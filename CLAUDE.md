@@ -21,6 +21,8 @@
 
 **ALWAYS refer to [PLANNING.md](PLANNING.md) for project requirements, architecture decisions, and implementation plans before starting any work.**
 
+**ALWAYS refer to [DATA_STRUCTURE.md](DATA_STRUCTURE.md) for the exact structure of the jaggery_sample_6_23 data to avoid coding mistakes.**
+
 ---
 
 ## Project Overview
@@ -51,7 +53,7 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 
 4. **Test connection:**
    ```bash
-   streamlit run test_connection.py
+   streamlit run scripts/test_connection.py
    ```
 
 ## Architecture
@@ -69,10 +71,18 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 ## Project Files
 
 - `app.py` - Main Streamlit application (MVP)
-- `test_connection.py` - Google Sheets API connection test
+- `scripts/` - Test and investigation scripts
+  - `test_connection.py` - Google Sheets API connection test
+  - `test_jaggery_sheet.py` - Test connection to jaggery_sample_6_23 sheet
+  - `investigate_jaggery_data.py` - Comprehensive data investigation script
+  - `quick_data_check.py` - Quick data preview (first 5 rows)
+  - `check_sheet_direct.py` - Direct Python connection test (non-Streamlit)
+  - `get_more_rows.py` - Retrieve detailed view of first 10 rows
 - `requirements.txt` - Python dependencies
 - `.streamlit/secrets.toml` - Google service account credentials (secret)
-- `master_pricing_demo_reference.csv` - Reference copy of sheet structure
+- `master_pricing_demo_reference.csv` - Reference copy of demo sheet structure
+- `jaggery_sample_6_23.xlsx` - Real data sample with tiered pricing
+- `DATA_STRUCTURE.md` - Documentation of jaggery data structure
 - `PLANNING.md` - Project planning and requirements
 - `CLAUDE.md` - This file (project context for Claude)
 
@@ -80,5 +90,6 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 
 - **Refresh pricing data:** Click menu → "Rerun" in the Streamlit app
 - **Update credentials:** Edit `.streamlit/secrets.toml`
-- **Test API connection:** Run `streamlit run test_connection.py`
+- **Test API connection:** Run `streamlit run scripts/test_connection.py`
+- **Investigate data structure:** Run `python scripts/check_sheet_direct.py` or `streamlit run scripts/investigate_jaggery_data.py`
 - **Deploy to cloud:** Follow Streamlit Cloud deployment guide (add secrets in app settings)
