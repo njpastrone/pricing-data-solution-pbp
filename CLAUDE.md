@@ -23,6 +23,8 @@
 
 **ALWAYS refer to [DATA_STRUCTURE.md](DATA_STRUCTURE.md) for the exact structure of the jaggery_sample_6_23 data to avoid coding mistakes.**
 
+**ALWAYS refer to [METHODOLOGY_LOGIC.md](METHODOLOGY_LOGIC.md) for pricing calculations, business rules, and partner-specific methodologies.**
+
 ---
 
 ## Project Overview
@@ -83,6 +85,8 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 - `master_pricing_demo_reference.csv` - Reference copy of demo sheet structure
 - `jaggery_sample_6_23.xlsx` - Real data sample with tiered pricing
 - `DATA_STRUCTURE.md` - Documentation of jaggery data structure
+- `METHODOLOGY_LOGIC.md` - Pricing calculations and business rules
+- `APP_UPDATE_PLAN.md` - Detailed plan for app updates
 - `PLANNING.md` - Project planning and requirements
 - `CLAUDE.md` - This file (project context for Claude)
 

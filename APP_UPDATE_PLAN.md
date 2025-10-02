@@ -214,54 +214,78 @@ def get_price_with_fallback(product_row, quantity, tier_columns):
 **Problem:** New cost components not in original formula
 **Solution:** Expand calculation to include all cost types with soft-coded approach
 
-⚠️ **PLACEHOLDER:** Art setup fee and label cost logic TBD (see Unanswered Questions section)
+✅ **CONFIRMED LOGIC** (see METHODOLOGY_LOGIC.md for detailed calculations)
 
 ```python
-def calculate_additional_costs(product_row, quantity):
+def calculate_additional_costs(product_row, quantity, include_labels=False):
     """
     Calculate additional costs (setup fees, labels, etc.)
     Soft-coded to handle different cost structures per partner.
+
+    Args:
+        product_row: Product data from DataFrame
+        quantity: Order quantity
+        include_labels: Boolean - whether customer wants labels
 
     Returns dict with all additional costs.
     """
     additional_costs = {}
 
-    # Art Setup Fee
-    # PLACEHOLDER: Assuming one-time per order (TBD)
+    # Art Setup Fee (one-time per order)
+    # ✅ CONFIRMED: Charged once per order, not per unit
     setup_fee_str = product_row.get('Art Setup Fee', '')
     setup_fee = clean_price(setup_fee_str) if setup_fee_str else 0
-    additional_costs['setup_fee_total'] = setup_fee
-    additional_costs['setup_fee_per_unit'] = setup_fee / quantity if quantity > 0 else 0
+    additional_costs['art_setup_fee_total'] = setup_fee
+    additional_costs['art_setup_fee_per_unit'] = setup_fee / quantity if quantity > 0 else 0
 
-    # Label Costs
-    # PLACEHOLDER: Logic TBD (see Unanswered Questions)
-    label_cost_str = product_row.get('Labels up to 1" x 2.5\'', '')
-    label_min_str = product_row.get('Minimum for labels', '')
-    label_cost_per_unit = clean_price(label_cost_str) if label_cost_str else 0
-    label_minimum = clean_price(label_min_str) if label_min_str else 0
+    # Label Costs (optional, user chooses)
+    # ✅ CONFIRMED: Jaggery partner has label art setup ($70) + minimum 100 labels
+    if include_labels:
+        # Label art setup fee (one-time, separate from product art setup)
+        # For Jaggery: $70 (may vary by partner)
+        label_setup_fee = 70  # TODO: Make this partner-configurable
+        additional_costs['label_setup_fee_total'] = label_setup_fee
+        additional_costs['label_setup_fee_per_unit'] = label_setup_fee / quantity if quantity > 0 else 0
 
-    # PLACEHOLDER logic - apply if quantity >= minimum
-    if quantity >= label_minimum:
-        additional_costs['label_cost_per_unit'] = label_cost_per_unit
-        additional_costs['label_cost_total'] = label_cost_per_unit * quantity
+        # Label unit cost and minimum
+        label_cost_str = product_row.get('Labels up to 1" x 2.5\'', '')
+        label_min_str = product_row.get('Minimum for labels', '')
+        label_cost_per_label = clean_price(label_cost_str) if label_cost_str else 0
+        label_minimum = int(clean_price(label_min_str)) if label_min_str else 100
+
+        # Apply minimum: customer pays for at least label_minimum labels
+        labels_to_charge = max(quantity, label_minimum)
+        additional_costs['labels_charged'] = labels_to_charge
+        additional_costs['label_cost_per_label'] = label_cost_per_label
+        additional_costs['label_cost_total'] = label_cost_per_label * labels_to_charge
+        additional_costs['label_cost_per_unit'] = (label_cost_per_label * labels_to_charge) / quantity if quantity > 0 else 0
+
+        # Warning message if minimum applies
+        if quantity < label_minimum:
+            additional_costs['label_warning'] = f"Minimum {label_minimum} labels required. Charging for {labels_to_charge} labels even though ordering {quantity} units."
     else:
-        additional_costs['label_cost_per_unit'] = 0
+        # No labels requested
+        additional_costs['label_setup_fee_total'] = 0
         additional_costs['label_cost_total'] = 0
+        additional_costs['labels_charged'] = 0
 
     return additional_costs
 
 # New formula components:
 # 1. Base price (from selected tier)
-# 2. Art setup fee (PLACEHOLDER: one-time per order / quantity)
-# 3. Label costs (PLACEHOLDER: per unit if qty >= minimum)
-# 4. Markup percentage
-# 5. Shipping
-# 6. Tariff
+# 2. Art setup fee (✅ one-time per order)
+# 3. Label art setup fee (✅ one-time per order, if labels requested)
+# 4. Label costs (✅ per label, minimum 100 for Jaggery)
+# 5. Markup percentage
+# 6. Shipping
+# 7. Tariff
 ```
 
 **Soft-Coding Strategy:**
 - Use `.get()` to safely access columns that may not exist for all partners
 - Return dict with all costs for easy expansion
+- `include_labels` parameter makes labels optional (user choice)
+- Label setup fee hardcoded for now (TODO: move to partner config)
 - Make it easy to add new cost types without changing calculation logic
 
 ---
@@ -655,19 +679,9 @@ def select_tier(quantity):
 
 ## ❓ Unanswered Questions (Placeholders in Code)
 
-These questions have **placeholder logic implemented** that can be easily updated later:
+~~All questions resolved! ✅~~
 
-### Question 1: Art Setup Fee - Per Order or Per Unit?
-**Status:** PLACEHOLDER IMPLEMENTED
-**Current Assumption:** One-time fee per order (amortized over quantity: `setup_fee / quantity`)
-**Code Location:** `calculate_additional_costs()` function
-**Action Needed:** Confirm with user, update logic if needed
-
-### Question 2: Label Costs - When Do They Apply?
-**Status:** PLACEHOLDER IMPLEMENTED
-**Current Assumption:** Labels apply if `quantity >= minimum_for_labels`
-**Code Location:** `calculate_additional_costs()` function
-**Action Needed:** Confirm with user, update logic if needed
+**STATUS: NO UNANSWERED QUESTIONS**
 
 ---
 
@@ -682,6 +696,21 @@ These questions have **placeholder logic implemented** that can be easily update
    - If missing, try next higher tier (more conservative pricing)
    - If no higher tier, try next lower tier
    - Display warning to user showing which fallback was used
+
+4. **Art Setup Fee:** ✅ **CONFIRMED - One-time fee per order**
+   - Art setup fee is charged once per order (not per unit)
+   - Should be displayed as separate line item in quote
+   - Amortize over quantity for per-unit breakdown: `setup_fee / quantity`
+
+5. **Label Costs:** ✅ **CONFIRMED - Optional with minimum requirement**
+   - **User Choice:** App should include checkbox/option to add labels
+   - **Jaggery Partner Methodology:**
+     - One-time label art setup fee: $70
+     - Label unit cost: $1.50 per label (size specified in product data)
+     - **Minimum quantity:** 100 labels
+     - **Logic:** If customer orders < 100 units BUT wants labels, they still pay for 100 labels minimum
+     - **Example:** Order 50 units with labels = 50 units @ product price + $70 label setup + (100 labels × $1.50 = $150)
+   - **Note:** Different partners may have different label pricing/minimums (see METHODOLOGY_LOGIC.md)
 
 ---
 
