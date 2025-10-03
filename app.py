@@ -177,6 +177,15 @@ except Exception as e:
     st.error(f"❌ Failed to load data: {e}")
     st.stop()
 
+# ===== SESSION STATE INITIALIZATION =====
+# Initialize order_items if not exists
+if 'order_items' not in st.session_state:
+    st.session_state.order_items = []
+
+# Initialize edit_index (None = adding new item, number = editing existing item)
+if 'edit_index' not in st.session_state:
+    st.session_state.edit_index = None
+
 # ===== PRODUCT SELECTION =====
 st.header("1️⃣ Select Products")
 
@@ -223,26 +232,20 @@ if description:
     with st.expander("📝 Product Description"):
         st.write(description)
 
-# ===== QUOTE CUSTOMIZATION =====
-st.header("2️⃣ Customize Quote")
+# ===== PRODUCT CUSTOMIZATION =====
+st.header("2️⃣ Customize Product")
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2 = st.columns(2)
 
 with col1:
-    quantity = st.number_input("Quantity", min_value=1, value=1, step=1)
+    quantity = st.number_input("Quantity", min_value=1, value=1, step=1, key="input_quantity")
 
 with col2:
     # Default markup is 100% (meaning 2x the base price)
-    markup_percent = st.number_input("Markup %", min_value=0.0, value=100.0, step=5.0)
-
-with col3:
-    shipping = st.number_input("Shipping Cost ($)", min_value=0.0, value=0.0, step=10.0)
-
-with col4:
-    tariff = st.number_input("Tariff Cost ($)", min_value=0.0, value=0.0, step=10.0)
+    markup_percent = st.number_input("Markup %", min_value=0.0, value=100.0, step=5.0, key="input_markup")
 
 # Label options
-include_labels = st.checkbox("Add custom labels to this order", value=False)
+include_labels = st.checkbox("Add custom labels to this product", value=False, key="input_labels")
 
 # Minimum quantity validation
 minimum_qty_str = product_data.get("Minimum Qty", "")
@@ -254,8 +257,8 @@ if minimum_qty_str:
     except (ValueError, TypeError):
         pass  # Skip validation if minimum qty is invalid
 
-# ===== QUOTE CALCULATION =====
-st.header("3️⃣ Quote Calculation")
+# ===== PRODUCT PREVIEW & ADD TO ORDER =====
+st.header("3️⃣ Product Preview")
 
 # Get price for quantity (tiered pricing)
 base_price, tier_range, tier_column = get_price_for_quantity(product_data, quantity)
@@ -285,32 +288,6 @@ if base_price is None:
 # Show which tier is being used
 st.info(f"📊 **Using pricing tier:** {tier_range} units | **Base price:** ${base_price:.2f} per unit")
 
-# DEBUG: Show tier selection details
-with st.expander("🔍 Debug: Tier Selection Details"):
-    st.write(f"**Quantity:** {quantity}")
-    st.write(f"**Selected Tier:** {tier_range}")
-    st.write(f"**Column Used:** {tier_column}")
-    st.write(f"**Base Price:** ${base_price:.2f}")
-
-    st.write("\n**All Pricing Tiers for This Product:**")
-    pricing_cols = [
-        'PBP Cost w/o shipping (1-25)',
-        'PBP Cost w/o shipping (26-50)',
-        'PBP Cost w/o shipping (51-100)',
-        'PBP Cost w/o shipping (101-250)',
-        'PBP Cost w/o shipping (251-500)',
-        'PBP Cost w/o shipping (501-1000)',
-        'PBP Cost w/o shipping (1000+)'
-    ]
-    for col in pricing_cols:
-        if col in product_data.index:
-            raw_value = product_data[col]
-            cleaned_value = clean_price(raw_value)
-            status = "✅" if cleaned_value is not None else "❌ Empty/Invalid"
-            st.write(f"- {col}: '{raw_value}' → {cleaned_value} {status}")
-        else:
-            st.write(f"- {col}: ❌ COLUMN NOT FOUND")
-
 # Calculate additional costs
 additional_costs = calculate_additional_costs(product_data, quantity, include_labels)
 
@@ -318,116 +295,281 @@ additional_costs = calculate_additional_costs(product_data, quantity, include_la
 if additional_costs.get('label_warning'):
     st.warning(additional_costs['label_warning'])
 
-# Calculate quote components
+# Calculate product totals (without shipping/tariff)
 product_subtotal = base_price * quantity
 art_setup_total = additional_costs['art_setup_fee_total']
 label_cost_total = additional_costs.get('label_cost_total', 0)
-
-# Subtotal before markup
 subtotal_before_markup = product_subtotal + art_setup_total + label_cost_total
-
-# Apply markup to product price ONLY (not to fees, shipping, tariff)
 markup_amount = product_subtotal * (markup_percent / 100)
-subtotal_after_markup = product_subtotal + markup_amount + art_setup_total + label_cost_total
+product_total = subtotal_before_markup + markup_amount
 
-# Total quote
-total_quote = subtotal_after_markup + shipping + tariff
+# Per-unit for this product
+total_per_unit = product_total / quantity
 
-# Per-unit breakdown
-base_price_per_unit = base_price
-art_setup_per_unit = additional_costs['art_setup_fee_per_unit']
-label_cost_per_unit = additional_costs.get('label_cost_per_unit', 0)
-markup_per_unit = markup_amount / quantity
-shipping_per_unit = shipping / quantity
-tariff_per_unit = tariff / quantity
-total_per_unit = total_quote / quantity
+# Display product summary
+st.success(f"### 💰 Product Total: ${product_total:.2f} ({quantity} units @ ${total_per_unit:.2f} each)")
 
-# Display calculation breakdown
-st.subheader("💵 Price Breakdown")
+# Add to Order button
+button_label = "Update Product in Order" if st.session_state.edit_index is not None else "Add to Order"
+if st.button(button_label, type="primary", use_container_width=True):
+    # Create order item
+    order_item = {
+        'product_name': product_data["Gift Name"],
+        'product_ref': product_data["Product Ref. No."],
+        'partner': product_data["Artisan Partner"],
+        'quantity': quantity,
+        'markup_percent': markup_percent,
+        'include_labels': include_labels,
+        'base_price': base_price,
+        'tier_range': tier_range,
+        'tier_column': tier_column,
+        'additional_costs': additional_costs,
+        'product_subtotal': product_subtotal,
+        'art_setup_total': art_setup_total,
+        'label_cost_total': label_cost_total,
+        'subtotal_before_markup': subtotal_before_markup,
+        'markup_amount': markup_amount,
+        'product_total': product_total,
+        'total_per_unit': total_per_unit
+    }
 
-# Create detailed breakdown table
-breakdown_items = [
-    ["Base Price (tier: " + tier_range + ")", f"${base_price_per_unit:.2f}", f"${product_subtotal:.2f}"]
-]
+    # Add or update item
+    if st.session_state.edit_index is not None:
+        st.session_state.order_items[st.session_state.edit_index] = order_item
+        st.session_state.edit_index = None
+        st.success("✅ Product updated in order!")
+    else:
+        st.session_state.order_items.append(order_item)
+        st.success("✅ Product added to order!")
 
-if include_labels:
-    if art_setup_total > 0:
-        breakdown_items.append(["Art Setup Fee", f"${art_setup_per_unit:.2f}", f"${art_setup_total:.2f}"])
-    if label_cost_total > 0:
-        labels_charged = additional_costs.get('labels_charged', 0)
-        label_unit_cost = additional_costs.get('label_cost_per_label', 0)
-        breakdown_items.append([f"Labels ({labels_charged} @ ${label_unit_cost:.2f})", f"${label_cost_per_unit:.2f}", f"${label_cost_total:.2f}"])
+    st.rerun()
 
-breakdown_items.append(["**Subtotal**", f"**${subtotal_before_markup / quantity:.2f}**", f"**${subtotal_before_markup:.2f}**"])
-breakdown_items.append([f"Markup ({markup_percent}% on product only)", f"${markup_per_unit:.2f}", f"${markup_amount:.2f}"])
-breakdown_items.append(["**Subtotal After Markup**", f"**${subtotal_after_markup / quantity:.2f}**", f"**${subtotal_after_markup:.2f}**"])
-breakdown_items.append(["Shipping", f"${shipping_per_unit:.2f}", f"${shipping:.2f}"])
-breakdown_items.append(["Tariff", f"${tariff_per_unit:.2f}", f"${tariff:.2f}"])
-breakdown_items.append(["**TOTAL**", f"**${total_per_unit:.2f}**", f"**${total_quote:.2f}**"])
+# Show detailed breakdown in expander
+with st.expander("💵 Detailed Price Breakdown"):
+    breakdown_items = [
+        ["Base Price (tier: " + tier_range + ")", f"${base_price:.2f}", f"${product_subtotal:.2f}"]
+    ]
 
-breakdown_df = pd.DataFrame(breakdown_items, columns=["Item", "Per Unit", "Total"])
-st.table(breakdown_df)
+    if include_labels:
+        if art_setup_total > 0:
+            breakdown_items.append(["Art Setup Fee", f"${art_setup_total / quantity:.2f}", f"${art_setup_total:.2f}"])
+        if label_cost_total > 0:
+            labels_charged = additional_costs.get('labels_charged', 0)
+            label_unit_cost = additional_costs.get('label_cost_per_label', 0)
+            breakdown_items.append([f"Labels ({labels_charged} @ ${label_unit_cost:.2f})", f"${label_cost_total / quantity:.2f}", f"${label_cost_total:.2f}"])
 
-# Display total
-st.success(f"### 💰 Total Quote: ${total_quote:.2f} ({quantity} units @ ${total_per_unit:.2f} each)")
+    breakdown_items.append(["**Subtotal**", f"**${subtotal_before_markup / quantity:.2f}**", f"**${subtotal_before_markup:.2f}**"])
+    breakdown_items.append([f"Markup ({markup_percent}% on product only)", f"${markup_amount / quantity:.2f}", f"${markup_amount:.2f}"])
+    breakdown_items.append(["**Product Total**", f"**${total_per_unit:.2f}**", f"**${product_total:.2f}**"])
+
+    breakdown_df = pd.DataFrame(breakdown_items, columns=["Item", "Per Unit", "Total"])
+    st.table(breakdown_df)
+
+# ===== CURRENT ORDER SUMMARY =====
+st.divider()
+st.header("4️⃣ Current Order")
+
+if len(st.session_state.order_items) == 0:
+    st.info("📦 No products added yet. Add products using the section above.")
+else:
+    st.success(f"🛒 **{len(st.session_state.order_items)} product(s) in order**")
+
+    # Display order items
+    for idx, item in enumerate(st.session_state.order_items):
+        with st.expander(f"**{item['product_name']}** - {item['quantity']} units @ ${item['total_per_unit']:.2f} each = ${item['product_total']:.2f}"):
+            col1, col2, col3 = st.columns([2, 1, 1])
+
+            with col1:
+                st.write(f"**Partner:** {item['partner']}")
+                st.write(f"**Product Ref:** {item['product_ref']}")
+                st.write(f"**Quantity:** {item['quantity']}")
+                st.write(f"**Pricing Tier:** {item['tier_range']}")
+                st.write(f"**Base Price:** ${item['base_price']:.2f} per unit")
+                st.write(f"**Markup:** {item['markup_percent']:.1f}%")
+                st.write(f"**Labels:** {'Yes' if item['include_labels'] else 'No'}")
+
+            with col2:
+                if st.button("✏️ Edit", key=f"edit_{idx}"):
+                    st.session_state.edit_index = idx
+                    st.rerun()
+
+            with col3:
+                if st.button("🗑️ Remove", key=f"remove_{idx}"):
+                    st.session_state.order_items.pop(idx)
+                    st.rerun()
+
+            # Show breakdown
+            st.write("**Cost Breakdown:**")
+            breakdown_items = [
+                ["Base Price", f"${item['base_price']:.2f}", f"${item['product_subtotal']:.2f}"]
+            ]
+
+            if item['art_setup_total'] > 0:
+                breakdown_items.append(["Art Setup Fee", f"${item['art_setup_total'] / item['quantity']:.2f}", f"${item['art_setup_total']:.2f}"])
+            if item['label_cost_total'] > 0:
+                breakdown_items.append(["Label Costs", f"${item['label_cost_total'] / item['quantity']:.2f}", f"${item['label_cost_total']:.2f}"])
+
+            breakdown_items.append(["**Subtotal**", f"**${item['subtotal_before_markup'] / item['quantity']:.2f}**", f"**${item['subtotal_before_markup']:.2f}**"])
+            breakdown_items.append([f"Markup ({item['markup_percent']:.1f}%)", f"${item['markup_amount'] / item['quantity']:.2f}", f"${item['markup_amount']:.2f}"])
+            breakdown_items.append(["**Product Total**", f"**${item['total_per_unit']:.2f}**", f"**${item['product_total']:.2f}**"])
+
+            breakdown_df = pd.DataFrame(breakdown_items, columns=["Item", "Per Unit", "Total"])
+            st.table(breakdown_df)
+
+    # Clear order button
+    if st.button("🗑️ Clear Entire Order", type="secondary"):
+        st.session_state.order_items = []
+        st.session_state.edit_index = None
+        st.rerun()
+
+# ===== ORDER SETTINGS =====
+st.divider()
+st.header("5️⃣ Order Settings")
+
+if len(st.session_state.order_items) == 0:
+    st.info("💡 Add products to your order first, then set shipping and tariff costs here.")
+    # Set defaults but disable interaction
+    shipping = 0.0
+    tariff = 0.0
+else:
+    col1, col2 = st.columns(2)
+
+    with col1:
+        shipping = st.number_input("Shipping Cost ($)", min_value=0.0, value=0.0, step=10.0, key="order_shipping",
+                                    help="Total shipping cost for the entire order")
+
+    with col2:
+        tariff = st.number_input("Tariff Cost ($)", min_value=0.0, value=0.0, step=10.0, key="order_tariff",
+                                  help="Total tariff/duty cost for the entire order")
+
+# ===== TOTAL ORDER CALCULATION =====
+if len(st.session_state.order_items) == 0:
+    st.info("💡 Add products to your order to see the total quote calculation.")
+else:
+    # Calculate totals
+    products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
+    total_quote = products_subtotal + shipping + tariff
+    total_units = sum(item['quantity'] for item in st.session_state.order_items)
+
+    # Display summary
+    st.subheader("💵 Order Summary")
+
+    summary_items = []
+    for item in st.session_state.order_items:
+        summary_items.append([
+            item['product_name'],
+            item['quantity'],
+            f"${item['total_per_unit']:.2f}",
+            f"${item['product_total']:.2f}"
+        ])
+
+    summary_items.append(["**Products Subtotal**", "", "", f"**${products_subtotal:.2f}**"])
+    summary_items.append(["Shipping", "", "", f"${shipping:.2f}"])
+    summary_items.append(["Tariff", "", "", f"${tariff:.2f}"])
+    summary_items.append(["**TOTAL QUOTE**", f"**{total_units} total units**", "", f"**${total_quote:.2f}**"])
+
+    summary_df = pd.DataFrame(summary_items, columns=["Product", "Qty", "Per Unit", "Total"])
+    st.table(summary_df)
+
+    # Display total
+    avg_per_unit = total_quote / total_units if total_units > 0 else 0
+    st.success(f"### 💰 Total Quote: ${total_quote:.2f} ({total_units} total units @ ${avg_per_unit:.2f} avg per unit)")
 
 # ===== PROPOSAL GENERATION =====
-st.header("4️⃣ Proposal")
+st.divider()
+st.header("7️⃣ Proposal")
 
-st.subheader("📄 Quote Proposal")
+if len(st.session_state.order_items) == 0:
+    st.info("💡 Add products to your order to generate a proposal.")
+else:
+    st.subheader("📄 Quote Proposal")
 
-proposal_items = [
-    ["Product Name", product_data["Gift Name"]],
-    ["Product Reference", product_data["Product Ref. No."]],
-    ["Partner", product_data["Artisan Partner"]],
-    ["Quantity", quantity],
-    ["Pricing Tier", tier_range],
-    ["Base Price (per unit)", f"${base_price:.2f}"],
-]
+    # Calculate totals
+    products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
+    total_quote = products_subtotal + shipping + tariff
+    total_units = sum(item['quantity'] for item in st.session_state.order_items)
 
-if include_labels:
-    if art_setup_total > 0:
-        proposal_items.append(["Art Setup Fee", f"${art_setup_total:.2f}"])
-    if label_cost_total > 0:
-        labels_charged = additional_costs.get('labels_charged', 0)
-        proposal_items.append([f"Labels ({labels_charged} units)", f"${label_cost_total:.2f}"])
+    # Build proposal items
+    proposal_items = []
 
-proposal_items.extend([
-    ["Subtotal Before Markup", f"${subtotal_before_markup:.2f}"],
-    [f"Markup ({markup_percent}%)", f"${markup_amount:.2f}"],
-    ["Subtotal After Markup", f"${subtotal_after_markup:.2f}"],
-    ["Shipping", f"${shipping:.2f}"],
-    ["Tariff", f"${tariff:.2f}"],
-    ["**Total Quote**", f"**${total_quote:.2f}**"],
-    ["**Price Per Unit**", f"**${total_per_unit:.2f}**"]
-])
+    # Add each product
+    for idx, item in enumerate(st.session_state.order_items, 1):
+        proposal_items.append([f"**Product {idx}**", item['product_name']])
+        proposal_items.append(["  Partner", item['partner']])
+        proposal_items.append(["  Product Ref.", item['product_ref']])
+        proposal_items.append(["  Quantity", item['quantity']])
+        proposal_items.append(["  Pricing Tier", item['tier_range']])
+        proposal_items.append(["  Base Price (per unit)", f"${item['base_price']:.2f}"])
 
-proposal_df = pd.DataFrame(proposal_items, columns=["Item", "Details"])
-st.table(proposal_df)
+        if item['art_setup_total'] > 0:
+            proposal_items.append(["  Art Setup Fee", f"${item['art_setup_total']:.2f}"])
+        if item['label_cost_total'] > 0:
+            labels_charged = item['additional_costs'].get('labels_charged', 0)
+            proposal_items.append([f"  Labels ({labels_charged} units)", f"${item['label_cost_total']:.2f}"])
 
-st.info("💡 Copy this table and paste into your proposal template.")
+        proposal_items.append(["  Subtotal Before Markup", f"${item['subtotal_before_markup']:.2f}"])
+        proposal_items.append([f"  Markup ({item['markup_percent']:.1f}%)", f"${item['markup_amount']:.2f}"])
+        proposal_items.append(["  **Product Total**", f"**${item['product_total']:.2f}**"])
+        proposal_items.append(["", ""])  # Blank row for spacing
+
+    # Add order totals
+    proposal_items.extend([
+        ["**Products Subtotal**", f"**${products_subtotal:.2f}**"],
+        ["Shipping", f"${shipping:.2f}"],
+        ["Tariff", f"${tariff:.2f}"],
+        ["**Total Quote**", f"**${total_quote:.2f}**"],
+        ["**Total Units**", f"**{total_units}**"],
+        ["**Average Price Per Unit**", f"**${total_quote / total_units:.2f}**"]
+    ])
+
+    proposal_df = pd.DataFrame(proposal_items, columns=["Item", "Details"])
+    st.table(proposal_df)
+
+    st.info("💡 Copy this table and paste into your proposal template.")
 
 # ===== INVOICE GENERATION =====
-st.header("5️⃣ Invoice")
+st.divider()
+st.header("8️⃣ Invoice")
 
-st.subheader("🧾 Invoice")
-invoice_date = datetime.now().strftime("%Y-%m-%d")
+if len(st.session_state.order_items) == 0:
+    st.info("💡 Add products to your order to generate an invoice.")
+else:
+    st.subheader("🧾 Invoice")
+    invoice_date = datetime.now().strftime("%Y-%m-%d")
 
-invoice_items = [
-    ["Invoice Date", invoice_date],
-    ["Product", product_data["Gift Name"]],
-    ["Product Reference", product_data["Product Ref. No."]],
-    ["Partner", product_data["Artisan Partner"]],
-    ["Quantity", quantity],
-    ["Pricing Tier", tier_range],
-    ["Unit Price", f"${total_per_unit:.2f}"],
-    ["Total Amount Due", f"${total_quote:.2f}"]
-]
+    # Calculate totals
+    products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
+    total_quote = products_subtotal + shipping + tariff
+    total_units = sum(item['quantity'] for item in st.session_state.order_items)
 
-invoice_df = pd.DataFrame(invoice_items, columns=["Field", "Value"])
-st.table(invoice_df)
+    invoice_items = [
+        ["Invoice Date", invoice_date],
+        ["", ""]
+    ]
 
-st.info("💡 Copy this table and paste into your invoice template.")
+    # Add each product line
+    for idx, item in enumerate(st.session_state.order_items, 1):
+        invoice_items.append([f"Product {idx}", item['product_name']])
+        invoice_items.append(["  Partner", item['partner']])
+        invoice_items.append(["  Product Ref.", item['product_ref']])
+        invoice_items.append(["  Quantity", item['quantity']])
+        invoice_items.append(["  Pricing Tier", item['tier_range']])
+        invoice_items.append(["  Unit Price", f"${item['total_per_unit']:.2f}"])
+        invoice_items.append(["  Subtotal", f"${item['product_total']:.2f}"])
+        invoice_items.append(["", ""])  # Blank row
+
+    # Add order totals
+    invoice_items.extend([
+        ["Products Subtotal", f"${products_subtotal:.2f}"],
+        ["Shipping", f"${shipping:.2f}"],
+        ["Tariff", f"${tariff:.2f}"],
+        ["**Total Amount Due**", f"**${total_quote:.2f}**"]
+    ])
+
+    invoice_df = pd.DataFrame(invoice_items, columns=["Field", "Value"])
+    st.table(invoice_df)
+
+    st.info("💡 Copy this table and paste into your invoice template.")
 
 # ===== FOOTER =====
 st.divider()
