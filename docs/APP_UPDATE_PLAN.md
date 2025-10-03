@@ -1,7 +1,8 @@
 # App Update Plan: Transitioning to Tiered Pricing Structure
 
 **Created:** 2025-10-02
-**Purpose:** Plan for updating app.py to handle real-world jaggery_sample_6_23 data structure with tiered pricing
+**Updated:** 2025-10-02 (migrated to jaggery_demo)
+**Purpose:** Plan for updating app.py to handle real-world jaggery data structure with tiered pricing
 
 ---
 
@@ -18,11 +19,10 @@
   - Quote calculation: `(base_price * markup%) + shipping + tariff`
   - Proposal and invoice generation
 
-### What We Need (Real Data: jaggery_sample_6_23)
+### What We Need (Real Data: jaggery_demo)
 - **Data Structure:** Complex tiered pricing
   - 25 columns with product details and pricing tiers
-  - **7+ pricing tiers** based on quantity ranges:
-    - Less than 25 units
+  - **7 pricing tiers** based on quantity ranges:
     - 1-25 units
     - 26-50 units
     - 51-100 units
@@ -30,13 +30,13 @@
     - 251-500 units
     - 501-1000 units
     - 1000+ units
-  - **Header rows 1-5** (data starts row 6)
+  - **Header row at Row 2** (data starts row 3)
   - **Currency strings** with "$" symbol requiring cleaning
   - **Additional costs:** Art Setup Fee, Label costs
-  - **22 total fields** (vs. 7 in demo)
+  - **All tiers have complete data** (improved from jaggery_sample_6_23)
 
 ### 🌟 IMPORTANT: Multi-Partner Future Consideration
-**Current Scope:** jaggery_sample_6_23 contains data for **one artisan partner (Jaggery) only**
+**Current Scope:** jaggery_demo contains data for **one artisan partner (Jaggery) only**
 
 **Future Scope:** The master spreadsheet will consolidate data from **multiple partners**, each with:
 - Different pricing tier structures (not all partners may have 7+ tiers)
@@ -81,10 +81,10 @@
 
 ## 🔄 Key Differences: Old vs. New Structure
 
-| Aspect | master_pricing_demo (Old) | jaggery_sample_6_23 (New) |
+| Aspect | master_pricing_demo (Old) | jaggery_demo (New) |
 |--------|---------------------------|---------------------------|
 | **Pricing Model** | Single flat price | 7+ tiered prices based on quantity |
-| **Data Format** | Clean, standard CSV-like | Headers in rows 1-5, data from row 6 |
+| **Data Format** | Clean, standard CSV-like | Header at row 2, data from row 3 |
 | **Currency** | Numeric values | String with "$" symbol |
 | **Columns** | 7 simple columns | 25 columns with complex structure |
 | **Additional Costs** | None | Art Setup Fee, Label costs |
@@ -391,15 +391,16 @@ Move partner-specific configuration to external file or sheet tab:
 
 ## 🛠️ Implementation Plan
 
-### Step 1: Update Data Loading Function
-**Goal:** Read jaggery_sample_6_23 correctly with header row handling
+### Step 1: Update Data Loading Function ✅ COMPLETED
+**Goal:** Read jaggery_demo correctly with header row handling
 
 **Changes:**
-1. Change sheet name from "master_pricing_demo" to "jaggery_sample_6_23"
-2. Implement header row skipping (skip rows 1-5, use row 5 as headers)
-3. Add data validation to verify column structure
+1. ✅ Changed sheet name from "master_pricing_demo" to "jaggery_demo"
+2. ✅ Implemented header row handling (skip row 1, use row 2 as headers)
+3. ✅ Added whitespace stripping for column names
+4. ✅ Added data validation to remove empty rows
 
-**Code Location:** `app.py` lines 36-45 (load_pricing_data function)
+**Code Location:** `app.py` load_pricing_data function
 
 ---
 

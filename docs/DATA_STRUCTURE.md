@@ -1,35 +1,34 @@
 # DATA_STRUCTURE.md
 
-**Reference document for jaggery_sample_6_23 Google Sheet structure**
+**Reference document for jaggery_demo Google Sheet structure**
 
 This file documents the exact structure of our pricing data to prevent coding mistakes and ensure consistent data handling throughout the project.
+
+**Last Updated:** 2025-10-02 (switched from jaggery_sample_6_23 to jaggery_demo)
 
 ---
 
 ## Sheet Overview
 
-- **Sheet Name:** jaggery_sample_6_23
-- **Total Rows:** ~1000
+- **Sheet Name:** jaggery_demo
+- **Total Rows:** Variable (cleaned data)
 - **Total Columns:** 25
-- **Data Starts:** Row 6 (after header rows)
-- **Header Row:** Row 5
+- **Data Starts:** Row 3 (after header rows)
+- **Header Row:** Row 2
 
 ---
 
 ## Sheet Structure
 
-### Rows 1-5: Header Section
-- **Row 1:** Contains "STATUS" label (column B)
-- **Row 2:** Contains "Active" status (column B)
-- **Row 3:** Empty row
-- **Row 4:** Section headers - "PRODUCT DETAILS" (column A) and "COST INFORMATION" (column K)
-- **Row 5:** Column headers (the actual field names we use)
+### Rows 1-2: Header Section
+- **Row 1:** Empty row
+- **Row 2:** Column headers (the actual field names we use)
 
-### Row 6 onwards: Product Data
+### Row 3 onwards: Product Data
 
 ---
 
-## Column Mapping (Row 5 Headers)
+## Column Mapping (Row 2 Headers)
 
 | Column Index | Column Letter | Field Name | Description |
 |--------------|---------------|------------|-------------|
@@ -58,7 +57,7 @@ This file documents the exact structure of our pricing data to prevent coding mi
 
 ---
 
-## Sample Data (Row 6)
+## Sample Data (Row 3)
 
 ```
 Product Ref. No.: JA01
@@ -66,16 +65,19 @@ Artisan Partner: Jaggery
 Origin Country: India
 Gift Name: Upcycled Pilot's Everyday Case
 Dimension: 13" X 13" X 4". Shoulder strap (45"). Exterior pockets (8" x 9" x 1").
-PBP Cost w/o shipping (-25): $55.00
-Jaggery Price Update 6_23: $48.00
 PBP Cost w/o shipping (1-25): $48.00
 PBP Cost w/o shipping (26-50): $40.80
 PBP Cost w/o shipping (51-100): $38.40
-PBP Cost w/o shipping (501-1000): $36.00
+PBP Cost w/o shipping (101-250): $36.00
+PBP Cost w/o shipping (251-500): $35.00
+PBP Cost w/o shipping (501-1000): $34.00
+PBP Cost w/o shipping (1000+): $33.00
 Art Setup Fee: 70
 Labels up to 1" x 2.5': 1.5
 Minimum for labels: 100
 ```
+
+**Note:** All pricing tiers now have data filled in (this was a key improvement in jaggery_demo).
 
 ---
 
@@ -84,7 +86,7 @@ Minimum for labels: 100
 ### 1. **Tiered Pricing Structure**
 - Products have **quantity-based pricing tiers**
 - Different costs for different quantity ranges: 1-25, 26-50, 51-100, 101-250, 251-500, 501-1000, 1000+
-- Not all tiers may have values for all products (some cells may be empty)
+- **All tiers now have complete data** (cleaned in jaggery_demo)
 
 ### 2. **Empty Cells**
 - Some pricing tiers may be blank/empty
@@ -95,9 +97,9 @@ Minimum for labels: 100
 - Need to strip "$" and convert to float for calculations
 
 ### 4. **Header Rows to Skip**
-- When reading data, **skip rows 1-5**
-- Row 5 contains the actual column headers
-- Data starts at row 6
+- When reading data, **skip row 1** (empty row)
+- Row 2 contains the actual column headers
+- Data starts at row 3
 
 ### 5. **Long Text Fields**
 - Description and Partner Info contain very long text
@@ -107,18 +109,12 @@ Minimum for labels: 100
 
 ## How to Read This Data in Code
 
-### Option 1: Skip header rows and use row 5 as headers
+### Current Implementation (jaggery_demo)
 ```python
-sheet = gc.open("jaggery_sample_6_23").sheet1
+sheet = gc.open("jaggery_demo").sheet1
 all_values = sheet.get_all_values()
-headers = all_values[4]  # Row 5 (index 4)
-data_rows = all_values[5:]  # Row 6 onwards (index 5+)
-```
-
-### Option 2: Use pandas with skiprows
-```python
-import pandas as pd
-# Skip first 5 rows, use row 5 as header
+headers = [col.strip() for col in all_values[1]]  # Row 2 (index 1), strip whitespace
+data_rows = all_values[2:]  # Row 3 onwards (index 2+)
 df = pd.DataFrame(data_rows, columns=headers)
 ```
 
@@ -140,12 +136,24 @@ For the initial MVP, focus on these essential fields:
 ## Notes
 
 - This structure is significantly different from `master_pricing_demo` which had a simple flat structure
-- The real data uses **tiered pricing** based on order quantity
-- Need to implement **quantity-based price selection** logic
-- Current MVP app will need substantial updates to handle this structure
+- The data uses **tiered pricing** based on order quantity
+- **quantity-based price selection** logic is implemented
 - Price format requires cleaning (remove "$" and convert to float)
+- **All pricing tiers are now filled** (key improvement in jaggery_demo vs jaggery_sample_6_23)
+
+---
+
+## Migration History
+
+**2025-10-02:** Migrated from `jaggery_sample_6_23` to `jaggery_demo`
+- **Key Changes:**
+  - Simplified header structure (1 empty row vs 5 header rows)
+  - Header row now at Row 2 (index 1) instead of Row 5 (index 4)
+  - Data starts at Row 3 (index 2) instead of Row 6 (index 5)
+  - All pricing tiers filled in (no more missing tier data)
+  - Cleaner data formatting
 
 ---
 
 **Last Updated:** 2025-10-02
-**Data Source:** jaggery_sample_6_23 Google Sheet
+**Data Source:** jaggery_demo Google Sheet

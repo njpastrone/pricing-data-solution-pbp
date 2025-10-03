@@ -38,7 +38,7 @@ Where:
 
 ### Partner: Jaggery
 
-**Data Source:** jaggery_sample_6_23 Google Sheet
+**Data Source:** jaggery_demo Google Sheet
 
 #### 1. Tiered Pricing Structure
 

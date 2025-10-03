@@ -19,11 +19,11 @@
 
 ## Important References
 
-**ALWAYS refer to [PLANNING.md](PLANNING.md) for project requirements, architecture decisions, and implementation plans before starting any work.**
+**ALWAYS refer to [docs/PLANNING.md](docs/PLANNING.md) for project requirements, architecture decisions, and implementation plans before starting any work.**
 
-**ALWAYS refer to [DATA_STRUCTURE.md](DATA_STRUCTURE.md) for the exact structure of the jaggery_sample_6_23 data to avoid coding mistakes.**
+**ALWAYS refer to [docs/DATA_STRUCTURE.md](docs/DATA_STRUCTURE.md) for the exact structure of the jaggery_demo data to avoid coding mistakes.**
 
-**ALWAYS refer to [METHODOLOGY_LOGIC.md](METHODOLOGY_LOGIC.md) for pricing calculations, business rules, and partner-specific methodologies.**
+**ALWAYS refer to [docs/METHODOLOGY_LOGIC.md](docs/METHODOLOGY_LOGIC.md) for pricing calculations, business rules, and partner-specific methodologies.**
 
 ---
 
@@ -70,30 +70,40 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   4. App calculates quotes using formula: `(base_price * markup%) + shipping + tariff`
   5. Displays proposal and invoice as copyable tables
 
-## Project Files
+## Project Structure
 
-- `app.py` - Main Streamlit application (MVP)
-- `scripts/` - Test and investigation scripts
-  - `test_connection.py` - Google Sheets API connection test
-  - `test_jaggery_sheet.py` - Test connection to jaggery_sample_6_23 sheet
-  - `investigate_jaggery_data.py` - Comprehensive data investigation script
-  - `quick_data_check.py` - Quick data preview (first 5 rows)
-  - `check_sheet_direct.py` - Direct Python connection test (non-Streamlit)
-  - `get_more_rows.py` - Retrieve detailed view of first 10 rows
-- `requirements.txt` - Python dependencies
-- `.streamlit/secrets.toml` - Google service account credentials (secret)
-- `master_pricing_demo_reference.csv` - Reference copy of demo sheet structure
-- `jaggery_sample_6_23.xlsx` - Real data sample with tiered pricing
-- `DATA_STRUCTURE.md` - Documentation of jaggery data structure
-- `METHODOLOGY_LOGIC.md` - Pricing calculations and business rules
-- `APP_UPDATE_PLAN.md` - Detailed plan for app updates
-- `PLANNING.md` - Project planning and requirements
-- `CLAUDE.md` - This file (project context for Claude)
+```
+pricing-data-solution-pbp/
+├── app.py                      # Main application (PRODUCTION)
+├── requirements.txt            # Python dependencies
+├── CLAUDE.md                   # This file - project rules & context
+├── README.md                   # Project overview & quick start
+│
+├── .streamlit/
+│   └── secrets.toml           # Google credentials (SECRET - never commit)
+│
+├── docs/                       # Documentation
+│   ├── PLANNING.md            # Project requirements & goals
+│   ├── DATA_STRUCTURE.md      # jaggery_demo data structure
+│   ├── METHODOLOGY_LOGIC.md   # Pricing calculations & business rules
+│   ├── APP_UPDATE_PLAN.md     # Implementation plan & details
+│   └── MIGRATION_SUMMARY.md   # Migration history
+│
+├── scripts/                    # Utility scripts
+│   ├── test_connection.py     # Test Google Sheets connection
+│   ├── check_jaggery_demo.py  # Investigate jaggery_demo (Python)
+│   └── investigate_jaggery_demo.py  # Investigate tool (Streamlit)
+│
+├── backups/                    # Backup files
+│   └── app_mvp_backup.py      # Original MVP
+│
+└── archive/                    # Deprecated files (old scripts & data)
+```
 
 ## Common Tasks
 
 - **Refresh pricing data:** Click menu → "Rerun" in the Streamlit app
 - **Update credentials:** Edit `.streamlit/secrets.toml`
 - **Test API connection:** Run `streamlit run scripts/test_connection.py`
-- **Investigate data structure:** Run `python scripts/check_sheet_direct.py` or `streamlit run scripts/investigate_jaggery_data.py`
+- **Investigate data structure:** `streamlit run scripts/investigate_jaggery_demo.py` or `python scripts/check_jaggery_demo.py`
 - **Deploy to cloud:** Follow Streamlit Cloud deployment guide (add secrets in app settings)
