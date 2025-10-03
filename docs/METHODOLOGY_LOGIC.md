@@ -402,6 +402,94 @@ Per Unit: $80.40
 
 ---
 
+## 🛒 Multi-Product Order Calculations
+
+### Overview
+The app supports multi-product orders where users can add multiple products to a single order, each with its own markup percentage. Shipping and tariff costs are applied once at the order level.
+
+### Multi-Product Formula
+
+```
+Total Order Quote = Sum(All Product Totals) + Order Shipping + Order Tariff
+
+Where each Product Total:
+Product Total = (Base Price × Quantity) + Art Setup + Label Costs + (Markup on Base Price)
+```
+
+### Key Rules
+1. **Per-Product Markup:** Each product can have a different markup percentage
+2. **Order-Level Shipping:** Shipping cost applies once to entire order, not per product
+3. **Order-Level Tariff:** Tariff cost applies once to entire order, not per product
+4. **Independent Product Calculations:** Each product calculated separately, then summed
+
+### Example: Multi-Product Order
+
+**Order Details:**
+
+**Product 1:** JA01 - Upcycled Pilot's Everyday Case
+- Quantity: 50 units
+- Tier: 26-50 @ $40.80 per unit
+- Markup: 100%
+- Labels: Yes (100 labels minimum)
+- Art Setup: $70
+- Label Setup: $70
+- Label Cost: $1.50 × 100 = $150
+
+**Product 2:** JA02 - Different Product
+- Quantity: 100 units
+- Tier: 51-100 @ $35.00 per unit
+- Markup: 120%
+- Labels: No
+- Art Setup: $70
+
+**Order Settings:**
+- Shipping: $300 (entire order)
+- Tariff: $150 (entire order)
+
+**Calculation:**
+
+**Product 1 Total:**
+```
+Base Cost: $40.80 × 50 = $2,040.00
+Art Setup: $70.00
+Label Costs: $70 + $150 = $220.00
+Subtotal: $2,330.00
+Markup (100% on base only): $2,040.00 × 1.00 = $2,040.00
+Product 1 Total: $4,370.00
+```
+
+**Product 2 Total:**
+```
+Base Cost: $35.00 × 100 = $3,500.00
+Art Setup: $70.00
+Subtotal: $3,570.00
+Markup (120% on base only): $3,500.00 × 1.20 = $4,200.00
+Product 2 Total: $7,770.00
+```
+
+**Order Total:**
+```
+Product 1: $4,370.00
+Product 2: $7,770.00
+Products Subtotal: $12,140.00
+
+Shipping (once): $300.00
+Tariff (once): $150.00
+
+TOTAL ORDER: $12,590.00
+Total Units: 150
+Average Per Unit: $83.93
+```
+
+### Important Notes
+- Shipping and tariff are **NOT** divided per product
+- Shipping and tariff are **NOT** marked up
+- Each product can have different markup percentages
+- Label minimums apply per product (if labels selected)
+- Art setup fees apply per product
+
+---
+
 ## 📚 References
 
 - [APP_UPDATE_PLAN.md](APP_UPDATE_PLAN.md) - Implementation plan
@@ -410,5 +498,5 @@ Per Unit: $80.40
 
 ---
 
-**Last Updated:** 2025-10-02
-**Status:** Jaggery methodology documented and confirmed
+**Last Updated:** 2025-10-03
+**Status:** Multi-product ordering implemented and documented

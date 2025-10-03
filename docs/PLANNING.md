@@ -52,8 +52,13 @@ Create a data solutions system for a small business to streamline the processes 
 
 ## Current Phase
 - **Phase 1 MVP - COMPLETE** ✅
-- Successfully built working Streamlit app connected to master_pricing_demo Google Sheet
+- Successfully built working Streamlit app connected to jaggery_demo Google Sheet
 - App includes product selection, quote calculation, and proposal/invoice generation
+- **Multi-Product Ordering - COMPLETE** ✅
+- Users can add multiple products to a single order
+- Per-product markup configuration
+- Order-level shipping and tariff costs
+- Enhanced proposal and invoice for multi-product orders
 - Ready for testing and user feedback  
 
 ---
@@ -88,11 +93,16 @@ Create a data solutions system for a small business to streamline the processes 
 ## Implementation Plan
 
 ### Phase 1 — MVP ✅ COMPLETE
-- [x] Set up Master Google Sheet with all required columns (master_pricing_demo)
+- [x] Set up Master Google Sheet with all required columns (jaggery_demo)
 - [x] Set up Google Cloud service account and API access
 - [x] Implement Google Sheets reading logic (`gspread` / `pandas`)
 - [x] Build dropdowns and quote calculation logic in the app
 - [x] Build basic proposal and invoice generator (on-screen tables)
+- [x] Implement tiered pricing (7 tiers)
+- [x] Add label costs and art setup fees
+- [x] Multi-product ordering with add-to-cart pattern
+- [x] Per-product markup configuration
+- [x] Order-level shipping and tariff settings
 - [ ] Deploy to Streamlit Cloud (pending)  
 
 ### Phase 2 — Optional Enhancements

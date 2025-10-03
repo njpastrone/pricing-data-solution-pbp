@@ -68,22 +68,35 @@ pricing-data-solution-pbp/
 ## 🎯 Features
 
 ### Current Implementation (Jaggery Partner)
+- **Multi-Product Ordering:** Add multiple products to a single order with add-to-cart pattern
+- **Per-Product Markup:** Configure individual markup percentages for each product
 - **Tiered Pricing:** 7 quantity-based pricing tiers (1-25, 26-50, 51-100, 101-250, 251-500, 501-1000, 1000+)
 - **Smart Price Selection:** Automatically selects correct tier with fallback logic
 - **Custom Labels:** Optional label costs with minimum quantity enforcement (100 labels)
-- **Art Setup Fee:** One-time setup fee per order (only when labels selected)
+- **Art Setup Fee:** One-time setup fee per product
+- **Order-Level Costs:** Shipping and tariff applied once to entire order
 - **Markup Calculation:** Applies markup to product price only (not fees/shipping/tariff)
-- **Detailed Breakdowns:** Per-unit and total cost breakdowns
-- **Proposal & Invoice Generation:** Copy-paste ready tables
+- **Detailed Breakdowns:** Per-product and order-level cost breakdowns
+- **Order Management:** Edit, remove, or clear products from order
+- **Proposal & Invoice Generation:** Multi-product copy-paste ready tables
 
 ### Formula
+
+**Single Product:**
 ```
-Total Quote = (Product Cost + Additional Costs + Markup) + Shipping + Tariff
+Product Total = (Base Price × Quantity) + Art Setup + Label Costs + Markup
 
 Where:
-- Product Cost = Base Price × Quantity
-- Additional Costs = Art Setup Fee + Label Costs (if applicable)
-- Markup = Product Cost × (Markup % / 100)
+- Markup = Base Price × Quantity × (Markup % / 100)
+```
+
+**Multi-Product Order:**
+```
+Total Order = Sum(All Product Totals) + Shipping + Tariff
+
+Where:
+- Shipping and Tariff apply once to entire order
+- Each product has independent markup percentage
 ```
 
 ---
@@ -147,6 +160,8 @@ Edit in `app.py` → `calculate_additional_costs()` function.
 ## 🧪 Testing
 
 ### Manual Testing Checklist
+
+**Product Selection & Customization:**
 - [ ] Product selection dropdown works
 - [ ] Quantity input validates minimum
 - [ ] Tier selection matches quantity (e.g., 70 → 51-100 tier)
@@ -154,11 +169,32 @@ Edit in `app.py` → `calculate_additional_costs()` function.
 - [ ] Label minimum enforced (100 labels)
 - [ ] Art setup fee only shows when labels selected
 - [ ] Markup applies to product price only
-- [ ] Calculations are accurate
-- [ ] Proposal & invoice display correctly
+- [ ] Per-product markup can be set independently
+
+**Multi-Product Order Management:**
+- [ ] Add to Order button adds product to order
+- [ ] Current Order section displays all added products
+- [ ] Edit button repopulates form with product details
+- [ ] Update button replaces edited product in order
+- [ ] Remove button deletes product from order
+- [ ] Clear Entire Order button clears all products
+- [ ] Order persists across product additions (session state)
+
+**Order-Level Settings:**
+- [ ] Shipping input only active when products in order
+- [ ] Tariff input only active when products in order
+- [ ] Shipping/tariff apply once to entire order
+
+**Calculations & Display:**
+- [ ] Product totals calculate correctly
+- [ ] Order total sums all products + shipping + tariff
+- [ ] Per-product breakdowns show in Current Order
+- [ ] Order Summary shows all products with totals
+- [ ] Proposal displays multi-product details correctly
+- [ ] Invoice displays multi-product line items correctly
 
 ### Test Cases
-See [docs/METHODOLOGY_LOGIC.md](docs/METHODOLOGY_LOGIC.md) for detailed test cases.
+See [docs/METHODOLOGY_LOGIC.md](docs/METHODOLOGY_LOGIC.md) for detailed single-product and multi-product test cases.
 
 ---
 
@@ -215,5 +251,5 @@ Peace by Piece International - Internal Tool
 
 ---
 
-**Last Updated:** 2025-10-02
-**Version:** 1.0 (Tiered Pricing with jaggery_demo)
+**Last Updated:** 2025-10-03
+**Version:** 1.1 (Multi-Product Ordering with Per-Product Markup)
