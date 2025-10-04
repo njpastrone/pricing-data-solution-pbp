@@ -13,10 +13,19 @@ from datetime import datetime
 st.set_page_config(
     page_title="PBP Pricing App",
     page_icon="💰",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-st.title("💰 Peace by Piece Pricing & Quoting App")
+st.title("Peace by Piece Pricing & Quoting App")
+
+# Purpose statement
+st.markdown("""
+**Welcome to the PBP Pricing App** — This tool helps you create quotes and invoices
+for artisan products. Select products, customize your order, and generate professional
+proposals with detailed pricing breakdowns.
+""")
+st.divider()
 
 # ===== HELPER FUNCTIONS =====
 
@@ -114,7 +123,7 @@ def calculate_additional_costs(product_row, quantity, include_labels=False):
 
         # Warning message if minimum applies
         if quantity < label_minimum:
-            additional_costs['label_warning'] = f"⚠️ Minimum {label_minimum} labels required. Charging for {labels_to_charge} labels even though ordering {quantity} units."
+            additional_costs['label_warning'] = f"Minimum {label_minimum} labels required. Charging for {labels_to_charge} labels even though ordering {quantity} units."
     else:
         # No labels requested - no costs apply
         additional_costs['art_setup_fee_total'] = 0
@@ -172,9 +181,9 @@ def load_pricing_data():
 # Load data
 try:
     df = load_pricing_data()
-    st.success(f"✅ Loaded {len(df)} products from jaggery_demo")
+    st.success(f"Loaded {len(df)} products from jaggery_demo")
 except Exception as e:
-    st.error(f"❌ Failed to load data: {e}")
+    st.error(f"Failed to load data: {e}")
     st.stop()
 
 # ===== SESSION STATE INITIALIZATION =====
@@ -186,8 +195,17 @@ if 'order_items' not in st.session_state:
 if 'edit_index' not in st.session_state:
     st.session_state.edit_index = None
 
+# Order status indicator
+total_products = len(st.session_state.order_items)
+if total_products > 0:
+    st.info(f"Current order: **{total_products}** product(s)")
+else:
+    st.info("Current order: **empty** — Add your first product below")
+
+st.divider()
+
 # ===== PRODUCT SELECTION =====
-st.header("1️⃣ Select Products")
+st.header("1. Select Products")
 
 # Create dropdowns for filtering
 col1, col2 = st.columns(2)
@@ -212,28 +230,28 @@ if selected_partner == "All Partners":
 else:
     product_data = df[(df["Artisan Partner"] == selected_partner) & (df["Gift Name"] == selected_product)].iloc[0]
 
-# Display product details
-st.subheader("📦 Product Details")
-col1, col2, col3, col4 = st.columns(4)
+# Display product details in cleaner layout
+st.markdown("##### Product Details")
+col1, col2 = st.columns(2)
 with col1:
-    st.metric("Partner", product_data["Artisan Partner"])
+    st.markdown(f"**Partner:** {product_data['Artisan Partner']}")
+    st.markdown(f"**Product Ref:** {product_data['Product Ref. No.']}")
 with col2:
-    st.metric("Product Ref.", product_data["Product Ref. No."])
-with col3:
     minimum_qty = product_data.get("Minimum Qty", "N/A")
-    st.metric("Minimum Qty", minimum_qty if minimum_qty else "N/A")
-with col4:
+    st.markdown(f"**Minimum Qty:** {minimum_qty if minimum_qty else 'N/A'}")
     origin = product_data.get("Origin Country", "N/A")
-    st.metric("Origin", origin if origin else "N/A")
+    st.markdown(f"**Origin:** {origin if origin else 'N/A'}")
 
 # Show product description if available
 description = product_data.get("Description", "")
 if description:
-    with st.expander("📝 Product Description"):
+    with st.expander("Product Description"):
         st.write(description)
 
+st.markdown("<br>", unsafe_allow_html=True)
+
 # ===== PRODUCT CUSTOMIZATION =====
-st.header("2️⃣ Customize Product")
+st.header("2. Customize Product")
 
 col1, col2 = st.columns(2)
 
@@ -242,10 +260,22 @@ with col1:
 
 with col2:
     # Default markup is 100% (meaning 2x the base price)
-    markup_percent = st.number_input("Markup %", min_value=0.0, value=100.0, step=5.0, key="input_markup")
+    markup_percent = st.number_input(
+        "Markup %",
+        min_value=0.0,
+        value=100.0,
+        step=5.0,
+        key="input_markup",
+        help="Your profit margin. 100% = double the cost (2x), 50% = 1.5x the cost, 200% = triple the cost (3x)"
+    )
 
 # Label options
-include_labels = st.checkbox("Add custom labels to this product", value=False, key="input_labels")
+include_labels = st.checkbox(
+    "Add custom labels to this product",
+    value=False,
+    key="input_labels",
+    help="Custom branding labels for the product. Minimum 100 labels required (Jaggery partner). Includes art setup fee."
+)
 
 # Minimum quantity validation
 minimum_qty_str = product_data.get("Minimum Qty", "")
@@ -253,18 +283,20 @@ if minimum_qty_str:
     try:
         minimum_qty = int(clean_price(minimum_qty_str)) if clean_price(minimum_qty_str) else 0
         if minimum_qty > 0 and quantity < minimum_qty:
-            st.warning(f"⚠️ Minimum order quantity for this product is {minimum_qty} units. You've entered {quantity} units.")
+            st.warning(f"Minimum order quantity for this product is {minimum_qty} units. You've entered {quantity} units.")
     except (ValueError, TypeError):
         pass  # Skip validation if minimum qty is invalid
 
+st.markdown("<br>", unsafe_allow_html=True)
+
 # ===== PRODUCT PREVIEW & ADD TO ORDER =====
-st.header("3️⃣ Product Preview")
+st.header("3. Product Preview")
 
 # Get price for quantity (tiered pricing)
 base_price, tier_range, tier_column = get_price_for_quantity(product_data, quantity)
 
 if base_price is None:
-    st.error("❌ No pricing available for this quantity. Please contact the partner.")
+    st.error("No pricing available for this quantity. Please contact the partner.")
     # DEBUG: Show available pricing columns
     with st.expander("🔍 Debug: Available Pricing Data"):
         pricing_cols = [
@@ -286,7 +318,7 @@ if base_price is None:
     st.stop()
 
 # Show which tier is being used
-st.info(f"📊 **Using pricing tier:** {tier_range} units | **Base price:** ${base_price:.2f} per unit")
+st.caption(f"Using pricing tier: {tier_range} units | Base price: ${base_price:.2f} per unit")
 
 # Calculate additional costs
 additional_costs = calculate_additional_costs(product_data, quantity, include_labels)
@@ -337,10 +369,10 @@ if st.button(button_label, type="primary", use_container_width=True):
     if st.session_state.edit_index is not None:
         st.session_state.order_items[st.session_state.edit_index] = order_item
         st.session_state.edit_index = None
-        st.success("✅ Product updated in order!")
+        st.success("Product updated in order!")
     else:
         st.session_state.order_items.append(order_item)
-        st.success("✅ Product added to order!")
+        st.success("Product added to order!")
 
     st.rerun()
 
@@ -367,12 +399,17 @@ with st.expander("💵 Detailed Price Breakdown"):
 
 # ===== CURRENT ORDER SUMMARY =====
 st.divider()
-st.header("4️⃣ Current Order")
+st.header("4. Current Order")
 
 if len(st.session_state.order_items) == 0:
-    st.info("📦 No products added yet. Add products using the section above.")
+    st.info("""
+    **Your order is empty.**
+
+    Select a product from Section 1, customize the details in Section 2,
+    then click "Add to Order" in Section 3 to add items here.
+    """)
 else:
-    st.success(f"🛒 **{len(st.session_state.order_items)} product(s) in order**")
+    st.success(f"**{len(st.session_state.order_items)} product(s) in order**")
 
     # Display order items
     for idx, item in enumerate(st.session_state.order_items):
@@ -394,7 +431,7 @@ else:
                     st.rerun()
 
             with col3:
-                if st.button("🗑️ Remove", key=f"remove_{idx}"):
+                if st.button("Remove", key=f"remove_{idx}"):
                     st.session_state.order_items.pop(idx)
                     st.rerun()
 
@@ -417,17 +454,17 @@ else:
             st.table(breakdown_df)
 
     # Clear order button
-    if st.button("🗑️ Clear Entire Order", type="secondary"):
+    if st.button("Clear Entire Order", type="secondary"):
         st.session_state.order_items = []
         st.session_state.edit_index = None
         st.rerun()
 
 # ===== ORDER SETTINGS =====
 st.divider()
-st.header("5️⃣ Order Settings")
+st.header("5. Order Settings")
 
 if len(st.session_state.order_items) == 0:
-    st.info("💡 Add products to your order first, then set shipping and tariff costs here.")
+    st.caption("Add products to your order first, then set shipping and tariff costs here.")
     # Set defaults but disable interaction
     shipping = 0.0
     tariff = 0.0
@@ -435,16 +472,28 @@ else:
     col1, col2 = st.columns(2)
 
     with col1:
-        shipping = st.number_input("Shipping Cost ($)", min_value=0.0, value=0.0, step=10.0, key="order_shipping",
-                                    help="Total shipping cost for the entire order")
+        shipping = st.number_input(
+            "Shipping Cost ($)",
+            min_value=0.0,
+            value=0.0,
+            step=10.0,
+            key="order_shipping",
+            help="One-time shipping cost for the entire order (not per product)"
+        )
 
     with col2:
-        tariff = st.number_input("Tariff Cost ($)", min_value=0.0, value=0.0, step=10.0, key="order_tariff",
-                                  help="Total tariff/duty cost for the entire order")
+        tariff = st.number_input(
+            "Tariff Cost ($)",
+            min_value=0.0,
+            value=0.0,
+            step=10.0,
+            key="order_tariff",
+            help="Import taxes or customs fees for the entire order. Leave at $0 if not applicable."
+        )
 
 # ===== TOTAL ORDER CALCULATION =====
 if len(st.session_state.order_items) == 0:
-    st.info("💡 Add products to your order to see the total quote calculation.")
+    st.caption("Add products to your order to see the total quote calculation.")
 else:
     # Calculate totals
     products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
@@ -452,7 +501,7 @@ else:
     total_units = sum(item['quantity'] for item in st.session_state.order_items)
 
     # Display summary
-    st.subheader("💵 Order Summary")
+    st.subheader("Order Summary")
 
     summary_items = []
     for item in st.session_state.order_items:
@@ -473,16 +522,16 @@ else:
 
     # Display total
     avg_per_unit = total_quote / total_units if total_units > 0 else 0
-    st.success(f"### 💰 Total Quote: ${total_quote:.2f} ({total_units} total units @ ${avg_per_unit:.2f} avg per unit)")
+    st.success(f"**Total Quote: ${total_quote:.2f}** ({total_units} total units @ ${avg_per_unit:.2f} avg per unit)")
 
 # ===== PROPOSAL GENERATION =====
 st.divider()
-st.header("7️⃣ Proposal")
+st.header("7. Proposal")
 
 if len(st.session_state.order_items) == 0:
-    st.info("💡 Add products to your order to generate a proposal.")
+    st.caption("Add products to your order to generate a proposal.")
 else:
-    st.subheader("📄 Quote Proposal")
+    st.subheader("Quote Proposal")
 
     # Calculate totals
     products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
@@ -525,16 +574,16 @@ else:
     proposal_df = pd.DataFrame(proposal_items, columns=["Item", "Details"])
     st.table(proposal_df)
 
-    st.info("💡 Copy this table and paste into your proposal template.")
+    st.caption("Copy this table and paste into your proposal template.")
 
 # ===== INVOICE GENERATION =====
 st.divider()
-st.header("8️⃣ Invoice")
+st.header("8. Invoice")
 
 if len(st.session_state.order_items) == 0:
-    st.info("💡 Add products to your order to generate an invoice.")
+    st.caption("Add products to your order to generate an invoice.")
 else:
-    st.subheader("🧾 Invoice")
+    st.subheader("Invoice")
     invoice_date = datetime.now().strftime("%Y-%m-%d")
 
     # Calculate totals
@@ -569,7 +618,7 @@ else:
     invoice_df = pd.DataFrame(invoice_items, columns=["Field", "Value"])
     st.table(invoice_df)
 
-    st.info("💡 Copy this table and paste into your invoice template.")
+    st.caption("Copy this table and paste into your invoice template.")
 
 # ===== FOOTER =====
 st.divider()
