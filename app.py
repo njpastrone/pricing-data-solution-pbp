@@ -14,8 +14,27 @@ st.set_page_config(
     page_title="PBP Pricing App",
     page_icon="💰",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="auto"
 )
+
+# ===== SESSION STATE INITIALIZATION (MUST BE EARLY) =====
+# Initialize order_items if not exists
+if 'order_items' not in st.session_state:
+    st.session_state.order_items = []
+
+# Initialize edit_index (None = adding new item, number = editing existing item)
+if 'edit_index' not in st.session_state:
+    st.session_state.edit_index = None
+
+# Initialize order history
+if 'order_history' not in st.session_state:
+    st.session_state.order_history = []
+
+# Initialize shipping and tariff in session state
+if 'order_shipping' not in st.session_state:
+    st.session_state.order_shipping = 0.0
+if 'order_tariff' not in st.session_state:
+    st.session_state.order_tariff = 0.0
 
 st.title("Peace by Piece Pricing & Quoting App")
 
@@ -26,6 +45,144 @@ for artisan products. Select products, customize your order, and generate profes
 proposals with detailed pricing breakdowns.
 """)
 st.divider()
+
+# ===== SIDEBAR =====
+with st.sidebar:
+    st.markdown("## Instructions & Tools")
+
+    # Section 1: Instructions
+    with st.expander("How to Use This App", expanded=False):
+        st.markdown("""
+        **Step-by-step guide:**
+
+        1. **Select Product** - Choose partner and product from dropdowns
+        2. **Customize Product** - Enter quantity and markup percentage
+        3. **Add Labels (Optional)** - Check box if customer wants custom branding
+        4. **Review Preview** - Check the pricing breakdown
+        5. **Add to Order** - Click "Add to Order" button
+        6. **Repeat** - Add more products if needed
+        7. **Set Order Settings** - Enter shipping and tariff costs
+        8. **Review Total** - Check the order summary and total quote
+        9. **Generate Outputs** - Copy proposal or invoice tables
+        """)
+
+    st.markdown("---")
+
+    # Section 2: Recent Orders
+    st.markdown("### Recent Orders")
+    if len(st.session_state.order_history) == 0:
+        st.caption("No recent orders this session")
+    else:
+        # Show last 5 orders, most recent first
+        for idx, order in enumerate(reversed(st.session_state.order_history[-5:])):
+            with st.container():
+                timestamp_str = order['timestamp'].strftime('%I:%M %p')
+                product_preview = ', '.join(order['product_names'][:2])
+                if len(order['product_names']) > 2:
+                    product_preview += f" +{len(order['product_names'])-2} more"
+
+                st.caption(f"{timestamp_str} - {product_preview}")
+                st.caption(f"${order['total_quote']:.2f} ({order['total_units']} units)")
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Load", key=f"load_order_{idx}", use_container_width=True):
+                        # Reload this order
+                        st.session_state.order_items = order['order_items'].copy()
+                        st.session_state.order_shipping = order['shipping']
+                        st.session_state.order_tariff = order['tariff']
+                        st.rerun()
+                with col2:
+                    if st.button("Delete", key=f"delete_order_{idx}", use_container_width=True):
+                        # Remove from history
+                        actual_idx = len(st.session_state.order_history) - 1 - idx
+                        st.session_state.order_history.pop(actual_idx)
+                        st.rerun()
+
+                if idx < min(4, len(st.session_state.order_history) - 1):
+                    st.markdown("---")
+
+    st.markdown("---")
+
+    # Section 3: Data Status
+    st.markdown("### Data Status")
+    if 'data_loaded_at' in st.session_state:
+        load_time = st.session_state.data_loaded_at
+        time_ago = datetime.now() - load_time
+
+        if time_ago.seconds < 60:
+            time_str = "Just now"
+        elif time_ago.seconds < 3600:
+            time_str = f"{time_ago.seconds // 60} min ago"
+        else:
+            time_str = load_time.strftime('%I:%M %p')
+
+        st.caption(f"Last updated: {time_str}")
+
+        if st.button("Refresh Data", use_container_width=True):
+            # Clear cached data and reload
+            st.session_state.pricing_df = load_pricing_data()
+            st.session_state.data_loaded_at = datetime.now()
+            st.rerun()
+    else:
+        st.caption("Data status: Unknown")
+
+    st.markdown("---")
+
+    # Section 4: Download Options
+    st.markdown("### Download Options")
+
+    # Download current order as CSV
+    if len(st.session_state.order_items) > 0:
+        import io
+        import csv
+
+        # Build CSV content
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Header
+        writer.writerow(["Product", "Quantity", "Per Unit", "Total"])
+
+        # Order items
+        for item in st.session_state.order_items:
+            writer.writerow([
+                item['product_name'],
+                item['quantity'],
+                f"${item['total_per_unit']:.2f}",
+                f"${item['product_total']:.2f}"
+            ])
+
+        # Add totals
+        products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
+        writer.writerow(["Shipping", "", "", f"${st.session_state.order_shipping:.2f}"])
+        writer.writerow(["Tariff", "", "", f"${st.session_state.order_tariff:.2f}"])
+        total_quote = products_subtotal + st.session_state.order_shipping + st.session_state.order_tariff
+        writer.writerow(["TOTAL", "", "", f"${total_quote:.2f}"])
+
+        csv_content = output.getvalue()
+
+        st.download_button(
+            label="Download Order (CSV)",
+            data=csv_content,
+            file_name=f"order_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    else:
+        st.caption("Add products to download order")
+
+    # Download master pricing data
+    if 'pricing_df' in st.session_state:
+        csv_pricing = st.session_state.pricing_df.to_csv(index=False)
+
+        st.download_button(
+            label="Download Pricing Data (CSV)",
+            data=csv_pricing,
+            file_name=f"pricing_data_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
 
 # ===== HELPER FUNCTIONS =====
 
@@ -180,27 +337,21 @@ def load_pricing_data():
 
 # Load data
 try:
-    df = load_pricing_data()
+    if 'pricing_df' not in st.session_state:
+        st.session_state.pricing_df = load_pricing_data()
+        st.session_state.data_loaded_at = datetime.now()
+    df = st.session_state.pricing_df
     st.success(f"Loaded {len(df)} products from jaggery_demo")
 except Exception as e:
     st.error(f"Failed to load data: {e}")
     st.stop()
 
-# ===== SESSION STATE INITIALIZATION =====
-# Initialize order_items if not exists
-if 'order_items' not in st.session_state:
-    st.session_state.order_items = []
-
-# Initialize edit_index (None = adding new item, number = editing existing item)
-if 'edit_index' not in st.session_state:
-    st.session_state.edit_index = None
-
 # Order status indicator
 total_products = len(st.session_state.order_items)
 if total_products > 0:
-    st.info(f"Current order: **{total_products}** product(s)")
+    st.info(f"Current order: {total_products} product(s)")
 else:
-    st.info("Current order: **empty** — Add your first product below")
+    st.info("Current order: empty — Add your first product below")
 
 st.divider()
 
@@ -298,7 +449,7 @@ base_price, tier_range, tier_column = get_price_for_quantity(product_data, quant
 if base_price is None:
     st.error("No pricing available for this quantity. Please contact the partner.")
     # DEBUG: Show available pricing columns
-    with st.expander("🔍 Debug: Available Pricing Data"):
+    with st.expander("Debug: Available Pricing Data"):
         pricing_cols = [
             'PBP Cost w/o shipping (1-25)',
             'PBP Cost w/o shipping (26-50)',
@@ -339,7 +490,7 @@ product_total = subtotal_before_markup + markup_amount
 total_per_unit = product_total / quantity
 
 # Display product summary
-st.success(f"### 💰 Product Total: ${product_total:.2f} ({quantity} units @ ${total_per_unit:.2f} each)")
+st.success(f"Product Total: ${product_total:.2f}  ({quantity} units @ ${total_per_unit:.2f} each)")
 
 # Add to Order button
 button_label = "Update Product in Order" if st.session_state.edit_index is not None else "Add to Order"
@@ -377,7 +528,7 @@ if st.button(button_label, type="primary", use_container_width=True):
     st.rerun()
 
 # Show detailed breakdown in expander
-with st.expander("💵 Detailed Price Breakdown"):
+with st.expander("Detailed Price Breakdown"):
     breakdown_items = [
         ["Base Price (tier: " + tier_range + ")", f"${base_price:.2f}", f"${product_subtotal:.2f}"]
     ]
@@ -409,11 +560,11 @@ if len(st.session_state.order_items) == 0:
     then click "Add to Order" in Section 3 to add items here.
     """)
 else:
-    st.success(f"**{len(st.session_state.order_items)} product(s) in order**")
+    st.success(f"{len(st.session_state.order_items)} product(s) in order")
 
     # Display order items
     for idx, item in enumerate(st.session_state.order_items):
-        with st.expander(f"**{item['product_name']}** - {item['quantity']} units @ ${item['total_per_unit']:.2f} each = ${item['product_total']:.2f}"):
+        with st.expander(f"{item['product_name']}  -  {item['quantity']} units @ ${item['total_per_unit']:.2f} each  =  ${item['product_total']:.2f}"):
             col1, col2, col3 = st.columns([2, 1, 1])
 
             with col1:
@@ -465,31 +616,32 @@ st.header("5. Order Settings")
 
 if len(st.session_state.order_items) == 0:
     st.caption("Add products to your order first, then set shipping and tariff costs here.")
-    # Set defaults but disable interaction
-    shipping = 0.0
-    tariff = 0.0
 else:
     col1, col2 = st.columns(2)
 
     with col1:
-        shipping = st.number_input(
+        st.session_state.order_shipping = st.number_input(
             "Shipping Cost ($)",
             min_value=0.0,
-            value=0.0,
+            value=st.session_state.order_shipping,
             step=10.0,
-            key="order_shipping",
+            key="shipping_input",
             help="One-time shipping cost for the entire order (not per product)"
         )
 
     with col2:
-        tariff = st.number_input(
+        st.session_state.order_tariff = st.number_input(
             "Tariff Cost ($)",
             min_value=0.0,
-            value=0.0,
+            value=st.session_state.order_tariff,
             step=10.0,
-            key="order_tariff",
+            key="tariff_input",
             help="Import taxes or customs fees for the entire order. Leave at $0 if not applicable."
         )
+
+# Use session state values for calculations
+shipping = st.session_state.order_shipping
+tariff = st.session_state.order_tariff
 
 # ===== TOTAL ORDER CALCULATION =====
 if len(st.session_state.order_items) == 0:
@@ -522,7 +674,24 @@ else:
 
     # Display total
     avg_per_unit = total_quote / total_units if total_units > 0 else 0
-    st.success(f"**Total Quote: ${total_quote:.2f}** ({total_units} total units @ ${avg_per_unit:.2f} avg per unit)")
+    st.success(f"Total Quote: ${total_quote:.2f}  ({total_units} total units @ ${avg_per_unit:.2f} avg per unit)")
+
+    # Save to history button
+    if st.button("Save Quote to History", type="secondary"):
+        # Create order history entry
+        order_entry = {
+            'timestamp': datetime.now(),
+            'total_quote': total_quote,
+            'total_units': total_units,
+            'num_products': len(st.session_state.order_items),
+            'product_names': [item['product_name'] for item in st.session_state.order_items],
+            'order_items': [item.copy() for item in st.session_state.order_items],
+            'shipping': shipping,
+            'tariff': tariff
+        }
+        st.session_state.order_history.append(order_entry)
+        st.success("Quote saved to history!")
+        st.rerun()
 
 # ===== PROPOSAL GENERATION =====
 st.divider()
@@ -623,4 +792,4 @@ else:
 # ===== FOOTER =====
 st.divider()
 st.caption(f"Last data refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-st.caption("💡 Click menu → 'Rerun' to refresh pricing data from Google Sheets")
+st.caption("Click menu → 'Rerun' to refresh pricing data from Google Sheets")

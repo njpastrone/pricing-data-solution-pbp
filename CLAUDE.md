@@ -14,6 +14,7 @@
 8. **Avoid duplicating code**
 9. **Refer to markdown files for context consistently**
 10. **Do not be afraid to ask the user for questions or clarifications**
+11. **NEVER use emojis in the app** - emojis make everything look AI-generated and unprofessional
 
 ---
 
