@@ -26,6 +26,8 @@
 
 **ALWAYS refer to [docs/METHODOLOGY_LOGIC.md](docs/METHODOLOGY_LOGIC.md) for pricing calculations, business rules, and partner-specific methodologies.**
 
+**ALWAYS refer to [docs/INVOICE_REQUIREMENTS.md](docs/INVOICE_REQUIREMENTS.md) for invoice format specifications and required information.**
+
 ---
 
 ## Project Overview
@@ -102,6 +104,7 @@ pricing-data-solution-pbp/
 │   ├── PLANNING.md            # Project requirements & goals
 │   ├── DATA_STRUCTURE.md      # jaggery_demo data structure
 │   ├── METHODOLOGY_LOGIC.md   # Pricing calculations & business rules
+│   ├── INVOICE_REQUIREMENTS.md # Invoice format specification
 │   ├── APP_UPDATE_PLAN.md     # Implementation plan & details
 │   └── MIGRATION_SUMMARY.md   # Migration history
 │
@@ -128,17 +131,20 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 1.0 - Tiered Pricing with jaggery_demo
+**Version:** 1.2 - Multi-Product Ordering with Professional Invoice Format
 
-**Last Updated:** 2025-10-02
+**Last Updated:** 2025-10-05
 
 **Features Implemented:**
 - ✅ Tiered pricing system (7 quantity ranges)
+- ✅ Multi-product ordering with add-to-cart pattern
+- ✅ Per-product markup configuration
 - ✅ Optional custom labels with minimum enforcement
 - ✅ Art setup fee (conditional on labels)
 - ✅ Smart markup calculation (product only)
 - ✅ Detailed cost breakdowns
 - ✅ Minimum quantity validation
+- ✅ Professional 6-column invoice table format
 - ✅ Clean, organized codebase structure
 
 **Testing Status:**

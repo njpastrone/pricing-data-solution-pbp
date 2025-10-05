@@ -59,6 +59,11 @@ Create a data solutions system for a small business to streamline the processes 
 - Per-product markup configuration
 - Order-level shipping and tariff costs
 - Enhanced proposal and invoice for multi-product orders
+- **Invoice Format Refinement - COMPLETE** ✅
+- Professional 6-column invoice table format
+- Line items with Product Name, Description, Quantity, Tier, Per-Unit Price, Total
+- Separate totals section with Subtotal (Pre-Tax), Shipping, Tariff, Final Total
+- Invoice requirements documented in INVOICE_REQUIREMENTS.md
 - Ready for testing and user feedback  
 
 ---

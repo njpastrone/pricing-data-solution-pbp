@@ -45,6 +45,7 @@ pricing-data-solution-pbp/
 │   ├── PLANNING.md            # Project requirements & goals
 │   ├── DATA_STRUCTURE.md      # jaggery_demo data structure
 │   ├── METHODOLOGY_LOGIC.md   # Pricing calculations & business rules
+│   ├── INVOICE_REQUIREMENTS.md # Invoice format specification
 │   ├── APP_UPDATE_PLAN.md     # Implementation plan & technical details
 │   └── MIGRATION_SUMMARY.md   # Migration history (jaggery_sample_6_23 → jaggery_demo)
 │
@@ -78,7 +79,8 @@ pricing-data-solution-pbp/
 - **Markup Calculation:** Applies markup to product price only (not fees/shipping/tariff)
 - **Detailed Breakdowns:** Per-product and order-level cost breakdowns
 - **Order Management:** Edit, remove, or clear products from order
-- **Proposal & Invoice Generation:** Multi-product copy-paste ready tables
+- **Proposal Generation:** Detailed multi-product proposal with cost breakdowns
+- **Invoice Generation:** Professional 6-column invoice table with line items and totals
 
 ### Formula
 
