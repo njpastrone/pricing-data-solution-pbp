@@ -786,7 +786,7 @@ else:
         ["Tariff", f"${tariff:.2f}"],
         ["**Final Total**", f"**${total_quote:.2f}**"]
     ]
-    totals_df = pd.DataFrame(totals_data, columns=["", ""])
+    totals_df = pd.DataFrame(totals_data, columns=["Item", "Amount"])
     st.table(totals_df)
 
     st.caption("Copy this table and paste into your invoice template.")
