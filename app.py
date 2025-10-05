@@ -755,37 +755,39 @@ else:
     st.subheader("Invoice")
     invoice_date = datetime.now().strftime("%Y-%m-%d")
 
+    st.write(f"**Invoice Date:** {invoice_date}")
+    st.write("")  # Spacing
+
     # Calculate totals
     products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
     total_quote = products_subtotal + shipping + tariff
-    total_units = sum(item['quantity'] for item in st.session_state.order_items)
 
-    invoice_items = [
-        ["Invoice Date", invoice_date],
-        ["", ""]
-    ]
+    # Build line items table
+    invoice_line_items = []
+    for item in st.session_state.order_items:
+        invoice_line_items.append({
+            'Product/Service Name': item['product_name'],
+            'Description': f"Product Ref: {item['product_ref']}, Partner: {item['partner']}",
+            'Quantity': item['quantity'],
+            'Pricing Tier': item['tier_range'],
+            'Price (Per-Unit)': f"${item['total_per_unit']:.2f}",
+            'Total (Per-Item)': f"${item['product_total']:.2f}"
+        })
 
-    # Add each product line
-    for idx, item in enumerate(st.session_state.order_items, 1):
-        invoice_items.append([f"Product {idx}", item['product_name']])
-        invoice_items.append(["  Partner", item['partner']])
-        invoice_items.append(["  Product Ref.", item['product_ref']])
-        invoice_items.append(["  Quantity", item['quantity']])
-        invoice_items.append(["  Pricing Tier", item['tier_range']])
-        invoice_items.append(["  Unit Price", f"${item['total_per_unit']:.2f}"])
-        invoice_items.append(["  Subtotal", f"${item['product_total']:.2f}"])
-        invoice_items.append(["", ""])  # Blank row
+    # Display line items table
+    invoice_df = pd.DataFrame(invoice_line_items)
+    st.table(invoice_df)
 
-    # Add order totals
-    invoice_items.extend([
-        ["Products Subtotal", f"${products_subtotal:.2f}"],
+    # Display totals section
+    st.write("")  # Spacing
+    totals_data = [
+        ["Subtotal (Pre-Tax)", f"${products_subtotal:.2f}"],
         ["Shipping", f"${shipping:.2f}"],
         ["Tariff", f"${tariff:.2f}"],
-        ["**Total Amount Due**", f"**${total_quote:.2f}**"]
-    ])
-
-    invoice_df = pd.DataFrame(invoice_items, columns=["Field", "Value"])
-    st.table(invoice_df)
+        ["**Final Total**", f"**${total_quote:.2f}**"]
+    ]
+    totals_df = pd.DataFrame(totals_data, columns=["", ""])
+    st.table(totals_df)
 
     st.caption("Copy this table and paste into your invoice template.")
 
