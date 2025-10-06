@@ -132,7 +132,7 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 1.3 - Enhanced Order Settings with Discounts, Rounding, and Custom Line Items
+**Version:** 1.4 - Per-Product Proposal Tables with Download Buttons
 
 **Last Updated:** 2025-10-06
 
@@ -149,6 +149,8 @@ pricing-data-solution-pbp/
 - ✅ Detailed cost breakdowns
 - ✅ Minimum quantity validation
 - ✅ Professional 6-column invoice table format
+- ✅ Per-product proposal tables (4-column MOQ format)
+- ✅ Download buttons for all major tables (proposals, invoices, order summary)
 - ✅ Clean, organized codebase structure
 
 **Testing Status:**
@@ -156,6 +158,8 @@ pricing-data-solution-pbp/
 - ✅ Calculations verified across multiple products
 - ✅ Label minimum enforcement working
 - ✅ All products loading successfully
+- ✅ Proposal tables generate correctly with MOQ pricing
+- ✅ Download functionality working for all table types
 
 **Production Status:** ✅ Ready
 

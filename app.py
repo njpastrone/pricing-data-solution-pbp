@@ -521,6 +521,7 @@ if st.button(button_label, type="primary", use_container_width=True):
         'product_name': product_data["Gift Name"],
         'product_ref': product_data["Product Ref. No."],
         'partner': product_data["Artisan Partner"],
+        'minimum_qty': product_data.get("Minimum Qty", ""),
         'quantity': quantity,
         'markup_percent': markup_percent,
         'include_labels': include_labels,
@@ -534,7 +535,8 @@ if st.button(button_label, type="primary", use_container_width=True):
         'subtotal_before_markup': subtotal_before_markup,
         'markup_amount': markup_amount,
         'product_total': product_total,
-        'total_per_unit': total_per_unit
+        'total_per_unit': total_per_unit,
+        'product_data_row': product_data  # Store full product row for proposal generation
     }
 
     # Add or update item
@@ -867,6 +869,16 @@ else:
     avg_per_unit = total_quote / total_units if total_units > 0 else 0
     st.success(f"Total Quote: ${total_quote:.2f}  ({total_units} total units @ ${avg_per_unit:.2f} avg per unit)")
 
+    # Add download button for order summary
+    summary_csv = summary_df.to_csv(index=False)
+    st.download_button(
+        label="Download Order Summary (CSV)",
+        data=summary_csv,
+        file_name=f"order_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+        key="download_order_summary"
+    )
+
     # Save to history button
     if st.button("Save Quote to History", type="secondary"):
         # Create order history entry
@@ -898,68 +910,127 @@ if len(st.session_state.order_items) == 0:
 else:
     st.subheader("Quote Proposal")
 
-    # Calculate totals (reuse discount calculations from above)
-    products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
-    discount_amount = products_subtotal * (discount_percent / 100)
-    total_quote = products_subtotal - discount_amount + shipping + tariff
+    st.markdown("Each product is presented in a separate table with MOQ pricing and discount information.")
+    st.markdown("")
 
-    # Apply marketing rounding if enabled
-    total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
-
-    total_units = sum(item['quantity'] for item in st.session_state.order_items)
-
-    # Build proposal items
-    proposal_items = []
-
-    # Add each product
+    # Generate a separate table for each product
     for idx, item in enumerate(st.session_state.order_items, 1):
-        proposal_items.append([f"**Product {idx}**", item['product_name']])
-
         # Check if custom item
         if item.get('is_custom', False):
-            proposal_items.append(["  Type", "Custom Line Item"])
-            proposal_items.append(["  Description", item.get('custom_description', 'Custom line item')])
-            proposal_items.append(["  Quantity", item['quantity']])
-            proposal_items.append(["  Unit Price", f"${item['total_per_unit']:.2f}"])
-            proposal_items.append(["  **Product Total**", f"**${item['product_total']:.2f}**"])
+            # Custom items: show simplified format
+            st.markdown(f"### Product {idx}: {item['product_name']}")
+
+            custom_table = pd.DataFrame([
+                {
+                    "Description": item.get('custom_description', 'Custom line item'),
+                    "Quantity": item['quantity'],
+                    "Unit Price": f"${item['total_per_unit']:.2f}",
+                    "Total": f"${item['product_total']:.2f}"
+                }
+            ])
+            st.table(custom_table)
+            st.caption("Custom line item")
+
+            # Add download button for custom item
+            custom_csv = custom_table.to_csv(index=False)
+            st.download_button(
+                label=f"Download Product {idx} Proposal (CSV)",
+                data=custom_csv,
+                file_name=f"proposal_product_{idx}_{item['product_name'].replace(' ', '_')}.csv",
+                mime="text/csv",
+                key=f"download_proposal_{idx}"
+            )
+
         else:
-            proposal_items.append(["  Partner", item['partner']])
-            proposal_items.append(["  Product Ref.", item['product_ref']])
-            proposal_items.append(["  Quantity", item['quantity']])
-            proposal_items.append(["  Pricing Tier", item['tier_range']])
-            proposal_items.append(["  Base Price (per unit)", f"${item['base_price']:.2f}"])
+            # Standard products: use new 4-column proposal format
+            st.markdown(f"### Product {idx}: {item['product_name']}")
 
-            if item['art_setup_total'] > 0:
-                proposal_items.append(["  Art Setup Fee", f"${item['art_setup_total']:.2f}"])
-            if item['label_cost_total'] > 0:
-                labels_charged = item['additional_costs'].get('labels_charged', 0)
-                proposal_items.append([f"  Labels ({labels_charged} units)", f"${item['label_cost_total']:.2f}"])
+            # Get MOQ (default to 5 if not available)
+            moq_raw = item.get('minimum_qty', '')
+            try:
+                moq = int(float(moq_raw)) if moq_raw and str(moq_raw).strip() != '' else 5
+            except (ValueError, TypeError):
+                moq = 5
 
-            proposal_items.append(["  Subtotal Before Markup", f"${item['subtotal_before_markup']:.2f}"])
-            proposal_items.append([f"  Markup ({item['markup_percent']:.1f}%)", f"${item['markup_amount']:.2f}"])
-            proposal_items.append(["  **Product Total**", f"**${item['product_total']:.2f}**"])
+            # Calculate price at MOQ quantity
+            product_row = item.get('product_data_row')
+            if product_row is not None:
+                # Get base price for MOQ quantity
+                moq_base_price, moq_tier_range, _ = get_price_for_quantity(product_row, moq)
 
-        proposal_items.append(["", ""])  # Blank row for spacing
+                if moq_base_price is not None:
+                    # Calculate additional costs at MOQ
+                    moq_additional = calculate_additional_costs(product_row, moq, item['include_labels'])
 
-    # Add order totals
-    proposal_items.append(["**Products Subtotal**", f"**${products_subtotal:.2f}**"])
+                    # Calculate per-unit price at MOQ
+                    moq_product_cost = moq_base_price * moq
+                    moq_art_setup = moq_additional.get('art_setup_fee_total', 0)
+                    moq_label_cost = moq_additional.get('label_cost_total', 0)
+                    moq_subtotal = moq_product_cost + moq_art_setup + moq_label_cost
 
-    # Add discount line if applicable
-    if discount_percent > 0:
-        proposal_items.append([f"Discount ({discount_description})", f"-${discount_amount:.2f}"])
+                    # Apply markup (on product cost only)
+                    moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
+                    moq_total = moq_subtotal + moq_markup_amount
+                    moq_price_per_unit = moq_total / moq
 
-    proposal_items.extend([
-        ["Shipping", f"${shipping:.2f}"],
-        ["Tariff", f"${tariff:.2f}"],
-        ["**Total Quote**", f"**${total_quote:.2f}**"],
-        ["**Total Units**", f"**{total_units}**"],
-        ["**Average Price Per Unit**", f"**${total_quote / total_units:.2f}**"]
-    ])
+                    # Calculate discount price per unit
+                    moq_discount_price = moq_price_per_unit * (1 - discount_percent / 100)
 
-    proposal_df = pd.DataFrame(proposal_items, columns=["Item", "Details"])
-    st.table(proposal_df)
+                    # Build column headers
+                    col_moq = "MOQ"
+                    col_price = f"Price Ea (@ Qty {moq})"
 
-    st.caption("Copy this table and paste into your proposal template.")
+                    # Discount column header
+                    if discount_percent > 0:
+                        col_discount = f"Price Ea {discount_description}"
+                    else:
+                        col_discount = "Price Ea (No Discount)"
+
+                    col_delivery = "Delivery"
+
+                    # Build proposal table
+                    proposal_table = pd.DataFrame([
+                        {
+                            col_moq: moq,
+                            col_price: f"${moq_price_per_unit:.2f}",
+                            col_discount: f"${moq_discount_price:.2f}",
+                            col_delivery: ""
+                        }
+                    ])
+
+                    st.table(proposal_table)
+
+                    # Build artwork/customization fees row
+                    fees_parts = []
+                    if moq_art_setup > 0:
+                        fees_parts.append(f"Artwork Set-Up: ${moq_art_setup:.2f}")
+
+                    if item['include_labels'] and moq_label_cost > 0:
+                        label_cost_per_unit = moq_additional.get('label_cost_per_label', 0)
+                        fees_parts.append(f"Labels: ${label_cost_per_unit:.2f} per unit")
+
+                    if fees_parts:
+                        st.caption("; ".join(fees_parts))
+                    else:
+                        st.caption("No additional customization fees")
+
+                    # Add download button for this product's proposal table
+                    proposal_csv = proposal_table.to_csv(index=False)
+                    st.download_button(
+                        label=f"Download Product {idx} Proposal (CSV)",
+                        data=proposal_csv,
+                        file_name=f"proposal_product_{idx}_{item['product_name'].replace(' ', '_')}.csv",
+                        mime="text/csv",
+                        key=f"download_proposal_{idx}"
+                    )
+                else:
+                    st.warning(f"Unable to calculate MOQ pricing for {item['product_name']}")
+            else:
+                st.warning(f"Product data not available for {item['product_name']}")
+
+        st.markdown("")  # Spacing between products
+
+    st.caption("Copy these tables and paste into your proposal template.")
 
 # ===== INVOICE GENERATION =====
 st.divider()
@@ -1026,6 +1097,35 @@ else:
     st.table(totals_df)
 
     st.caption("Copy this table and paste into your invoice template.")
+
+    # Add download button for complete invoice
+    # Combine line items and totals into one downloadable file
+    invoice_complete = invoice_df.copy()
+
+    # Add blank row
+    blank_row = pd.DataFrame([{col: "" for col in invoice_df.columns}])
+    invoice_complete = pd.concat([invoice_complete, blank_row], ignore_index=True)
+
+    # Add totals section
+    for total_item in totals_data:
+        total_row = pd.DataFrame([{
+            'Product/Service Name': total_item[0],
+            'Description': '',
+            'Quantity': '',
+            'Pricing Tier': '',
+            'Price (Per-Unit)': '',
+            'Total (Per-Item)': total_item[1]
+        }])
+        invoice_complete = pd.concat([invoice_complete, total_row], ignore_index=True)
+
+    invoice_csv = invoice_complete.to_csv(index=False)
+    st.download_button(
+        label="Download Complete Invoice (CSV)",
+        data=invoice_csv,
+        file_name=f"invoice_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+        key="download_invoice_complete"
+    )
 
 # ===== FOOTER =====
 st.divider()
