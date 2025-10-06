@@ -105,6 +105,7 @@ pricing-data-solution-pbp/
 │   ├── DATA_STRUCTURE.md      # jaggery_demo data structure
 │   ├── METHODOLOGY_LOGIC.md   # Pricing calculations & business rules
 │   ├── INVOICE_REQUIREMENTS.md # Invoice format specification
+│   ├── CLIENT_QUESTIONS.md    # Unanswered client questions
 │   ├── APP_UPDATE_PLAN.md     # Implementation plan & details
 │   └── MIGRATION_SUMMARY.md   # Migration history
 │
@@ -131,9 +132,9 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 1.2 - Multi-Product Ordering with Professional Invoice Format
+**Version:** 1.3 - Enhanced Order Settings with Discounts, Rounding, and Custom Line Items
 
-**Last Updated:** 2025-10-05
+**Last Updated:** 2025-10-06
 
 **Features Implemented:**
 - ✅ Tiered pricing system (7 quantity ranges)
@@ -142,6 +143,9 @@ pricing-data-solution-pbp/
 - ✅ Optional custom labels with minimum enforcement
 - ✅ Art setup fee (conditional on labels)
 - ✅ Smart markup calculation (product only)
+- ✅ Discount options (NGO preset 5% + custom discounts)
+- ✅ Marketing rounding (charm pricing: $60 → $59)
+- ✅ Custom line items for unique services/customizations
 - ✅ Detailed cost breakdowns
 - ✅ Minimum quantity validation
 - ✅ Professional 6-column invoice table format

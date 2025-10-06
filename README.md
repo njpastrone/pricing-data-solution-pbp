@@ -46,6 +46,7 @@ pricing-data-solution-pbp/
 │   ├── DATA_STRUCTURE.md      # jaggery_demo data structure
 │   ├── METHODOLOGY_LOGIC.md   # Pricing calculations & business rules
 │   ├── INVOICE_REQUIREMENTS.md # Invoice format specification
+│   ├── CLIENT_QUESTIONS.md    # Unanswered client questions
 │   ├── APP_UPDATE_PLAN.md     # Implementation plan & technical details
 │   └── MIGRATION_SUMMARY.md   # Migration history (jaggery_sample_6_23 → jaggery_demo)
 │
@@ -76,6 +77,9 @@ pricing-data-solution-pbp/
 - **Custom Labels:** Optional label costs with minimum quantity enforcement (100 labels)
 - **Art Setup Fee:** One-time setup fee per product
 - **Order-Level Costs:** Shipping and tariff applied once to entire order
+- **Discount Options:** Preset NGO discount (5%) or custom discounts with description and percentage
+- **Marketing Rounding:** Optional charm pricing (e.g., $60 → $59) for whole dollar amounts
+- **Custom Line Items:** Add unique services or customizations not in the product catalog
 - **Markup Calculation:** Applies markup to product price only (not fees/shipping/tariff)
 - **Detailed Breakdowns:** Per-product and order-level cost breakdowns
 - **Order Management:** Edit, remove, or clear products from order
@@ -94,10 +98,12 @@ Where:
 
 **Multi-Product Order:**
 ```
-Total Order = Sum(All Product Totals) + Shipping + Tariff
+Total Order = Sum(All Product Totals) - Discount + Shipping + Tariff
 
 Where:
+- Discount applies to products subtotal (not shipping/tariff)
 - Shipping and Tariff apply once to entire order
+- Optional marketing rounding applies to final total
 - Each product has independent markup percentage
 ```
 

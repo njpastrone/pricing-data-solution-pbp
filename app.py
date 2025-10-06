@@ -9,6 +9,13 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 from datetime import datetime
 
+# ===== HELPER FUNCTIONS =====
+def apply_marketing_rounding(price, enabled=True):
+    """Apply charm pricing: round whole dollar amounts down by $1 (e.g., $60 -> $59)"""
+    if enabled and price % 1 == 0:
+        return price - 1
+    return price
+
 # Page configuration
 st.set_page_config(
     page_title="PBP Pricing App",
@@ -35,6 +42,20 @@ if 'order_shipping' not in st.session_state:
     st.session_state.order_shipping = 0.0
 if 'order_tariff' not in st.session_state:
     st.session_state.order_tariff = 0.0
+
+# Initialize discount settings in session state
+if 'order_discount_type' not in st.session_state:
+    st.session_state.order_discount_type = "none"
+if 'order_discount_preset' not in st.session_state:
+    st.session_state.order_discount_preset = "NGO Discount (5%)"
+if 'order_discount_custom_desc' not in st.session_state:
+    st.session_state.order_discount_custom_desc = ""
+if 'order_discount_custom_value' not in st.session_state:
+    st.session_state.order_discount_custom_value = 0.0
+
+# Initialize marketing rounding setting
+if 'order_use_marketing_rounding' not in st.session_state:
+    st.session_state.order_use_marketing_rounding = False
 
 st.title("Peace by Piece Pricing & Quoting App")
 
@@ -565,44 +586,63 @@ else:
     # Display order items
     for idx, item in enumerate(st.session_state.order_items):
         with st.expander(f"{item['product_name']}  -  {item['quantity']} units @ ${item['total_per_unit']:.2f} each  =  ${item['product_total']:.2f}"):
-            col1, col2, col3 = st.columns([2, 1, 1])
+            # Check if custom item
+            if item.get('is_custom', False):
+                # Custom item display
+                col1, col2 = st.columns([3, 1])
 
-            with col1:
-                st.write(f"**Partner:** {item['partner']}")
-                st.write(f"**Product Ref:** {item['product_ref']}")
-                st.write(f"**Quantity:** {item['quantity']}")
-                st.write(f"**Pricing Tier:** {item['tier_range']}")
-                st.write(f"**Base Price:** ${item['base_price']:.2f} per unit")
-                st.write(f"**Markup:** {item['markup_percent']:.1f}%")
-                st.write(f"**Labels:** {'Yes' if item['include_labels'] else 'No'}")
+                with col1:
+                    st.write(f"**Type:** Custom Line Item")
+                    st.write(f"**Description:** {item.get('custom_description', 'N/A')}")
+                    st.write(f"**Quantity:** {item['quantity']}")
+                    st.write(f"**Unit Price:** ${item['total_per_unit']:.2f}")
+                    st.write(f"**Total Price:** ${item['product_total']:.2f}")
 
-            with col2:
-                if st.button("✏️ Edit", key=f"edit_{idx}"):
-                    st.session_state.edit_index = idx
-                    st.rerun()
+                with col2:
+                    if st.button("Remove", key=f"remove_{idx}"):
+                        st.session_state.order_items.pop(idx)
+                        st.rerun()
 
-            with col3:
-                if st.button("Remove", key=f"remove_{idx}"):
-                    st.session_state.order_items.pop(idx)
-                    st.rerun()
+            else:
+                # Regular product display
+                col1, col2, col3 = st.columns([2, 1, 1])
 
-            # Show breakdown
-            st.write("**Cost Breakdown:**")
-            breakdown_items = [
-                ["Base Price", f"${item['base_price']:.2f}", f"${item['product_subtotal']:.2f}"]
-            ]
+                with col1:
+                    st.write(f"**Partner:** {item['partner']}")
+                    st.write(f"**Product Ref:** {item['product_ref']}")
+                    st.write(f"**Quantity:** {item['quantity']}")
+                    st.write(f"**Pricing Tier:** {item['tier_range']}")
+                    st.write(f"**Base Price:** ${item['base_price']:.2f} per unit")
+                    st.write(f"**Markup:** {item['markup_percent']:.1f}%")
+                    st.write(f"**Labels:** {'Yes' if item['include_labels'] else 'No'}")
 
-            if item['art_setup_total'] > 0:
-                breakdown_items.append(["Art Setup Fee", f"${item['art_setup_total'] / item['quantity']:.2f}", f"${item['art_setup_total']:.2f}"])
-            if item['label_cost_total'] > 0:
-                breakdown_items.append(["Label Costs", f"${item['label_cost_total'] / item['quantity']:.2f}", f"${item['label_cost_total']:.2f}"])
+                with col2:
+                    if st.button("✏️ Edit", key=f"edit_{idx}"):
+                        st.session_state.edit_index = idx
+                        st.rerun()
 
-            breakdown_items.append(["**Subtotal**", f"**${item['subtotal_before_markup'] / item['quantity']:.2f}**", f"**${item['subtotal_before_markup']:.2f}**"])
-            breakdown_items.append([f"Markup ({item['markup_percent']:.1f}%)", f"${item['markup_amount'] / item['quantity']:.2f}", f"${item['markup_amount']:.2f}"])
-            breakdown_items.append(["**Product Total**", f"**${item['total_per_unit']:.2f}**", f"**${item['product_total']:.2f}**"])
+                with col3:
+                    if st.button("Remove", key=f"remove_{idx}"):
+                        st.session_state.order_items.pop(idx)
+                        st.rerun()
 
-            breakdown_df = pd.DataFrame(breakdown_items, columns=["Item", "Per Unit", "Total"])
-            st.table(breakdown_df)
+                # Show breakdown
+                st.write("**Cost Breakdown:**")
+                breakdown_items = [
+                    ["Base Price", f"${item['base_price']:.2f}", f"${item['product_subtotal']:.2f}"]
+                ]
+
+                if item['art_setup_total'] > 0:
+                    breakdown_items.append(["Art Setup Fee", f"${item['art_setup_total'] / item['quantity']:.2f}", f"${item['art_setup_total']:.2f}"])
+                if item['label_cost_total'] > 0:
+                    breakdown_items.append(["Label Costs", f"${item['label_cost_total'] / item['quantity']:.2f}", f"${item['label_cost_total']:.2f}"])
+
+                breakdown_items.append(["**Subtotal**", f"**${item['subtotal_before_markup'] / item['quantity']:.2f}**", f"**${item['subtotal_before_markup']:.2f}**"])
+                breakdown_items.append([f"Markup ({item['markup_percent']:.1f}%)", f"${item['markup_amount'] / item['quantity']:.2f}", f"${item['markup_amount']:.2f}"])
+                breakdown_items.append(["**Product Total**", f"**${item['total_per_unit']:.2f}**", f"**${item['product_total']:.2f}**"])
+
+                breakdown_df = pd.DataFrame(breakdown_items, columns=["Item", "Per Unit", "Total"])
+                st.table(breakdown_df)
 
     # Clear order button
     if st.button("Clear Entire Order", type="secondary"):
@@ -615,8 +655,10 @@ st.divider()
 st.header("5. Order Settings")
 
 if len(st.session_state.order_items) == 0:
-    st.caption("Add products to your order first, then set shipping and tariff costs here.")
+    st.caption("Add products to your order first, then configure order settings here.")
 else:
+    # Shipping & Tariff
+    st.subheader("Shipping & Tariff")
     col1, col2 = st.columns(2)
 
     with col1:
@@ -639,21 +681,165 @@ else:
             help="Import taxes or customs fees for the entire order. Leave at $0 if not applicable."
         )
 
+    # Discount Options
+    st.divider()
+    st.subheader("Discount Options")
+
+    discount_type = st.radio(
+        "Select discount type:",
+        options=["none", "preset", "custom"],
+        format_func=lambda x: {"none": "No Discount", "preset": "Preset Discount", "custom": "Custom Discount"}[x],
+        horizontal=True,
+        key="discount_type_radio"
+    )
+    st.session_state.order_discount_type = discount_type
+
+    if discount_type == "preset":
+        preset_options = [
+            "NGO Discount (5%)"
+        ]
+        st.session_state.order_discount_preset = st.selectbox(
+            "Select preset discount:",
+            options=preset_options,
+            key="discount_preset_select"
+        )
+
+    elif discount_type == "custom":
+        col1, col2 = st.columns(2)
+        with col1:
+            st.session_state.order_discount_custom_desc = st.text_input(
+                "Discount Description",
+                value=st.session_state.order_discount_custom_desc,
+                key="discount_custom_desc",
+                placeholder="e.g., Early Bird Special"
+            )
+        with col2:
+            st.session_state.order_discount_custom_value = st.number_input(
+                "Discount Percentage (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=st.session_state.order_discount_custom_value,
+                step=1.0,
+                key="discount_custom_value"
+            )
+
+    # Additional Options
+    st.divider()
+    st.subheader("Additional Options")
+
+    st.session_state.order_use_marketing_rounding = st.checkbox(
+        "Apply marketing rounding (e.g., $60 → $59)",
+        value=st.session_state.order_use_marketing_rounding,
+        key="marketing_rounding_checkbox",
+        help="Rounds whole dollar amounts down by $1 for charm pricing effect"
+    )
+
+    # Custom Line Items
+    st.divider()
+    st.subheader("Custom Line Items")
+
+    with st.expander("➕ Add Custom Line Item", expanded=False):
+        st.caption("Add unique services or customizations not in the catalog")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            custom_name = st.text_input(
+                "Product/Service Name*",
+                key="custom_name_input",
+                placeholder="e.g., Custom Engraving Service"
+            )
+            custom_quantity = st.number_input(
+                "Quantity*",
+                min_value=1,
+                value=1,
+                step=1,
+                key="custom_quantity_input"
+            )
+
+        with col2:
+            custom_description = st.text_input(
+                "Description",
+                key="custom_description_input",
+                placeholder="e.g., Laser engraving on wooden items"
+            )
+            custom_price = st.number_input(
+                "Total Price ($)*",
+                min_value=0.0,
+                value=0.0,
+                step=10.0,
+                key="custom_price_input",
+                help="Total price for this line item (quantity × unit price)"
+            )
+
+        if st.button("Add Custom Item to Order", type="secondary", use_container_width=True, key="add_custom_item_btn"):
+            # Validation
+            if not custom_name or custom_price <= 0:
+                st.error("Please fill in Product/Service Name and set Total Price greater than $0")
+            else:
+                # Create custom item
+                custom_item = {
+                    'product_name': custom_name,
+                    'product_ref': "CUSTOM",
+                    'partner': "Custom",
+                    'quantity': custom_quantity,
+                    'markup_percent': 0.0,
+                    'include_labels': False,
+                    'base_price': custom_price / custom_quantity,
+                    'tier_range': "N/A",
+                    'tier_column': "N/A",
+                    'additional_costs': {},
+                    'product_subtotal': custom_price,
+                    'art_setup_total': 0,
+                    'label_cost_total': 0,
+                    'subtotal_before_markup': custom_price,
+                    'markup_amount': 0,
+                    'product_total': custom_price,
+                    'total_per_unit': custom_price / custom_quantity,
+                    'is_custom': True,
+                    'custom_description': custom_description if custom_description else "Custom line item"
+                }
+
+                st.session_state.order_items.append(custom_item)
+                st.success(f"Added custom item: {custom_name}")
+                st.rerun()
+
 # Use session state values for calculations
 shipping = st.session_state.order_shipping
 tariff = st.session_state.order_tariff
 
+# Calculate discount
+discount_percent = 0.0
+discount_description = ""
+
+if st.session_state.order_discount_type == "preset":
+    # Extract percentage from preset string (e.g., "NGO Discount (5%)" -> 5.0)
+    preset = st.session_state.order_discount_preset
+    discount_description = preset
+    # Parse percentage from string like "NGO Discount (5%)"
+    if "(" in preset and "%" in preset:
+        percent_str = preset.split("(")[1].split("%")[0]
+        discount_percent = float(percent_str)
+
+elif st.session_state.order_discount_type == "custom":
+    discount_percent = st.session_state.order_discount_custom_value
+    discount_description = st.session_state.order_discount_custom_desc if st.session_state.order_discount_custom_desc else f"Custom Discount ({discount_percent}%)"
+
 # ===== TOTAL ORDER CALCULATION =====
+st.divider()
+st.header("6. Order Summary")
+
 if len(st.session_state.order_items) == 0:
     st.caption("Add products to your order to see the total quote calculation.")
 else:
     # Calculate totals
     products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
-    total_quote = products_subtotal + shipping + tariff
-    total_units = sum(item['quantity'] for item in st.session_state.order_items)
+    discount_amount = products_subtotal * (discount_percent / 100)
+    total_quote = products_subtotal - discount_amount + shipping + tariff
 
-    # Display summary
-    st.subheader("Order Summary")
+    # Apply marketing rounding if enabled
+    total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
+
+    total_units = sum(item['quantity'] for item in st.session_state.order_items)
 
     summary_items = []
     for item in st.session_state.order_items:
@@ -665,6 +851,11 @@ else:
         ])
 
     summary_items.append(["**Products Subtotal**", "", "", f"**${products_subtotal:.2f}**"])
+
+    # Add discount line if applicable
+    if discount_percent > 0:
+        summary_items.append([f"Discount ({discount_description})", "", "", f"-${discount_amount:.2f}"])
+
     summary_items.append(["Shipping", "", "", f"${shipping:.2f}"])
     summary_items.append(["Tariff", "", "", f"${tariff:.2f}"])
     summary_items.append(["**TOTAL QUOTE**", f"**{total_units} total units**", "", f"**${total_quote:.2f}**"])
@@ -687,7 +878,12 @@ else:
             'product_names': [item['product_name'] for item in st.session_state.order_items],
             'order_items': [item.copy() for item in st.session_state.order_items],
             'shipping': shipping,
-            'tariff': tariff
+            'tariff': tariff,
+            'discount_type': st.session_state.order_discount_type,
+            'discount_description': discount_description,
+            'discount_percent': discount_percent,
+            'discount_amount': discount_amount,
+            'use_marketing_rounding': st.session_state.order_use_marketing_rounding
         }
         st.session_state.order_history.append(order_entry)
         st.success("Quote saved to history!")
@@ -702,9 +898,14 @@ if len(st.session_state.order_items) == 0:
 else:
     st.subheader("Quote Proposal")
 
-    # Calculate totals
+    # Calculate totals (reuse discount calculations from above)
     products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
-    total_quote = products_subtotal + shipping + tariff
+    discount_amount = products_subtotal * (discount_percent / 100)
+    total_quote = products_subtotal - discount_amount + shipping + tariff
+
+    # Apply marketing rounding if enabled
+    total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
+
     total_units = sum(item['quantity'] for item in st.session_state.order_items)
 
     # Build proposal items
@@ -713,26 +914,41 @@ else:
     # Add each product
     for idx, item in enumerate(st.session_state.order_items, 1):
         proposal_items.append([f"**Product {idx}**", item['product_name']])
-        proposal_items.append(["  Partner", item['partner']])
-        proposal_items.append(["  Product Ref.", item['product_ref']])
-        proposal_items.append(["  Quantity", item['quantity']])
-        proposal_items.append(["  Pricing Tier", item['tier_range']])
-        proposal_items.append(["  Base Price (per unit)", f"${item['base_price']:.2f}"])
 
-        if item['art_setup_total'] > 0:
-            proposal_items.append(["  Art Setup Fee", f"${item['art_setup_total']:.2f}"])
-        if item['label_cost_total'] > 0:
-            labels_charged = item['additional_costs'].get('labels_charged', 0)
-            proposal_items.append([f"  Labels ({labels_charged} units)", f"${item['label_cost_total']:.2f}"])
+        # Check if custom item
+        if item.get('is_custom', False):
+            proposal_items.append(["  Type", "Custom Line Item"])
+            proposal_items.append(["  Description", item.get('custom_description', 'Custom line item')])
+            proposal_items.append(["  Quantity", item['quantity']])
+            proposal_items.append(["  Unit Price", f"${item['total_per_unit']:.2f}"])
+            proposal_items.append(["  **Product Total**", f"**${item['product_total']:.2f}**"])
+        else:
+            proposal_items.append(["  Partner", item['partner']])
+            proposal_items.append(["  Product Ref.", item['product_ref']])
+            proposal_items.append(["  Quantity", item['quantity']])
+            proposal_items.append(["  Pricing Tier", item['tier_range']])
+            proposal_items.append(["  Base Price (per unit)", f"${item['base_price']:.2f}"])
 
-        proposal_items.append(["  Subtotal Before Markup", f"${item['subtotal_before_markup']:.2f}"])
-        proposal_items.append([f"  Markup ({item['markup_percent']:.1f}%)", f"${item['markup_amount']:.2f}"])
-        proposal_items.append(["  **Product Total**", f"**${item['product_total']:.2f}**"])
+            if item['art_setup_total'] > 0:
+                proposal_items.append(["  Art Setup Fee", f"${item['art_setup_total']:.2f}"])
+            if item['label_cost_total'] > 0:
+                labels_charged = item['additional_costs'].get('labels_charged', 0)
+                proposal_items.append([f"  Labels ({labels_charged} units)", f"${item['label_cost_total']:.2f}"])
+
+            proposal_items.append(["  Subtotal Before Markup", f"${item['subtotal_before_markup']:.2f}"])
+            proposal_items.append([f"  Markup ({item['markup_percent']:.1f}%)", f"${item['markup_amount']:.2f}"])
+            proposal_items.append(["  **Product Total**", f"**${item['product_total']:.2f}**"])
+
         proposal_items.append(["", ""])  # Blank row for spacing
 
     # Add order totals
+    proposal_items.append(["**Products Subtotal**", f"**${products_subtotal:.2f}**"])
+
+    # Add discount line if applicable
+    if discount_percent > 0:
+        proposal_items.append([f"Discount ({discount_description})", f"-${discount_amount:.2f}"])
+
     proposal_items.extend([
-        ["**Products Subtotal**", f"**${products_subtotal:.2f}**"],
         ["Shipping", f"${shipping:.2f}"],
         ["Tariff", f"${tariff:.2f}"],
         ["**Total Quote**", f"**${total_quote:.2f}**"],
@@ -758,18 +974,30 @@ else:
     st.write(f"**Invoice Date:** {invoice_date}")
     st.write("")  # Spacing
 
-    # Calculate totals
+    # Calculate totals (reuse discount calculations from above)
     products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
-    total_quote = products_subtotal + shipping + tariff
+    discount_amount = products_subtotal * (discount_percent / 100)
+    total_quote = products_subtotal - discount_amount + shipping + tariff
+
+    # Apply marketing rounding if enabled
+    total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
 
     # Build line items table
     invoice_line_items = []
     for item in st.session_state.order_items:
+        # Check if custom item
+        if item.get('is_custom', False):
+            description = item.get('custom_description', 'Custom line item')
+            tier = "Custom"
+        else:
+            description = f"Product Ref: {item['product_ref']}, Partner: {item['partner']}"
+            tier = item['tier_range']
+
         invoice_line_items.append({
             'Product/Service Name': item['product_name'],
-            'Description': f"Product Ref: {item['product_ref']}, Partner: {item['partner']}",
+            'Description': description,
             'Quantity': item['quantity'],
-            'Pricing Tier': item['tier_range'],
+            'Pricing Tier': tier,
             'Price (Per-Unit)': f"${item['total_per_unit']:.2f}",
             'Total (Per-Item)': f"${item['product_total']:.2f}"
         })
@@ -781,11 +1009,19 @@ else:
     # Display totals section
     st.write("")  # Spacing
     totals_data = [
-        ["Subtotal (Pre-Tax)", f"${products_subtotal:.2f}"],
+        ["Subtotal (Pre-Tax)", f"${products_subtotal:.2f}"]
+    ]
+
+    # Add discount line if applicable
+    if discount_percent > 0:
+        totals_data.append([f"Discount ({discount_description})", f"-${discount_amount:.2f}"])
+
+    totals_data.extend([
         ["Shipping", f"${shipping:.2f}"],
         ["Tariff", f"${tariff:.2f}"],
         ["**Final Total**", f"**${total_quote:.2f}**"]
-    ]
+    ])
+
     totals_df = pd.DataFrame(totals_data, columns=["Item", "Amount"])
     st.table(totals_df)
 
