@@ -16,6 +16,25 @@ def apply_marketing_rounding(price, enabled=True):
         return price - 1
     return price
 
+def calculate_moq(unit_price):
+    """
+    Calculate Minimum Order Quantity based on $1,000 minimum order value.
+    Formula: MOQ = ceil(1000 / Unit Price)
+    """
+    import math
+    if unit_price <= 0:
+        return None
+    return math.ceil(1000 / unit_price)
+
+def calculate_credit_card_fee(total, apply_fee=False, fee_percent=2.9):
+    """
+    Calculate credit card processing fee if applicable.
+    Default rate: 2.9%
+    """
+    if apply_fee:
+        return total * (fee_percent / 100)
+    return 0.0
+
 def parse_tier_info(tier_string):
     """
     Parse 'T1: 1-25, T2: 26-50, ...' into dict of tier ranges.
@@ -144,6 +163,27 @@ if 'order_discount_custom_value' not in st.session_state:
 if 'order_use_marketing_rounding' not in st.session_state:
     st.session_state.order_use_marketing_rounding = False
 
+# Initialize client information
+if 'client_info' not in st.session_state:
+    st.session_state.client_info = {
+        'is_new_client': True,
+        'company_name': '',
+        'contact_name': '',
+        'contact_email': '',
+        'client_po': '',
+        'billing_address': '',
+        'shipping_type': 'One Location',
+        'shipping_address': '',
+        'payment_timeline': '50% upfront, 50% on delivery',
+        'payment_preference': 'Wire Transfer'
+    }
+
+# Initialize credit card fee settings
+if 'apply_cc_fee' not in st.session_state:
+    st.session_state.apply_cc_fee = False
+if 'cc_fee_percent' not in st.session_state:
+    st.session_state.cc_fee_percent = 2.9
+
 st.title("Peace by Piece Pricing & Quoting App")
 
 # Purpose statement
@@ -163,15 +203,16 @@ with st.sidebar:
         st.markdown("""
         **Step-by-step guide:**
 
-        1. **Select Partner & Product** - Choose from dropdowns
-        2. **Enter Quantity** - Tiered pricing applies automatically
-        3. **Set Markup** - Your profit margin percentage
-        4. **Add Customization (Optional)** - Custom labels, branding, etc.
-        5. **Review Preview** - Check the pricing breakdown
-        6. **Add to Order** - Click "Add to Order" button
-        7. **Repeat** - Add more products if needed
-        8. **Set Order Settings** - Shipping, tariff, discounts
-        9. **Generate Outputs** - Copy proposal or invoice tables
+        1. **Enter Client Information** - Company, contact, payment terms (optional but recommended)
+        2. **Select Partner & Product** - Choose from dropdowns
+        3. **Enter Quantity** - Tiered pricing applies automatically
+        4. **Set Markup** - Your profit margin percentage
+        5. **Add Customization (Optional)** - Custom labels, branding, etc.
+        6. **Review Preview** - Check the pricing breakdown
+        7. **Add to Order** - Click "Add to Order" button
+        8. **Repeat** - Add more products if needed
+        9. **Set Order Settings** - Shipping, tariff, discounts, credit card fees
+        10. **Generate Deliverables** - Proposal (with MOQ), Invoice, or Purchase Order
         """)
 
     st.markdown("---")
@@ -517,8 +558,93 @@ else:
 
 st.divider()
 
+# ===== CLIENT INFORMATION =====
+st.header("1. Client & Order Information")
+
+with st.expander("Client Details", expanded=False):
+    st.markdown("Enter client information for invoices and purchase orders.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.session_state.client_info['is_new_client'] = st.checkbox(
+            "New Client?",
+            value=st.session_state.client_info['is_new_client']
+        )
+
+        st.session_state.client_info['company_name'] = st.text_input(
+            "Company Name",
+            value=st.session_state.client_info['company_name'],
+            placeholder="e.g., Acme Corp"
+        )
+
+        st.session_state.client_info['contact_name'] = st.text_input(
+            "Contact Name",
+            value=st.session_state.client_info['contact_name'],
+            placeholder="e.g., John Smith"
+        )
+
+        st.session_state.client_info['contact_email'] = st.text_input(
+            "Contact Email",
+            value=st.session_state.client_info['contact_email'],
+            placeholder="e.g., john@acme.com"
+        )
+
+        st.session_state.client_info['client_po'] = st.text_input(
+            "Client PO Number (optional)",
+            value=st.session_state.client_info['client_po'],
+            placeholder="e.g., PO-2025-001"
+        )
+
+    with col2:
+        st.session_state.client_info['billing_address'] = st.text_area(
+            "Billing Address",
+            value=st.session_state.client_info['billing_address'],
+            placeholder="123 Main St\nCity, State ZIP",
+            height=100
+        )
+
+        st.session_state.client_info['shipping_type'] = st.selectbox(
+            "Shipping Type",
+            options=['One Location', 'Drop Shipping'],
+            index=0 if st.session_state.client_info['shipping_type'] == 'One Location' else 1
+        )
+
+        if st.session_state.client_info['shipping_type'] == 'One Location':
+            st.session_state.client_info['shipping_address'] = st.text_area(
+                "Shipping Address",
+                value=st.session_state.client_info['shipping_address'],
+                placeholder="456 Shipping Lane\nCity, State ZIP",
+                height=100
+            )
+        else:
+            st.session_state.client_info['shipping_address'] = ''
+            st.caption("Drop shipping details to be arranged separately")
+
+    st.markdown("---")
+
+    col3, col4 = st.columns(2)
+
+    with col3:
+        st.session_state.client_info['payment_timeline'] = st.text_input(
+            "Payment Timeline",
+            value=st.session_state.client_info['payment_timeline'],
+            placeholder="e.g., 50% upfront, 50% on delivery"
+        )
+
+    with col4:
+        st.session_state.client_info['payment_preference'] = st.selectbox(
+            "Payment Preference",
+            options=['Wire Transfer', 'Credit Card', 'ACH', 'Check'],
+            index=['Wire Transfer', 'Credit Card', 'ACH', 'Check'].index(
+                st.session_state.client_info['payment_preference']
+            ) if st.session_state.client_info['payment_preference'] in ['Wire Transfer', 'Credit Card', 'ACH', 'Check'] else 0
+        )
+
+st.divider()
+
 # ===== PRODUCT SELECTION =====
-st.header("1. Select Products")
+st.header("2. Select Products")
 
 # Create dropdowns for filtering
 col1, col2 = st.columns(2)
@@ -566,7 +692,7 @@ if tier_info and tier_info.strip() and tier_info != "NA":
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ===== PRODUCT CUSTOMIZATION =====
-st.header("2. Customize Product")
+st.header("3. Customize Product")
 
 col1, col2 = st.columns(2)
 
@@ -599,7 +725,7 @@ include_customization = st.checkbox(
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ===== PRODUCT PREVIEW & ADD TO ORDER =====
-st.header("3. Product Preview")
+st.header("4. Product Preview")
 
 # Get price for quantity using new system
 base_price, tier_range, tier_column = get_unit_price_new_system(product_data, quantity)
@@ -706,7 +832,7 @@ with st.expander("Detailed Price Breakdown"):
 
 # ===== CURRENT ORDER SUMMARY =====
 st.divider()
-st.header("4. Current Order")
+st.header("5. Current Order")
 
 if len(st.session_state.order_items) == 0:
     st.info("""
@@ -790,7 +916,7 @@ else:
 
 # ===== ORDER SETTINGS =====
 st.divider()
-st.header("5. Order Settings")
+st.header("6. Order Settings")
 
 if len(st.session_state.order_items) == 0:
     st.caption("Add products to your order first, then configure order settings here.")
@@ -865,12 +991,34 @@ else:
     st.divider()
     st.subheader("Additional Options")
 
-    st.session_state.order_use_marketing_rounding = st.checkbox(
-        "Apply marketing rounding (e.g., $60 → $59)",
-        value=st.session_state.order_use_marketing_rounding,
-        key="marketing_rounding_checkbox",
-        help="Rounds whole dollar amounts down by $1 for charm pricing effect"
-    )
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.session_state.order_use_marketing_rounding = st.checkbox(
+            "Apply marketing rounding (e.g., $60 → $59)",
+            value=st.session_state.order_use_marketing_rounding,
+            key="marketing_rounding_checkbox",
+            help="Rounds whole dollar amounts down by $1 for charm pricing effect"
+        )
+
+    with col2:
+        st.session_state.apply_cc_fee = st.checkbox(
+            "Apply credit card processing fee",
+            value=st.session_state.apply_cc_fee,
+            key="cc_fee_checkbox",
+            help="Add credit card processing fee to total (default 2.9%)"
+        )
+
+    if st.session_state.apply_cc_fee:
+        st.session_state.cc_fee_percent = st.number_input(
+            "Credit Card Fee Percentage (%)",
+            min_value=0.0,
+            max_value=10.0,
+            value=st.session_state.cc_fee_percent,
+            step=0.1,
+            key="cc_fee_percent_input",
+            help="Percentage fee charged for credit card payments"
+        )
 
     # Custom Line Items
     st.divider()
@@ -964,7 +1112,7 @@ elif st.session_state.order_discount_type == "custom":
 
 # ===== TOTAL ORDER CALCULATION =====
 st.divider()
-st.header("6. Order Summary")
+st.header("7. Order Summary")
 
 if len(st.session_state.order_items) == 0:
     st.caption("Add products to your order to see the total quote calculation.")
@@ -972,7 +1120,16 @@ else:
     # Calculate totals
     products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
     discount_amount = products_subtotal * (discount_percent / 100)
-    total_quote = products_subtotal - discount_amount + shipping + tariff
+    subtotal_after_discount = products_subtotal - discount_amount
+
+    # Calculate base total before CC fee
+    total_before_cc = subtotal_after_discount + shipping + tariff
+
+    # Calculate credit card fee (applied to total before CC fee)
+    cc_fee_amount = calculate_credit_card_fee(total_before_cc, st.session_state.apply_cc_fee, st.session_state.cc_fee_percent)
+
+    # Final total
+    total_quote = total_before_cc + cc_fee_amount
 
     # Apply marketing rounding if enabled
     total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
@@ -996,6 +1153,11 @@ else:
 
     summary_items.append(["Shipping", "", "", f"${shipping:.2f}"])
     summary_items.append(["Tariff", "", "", f"${tariff:.2f}"])
+
+    # Add credit card fee if applicable
+    if st.session_state.apply_cc_fee and cc_fee_amount > 0:
+        summary_items.append([f"Credit Card Fee ({st.session_state.cc_fee_percent}%)", "", "", f"${cc_fee_amount:.2f}"])
+
     summary_items.append(["**TOTAL QUOTE**", f"**{total_units} total units**", "", f"**${total_quote:.2f}**"])
 
     summary_df = pd.DataFrame(summary_items, columns=["Product", "Qty", "Per Unit", "Total"])
@@ -1039,7 +1201,7 @@ else:
 
 # ===== PROPOSAL GENERATION =====
 st.divider()
-st.header("7. Proposal")
+st.header("8. Proposal")
 
 if len(st.session_state.order_items) == 0:
     st.caption("Add products to your order to generate a proposal.")
@@ -1081,14 +1243,37 @@ else:
             # Standard products: use new 4-column proposal format
             st.markdown(f"### Product {idx}: {item['product_name']}")
 
-            # Use a default MOQ of 5 (not in new data structure)
-            moq = 5
-
-            # Calculate price at MOQ quantity
+            # Calculate MOQ based on $1,000 minimum order value
+            # First, get a preliminary unit price (use current order quantity as reference)
             product_row = item.get('product_data_row')
             if product_row is not None:
-                # Get base price for MOQ quantity using new system
-                moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
+                # Get base price using current quantity to estimate MOQ
+                preliminary_base_price, _, _ = get_unit_price_new_system(product_row, item['quantity'])
+
+                if preliminary_base_price is not None:
+                    # Calculate per-unit price including markup and customization
+                    temp_customization_per_unit = 0
+                    if item.get('include_customization', False):
+                        # Estimate customization per unit (setup fee amortized + per-unit cost)
+                        temp_setup = item.get('customization_setup_fee', 0)
+                        temp_per_unit = item.get('customization_per_unit', 0)
+                        # Use quantity of 100 as baseline for setup amortization estimate
+                        temp_customization_per_unit = (temp_setup / 100) + temp_per_unit
+
+                    # Estimate total per-unit price with markup
+                    temp_markup_multiplier = 1 + (item['markup_percent'] / 100)
+                    estimated_unit_price = (preliminary_base_price + temp_customization_per_unit) * temp_markup_multiplier
+
+                    # Calculate MOQ based on $1,000 minimum
+                    moq = calculate_moq(estimated_unit_price)
+                    if moq is None:
+                        moq = 5  # Fallback
+
+                    # Now get actual base price for MOQ quantity using new system
+                    moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
+                else:
+                    moq = 5  # Fallback
+                    moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
 
                 if moq_base_price is not None:
                     # Calculate customization costs at MOQ
@@ -1135,6 +1320,10 @@ else:
 
                     st.table(proposal_table)
 
+                    # Show MOQ calculation note
+                    moq_total_value = moq * moq_price_per_unit
+                    st.caption(f"MOQ calculated based on $1,000 minimum order value (MOQ {moq} units = ${moq_total_value:.2f})")
+
                     # Build customization fees row
                     fees_parts = []
                     if moq_customization_setup > 0:
@@ -1169,7 +1358,7 @@ else:
 
 # ===== INVOICE GENERATION =====
 st.divider()
-st.header("8. Invoice")
+st.header("9. Invoice")
 
 if len(st.session_state.order_items) == 0:
     st.caption("Add products to your order to generate an invoice.")
@@ -1177,13 +1366,40 @@ else:
     st.subheader("Invoice")
     invoice_date = datetime.now().strftime("%Y-%m-%d")
 
-    st.write(f"**Invoice Date:** {invoice_date}")
-    st.write("")  # Spacing
+    # Display client information header
+    st.markdown("#### Client Information")
+    client_info = st.session_state.client_info
 
-    # Calculate totals (reuse discount calculations from above)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Company:** {client_info['company_name'] if client_info['company_name'] else 'Not specified'}")
+        st.write(f"**Contact:** {client_info['contact_name'] if client_info['contact_name'] else 'Not specified'}")
+        st.write(f"**Email:** {client_info['contact_email'] if client_info['contact_email'] else 'Not specified'}")
+        if client_info['client_po']:
+            st.write(f"**Client PO:** {client_info['client_po']}")
+    with col2:
+        st.write(f"**Invoice Date:** {invoice_date}")
+        st.write(f"**New Client:** {'Yes' if client_info['is_new_client'] else 'No'}")
+        st.write(f"**Payment Terms:** {client_info['payment_timeline']}")
+        st.write(f"**Payment Method:** {client_info['payment_preference']}")
+
+    if client_info['billing_address']:
+        st.write(f"**Billing Address:** {client_info['billing_address']}")
+
+    if client_info['shipping_type'] == 'One Location' and client_info['shipping_address']:
+        st.write(f"**Shipping Address:** {client_info['shipping_address']}")
+    elif client_info['shipping_type'] == 'Drop Shipping':
+        st.write(f"**Shipping:** Drop Shipping (details to be arranged)")
+
+    st.divider()
+
+    # Calculate totals (same as order summary)
     products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
     discount_amount = products_subtotal * (discount_percent / 100)
-    total_quote = products_subtotal - discount_amount + shipping + tariff
+    subtotal_after_discount = products_subtotal - discount_amount
+    total_before_cc = subtotal_after_discount + shipping + tariff
+    cc_fee_amount = calculate_credit_card_fee(total_before_cc, st.session_state.apply_cc_fee, st.session_state.cc_fee_percent)
+    total_quote = total_before_cc + cc_fee_amount
 
     # Apply marketing rounding if enabled
     total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
@@ -1224,9 +1440,14 @@ else:
 
     totals_data.extend([
         ["Shipping", f"${shipping:.2f}"],
-        ["Tariff", f"${tariff:.2f}"],
-        ["**Final Total**", f"**${total_quote:.2f}**"]
+        ["Tariff", f"${tariff:.2f}"]
     ])
+
+    # Add credit card fee if applicable
+    if st.session_state.apply_cc_fee and cc_fee_amount > 0:
+        totals_data.append([f"Credit Card Fee ({st.session_state.cc_fee_percent}%)", f"${cc_fee_amount:.2f}"])
+
+    totals_data.append(["**Final Total**", f"**${total_quote:.2f}**"])
 
     totals_df = pd.DataFrame(totals_data, columns=["Item", "Amount"])
     st.table(totals_df)
@@ -1260,6 +1481,134 @@ else:
         file_name=f"invoice_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
         mime="text/csv",
         key="download_invoice_complete"
+    )
+
+# ===== PURCHASE ORDER GENERATION =====
+st.divider()
+st.header("10. Purchase Order")
+
+if len(st.session_state.order_items) == 0:
+    st.caption("Add products to your order to generate a purchase order.")
+else:
+    st.subheader("Purchase Order")
+    po_date = datetime.now().strftime("%Y-%m-%d")
+    po_number = f"PO-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
+    # Display PO header information
+    st.markdown("#### Purchase Order Information")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**PO Number:** {po_number}")
+        st.write(f"**PO Date:** {po_date}")
+        st.write(f"**Total Units:** {sum(item['quantity'] for item in st.session_state.order_items)}")
+        st.write(f"**Total Amount:** ${total_quote:.2f}")
+
+    with col2:
+        client_info = st.session_state.client_info
+        st.write(f"**Client:** {client_info['company_name'] if client_info['company_name'] else 'Not specified'}")
+        st.write(f"**Contact:** {client_info['contact_name'] if client_info['contact_name'] else 'Not specified'}")
+        st.write(f"**Email:** {client_info['contact_email'] if client_info['contact_email'] else 'Not specified'}")
+        if client_info['client_po']:
+            st.write(f"**Client PO Reference:** {client_info['client_po']}")
+
+    st.divider()
+
+    # Build PO line items table
+    st.markdown("#### Order Details")
+
+    po_line_items = []
+    for item in st.session_state.order_items:
+        if item.get('is_custom', False):
+            partner = "Custom"
+            product_ref = "N/A"
+            description = item.get('custom_description', 'Custom line item')
+        else:
+            partner = item['partner']
+            product_ref = item['product_ref']
+            description = f"Tier: {item['tier_range']}"
+
+        po_line_items.append({
+            'Partner': partner,
+            'Product/Service': item['product_name'],
+            'Product Ref': product_ref,
+            'Quantity': item['quantity'],
+            'Unit Cost': f"${item['total_per_unit']:.2f}",
+            'Total': f"${item['product_total']:.2f}",
+            'Notes': description
+        })
+
+    po_df = pd.DataFrame(po_line_items)
+    st.table(po_df)
+
+    # Display order summary
+    st.markdown("#### Order Summary")
+
+    summary_data = [
+        ["Products Subtotal", f"${products_subtotal:.2f}"]
+    ]
+
+    if discount_percent > 0:
+        summary_data.append([f"Discount ({discount_description})", f"-${discount_amount:.2f}"])
+
+    summary_data.extend([
+        ["Shipping", f"${shipping:.2f}"],
+        ["Tariff", f"${tariff:.2f}"]
+    ])
+
+    if st.session_state.apply_cc_fee and cc_fee_amount > 0:
+        summary_data.append([f"Credit Card Fee ({st.session_state.cc_fee_percent}%)", f"${cc_fee_amount:.2f}"])
+
+    summary_data.append(["**Total Order Value**", f"**${total_quote:.2f}**"])
+
+    summary_df = pd.DataFrame(summary_data, columns=["Item", "Amount"])
+    st.table(summary_df)
+
+    # Payment and shipping information
+    st.markdown("#### Payment & Shipping")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Payment Terms:** {client_info['payment_timeline']}")
+        st.write(f"**Payment Method:** {client_info['payment_preference']}")
+    with col2:
+        st.write(f"**Shipping Type:** {client_info['shipping_type']}")
+        if client_info['shipping_type'] == 'One Location' and client_info['shipping_address']:
+            st.write(f"**Shipping Address:**")
+            st.caption(client_info['shipping_address'])
+
+    if client_info['billing_address']:
+        st.write(f"**Billing Address:**")
+        st.caption(client_info['billing_address'])
+
+    st.caption("Copy this purchase order for your records.")
+
+    # Download button for PO
+    po_complete = po_df.copy()
+
+    # Add summary section
+    blank_row = pd.DataFrame([{col: "" for col in po_df.columns}])
+    po_complete = pd.concat([po_complete, blank_row], ignore_index=True)
+
+    for summary_item in summary_data:
+        summary_row = pd.DataFrame([{
+            'Partner': summary_item[0],
+            'Product/Service': '',
+            'Product Ref': '',
+            'Quantity': '',
+            'Unit Cost': '',
+            'Total': summary_item[1],
+            'Notes': ''
+        }])
+        po_complete = pd.concat([po_complete, summary_row], ignore_index=True)
+
+    po_csv = po_complete.to_csv(index=False)
+    st.download_button(
+        label="Download Purchase Order (CSV)",
+        data=po_csv,
+        file_name=f"purchase_order_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+        key="download_po"
     )
 
 # ===== FOOTER =====
