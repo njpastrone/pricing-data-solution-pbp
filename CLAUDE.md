@@ -20,9 +20,9 @@
 
 ## Important References
 
-**ALWAYS refer to [docs/PLANNING.md](docs/PLANNING.md) for project requirements, architecture decisions, and implementation plans before starting any work.**
+**ALWAYS refer to [docs/RESTRUCTURE_CONTEXT.md](docs/RESTRUCTURE_CONTEXT.md) for the current data structure from master_pricing_template_10_14.**
 
-**ALWAYS refer to [docs/DATA_STRUCTURE.md](docs/DATA_STRUCTURE.md) for the exact structure of the jaggery_demo data to avoid coding mistakes.**
+**ALWAYS refer to [docs/PLANNING.md](docs/PLANNING.md) for project requirements, architecture decisions, and implementation plans before starting any work.**
 
 **ALWAYS refer to [docs/METHODOLOGY_LOGIC.md](docs/METHODOLOGY_LOGIC.md) for pricing calculations, business rules, and partner-specific methodologies.**
 
@@ -64,29 +64,35 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 ## Architecture
 
 - **Frontend:** Streamlit (Python-based web app)
-- **Data Source:** Google Sheets (jaggery_demo)
+- **Data Source:** Google Sheets (master_pricing_template_10_14) with 3 sheets:
+  - **Template**: Partner-product pricing data
+  - **Metadata**: Deliverable field definitions
+  - **Partner-Specific Info**: Partner configuration reference
 - **Authentication:** Google Cloud service account
-- **Pricing Model:** Tiered pricing with 7 quantity ranges
+- **Pricing Model:** Flexible tiered or flat-rate pricing per product
 - **Data Flow:**
   1. App connects to Google Sheets via `gspread`
-  2. Loads pricing data into pandas DataFrame (skip row 1, headers at row 2, data from row 3)
-  3. User selects products, enters quantity, and custom options
-  4. App selects correct pricing tier based on quantity (1-25, 26-50, 51-100, 101-250, 251-500, 501-1000, 1000+)
-  5. Calculates quote: `Total = (Product Cost + Additional Costs + Markup) + Shipping + Tariff`
-     - Product Cost = Base Price (from tier) × Quantity
-     - Additional Costs = Art Setup Fee + Label Costs (if labels selected)
+  2. Loads three sheets into separate pandas DataFrames (headers at row 6 for Template, row 2 for others)
+  3. User selects partner, then product/service
+  4. App determines pricing structure (tiered Y/N) and selects appropriate price
+  5. For tiered products: parses tier ranges from "Pricing Tiers Info" column
+  6. Calculates quote: `Total = (Product Cost + Customization Costs + Markup) + Shipping + Tariff`
+     - Product Cost = Base Price (from tier or flat) × Quantity
+     - Customization = Setup Fee + (Per-Unit Cost × Quantity)
      - Markup = Product Cost × (Markup % / 100) - applies to product only, NOT fees/shipping/tariff
-  6. Displays detailed breakdown, proposal, and invoice as copyable tables
+  7. Displays detailed breakdown, proposal, and invoice as copyable tables
 
 ## Current Features
 
-- **Tiered Pricing:** Automatic tier selection based on order quantity
-- **Optional Labels:** Custom labels with minimum enforcement (100 labels for Jaggery partner)
-- **Art Setup Fee:** One-time fee per order (only when labels selected)
+- **Multi-Partner Support:** Select from multiple vendors/suppliers
+- **Flexible Pricing:** Both tiered and flat-rate products supported
+- **Dynamic Tier Parsing:** Tier ranges defined in data (not hardcoded)
+- **Customization Options:** Setup fees + per-unit costs for custom branding
 - **Smart Calculations:** Markup applies to product price only
 - **Detailed Breakdowns:** Per-unit and total cost breakdowns
-- **Minimum Quantity Validation:** Warns if order is below product minimum
-- **Soft-Coded Design:** Easy to modify tier ranges and partner-specific settings
+- **Discount Options:** NGO preset (5%) + custom discounts
+- **Marketing Rounding:** Charm pricing ($60 → $59)
+- **Custom Line Items:** Add unique services/customizations
 
 ## Project Structure
 
@@ -132,36 +138,34 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 1.4 - Per-Product Proposal Tables with Download Buttons
+**Version:** 2.0 - Multi-Partner Restructured System
 
-**Last Updated:** 2025-10-06
+**Last Updated:** 2025-10-14
 
 **Features Implemented:**
-- ✅ Tiered pricing system (7 quantity ranges)
+- ✅ Multi-partner support (Partner X and future partners)
+- ✅ Flexible pricing: tiered AND flat-rate products
+- ✅ Dynamic tier parsing from Google Sheets data
+- ✅ 3-sheet data architecture (Template, Metadata, Partner-Specific Info)
+- ✅ Customization system (setup fee + per-unit costs)
 - ✅ Multi-product ordering with add-to-cart pattern
 - ✅ Per-product markup configuration
-- ✅ Optional custom labels with minimum enforcement
-- ✅ Art setup fee (conditional on labels)
 - ✅ Smart markup calculation (product only)
 - ✅ Discount options (NGO preset 5% + custom discounts)
 - ✅ Marketing rounding (charm pricing: $60 → $59)
 - ✅ Custom line items for unique services/customizations
-- ✅ Detailed cost breakdowns
-- ✅ Minimum quantity validation
 - ✅ Professional 6-column invoice table format
 - ✅ Per-product proposal tables (4-column MOQ format)
-- ✅ Download buttons for all major tables (proposals, invoices, order summary)
-- ✅ Clean, organized codebase structure
+- ✅ Download buttons for all major tables
 
 **Testing Status:**
-- ✅ Tier selection verified (e.g., quantity 70 → 51-100 tier)
-- ✅ Calculations verified across multiple products
-- ✅ Label minimum enforcement working
-- ✅ All products loading successfully
-- ✅ Proposal tables generate correctly with MOQ pricing
-- ✅ Download functionality working for all table types
+- ✅ Data loads from master_pricing_template_10_14
+- ✅ Tier parsing logic verified (T1-T6 ranges)
+- ✅ Tier selection working correctly for various quantities
+- ✅ New column structure compatible with app
+- ✅ Partner filtering functional
 
-**Production Status:** ✅ Ready
+**Production Status:** ✅ Ready for testing with real partners
 
 ---
 

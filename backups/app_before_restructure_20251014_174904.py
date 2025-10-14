@@ -16,93 +16,6 @@ def apply_marketing_rounding(price, enabled=True):
         return price - 1
     return price
 
-def parse_tier_info(tier_string):
-    """
-    Parse 'T1: 1-25, T2: 26-50, ...' into dict of tier ranges.
-    Returns: {1: (1, 25), 2: (26, 50), ...}
-    """
-    if pd.isna(tier_string) or tier_string == "" or tier_string == "NA":
-        return {}
-
-    tier_dict = {}
-    parts = tier_string.split(',')
-    for part in parts:
-        if ':' not in part:
-            continue
-        # Extract "T1: 1-25" → tier_num=1, range=(1, 25)
-        tier_label, range_str = part.split(':')
-        tier_num = int(tier_label.strip().replace('T', ''))
-        range_str = range_str.strip()
-        if '-' in range_str:
-            min_qty, max_qty = range_str.split('-')
-            tier_dict[tier_num] = (int(min_qty), int(max_qty))
-        elif '+' in range_str:
-            # Handle "1000+" format
-            min_qty = int(range_str.replace('+', ''))
-            tier_dict[tier_num] = (min_qty, float('inf'))
-
-    return tier_dict
-
-def determine_tier_number(quantity, tier_info_string, has_tiers):
-    """
-    Returns tier number (1-6) based on quantity, or None if no tiers.
-    """
-    if has_tiers != 'Y':
-        return None
-
-    tier_ranges = parse_tier_info(tier_info_string)
-
-    if not tier_ranges:
-        return None
-
-    for tier_num, (min_qty, max_qty) in tier_ranges.items():
-        if min_qty <= quantity <= max_qty:
-            return tier_num
-
-    # If quantity exceeds all ranges, use highest tier
-    if tier_ranges:
-        return max(tier_ranges.keys())
-
-    return None
-
-def get_unit_price_new_system(row, quantity):
-    """
-    Get correct unit price based on new tier logic from master_pricing_template_10_14.
-    Handles both tiered and non-tiered pricing.
-    """
-    has_tiers = str(row.get('Pricing Tiers (Y/N)', '')).strip().upper()
-
-    if has_tiers != 'Y':
-        # Use flat rate
-        flat_price = clean_price(row.get('PBP Cost (No Tiers)', ''))
-        if flat_price is not None:
-            return flat_price, "No Tiers", "PBP Cost (No Tiers)"
-        else:
-            return None, None, None
-
-    # Determine tier and get price
-    tier_info = row.get('Pricing Tiers Info', '')
-    tier_num = determine_tier_number(quantity, tier_info, has_tiers)
-
-    if tier_num is None:
-        return None, None, None
-
-    tier_col = f'PBP Cost: Tier {tier_num}'
-    price = clean_price(row.get(tier_col, ''))
-
-    if price is not None:
-        # Get tier range for display
-        tier_ranges = parse_tier_info(tier_info)
-        if tier_num in tier_ranges:
-            min_qty, max_qty = tier_ranges[tier_num]
-            if max_qty == float('inf'):
-                tier_range = f"{min_qty}+"
-            else:
-                tier_range = f"{min_qty}-{max_qty}"
-            return price, tier_range, tier_col
-
-    return None, None, None
-
 # Page configuration
 st.set_page_config(
     page_title="PBP Pricing App",
@@ -163,14 +76,14 @@ with st.sidebar:
         st.markdown("""
         **Step-by-step guide:**
 
-        1. **Select Partner & Product** - Choose from dropdowns
-        2. **Enter Quantity** - Tiered pricing applies automatically
-        3. **Set Markup** - Your profit margin percentage
-        4. **Add Customization (Optional)** - Custom labels, branding, etc.
-        5. **Review Preview** - Check the pricing breakdown
-        6. **Add to Order** - Click "Add to Order" button
-        7. **Repeat** - Add more products if needed
-        8. **Set Order Settings** - Shipping, tariff, discounts
+        1. **Select Product** - Choose partner and product from dropdowns
+        2. **Customize Product** - Enter quantity and markup percentage
+        3. **Add Labels (Optional)** - Check box if customer wants custom branding
+        4. **Review Preview** - Check the pricing breakdown
+        5. **Add to Order** - Click "Add to Order" button
+        6. **Repeat** - Add more products if needed
+        7. **Set Order Settings** - Enter shipping and tariff costs
+        8. **Review Total** - Check the order summary and total quote
         9. **Generate Outputs** - Copy proposal or invoice tables
         """)
 
@@ -229,10 +142,7 @@ with st.sidebar:
 
         if st.button("Refresh Data", use_container_width=True):
             # Clear cached data and reload
-            df_template, df_metadata, df_partner_info = load_pricing_data()
-            st.session_state.df_template = df_template
-            st.session_state.df_metadata = df_metadata
-            st.session_state.df_partner_info = df_partner_info
+            st.session_state.pricing_df = load_pricing_data()
             st.session_state.data_loaded_at = datetime.now()
             st.rerun()
     else:
@@ -284,8 +194,8 @@ with st.sidebar:
         st.caption("Add products to download order")
 
     # Download master pricing data
-    if 'df_template' in st.session_state:
-        csv_pricing = st.session_state.df_template.to_csv(index=False)
+    if 'pricing_df' in st.session_state:
+        csv_pricing = st.session_state.pricing_df.to_csv(index=False)
 
         st.download_button(
             label="Download Pricing Data (CSV)",
@@ -421,89 +331,38 @@ def connect_to_sheets():
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def load_pricing_data():
     """
-    Load pricing data from master_pricing_template_10_14 Google Sheet.
-    Loads three sheets: Template, Metadata, Partner-Specific Info
-    Returns three DataFrames.
+    Load pricing data from jaggery_demo Google Sheet.
+    New structure: Row 1 is empty, Row 2 has headers, data starts Row 3.
+    Returns a pandas DataFrame.
     """
     gc = connect_to_sheets()
-    spreadsheet = gc.open("master_pricing_template_10_14")
+    sheet = gc.open("jaggery_demo").sheet1
 
-    # Load Template sheet (header at row 6, index 5)
-    template_sheet = spreadsheet.worksheet("Template")
-    template_values = template_sheet.get_all_values()
+    # Get all values from sheet
+    all_values = sheet.get_all_values()
 
-    # Row 6 has headers, but first column is empty - skip it
-    raw_headers = template_values[5]
-    raw_data = template_values[6:]
+    # Row 2 (index 1) contains column headers
+    # IMPORTANT: Strip whitespace from column names
+    headers = [col.strip() for col in all_values[1]]
 
-    # Find first non-empty column index
-    first_col_idx = 0
-    for i, header in enumerate(raw_headers):
-        if header.strip():
-            first_col_idx = i
-            break
+    # Data starts at row 3 (index 2)
+    data_rows = all_values[2:]
 
-    # Extract headers and data starting from first non-empty column
-    template_headers = [col.strip() for col in raw_headers[first_col_idx:]]
-    template_data = [row[first_col_idx:] for row in raw_data]
+    # Create DataFrame
+    df = pd.DataFrame(data_rows, columns=headers)
 
-    df_template = pd.DataFrame(template_data, columns=template_headers)
+    # Remove empty rows (where Product Ref. No. is empty)
+    df = df[df['Product Ref. No.'].str.strip() != '']
 
-    # Remove empty rows (where Partner column is empty)
-    df_template = df_template[df_template['Partner'].str.strip() != '']
-
-    # Load Metadata sheet (header at row 2, index 1)
-    metadata_sheet = spreadsheet.worksheet("Metadata")
-    metadata_values = metadata_sheet.get_all_values()
-    metadata_headers = [col.strip() if col else f"Unnamed_{i}" for i, col in enumerate(metadata_values[1])]  # Row 2 (index 1)
-    metadata_data = metadata_values[2:]
-    df_metadata = pd.DataFrame(metadata_data, columns=metadata_headers)
-
-    # Load Partner-Specific Info sheet (header at row 2, index 1)
-    partner_sheet = spreadsheet.worksheet("Partner-Specific Info")
-    partner_values = partner_sheet.get_all_values()
-
-    # Row 2 has headers, may have empty first column - skip it
-    raw_partner_headers = partner_values[1]
-    raw_partner_data = partner_values[2:]
-
-    # Find first non-empty column index for partner sheet
-    first_partner_col_idx = 0
-    for i, header in enumerate(raw_partner_headers):
-        if header.strip():
-            first_partner_col_idx = i
-            break
-
-    # Extract headers and data starting from first non-empty column
-    partner_headers = [col.strip() if col else f"Unnamed_{i}" for i, col in enumerate(raw_partner_headers[first_partner_col_idx:])]
-    partner_data = [row[first_partner_col_idx:] for row in raw_partner_data]
-
-    df_partner_info = pd.DataFrame(partner_data, columns=partner_headers)
-
-    # Remove empty rows from partner info (only if Partner column exists)
-    if 'Partner' in df_partner_info.columns:
-        df_partner_info = df_partner_info[df_partner_info['Partner'].str.strip() != '']
-
-    return df_template, df_metadata, df_partner_info
+    return df
 
 # Load data
 try:
-    if 'df_template' not in st.session_state:
-        df_template, df_metadata, df_partner_info = load_pricing_data()
-        st.session_state.df_template = df_template
-        st.session_state.df_metadata = df_metadata
-        st.session_state.df_partner_info = df_partner_info
+    if 'pricing_df' not in st.session_state:
+        st.session_state.pricing_df = load_pricing_data()
         st.session_state.data_loaded_at = datetime.now()
-
-    df_template = st.session_state.df_template
-    df_metadata = st.session_state.df_metadata
-    df_partner_info = st.session_state.df_partner_info
-
-    # Count unique partner-product combinations
-    unique_products = len(df_template)
-    unique_partners = len(df_template['Partner'].unique())
-
-    st.success(f"Loaded {unique_products} products from {unique_partners} partners (master_pricing_template_10_14)")
+    df = st.session_state.pricing_df
+    st.success(f"Loaded {len(df)} products from jaggery_demo")
 except Exception as e:
     st.error(f"Failed to load data: {e}")
     st.stop()
@@ -524,44 +383,42 @@ st.header("1. Select Products")
 col1, col2 = st.columns(2)
 
 with col1:
-    # Partner dropdown (using "Partner" column from Template sheet)
-    partners = sorted(df_template["Partner"].unique().tolist())
+    # Partner dropdown (using "Artisan Partner" column)
+    partners = ["All Partners"] + sorted(df["Artisan Partner"].unique().tolist())
     selected_partner = st.selectbox("Select Partner", partners)
 
 with col2:
-    # Filter products based on partner selection (using "Product/Service" column)
-    available_products = df_template[df_template["Partner"] == selected_partner]["Product/Service"].unique().tolist()
-    selected_product = st.selectbox("Select Product/Service", available_products)
+    # Filter products based on partner selection (using "Gift Name" column)
+    if selected_partner == "All Partners":
+        available_products = df["Gift Name"].unique().tolist()
+    else:
+        available_products = df[df["Artisan Partner"] == selected_partner]["Gift Name"].unique().tolist()
+
+    selected_product = st.selectbox("Select Product", available_products)
 
 # Get selected product details
-product_data = df_template[
-    (df_template["Partner"] == selected_partner) &
-    (df_template["Product/Service"] == selected_product)
-].iloc[0]
+if selected_partner == "All Partners":
+    product_data = df[df["Gift Name"] == selected_product].iloc[0]
+else:
+    product_data = df[(df["Artisan Partner"] == selected_partner) & (df["Gift Name"] == selected_product)].iloc[0]
 
 # Display product details in cleaner layout
 st.markdown("##### Product Details")
 col1, col2 = st.columns(2)
 with col1:
-    st.markdown(f"**Partner:** {product_data['Partner']}")
-    st.markdown(f"**Product/Service:** {product_data['Product/Service']}")
+    st.markdown(f"**Partner:** {product_data['Artisan Partner']}")
+    st.markdown(f"**Product Ref:** {product_data['Product Ref. No.']}")
 with col2:
-    origin = product_data.get("Country of Origin", "N/A")
-    st.markdown(f"**Country of Origin:** {origin if origin else 'N/A'}")
-    has_tiers = product_data.get("Pricing Tiers (Y/N)", "N/A")
-    st.markdown(f"**Tiered Pricing:** {has_tiers}")
+    minimum_qty = product_data.get("Minimum Qty", "N/A")
+    st.markdown(f"**Minimum Qty:** {minimum_qty if minimum_qty else 'N/A'}")
+    origin = product_data.get("Origin Country", "N/A")
+    st.markdown(f"**Origin:** {origin if origin else 'N/A'}")
 
 # Show product description if available
-description = product_data.get("Marketing Description", "")
-if description and description.strip():
-    with st.expander("Marketing Description"):
+description = product_data.get("Description", "")
+if description:
+    with st.expander("Product Description"):
         st.write(description)
-
-# Show pricing tier info if applicable
-tier_info = product_data.get("Pricing Tiers Info", "")
-if tier_info and tier_info.strip() and tier_info != "NA":
-    with st.expander("Pricing Tier Information"):
-        st.write(tier_info)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -584,60 +441,69 @@ with col2:
         help="Your profit margin. 100% = double the cost (2x), 50% = 1.5x the cost, 200% = triple the cost (3x)"
     )
 
-# Customization options
-customization_info = product_data.get("Customization Info", "")
-if customization_info and customization_info.strip():
-    st.info(f"Customization options: {customization_info}")
-
-include_customization = st.checkbox(
-    "Add customization to this product",
+# Label options
+include_labels = st.checkbox(
+    "Add custom labels to this product",
     value=False,
-    key="input_customization",
-    help="Adds setup fee and per-unit customization cost (e.g., custom labels, branding, engraving)"
+    key="input_labels",
+    help="Custom branding labels for the product. Minimum 100 labels required (Jaggery partner). Includes art setup fee."
 )
+
+# Minimum quantity validation
+minimum_qty_str = product_data.get("Minimum Qty", "")
+if minimum_qty_str:
+    try:
+        minimum_qty = int(clean_price(minimum_qty_str)) if clean_price(minimum_qty_str) else 0
+        if minimum_qty > 0 and quantity < minimum_qty:
+            st.warning(f"Minimum order quantity for this product is {minimum_qty} units. You've entered {quantity} units.")
+    except (ValueError, TypeError):
+        pass  # Skip validation if minimum qty is invalid
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ===== PRODUCT PREVIEW & ADD TO ORDER =====
 st.header("3. Product Preview")
 
-# Get price for quantity using new system
-base_price, tier_range, tier_column = get_unit_price_new_system(product_data, quantity)
+# Get price for quantity (tiered pricing)
+base_price, tier_range, tier_column = get_price_for_quantity(product_data, quantity)
 
 if base_price is None:
     st.error("No pricing available for this quantity. Please contact the partner.")
-    # DEBUG: Show available pricing data
+    # DEBUG: Show available pricing columns
     with st.expander("Debug: Available Pricing Data"):
-        st.write(f"Pricing Tiers (Y/N): {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
-        st.write(f"Pricing Tiers Info: {product_data.get('Pricing Tiers Info', 'N/A')}")
-        st.write(f"PBP Cost (No Tiers): {product_data.get('PBP Cost (No Tiers)', 'N/A')}")
-        for i in range(1, 7):
-            col_name = f'PBP Cost: Tier {i}'
-            st.write(f"{col_name}: {product_data.get(col_name, 'N/A')}")
+        pricing_cols = [
+            'PBP Cost w/o shipping (1-25)',
+            'PBP Cost w/o shipping (26-50)',
+            'PBP Cost w/o shipping (51-100)',
+            'PBP Cost w/o shipping (101-250)',
+            'PBP Cost w/o shipping (251-500)',
+            'PBP Cost w/o shipping (501-1000)',
+            'PBP Cost w/o shipping (1000+)'
+        ]
+        for col in pricing_cols:
+            if col in product_data.index:
+                raw_value = product_data[col]
+                cleaned_value = clean_price(raw_value)
+                st.write(f"- {col}: raw='{raw_value}' | cleaned={cleaned_value}")
+            else:
+                st.write(f"- {col}: COLUMN NOT FOUND")
     st.stop()
 
 # Show which tier is being used
-if tier_range == "No Tiers":
-    st.caption(f"Flat pricing: ${base_price:.2f} per unit")
-else:
-    st.caption(f"Using pricing tier: {tier_range} units | Base price: ${base_price:.2f} per unit")
+st.caption(f"Using pricing tier: {tier_range} units | Base price: ${base_price:.2f} per unit")
 
-# Calculate customization costs
-customization_setup_fee = 0
-customization_per_unit = 0
+# Calculate additional costs
+additional_costs = calculate_additional_costs(product_data, quantity, include_labels)
 
-if include_customization:
-    setup_fee_raw = clean_price(product_data.get('Customization Setup Fee', ''))
-    customization_setup_fee = setup_fee_raw if setup_fee_raw is not None else 0
-
-    per_unit_raw = clean_price(product_data.get('Customization Cost per Unit', ''))
-    customization_per_unit = per_unit_raw if per_unit_raw is not None else 0
+# Show label warning if applicable
+if additional_costs.get('label_warning'):
+    st.warning(additional_costs['label_warning'])
 
 # Calculate product totals (without shipping/tariff)
 product_subtotal = base_price * quantity
-customization_setup_total = customization_setup_fee
-customization_unit_total = customization_per_unit * quantity
-subtotal_before_markup = product_subtotal + customization_setup_total + customization_unit_total
+art_setup_total = additional_costs['art_setup_fee_total']
+label_cost_total = additional_costs.get('label_cost_total', 0)
+subtotal_before_markup = product_subtotal + art_setup_total + label_cost_total
 markup_amount = product_subtotal * (markup_percent / 100)
 product_total = subtotal_before_markup + markup_amount
 
@@ -652,21 +518,20 @@ button_label = "Update Product in Order" if st.session_state.edit_index is not N
 if st.button(button_label, type="primary", use_container_width=True):
     # Create order item
     order_item = {
-        'product_name': product_data["Product/Service"],
-        'product_ref': product_data.get("Purchase Description", ""),
-        'partner': product_data["Partner"],
-        'minimum_qty': "",  # Not in new structure
+        'product_name': product_data["Gift Name"],
+        'product_ref': product_data["Product Ref. No."],
+        'partner': product_data["Artisan Partner"],
+        'minimum_qty': product_data.get("Minimum Qty", ""),
         'quantity': quantity,
         'markup_percent': markup_percent,
-        'include_customization': include_customization,
+        'include_labels': include_labels,
         'base_price': base_price,
         'tier_range': tier_range,
         'tier_column': tier_column,
-        'customization_setup_fee': customization_setup_fee,
-        'customization_per_unit': customization_per_unit,
+        'additional_costs': additional_costs,
         'product_subtotal': product_subtotal,
-        'customization_setup_total': customization_setup_total,
-        'customization_unit_total': customization_unit_total,
+        'art_setup_total': art_setup_total,
+        'label_cost_total': label_cost_total,
         'subtotal_before_markup': subtotal_before_markup,
         'markup_amount': markup_amount,
         'product_total': product_total,
@@ -691,11 +556,13 @@ with st.expander("Detailed Price Breakdown"):
         ["Base Price (tier: " + tier_range + ")", f"${base_price:.2f}", f"${product_subtotal:.2f}"]
     ]
 
-    if include_customization:
-        if customization_setup_total > 0:
-            breakdown_items.append(["Customization Setup Fee", f"${customization_setup_total / quantity:.2f}", f"${customization_setup_total:.2f}"])
-        if customization_unit_total > 0:
-            breakdown_items.append([f"Customization per Unit ({quantity} @ ${customization_per_unit:.2f})", f"${customization_per_unit:.2f}", f"${customization_unit_total:.2f}"])
+    if include_labels:
+        if art_setup_total > 0:
+            breakdown_items.append(["Art Setup Fee", f"${art_setup_total / quantity:.2f}", f"${art_setup_total:.2f}"])
+        if label_cost_total > 0:
+            labels_charged = additional_costs.get('labels_charged', 0)
+            label_unit_cost = additional_costs.get('label_cost_per_label', 0)
+            breakdown_items.append([f"Labels ({labels_charged} @ ${label_unit_cost:.2f})", f"${label_cost_total / quantity:.2f}", f"${label_cost_total:.2f}"])
 
     breakdown_items.append(["**Subtotal**", f"**${subtotal_before_markup / quantity:.2f}**", f"**${subtotal_before_markup:.2f}**"])
     breakdown_items.append([f"Markup ({markup_percent}% on product only)", f"${markup_amount / quantity:.2f}", f"${markup_amount:.2f}"])
@@ -749,7 +616,7 @@ else:
                     st.write(f"**Pricing Tier:** {item['tier_range']}")
                     st.write(f"**Base Price:** ${item['base_price']:.2f} per unit")
                     st.write(f"**Markup:** {item['markup_percent']:.1f}%")
-                    st.write(f"**Customization:** {'Yes' if item.get('include_customization', False) else 'No'}")
+                    st.write(f"**Labels:** {'Yes' if item['include_labels'] else 'No'}")
 
                 with col2:
                     if st.button("✏️ Edit", key=f"edit_{idx}"):
@@ -767,13 +634,10 @@ else:
                     ["Base Price", f"${item['base_price']:.2f}", f"${item['product_subtotal']:.2f}"]
                 ]
 
-                customization_setup = item.get('customization_setup_total', 0)
-                customization_unit = item.get('customization_unit_total', 0)
-
-                if customization_setup > 0:
-                    breakdown_items.append(["Customization Setup Fee", f"${customization_setup / item['quantity']:.2f}", f"${customization_setup:.2f}"])
-                if customization_unit > 0:
-                    breakdown_items.append(["Customization per Unit", f"${customization_unit / item['quantity']:.2f}", f"${customization_unit:.2f}"])
+                if item['art_setup_total'] > 0:
+                    breakdown_items.append(["Art Setup Fee", f"${item['art_setup_total'] / item['quantity']:.2f}", f"${item['art_setup_total']:.2f}"])
+                if item['label_cost_total'] > 0:
+                    breakdown_items.append(["Label Costs", f"${item['label_cost_total'] / item['quantity']:.2f}", f"${item['label_cost_total']:.2f}"])
 
                 breakdown_items.append(["**Subtotal**", f"**${item['subtotal_before_markup'] / item['quantity']:.2f}**", f"**${item['subtotal_before_markup']:.2f}**"])
                 breakdown_items.append([f"Markup ({item['markup_percent']:.1f}%)", f"${item['markup_amount'] / item['quantity']:.2f}", f"${item['markup_amount']:.2f}"])
@@ -1081,27 +945,28 @@ else:
             # Standard products: use new 4-column proposal format
             st.markdown(f"### Product {idx}: {item['product_name']}")
 
-            # Use a default MOQ of 5 (not in new data structure)
-            moq = 5
+            # Get MOQ (default to 5 if not available)
+            moq_raw = item.get('minimum_qty', '')
+            try:
+                moq = int(float(moq_raw)) if moq_raw and str(moq_raw).strip() != '' else 5
+            except (ValueError, TypeError):
+                moq = 5
 
             # Calculate price at MOQ quantity
             product_row = item.get('product_data_row')
             if product_row is not None:
-                # Get base price for MOQ quantity using new system
-                moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
+                # Get base price for MOQ quantity
+                moq_base_price, moq_tier_range, _ = get_price_for_quantity(product_row, moq)
 
                 if moq_base_price is not None:
-                    # Calculate customization costs at MOQ
-                    moq_customization_setup = 0
-                    moq_customization_unit = 0
-
-                    if item.get('include_customization', False):
-                        moq_customization_setup = item.get('customization_setup_fee', 0)
-                        moq_customization_unit = item.get('customization_per_unit', 0) * moq
+                    # Calculate additional costs at MOQ
+                    moq_additional = calculate_additional_costs(product_row, moq, item['include_labels'])
 
                     # Calculate per-unit price at MOQ
                     moq_product_cost = moq_base_price * moq
-                    moq_subtotal = moq_product_cost + moq_customization_setup + moq_customization_unit
+                    moq_art_setup = moq_additional.get('art_setup_fee_total', 0)
+                    moq_label_cost = moq_additional.get('label_cost_total', 0)
+                    moq_subtotal = moq_product_cost + moq_art_setup + moq_label_cost
 
                     # Apply markup (on product cost only)
                     moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
@@ -1135,14 +1000,14 @@ else:
 
                     st.table(proposal_table)
 
-                    # Build customization fees row
+                    # Build artwork/customization fees row
                     fees_parts = []
-                    if moq_customization_setup > 0:
-                        fees_parts.append(f"Customization Set-Up: ${moq_customization_setup:.2f}")
+                    if moq_art_setup > 0:
+                        fees_parts.append(f"Artwork Set-Up: ${moq_art_setup:.2f}")
 
-                    if item.get('include_customization', False) and item.get('customization_per_unit', 0) > 0:
-                        customization_cost_per_unit = item.get('customization_per_unit', 0)
-                        fees_parts.append(f"Customization: ${customization_cost_per_unit:.2f} per unit")
+                    if item['include_labels'] and moq_label_cost > 0:
+                        label_cost_per_unit = moq_additional.get('label_cost_per_label', 0)
+                        fees_parts.append(f"Labels: ${label_cost_per_unit:.2f} per unit")
 
                     if fees_parts:
                         st.caption("; ".join(fees_parts))
