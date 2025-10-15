@@ -80,6 +80,7 @@ This data model supports three main deliverables:
 3. **Purchase Orders** — Link client and quantity data to compute final sale price.
 
 The app should:
+
 - **Read** static product and pricing data from the spreadsheet.
 - **Collect** client and order info from internal users.
 - **Compute** dynamic pricing, tariffs, MOQs, and totals.

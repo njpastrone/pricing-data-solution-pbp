@@ -62,6 +62,48 @@ def parse_tier_info(tier_string):
 
     return tier_dict
 
+def parse_tariff_rate(tariff_string):
+    """
+    Parse tariff percentage from spreadsheet strings.
+
+    Examples:
+        "50.00%" -> 50.0
+        "50%" -> 50.0
+        "25.5%" -> 25.5
+        "" -> 0.0
+        "NA" -> 0.0
+
+    Returns:
+        float: Tariff rate as decimal percentage (0.0 if invalid)
+    """
+    if not tariff_string or tariff_string == '' or tariff_string == 'NA':
+        return 0.0
+    try:
+        cleaned = str(tariff_string).replace('%', '').strip()
+        return float(cleaned)
+    except (ValueError, AttributeError):
+        return 0.0
+
+def calculate_product_tariff(product_cost_with_markup, tariff_rate_percent):
+    """
+    Calculate tariff on product cost.
+
+    Args:
+        product_cost_with_markup: Base product cost (price + markup, excluding customization)
+        tariff_rate_percent: Tariff rate as percentage (e.g., 50.0 for 50%)
+
+    Returns:
+        float: Tariff dollar amount
+
+    Example:
+        product_cost = $4,000 (base $2,000 + markup $2,000)
+        tariff_rate = 50.0%
+        tariff_amount = $2,000
+    """
+    if tariff_rate_percent <= 0:
+        return 0.0
+    return product_cost_with_markup * (tariff_rate_percent / 100)
+
 def determine_tier_number(quantity, tier_info_string, has_tiers):
     """
     Returns tier number (1-6) based on quantity, or None if no tiers.
@@ -143,11 +185,9 @@ if 'edit_index' not in st.session_state:
 if 'order_history' not in st.session_state:
     st.session_state.order_history = []
 
-# Initialize shipping and tariff in session state
+# Initialize shipping in session state
 if 'order_shipping' not in st.session_state:
     st.session_state.order_shipping = 0.0
-if 'order_tariff' not in st.session_state:
-    st.session_state.order_tariff = 0.0
 
 # Initialize discount settings in session state
 if 'order_discount_type' not in st.session_state:
@@ -239,7 +279,6 @@ with st.sidebar:
                         # Reload this order
                         st.session_state.order_items = order['order_items'].copy()
                         st.session_state.order_shipping = order['shipping']
-                        st.session_state.order_tariff = order['tariff']
                         st.rerun()
                 with col2:
                     if st.button("Delete", key=f"delete_order_{idx}", use_container_width=True):
@@ -308,8 +347,18 @@ with st.sidebar:
         # Add totals
         products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
         writer.writerow(["Shipping", "", "", f"${st.session_state.order_shipping:.2f}"])
-        writer.writerow(["Tariff", "", "", f"${st.session_state.order_tariff:.2f}"])
-        total_quote = products_subtotal + st.session_state.order_shipping + st.session_state.order_tariff
+
+        # Add per-product tariff lines
+        for item in st.session_state.order_items:
+            tariff_amount = item.get('tariff_amount', 0)
+            if tariff_amount > 0:
+                country = item.get('country_of_origin', 'Unknown')
+                tariff_rate = item.get('tariff_rate_percent', 0)
+                writer.writerow([f"Tariff: {item['product_name']} ({tariff_rate}% - {country})", "", "", f"${tariff_amount:.2f}"])
+
+        # Calculate total tariff
+        total_tariff = sum(item.get('tariff_amount', 0) for item in st.session_state.order_items)
+        total_quote = products_subtotal + st.session_state.order_shipping + total_tariff
         writer.writerow(["TOTAL", "", "", f"${total_quote:.2f}"])
 
         csv_content = output.getvalue()
@@ -687,7 +736,11 @@ if description and description.strip():
 tier_info = product_data.get("Pricing Tiers Info", "")
 if tier_info and tier_info.strip() and tier_info != "NA":
     with st.expander("Pricing Tier Information"):
-        st.write(tier_info)
+        st.markdown("**How Pricing Tiers Work:**")
+        st.markdown("This product uses tiered pricing - the price per unit decreases as you order more. The tier ranges below show which price applies based on your order quantity.")
+        st.markdown("")
+        st.markdown(f"**Tier Ranges:** {tier_info}")
+        st.caption("Your order quantity will automatically match to the correct tier and price.")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -713,7 +766,7 @@ with col2:
 # Customization options
 customization_info = product_data.get("Customization Info", "")
 if customization_info and customization_info.strip():
-    st.info(f"Customization options: {customization_info}")
+    st.markdown(f"**Customization Options:** {customization_info}")
 
 include_customization = st.checkbox(
     "Add customization to this product",
@@ -721,6 +774,38 @@ include_customization = st.checkbox(
     key="input_customization",
     help="Adds setup fee and per-unit customization cost (e.g., custom labels, branding, engraving)"
 )
+
+# Show editable customization cost fields when customization is enabled
+if include_customization:
+    st.markdown("##### Customization Costs")
+    st.caption("Default values are from the spreadsheet. You can override them if needed.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        default_setup_fee = clean_price(product_data.get('Customization Setup Fee', '')) or 0
+        customization_setup_fee_input = st.number_input(
+            "Customization Setup Fee",
+            min_value=0.0,
+            value=float(default_setup_fee),
+            step=1.0,
+            key="input_setup_fee",
+            help="One-time setup fee for this customization"
+        )
+
+    with col2:
+        default_per_unit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0
+        customization_per_unit_input = st.number_input(
+            "Customization Cost per Unit",
+            min_value=0.0,
+            value=float(default_per_unit),
+            step=0.1,
+            key="input_per_unit",
+            help="Additional cost per unit for customization"
+        )
+else:
+    customization_setup_fee_input = 0
+    customization_per_unit_input = 0
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -748,16 +833,13 @@ if tier_range == "No Tiers":
 else:
     st.caption(f"Using pricing tier: {tier_range} units | Base price: ${base_price:.2f} per unit")
 
-# Calculate customization costs
+# Calculate customization costs - use user input values
 customization_setup_fee = 0
 customization_per_unit = 0
 
 if include_customization:
-    setup_fee_raw = clean_price(product_data.get('Customization Setup Fee', ''))
-    customization_setup_fee = setup_fee_raw if setup_fee_raw is not None else 0
-
-    per_unit_raw = clean_price(product_data.get('Customization Cost per Unit', ''))
-    customization_per_unit = per_unit_raw if per_unit_raw is not None else 0
+    customization_setup_fee = customization_setup_fee_input
+    customization_per_unit = customization_per_unit_input
 
 # Calculate product totals (without shipping/tariff)
 product_subtotal = base_price * quantity
@@ -776,6 +858,14 @@ st.success(f"Product Total: ${product_total:.2f}  ({quantity} units @ ${total_pe
 # Add to Order button
 button_label = "Update Product in Order" if st.session_state.edit_index is not None else "Add to Order"
 if st.button(button_label, type="primary", use_container_width=True):
+    # Parse tariff data from product
+    tariff_estimate_raw = product_data.get('Tariff Estimate (if available)', '')
+    default_tariff_rate = parse_tariff_rate(tariff_estimate_raw)
+
+    # Calculate tariff base (product + markup, no customization)
+    tariff_base = product_subtotal + markup_amount
+    tariff_amount = calculate_product_tariff(tariff_base, default_tariff_rate)
+
     # Create order item
     order_item = {
         'product_name': product_data["Product/Service"],
@@ -785,6 +875,7 @@ if st.button(button_label, type="primary", use_container_width=True):
         'quantity': quantity,
         'markup_percent': markup_percent,
         'include_customization': include_customization,
+        'customization_description': customization_info if customization_info else "Custom work",
         'base_price': base_price,
         'tier_range': tier_range,
         'tier_column': tier_column,
@@ -797,7 +888,12 @@ if st.button(button_label, type="primary", use_container_width=True):
         'markup_amount': markup_amount,
         'product_total': product_total,
         'total_per_unit': total_per_unit,
-        'product_data_row': product_data  # Store full product row for proposal generation
+        'product_data_row': product_data,  # Store full product row for proposal generation
+        'country_of_origin': product_data.get("Country of Origin", ""),
+        'tariff_rate_percent': default_tariff_rate,
+        'tariff_info': product_data.get("Tariff Info", ""),
+        'tariff_base': tariff_base,
+        'tariff_amount': tariff_amount
     }
 
     # Add or update item
@@ -846,7 +942,21 @@ else:
 
     # Display order items
     for idx, item in enumerate(st.session_state.order_items):
-        with st.expander(f"{item['product_name']}  -  {item['quantity']} units @ ${item['total_per_unit']:.2f} each  =  ${item['product_total']:.2f}"):
+        # Calculate what will show as separate line items in deliverables
+        has_customization = item.get('include_customization', False)
+        customization_setup = item.get('customization_setup_total', 0) if has_customization else 0
+        customization_unit = item.get('customization_unit_total', 0) if has_customization else 0
+
+        # Count line items for display
+        line_item_count = 1  # Base product
+        if customization_setup > 0:
+            line_item_count += 1
+        if customization_unit > 0:
+            line_item_count += 1
+
+        line_count_text = f" ({line_item_count} line items)" if has_customization and line_item_count > 1 else ""
+
+        with st.expander(f"{item['product_name']}  -  {item['quantity']} units @ ${item['total_per_unit']:.2f} each  =  ${item['product_total']:.2f}{line_count_text}"):
             # Check if custom item
             if item.get('is_custom', False):
                 # Custom item display
@@ -875,7 +985,9 @@ else:
                     st.write(f"**Pricing Tier:** {item['tier_range']}")
                     st.write(f"**Base Price:** ${item['base_price']:.2f} per unit")
                     st.write(f"**Markup:** {item['markup_percent']:.1f}%")
-                    st.write(f"**Customization:** {'Yes' if item.get('include_customization', False) else 'No'}")
+                    if has_customization:
+                        customization_desc = item.get('customization_description', 'Custom work')
+                        st.write(f"**Customization:** {customization_desc}")
 
                 with col2:
                     if st.button("✏️ Edit", key=f"edit_{idx}"):
@@ -887,26 +999,74 @@ else:
                         st.session_state.order_items.pop(idx)
                         st.rerun()
 
-                # Show breakdown
-                st.write("**Cost Breakdown:**")
-                breakdown_items = [
-                    ["Base Price", f"${item['base_price']:.2f}", f"${item['product_subtotal']:.2f}"]
-                ]
+                # Show line item breakdown - how this will appear in invoices/proposals
+                if has_customization and (customization_setup > 0 or customization_unit > 0):
+                    st.write("**Line Items (as they will appear in deliverables):**")
 
-                customization_setup = item.get('customization_setup_total', 0)
-                customization_unit = item.get('customization_unit_total', 0)
+                    # Calculate base product price (without customization)
+                    base_product_only = item['product_subtotal'] + item['markup_amount']
 
-                if customization_setup > 0:
-                    breakdown_items.append(["Customization Setup Fee", f"${customization_setup / item['quantity']:.2f}", f"${customization_setup:.2f}"])
-                if customization_unit > 0:
-                    breakdown_items.append(["Customization per Unit", f"${customization_unit / item['quantity']:.2f}", f"${customization_unit:.2f}"])
+                    line_items_display = [
+                        [f"1. {item['product_name']}", item['quantity'], f"${base_product_only / item['quantity']:.2f}", f"${base_product_only:.2f}"]
+                    ]
 
-                breakdown_items.append(["**Subtotal**", f"**${item['subtotal_before_markup'] / item['quantity']:.2f}**", f"**${item['subtotal_before_markup']:.2f}**"])
-                breakdown_items.append([f"Markup ({item['markup_percent']:.1f}%)", f"${item['markup_amount'] / item['quantity']:.2f}", f"${item['markup_amount']:.2f}"])
-                breakdown_items.append(["**Product Total**", f"**${item['total_per_unit']:.2f}**", f"**${item['product_total']:.2f}**"])
+                    line_num = 2
+                    if customization_setup > 0:
+                        customization_desc = item.get('customization_description', 'Custom work')
+                        line_items_display.append([f"{line_num}. Setup Fee: {customization_desc}", 1, f"${customization_setup:.2f}", f"${customization_setup:.2f}"])
+                        line_num += 1
 
-                breakdown_df = pd.DataFrame(breakdown_items, columns=["Item", "Per Unit", "Total"])
-                st.table(breakdown_df)
+                    if customization_unit > 0:
+                        customization_desc = item.get('customization_description', 'Custom work')
+                        line_items_display.append([f"{line_num}. Customization: {customization_desc}", item['quantity'], f"${customization_unit / item['quantity']:.2f}", f"${customization_unit:.2f}"])
+                        line_num += 1
+
+                    # Add tariff line item if applicable
+                    tariff_amount = item.get('tariff_amount', 0)
+                    if tariff_amount > 0:
+                        country = item.get('country_of_origin', 'Unknown')
+                        tariff_rate = item.get('tariff_rate_percent', 0)
+                        line_items_display.append([
+                            f"{line_num}. Tariff ({tariff_rate}% - {country})",
+                            1,
+                            f"${tariff_amount:.2f}",
+                            f"${tariff_amount:.2f}"
+                        ])
+
+                    line_items_display.append(["**TOTAL**", "", "", f"**${item['product_total']:.2f}**"])
+
+                    line_items_df = pd.DataFrame(line_items_display, columns=["Item", "Qty", "Per Unit", "Total"])
+                    st.table(line_items_df)
+                else:
+                    st.write("**Line Item:**")
+                    simple_display = pd.DataFrame([
+                        {
+                            "Item": item['product_name'],
+                            "Qty": item['quantity'],
+                            "Per Unit": f"${item['total_per_unit']:.2f}",
+                            "Total": f"${item['product_total']:.2f}"
+                        }
+                    ])
+                    st.table(simple_display)
+
+                # Show detailed cost breakdown with toggle
+                show_breakdown = st.checkbox("Show detailed cost breakdown", key=f"breakdown_{idx}")
+                if show_breakdown:
+                    breakdown_items = [
+                        ["Base Price", f"${item['base_price']:.2f}", f"${item['product_subtotal']:.2f}"]
+                    ]
+
+                    if customization_setup > 0:
+                        breakdown_items.append(["Customization Setup Fee", f"${customization_setup / item['quantity']:.2f}", f"${customization_setup:.2f}"])
+                    if customization_unit > 0:
+                        breakdown_items.append(["Customization per Unit", f"${customization_unit / item['quantity']:.2f}", f"${customization_unit:.2f}"])
+
+                    breakdown_items.append(["**Subtotal**", f"**${item['subtotal_before_markup'] / item['quantity']:.2f}**", f"**${item['subtotal_before_markup']:.2f}**"])
+                    breakdown_items.append([f"Markup ({item['markup_percent']:.1f}%)", f"${item['markup_amount'] / item['quantity']:.2f}", f"${item['markup_amount']:.2f}"])
+                    breakdown_items.append(["**Product Total**", f"**${item['total_per_unit']:.2f}**", f"**${item['product_total']:.2f}**"])
+
+                    breakdown_df = pd.DataFrame(breakdown_items, columns=["Item", "Per Unit", "Total"])
+                    st.table(breakdown_df)
 
     # Clear order button
     if st.button("Clear Entire Order", type="secondary"):
@@ -921,29 +1081,84 @@ st.header("6. Order Settings")
 if len(st.session_state.order_items) == 0:
     st.caption("Add products to your order first, then configure order settings here.")
 else:
-    # Shipping & Tariff
-    st.subheader("Shipping & Tariff")
-    col1, col2 = st.columns(2)
+    # Shipping
+    st.subheader("Shipping")
+    st.session_state.order_shipping = st.number_input(
+        "Shipping Cost ($)",
+        min_value=0.0,
+        value=st.session_state.order_shipping,
+        step=10.0,
+        key="shipping_input",
+        help="One-time shipping cost for the entire order (not per product)"
+    )
 
-    with col1:
-        st.session_state.order_shipping = st.number_input(
-            "Shipping Cost ($)",
-            min_value=0.0,
-            value=st.session_state.order_shipping,
-            step=10.0,
-            key="shipping_input",
-            help="One-time shipping cost for the entire order (not per product)"
-        )
+    # Tariff Configuration
+    st.divider()
+    st.subheader("Tariff Configuration")
 
-    with col2:
-        st.session_state.order_tariff = st.number_input(
-            "Tariff Cost ($)",
-            min_value=0.0,
-            value=st.session_state.order_tariff,
-            step=10.0,
-            key="tariff_input",
-            help="Import taxes or customs fees for the entire order. Leave at $0 if not applicable."
-        )
+    st.markdown("""
+Tariffs are import duties based on product country of origin.
+Rates default to current estimates but can be adjusted as needed.
+""")
+
+    # Build editable tariff table with detailed breakdown
+    tariff_table_rows = []
+
+    for idx, item in enumerate(st.session_state.order_items):
+        # Get tariff base (product cost + markup, excludes customization)
+        tariff_base = item.get('tariff_base', 0.0)
+        tariff_base_per_unit = tariff_base / item['quantity'] if item['quantity'] > 0 else 0
+
+        # Display product info
+        st.markdown(f"**{idx + 1}. {item['product_name']}**")
+
+        col1, col2, col3 = st.columns([2, 2, 2])
+
+        with col1:
+            country = item.get('country_of_origin', 'N/A')
+            st.write(f"**Country:** {country if country else 'N/A'}")
+            st.write(f"**Quantity:** {item['quantity']} units")
+
+        with col2:
+            st.write(f"**Unit Cost:** ${tariff_base_per_unit:.2f}")
+            st.write(f"**Total Cost:** ${tariff_base:.2f}")
+            st.caption("(Product + Markup, excludes customization)")
+
+        with col3:
+            # Editable tariff rate
+            current_rate = item.get('tariff_rate_percent', 0.0)
+            new_rate = st.number_input(
+                "Tariff Rate (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=current_rate,
+                step=0.5,
+                key=f"tariff_rate_{idx}",
+                format="%.1f"
+            )
+
+            # Update if changed
+            if new_rate != current_rate:
+                item['tariff_rate_percent'] = new_rate
+                item['tariff_amount'] = calculate_product_tariff(tariff_base, new_rate)
+
+            tariff_amount = item.get('tariff_amount', 0.0)
+            st.write(f"**Tariff Amount:** ${tariff_amount:.2f}")
+            if tariff_base > 0 and new_rate > 0:
+                st.caption(f"${tariff_base:.2f} × {new_rate}% = ${tariff_amount:.2f}")
+
+        # Show tariff info if available
+        tariff_info = item.get('tariff_info', '')
+        if tariff_info and tariff_info.strip():
+            st.caption(f"ℹ️ {tariff_info}")
+
+        st.markdown("")  # Spacing
+
+    # Show total tariff
+    total_tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
+    st.markdown(f"**Total Tariff for Order:** ${total_tariff:.2f}")
+
+    st.caption("Tariff is calculated on product cost + markup (excludes customization fees and shipping)")
 
     # Discount Options
     st.divider()
@@ -1082,7 +1297,12 @@ else:
                     'product_total': custom_price,
                     'total_per_unit': custom_price / custom_quantity,
                     'is_custom': True,
-                    'custom_description': custom_description if custom_description else "Custom line item"
+                    'custom_description': custom_description if custom_description else "Custom line item",
+                    'country_of_origin': '',
+                    'tariff_rate_percent': 0.0,
+                    'tariff_info': '',
+                    'tariff_base': 0.0,
+                    'tariff_amount': 0.0
                 }
 
                 st.session_state.order_items.append(custom_item)
@@ -1091,7 +1311,8 @@ else:
 
 # Use session state values for calculations
 shipping = st.session_state.order_shipping
-tariff = st.session_state.order_tariff
+# Calculate total tariff from all products
+tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
 
 # Calculate discount
 discount_percent = 0.0
@@ -1152,7 +1373,19 @@ else:
         summary_items.append([f"Discount ({discount_description})", "", "", f"-${discount_amount:.2f}"])
 
     summary_items.append(["Shipping", "", "", f"${shipping:.2f}"])
-    summary_items.append(["Tariff", "", "", f"${tariff:.2f}"])
+
+    # Add tariff for each product (if > 0)
+    for item in st.session_state.order_items:
+        tariff_amount = item.get('tariff_amount', 0)
+        if tariff_amount > 0:
+            country = item.get('country_of_origin', 'Unknown')
+            tariff_rate = item.get('tariff_rate_percent', 0)
+            summary_items.append([
+                f"Tariff: {item['product_name']} ({tariff_rate}% - {country})",
+                "",
+                "",
+                f"${tariff_amount:.2f}"
+            ])
 
     # Add credit card fee if applicable
     if st.session_state.apply_cc_fee and cc_fee_amount > 0:
@@ -1276,25 +1509,14 @@ else:
                     moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
 
                 if moq_base_price is not None:
-                    # Calculate customization costs at MOQ
-                    moq_customization_setup = 0
-                    moq_customization_unit = 0
-
-                    if item.get('include_customization', False):
-                        moq_customization_setup = item.get('customization_setup_fee', 0)
-                        moq_customization_unit = item.get('customization_per_unit', 0) * moq
-
-                    # Calculate per-unit price at MOQ
+                    # Calculate product price WITHOUT customization (for main table)
                     moq_product_cost = moq_base_price * moq
-                    moq_subtotal = moq_product_cost + moq_customization_setup + moq_customization_unit
-
-                    # Apply markup (on product cost only)
                     moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
-                    moq_total = moq_subtotal + moq_markup_amount
-                    moq_price_per_unit = moq_total / moq
+                    moq_product_only_total = moq_product_cost + moq_markup_amount
+                    moq_product_price_per_unit = moq_product_only_total / moq
 
-                    # Calculate discount price per unit
-                    moq_discount_price = moq_price_per_unit * (1 - discount_percent / 100)
+                    # Calculate discount price per unit (product only)
+                    moq_discount_price = moq_product_price_per_unit * (1 - discount_percent / 100)
 
                     # Build column headers
                     col_moq = "MOQ"
@@ -1308,11 +1530,11 @@ else:
 
                     col_delivery = "Delivery"
 
-                    # Build proposal table
+                    # Build proposal table (product only, no customization baked in)
                     proposal_table = pd.DataFrame([
                         {
                             col_moq: moq,
-                            col_price: f"${moq_price_per_unit:.2f}",
+                            col_price: f"${moq_product_price_per_unit:.2f}",
                             col_discount: f"${moq_discount_price:.2f}",
                             col_delivery: ""
                         }
@@ -1321,22 +1543,53 @@ else:
                     st.table(proposal_table)
 
                     # Show MOQ calculation note
-                    moq_total_value = moq * moq_price_per_unit
+                    moq_total_value = moq * moq_product_price_per_unit
                     st.caption(f"MOQ calculated based on $1,000 minimum order value (MOQ {moq} units = ${moq_total_value:.2f})")
 
-                    # Build customization fees row
-                    fees_parts = []
-                    if moq_customization_setup > 0:
-                        fees_parts.append(f"Customization Set-Up: ${moq_customization_setup:.2f}")
+                    # Build customization fees section - show as SEPARATE items
+                    if item.get('include_customization', False):
+                        moq_customization_setup = item.get('customization_setup_fee', 0)
+                        moq_customization_per_unit = item.get('customization_per_unit', 0)
+                        customization_desc = item.get('customization_description', 'Custom work')
 
-                    if item.get('include_customization', False) and item.get('customization_per_unit', 0) > 0:
-                        customization_cost_per_unit = item.get('customization_per_unit', 0)
-                        fees_parts.append(f"Customization: ${customization_cost_per_unit:.2f} per unit")
+                        st.markdown("**Additional Customization Fees:**")
 
-                    if fees_parts:
-                        st.caption("; ".join(fees_parts))
+                        customization_fees = []
+                        if moq_customization_setup > 0:
+                            customization_fees.append({
+                                "Item": f"Setup Fee: {customization_desc}",
+                                "Quantity": 1,
+                                "Unit Price": f"${moq_customization_setup:.2f}",
+                                "Total": f"${moq_customization_setup:.2f}"
+                            })
+
+                        if moq_customization_per_unit > 0:
+                            customization_fees.append({
+                                "Item": f"Customization: {customization_desc}",
+                                "Quantity": moq,
+                                "Unit Price": f"${moq_customization_per_unit:.2f}",
+                                "Total": f"${moq_customization_per_unit * moq:.2f}"
+                            })
+
+                        if customization_fees:
+                            customization_df = pd.DataFrame(customization_fees)
+                            st.table(customization_df)
+                            st.caption("Customization fees are separate line items and not included in the product price above.")
                     else:
-                        st.caption("No additional customization fees")
+                        st.caption("No customization fees")
+
+                    # Add tariff information if applicable
+                    if item.get('tariff_amount', 0) > 0:
+                        tariff_rate = item.get('tariff_rate_percent', 0)
+                        country = item.get('country_of_origin', 'Unknown')
+                        tariff_amount = item.get('tariff_amount', 0)
+
+                        st.markdown("**Tariff Information:**")
+                        st.caption(f"Import duty: {tariff_rate}% (from {country}) = ${tariff_amount:.2f}")
+
+                        tariff_info = item.get('tariff_info', '')
+                        if tariff_info:
+                            st.caption(f"Note: {tariff_info}")
 
                     # Add download button for this product's proposal table
                     proposal_csv = proposal_table.to_csv(index=False)
@@ -1404,25 +1657,84 @@ else:
     # Apply marketing rounding if enabled
     total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
 
-    # Build line items table
+    # Build line items table - show customization as SEPARATE line items
     invoice_line_items = []
     for item in st.session_state.order_items:
         # Check if custom item
         if item.get('is_custom', False):
             description = item.get('custom_description', 'Custom line item')
             tier = "Custom"
+
+            invoice_line_items.append({
+                'Product/Service Name': item['product_name'],
+                'Description': description,
+                'Quantity': item['quantity'],
+                'Pricing Tier': tier,
+                'Price (Per-Unit)': f"${item['total_per_unit']:.2f}",
+                'Total (Per-Item)': f"${item['product_total']:.2f}"
+            })
         else:
+            # Regular product
             description = f"Product Ref: {item['product_ref']}, Partner: {item['partner']}"
             tier = item['tier_range']
 
-        invoice_line_items.append({
-            'Product/Service Name': item['product_name'],
-            'Description': description,
-            'Quantity': item['quantity'],
-            'Pricing Tier': tier,
-            'Price (Per-Unit)': f"${item['total_per_unit']:.2f}",
-            'Total (Per-Item)': f"${item['product_total']:.2f}"
-        })
+            # Calculate base product price WITHOUT customization
+            base_product_only = item['product_subtotal'] + item['markup_amount']
+            base_product_per_unit = base_product_only / item['quantity']
+
+            # Add base product line
+            invoice_line_items.append({
+                'Product/Service Name': item['product_name'],
+                'Description': description,
+                'Quantity': item['quantity'],
+                'Pricing Tier': tier,
+                'Price (Per-Unit)': f"${base_product_per_unit:.2f}",
+                'Total (Per-Item)': f"${base_product_only:.2f}"
+            })
+
+            # Add customization line items if present
+            if item.get('include_customization', False):
+                customization_desc = item.get('customization_description', 'Custom work')
+                customization_setup = item.get('customization_setup_total', 0)
+                customization_unit = item.get('customization_unit_total', 0)
+
+                # Setup fee line item
+                if customization_setup > 0:
+                    invoice_line_items.append({
+                        'Product/Service Name': f"Setup Fee: {customization_desc}",
+                        'Description': f"One-time setup for {item['product_name']}",
+                        'Quantity': 1,
+                        'Pricing Tier': "N/A",
+                        'Price (Per-Unit)': f"${customization_setup:.2f}",
+                        'Total (Per-Item)': f"${customization_setup:.2f}"
+                    })
+
+                # Per-unit customization line item
+                if customization_unit > 0:
+                    customization_per_unit_price = customization_unit / item['quantity']
+                    invoice_line_items.append({
+                        'Product/Service Name': f"Customization: {customization_desc}",
+                        'Description': f"Per-unit customization for {item['product_name']}",
+                        'Quantity': item['quantity'],
+                        'Pricing Tier': "N/A",
+                        'Price (Per-Unit)': f"${customization_per_unit_price:.2f}",
+                        'Total (Per-Item)': f"${customization_unit:.2f}"
+                    })
+
+            # Add tariff line item if applicable
+            if item.get('tariff_amount', 0) > 0:
+                tariff_amount = item.get('tariff_amount', 0)
+                country = item.get('country_of_origin', 'Unknown')
+                tariff_rate = item.get('tariff_rate_percent', 0)
+
+                invoice_line_items.append({
+                    'Product/Service Name': f"Tariff: {item['product_name']}",
+                    'Description': f"Import duty ({tariff_rate}% from {country})",
+                    'Quantity': 1,
+                    'Pricing Tier': "N/A",
+                    'Price (Per-Unit)': f"${tariff_amount:.2f}",
+                    'Total (Per-Item)': f"${tariff_amount:.2f}"
+                })
 
     # Display line items table
     invoice_df = pd.DataFrame(invoice_line_items)
@@ -1438,10 +1750,7 @@ else:
     if discount_percent > 0:
         totals_data.append([f"Discount ({discount_description})", f"-${discount_amount:.2f}"])
 
-    totals_data.extend([
-        ["Shipping", f"${shipping:.2f}"],
-        ["Tariff", f"${tariff:.2f}"]
-    ])
+    totals_data.append(["Shipping", f"${shipping:.2f}"])
 
     # Add credit card fee if applicable
     if st.session_state.apply_cc_fee and cc_fee_amount > 0:
@@ -1514,7 +1823,7 @@ else:
 
     st.divider()
 
-    # Build PO line items table
+    # Build PO line items table - show customization as SEPARATE line items
     st.markdown("#### Order Details")
 
     po_line_items = []
@@ -1523,20 +1832,83 @@ else:
             partner = "Custom"
             product_ref = "N/A"
             description = item.get('custom_description', 'Custom line item')
+
+            po_line_items.append({
+                'Partner': partner,
+                'Product/Service': item['product_name'],
+                'Product Ref': product_ref,
+                'Quantity': item['quantity'],
+                'Unit Cost': f"${item['total_per_unit']:.2f}",
+                'Total': f"${item['product_total']:.2f}",
+                'Notes': description
+            })
         else:
+            # Regular product
             partner = item['partner']
             product_ref = item['product_ref']
             description = f"Tier: {item['tier_range']}"
 
-        po_line_items.append({
-            'Partner': partner,
-            'Product/Service': item['product_name'],
-            'Product Ref': product_ref,
-            'Quantity': item['quantity'],
-            'Unit Cost': f"${item['total_per_unit']:.2f}",
-            'Total': f"${item['product_total']:.2f}",
-            'Notes': description
-        })
+            # Calculate base product price WITHOUT customization
+            base_product_only = item['product_subtotal'] + item['markup_amount']
+            base_product_per_unit = base_product_only / item['quantity']
+
+            # Add base product line
+            po_line_items.append({
+                'Partner': partner,
+                'Product/Service': item['product_name'],
+                'Product Ref': product_ref,
+                'Quantity': item['quantity'],
+                'Unit Cost': f"${base_product_per_unit:.2f}",
+                'Total': f"${base_product_only:.2f}",
+                'Notes': description
+            })
+
+            # Add customization line items if present
+            if item.get('include_customization', False):
+                customization_desc = item.get('customization_description', 'Custom work')
+                customization_setup = item.get('customization_setup_total', 0)
+                customization_unit = item.get('customization_unit_total', 0)
+
+                # Setup fee line item
+                if customization_setup > 0:
+                    po_line_items.append({
+                        'Partner': partner,
+                        'Product/Service': f"Setup Fee: {customization_desc}",
+                        'Product Ref': product_ref,
+                        'Quantity': 1,
+                        'Unit Cost': f"${customization_setup:.2f}",
+                        'Total': f"${customization_setup:.2f}",
+                        'Notes': f"One-time setup for {item['product_name']}"
+                    })
+
+                # Per-unit customization line item
+                if customization_unit > 0:
+                    customization_per_unit_price = customization_unit / item['quantity']
+                    po_line_items.append({
+                        'Partner': partner,
+                        'Product/Service': f"Customization: {customization_desc}",
+                        'Product Ref': product_ref,
+                        'Quantity': item['quantity'],
+                        'Unit Cost': f"${customization_per_unit_price:.2f}",
+                        'Total': f"${customization_unit:.2f}",
+                        'Notes': f"Per-unit customization for {item['product_name']}"
+                    })
+
+            # Add tariff line item if applicable
+            if item.get('tariff_amount', 0) > 0:
+                tariff_amount = item.get('tariff_amount', 0)
+                country = item.get('country_of_origin', 'Unknown')
+                tariff_rate = item.get('tariff_rate_percent', 0)
+
+                po_line_items.append({
+                    'Partner': partner,
+                    'Product/Service': f"Tariff: {item['product_name']}",
+                    'Product Ref': product_ref,
+                    'Quantity': 1,
+                    'Unit Cost': f"${tariff_amount:.2f}",
+                    'Total': f"${tariff_amount:.2f}",
+                    'Notes': f"Import duty ({tariff_rate}% from {country})"
+                })
 
     po_df = pd.DataFrame(po_line_items)
     st.table(po_df)
@@ -1551,10 +1923,7 @@ else:
     if discount_percent > 0:
         summary_data.append([f"Discount ({discount_description})", f"-${discount_amount:.2f}"])
 
-    summary_data.extend([
-        ["Shipping", f"${shipping:.2f}"],
-        ["Tariff", f"${tariff:.2f}"]
-    ])
+    summary_data.append(["Shipping", f"${shipping:.2f}"])
 
     if st.session_state.apply_cc_fee and cc_fee_amount > 0:
         summary_data.append([f"Credit Card Fee ({st.session_state.cc_fee_percent}%)", f"${cc_fee_amount:.2f}"])
