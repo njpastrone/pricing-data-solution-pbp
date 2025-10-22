@@ -41,6 +41,55 @@ def calculate_credit_card_fee(total, apply_fee=False, fee_percent=2.9):
         return total * (fee_percent / 100)
     return 0.0
 
+def extract_partner_contacts(df_partner_info):
+    """
+    Extract partner contact information from Partner-Specific Info sheet.
+    Returns dict: {partner_name: {poc_name, poc_email, poc_phone}}
+    """
+    partner_contacts = {}
+
+    for _, row in df_partner_info.iterrows():
+        partner_name = row.get('Partner', '').strip()
+        if not partner_name:
+            continue
+
+        partner_contacts[partner_name] = {
+            'poc_name': row.get('POC Name', '').strip() or row.get('Contact Name', '').strip() or '',
+            'poc_email': row.get('POC Email', '').strip() or row.get('Email', '').strip() or '',
+            'poc_phone': row.get('POC Phone', '').strip() or row.get('Phone', '').strip() or ''
+        }
+
+    return partner_contacts
+
+def validate_invoice_completeness(client_info, order_items):
+    """
+    Check if all required fields are filled before invoice/PO generation.
+    Returns list of missing/invalid fields as warning messages.
+    """
+    missing = []
+
+    # Check client info required fields
+    if not client_info.get('company_name'):
+        missing.append("Company Name is required")
+    if not client_info.get('contact_email'):
+        missing.append("Contact Email is required")
+    if not client_info.get('client_in_hands_date'):
+        missing.append("Client In-Hands Date is required")
+    if not client_info.get('order_submitted_by'):
+        missing.append("Order Submitted By is required")
+    if not client_info.get('cost_submitted_by'):
+        missing.append("Cost Submitted By is required")
+
+    # Check line items
+    for idx, item in enumerate(order_items, 1):
+        if not item.get('is_custom', False):
+            if not item.get('partner_in_hands_date'):
+                missing.append(f"Item #{idx} ({item.get('product_name', 'Unknown')}): Partner In-Hands Date not set")
+            if item.get('cost_verified') == 'Pending':
+                missing.append(f"Item #{idx} ({item.get('product_name', 'Unknown')}): Cost not verified")
+
+    return missing
+
 def parse_tier_info(tier_string):
     """
     Parse 'T1: 1-25, T2: 26-50, ...' into dict of tier ranges.
@@ -218,10 +267,25 @@ if 'client_info' not in st.session_state:
         'contact_email': '',
         'client_po': '',
         'billing_address': '',
-        'shipping_type': 'One Location',
+        'shipping_type': 'Ground',  # MODIFIED: Changed to dropdown default
         'shipping_address': '',
-        'payment_timeline': '50% upfront, 50% on delivery',
-        'payment_preference': 'Wire Transfer'
+        'payment_timeline': 'Net 30',  # MODIFIED: Changed to dropdown default
+        'payment_preference': 'Check',  # MODIFIED: Changed to dropdown default
+        'client_in_hands_date': None,  # NEW: Target delivery date for client
+        'order_submitted_by': '',  # NEW: Person submitting order
+        'order_submitted_date': datetime.now().date(),  # NEW: Auto-filled submission date
+        'cost_submitted_by': '',  # NEW: Person submitting costs
+        'cost_submitted_date': None  # NEW: Date costs were submitted
+    }
+
+# Initialize order notes
+if 'order_notes' not in st.session_state:
+    st.session_state.order_notes = {
+        'kitting_specs': '',  # Details about kitting requirements
+        'client_requests': '',  # Special client requests
+        'addon_samples': '',  # Additional samples to include
+        'artwork_attachments': '',  # List of artwork files
+        'general_notes': ''  # Catch-all for other notes
     }
 
 # Initialize credit card fee settings
@@ -590,6 +654,9 @@ try:
         st.session_state.df_partner_info = df_partner_info
         st.session_state.data_loaded_at = datetime.now()
 
+        # Extract and store partner contacts
+        st.session_state.partner_contacts = extract_partner_contacts(df_partner_info)
+
     df_template = st.session_state.df_template
     df_metadata = st.session_state.df_metadata
     df_partner_info = st.session_state.df_partner_info
@@ -676,23 +743,101 @@ with st.expander("Client Details", expanded=False):
             st.caption("Drop shipping details to be arranged separately")
 
     st.markdown("---")
+    st.markdown("**Payment & Delivery Terms**")
 
     col3, col4 = st.columns(2)
 
     with col3:
-        st.session_state.client_info['payment_timeline'] = st.text_input(
-            "Payment Timeline",
-            value=st.session_state.client_info['payment_timeline'],
-            placeholder="e.g., 50% upfront, 50% on delivery"
+        # Updated to dropdown
+        payment_terms_options = ['Net 30', 'Net 60', 'Due on Receipt', '50% Deposit']
+        current_timeline = st.session_state.client_info.get('payment_timeline', 'Net 30')
+        if current_timeline not in payment_terms_options:
+            payment_terms_options.append(current_timeline)
+
+        st.session_state.client_info['payment_timeline'] = st.selectbox(
+            "Payment Terms",
+            options=payment_terms_options,
+            index=payment_terms_options.index(current_timeline) if current_timeline in payment_terms_options else 0
         )
 
     with col4:
+        # Updated to match template options
+        payment_method_options = ['Check', 'ACH', 'Credit Card', 'Wire Transfer']
+        current_preference = st.session_state.client_info.get('payment_preference', 'Check')
+        if current_preference not in payment_method_options:
+            payment_method_options.append(current_preference)
+
         st.session_state.client_info['payment_preference'] = st.selectbox(
-            "Payment Preference",
-            options=['Wire Transfer', 'Credit Card', 'ACH', 'Check'],
-            index=['Wire Transfer', 'Credit Card', 'ACH', 'Check'].index(
-                st.session_state.client_info['payment_preference']
-            ) if st.session_state.client_info['payment_preference'] in ['Wire Transfer', 'Credit Card', 'ACH', 'Check'] else 0
+            "Payment Method",
+            options=payment_method_options,
+            index=payment_method_options.index(current_preference) if current_preference in payment_method_options else 0
+        )
+
+    col5, col6 = st.columns(2)
+
+    with col5:
+        # NEW: Ship method dropdown
+        ship_method_options = ['Ground', 'Air', 'Freight', 'Other']
+        current_ship_type = st.session_state.client_info.get('shipping_type', 'Ground')
+        # Map old values to new
+        if current_ship_type == 'One Location':
+            current_ship_type = 'Ground'
+        elif current_ship_type == 'Drop Shipping':
+            current_ship_type = 'Other'
+
+        if current_ship_type not in ship_method_options:
+            ship_method_options.append(current_ship_type)
+
+        # Note: We're overriding shipping_type to use ship method
+        ship_method = st.selectbox(
+            "Ship Method",
+            options=ship_method_options,
+            index=ship_method_options.index(current_ship_type) if current_ship_type in ship_method_options else 0,
+            help="How products will be shipped to client"
+        )
+
+    with col6:
+        # NEW: Client in-hands date
+        st.session_state.client_info['client_in_hands_date'] = st.date_input(
+            "Client In-Hands Date",
+            value=st.session_state.client_info.get('client_in_hands_date'),
+            help="Target delivery date for client to receive products"
+        )
+
+    st.markdown("---")
+    st.markdown("**Order Submission Details**")
+
+    col7, col8 = st.columns(2)
+
+    with col7:
+        st.session_state.client_info['order_submitted_by'] = st.text_input(
+            "Order Submitted By",
+            value=st.session_state.client_info.get('order_submitted_by', ''),
+            placeholder="Your name",
+            help="Person creating this order"
+        )
+
+        st.session_state.client_info['cost_submitted_by'] = st.text_input(
+            "Cost Submitted By",
+            value=st.session_state.client_info.get('cost_submitted_by', ''),
+            placeholder="Finance contact name",
+            help="Person who submitted/verified costs"
+        )
+
+    with col8:
+        # Order submitted date (auto-filled, read-only display)
+        order_date = st.session_state.client_info.get('order_submitted_date', datetime.now().date())
+        st.date_input(
+            "Order Submitted Date",
+            value=order_date,
+            disabled=True,
+            help="Auto-filled when order created"
+        )
+
+        st.session_state.client_info['cost_submitted_date'] = st.date_input(
+            "Cost Submitted Date",
+            value=st.session_state.client_info.get('cost_submitted_date'),
+            help="Date when costs were submitted/verified"
         )
 
 st.divider()
@@ -1084,7 +1229,14 @@ if st.button(button_label, type="primary", use_container_width=True):
         'round_to_five': round_to_five,
         'apply_custom_minimum': apply_custom_minimum if include_customization else False,
         'customization_minimum_qty': customization_minimum_qty if (include_customization and apply_custom_minimum) else 0,
-        'effective_custom_qty': effective_custom_qty if include_customization else 0
+        'effective_custom_qty': effective_custom_qty if include_customization else 0,
+        # NEW FIELDS for invoice/PO template
+        'product_specs': product_data.get("Product Description", "").strip() or f"{product_data.get('Product/Service', '')} - {tier_range}",
+        'partner_in_hands_date': None,  # To be set in UI
+        'partner_cost_per_unit': base_price,  # Partner cost before markup
+        'cost_verified': 'Pending',  # Default to Pending
+        'sell_price_total': product_total,  # Total sell price to client
+        'sell_price_per_unit': total_per_unit  # Per-unit sell price to client
     }
 
     # Add or update item
@@ -1531,6 +1683,57 @@ elif st.session_state.order_discount_type == "custom":
     discount_percent = st.session_state.order_discount_custom_value
     discount_description = st.session_state.order_discount_custom_desc if st.session_state.order_discount_custom_desc else f"Custom Discount ({discount_percent}%)"
 
+# ===== ORDER NOTES =====
+st.divider()
+st.header("7.5. Order Notes")
+
+st.markdown("Add any specific details for this order (kitting specs, client requests, artwork files, etc.)")
+
+with st.expander("Add Order Notes", expanded=False):
+    col_notes1, col_notes2 = st.columns(2)
+
+    with col_notes1:
+        st.session_state.order_notes['kitting_specs'] = st.text_area(
+            "Kitting Specifications",
+            value=st.session_state.order_notes.get('kitting_specs', ''),
+            placeholder="Box size, packaging requirements, assembly instructions...",
+            height=100,
+            help="Details about how products should be kitted/packaged"
+        )
+
+        st.session_state.order_notes['client_requests'] = st.text_area(
+            "Client Requests",
+            value=st.session_state.order_notes.get('client_requests', ''),
+            placeholder="Rush delivery, special handling, custom messaging...",
+            height=100,
+            help="Special requests from the client"
+        )
+
+        st.session_state.order_notes['addon_samples'] = st.text_area(
+            "Add-on Samples",
+            value=st.session_state.order_notes.get('addon_samples', ''),
+            placeholder="Extra units for display, samples for approval...",
+            height=100,
+            help="Additional samples to include with order"
+        )
+
+    with col_notes2:
+        st.session_state.order_notes['artwork_attachments'] = st.text_area(
+            "Artwork Attachments",
+            value=st.session_state.order_notes.get('artwork_attachments', ''),
+            placeholder="logo_final.ai, label_design_v3.pdf...",
+            height=100,
+            help="List of artwork files attached to this order"
+        )
+
+        st.session_state.order_notes['general_notes'] = st.text_area(
+            "General Notes",
+            value=st.session_state.order_notes.get('general_notes', ''),
+            placeholder="Any other important details...",
+            height=100,
+            help="Catch-all for any other notes or details"
+        )
+
 # ===== TOTAL ORDER CALCULATION =====
 st.divider()
 st.header("8. Order Summary")
@@ -1809,40 +2012,82 @@ else:
 
     st.caption("Copy these tables and paste into your proposal template.")
 
-# ===== INVOICE GENERATION =====
+# ===== INVOICE AND PURCHASE ORDER GENERATION =====
 st.divider()
-st.header("10. Invoice")
+st.header("10. Invoice & Purchase Order Request Form")
 
 if len(st.session_state.order_items) == 0:
-    st.caption("Add products to your order to generate an invoice.")
+    st.caption("Add products to your order to generate an invoice and purchase order.")
 else:
-    st.subheader("Invoice")
-    invoice_date = datetime.now().strftime("%Y-%m-%d")
-
-    # Display client information header
-    st.markdown("#### Client Information")
     client_info = st.session_state.client_info
+
+    # Validate completeness
+    validation_warnings = validate_invoice_completeness(client_info, st.session_state.order_items)
+
+    if validation_warnings:
+        with st.expander("Validation Warnings - Click to Review", expanded=True):
+            st.warning("The following fields are missing or incomplete. The invoice/PO can still be generated, but these should be completed before sending to the bookkeeper:")
+            for warning in validation_warnings:
+                st.write(f"- {warning}")
+
+    st.markdown("### INVOICE AND PURCHASE ORDER REQUEST FORM")
+
+    # === HEADER SECTION ===
+    st.markdown("#### Header Information")
 
     col1, col2 = st.columns(2)
     with col1:
-        st.write(f"**Company:** {client_info['company_name'] if client_info['company_name'] else 'Not specified'}")
-        st.write(f"**Contact:** {client_info['contact_name'] if client_info['contact_name'] else 'Not specified'}")
-        st.write(f"**Email:** {client_info['contact_email'] if client_info['contact_email'] else 'Not specified'}")
-        if client_info['client_po']:
-            st.write(f"**Client PO:** {client_info['client_po']}")
+        company_status = "New" if client_info.get('is_new_client', False) else "Existing"
+        st.write(f"**Company:** {client_info.get('company_name', 'Not specified')} ({company_status})")
+        st.write(f"**Contact + Email:** {client_info.get('contact_name', 'Not specified')} ({client_info.get('contact_email', 'Not specified')})")
+
+        if client_info.get('is_new_client', False) and client_info.get('billing_address'):
+            st.write(f"**IF NEW - Billing Address:** {client_info['billing_address']}")
+
+        po_number = client_info.get('client_po', 'N/A')
+        st.write(f"**Client PO #:** {po_number}")
+
     with col2:
-        st.write(f"**Invoice Date:** {invoice_date}")
-        st.write(f"**New Client:** {'Yes' if client_info['is_new_client'] else 'No'}")
-        st.write(f"**Payment Terms:** {client_info['payment_timeline']}")
-        st.write(f"**Payment Method:** {client_info['payment_preference']}")
+        order_submitted_by = client_info.get('order_submitted_by', 'Not specified')
+        order_submitted_date = client_info.get('order_submitted_date', datetime.now().date())
+        st.write(f"**Order Submitted by:** {order_submitted_by}")
+        st.write(f"**Date:** {order_submitted_date}")
 
-    if client_info['billing_address']:
-        st.write(f"**Billing Address:** {client_info['billing_address']}")
+        cost_submitted_by = client_info.get('cost_submitted_by', 'Not specified')
+        cost_submitted_date = client_info.get('cost_submitted_date', 'Not specified')
+        st.write(f"**Cost Submitted by:** {cost_submitted_by}")
+        st.write(f"**Date:** {cost_submitted_date if cost_submitted_date else 'Not specified'}")
 
-    if client_info['shipping_type'] == 'One Location' and client_info['shipping_address']:
-        st.write(f"**Shipping Address:** {client_info['shipping_address']}")
-    elif client_info['shipping_type'] == 'Drop Shipping':
-        st.write(f"**Shipping:** Drop Shipping (details to be arranged)")
+    st.markdown("---")
+
+    # === PARTNER(S) + POC SECTION ===
+    st.markdown("**Partner(s) + POC:**")
+
+    # Get unique partners from order items
+    partners_in_order = list(set(item['partner'] for item in st.session_state.order_items if not item.get('is_custom', False)))
+
+    if partners_in_order and hasattr(st.session_state, 'partner_contacts'):
+        for partner_name in partners_in_order:
+            partner_contact = st.session_state.partner_contacts.get(partner_name, {})
+            poc_name = partner_contact.get('poc_name', 'Not specified')
+            poc_email = partner_contact.get('poc_email', 'Not specified')
+            st.write(f"- {partner_name} - {poc_name} ({poc_email})")
+    else:
+        st.write("No partners in order")
+
+    st.markdown("---")
+
+    # === DELIVERY & PAYMENT DETAILS ===
+    col3, col4 = st.columns(2)
+    with col3:
+        client_in_hands = client_info.get('client_in_hands_date', 'Not specified')
+        st.write(f"**Client In-Hands Date:** {client_in_hands}")
+        st.write(f"**Payment Terms:** {client_info.get('payment_timeline', 'Not specified')}")
+
+    with col4:
+        ship_method = client_info.get('shipping_type', 'Not specified')
+        st.write(f"**Ship Method:** {ship_method}")
+        st.write(f"**Payment Method:** {client_info.get('payment_preference', 'Not specified')}")
 
     st.divider()
 
@@ -1857,83 +2102,111 @@ else:
     # Apply marketing rounding if enabled
     total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
 
-    # Build line items table - show customization as SEPARATE line items
+    # === ITEMIZED TABLE SECTION ===
+    st.markdown("#### INVOICE AND PURCHASE ORDER ITEM DETAILS")
+    st.caption("""
+    This cost-to-sell segment outlines our partners' cost, our sell price to client,
+    and our partners' requested in-hands date. Our in-hands date for clients may be
+    later than the in-hands date to Peace by Piece for kitting purposes.
+    """)
+
+    # Build line items table in NEW template format
     invoice_line_items = []
     for item in st.session_state.order_items:
         # Check if custom item
         if item.get('is_custom', False):
-            description = item.get('custom_description', 'Custom line item')
-            tier = "Custom"
+            partner = "Custom"
+            items_specs = item.get('custom_description', 'Custom line item')
+            partner_in_hands = "N/A"
+            cost = f"${item.get('total_per_unit', 0):.2f}"
+            cost_verified = "N/A"
+            sell_price = f"${item.get('product_total', 0):.2f}"
 
             invoice_line_items.append({
-                'Product/Service Name': item['product_name'],
-                'Description': description,
-                'Quantity': item['quantity'],
-                'Pricing Tier': tier,
-                'Price (Per-Unit)': f"${item['total_per_unit']:.2f}",
-                'Total (Per-Item)': f"${item['product_total']:.2f}"
+                'PARTNER': partner,
+                'ITEMS + SPECS': items_specs,
+                'QTY': item['quantity'],
+                'IN-HANDS from Partner': partner_in_hands,
+                'COST': cost,
+                'COST VERIFIED?': cost_verified,
+                'SELL PRICE': sell_price
             })
         else:
             # Regular product
-            description = f"Product Ref: {item['product_ref']}, Partner: {item['partner']}"
-            tier = item['tier_range']
+            partner = item['partner']
+            product_name = item['product_name']
+            product_specs = item.get('product_specs', item.get('tier_range', ''))
+            items_specs = f"{product_name}\n{product_specs}"
 
-            # Calculate base product price WITHOUT customization
-            base_product_only = item['product_subtotal'] + item['markup_amount']
-            base_product_per_unit = base_product_only / item['quantity']
+            partner_in_hands = item.get('partner_in_hands_date', 'TBD')
+            if partner_in_hands and partner_in_hands != 'TBD':
+                partner_in_hands = str(partner_in_hands)
+
+            # Partner cost (before markup)
+            partner_cost = item.get('partner_cost_per_unit', item.get('base_price', 0))
+            cost = f"${partner_cost:.2f}"
+
+            cost_verified = item.get('cost_verified', 'Pending')
+
+            # Sell price (total to client for this line)
+            sell_price_total = item.get('sell_price_total', item.get('product_total', 0))
+            sell_price = f"${sell_price_total:.2f}"
 
             # Add base product line
             invoice_line_items.append({
-                'Product/Service Name': item['product_name'],
-                'Description': description,
-                'Quantity': item['quantity'],
-                'Pricing Tier': tier,
-                'Price (Per-Unit)': f"${base_product_per_unit:.2f}",
-                'Total (Per-Item)': f"${base_product_only:.2f}"
+                'PARTNER': partner,
+                'ITEMS + SPECS': items_specs,
+                'QTY': item['quantity'],
+                'IN-HANDS from Partner': partner_in_hands,
+                'COST': cost,
+                'COST VERIFIED?': cost_verified,
+                'SELL PRICE': sell_price
             })
 
             # Add customization line items if present
             if item.get('include_customization', False):
                 customization_desc = item.get('customization_description', 'Custom work')
                 customization_setup = item.get('customization_setup_total', 0)
-                customization_unit = item.get('customization_unit_total', 0)
+                customization_unit_total = item.get('customization_unit_total', 0)
+                customization_per_unit = item.get('customization_per_unit', 0)
 
                 # Setup fee line item
                 if customization_setup > 0:
                     invoice_line_items.append({
-                        'Product/Service Name': f"Setup Fee: {customization_desc}",
-                        'Description': f"One-time setup for {item['product_name']}",
-                        'Quantity': 1,
-                        'Pricing Tier': "N/A",
-                        'Price (Per-Unit)': f"${customization_setup:.2f}",
-                        'Total (Per-Item)': f"${customization_setup:.2f}"
+                        'PARTNER': partner,
+                        'ITEMS + SPECS': f"Setup Fee: {customization_desc}",
+                        'QTY': 1,
+                        'IN-HANDS from Partner': partner_in_hands,
+                        'COST': f"${customization_setup:.2f}",
+                        'COST VERIFIED?': cost_verified,
+                        'SELL PRICE': f"${customization_setup:.2f}"
                     })
 
                 # Per-unit customization line item
-                if customization_unit > 0:
-                    customization_per_unit_price = customization_unit / item['quantity']
+                if customization_unit_total > 0:
                     invoice_line_items.append({
-                        'Product/Service Name': f"Customization: {customization_desc}",
-                        'Description': f"Per-unit customization for {item['product_name']}",
-                        'Quantity': item['quantity'],
-                        'Pricing Tier': "N/A",
-                        'Price (Per-Unit)': f"${customization_per_unit_price:.2f}",
-                        'Total (Per-Item)': f"${customization_unit:.2f}"
+                        'PARTNER': partner,
+                        'ITEMS + SPECS': f"Customization: {customization_desc}",
+                        'QTY': item['quantity'],
+                        'IN-HANDS from Partner': partner_in_hands,
+                        'COST': f"${customization_per_unit:.2f}",
+                        'COST VERIFIED?': cost_verified,
+                        'SELL PRICE': f"${customization_unit_total:.2f}"
                     })
 
             # Add tariff line item if applicable
             if item.get('tariff_amount', 0) > 0:
                 tariff_amount = item.get('tariff_amount', 0)
-                country = item.get('country_of_origin', 'Unknown')
                 tariff_rate = item.get('tariff_rate_percent', 0)
 
                 invoice_line_items.append({
-                    'Product/Service Name': f"Tariff: {item['product_name']}",
-                    'Description': f"Import duty ({tariff_rate}% from {country})",
-                    'Quantity': 1,
-                    'Pricing Tier': "N/A",
-                    'Price (Per-Unit)': f"${tariff_amount:.2f}",
-                    'Total (Per-Item)': f"${tariff_amount:.2f}"
+                    'PARTNER': partner,
+                    'ITEMS + SPECS': f"Tariff ({tariff_rate}%)",
+                    'QTY': 1,
+                    'IN-HANDS from Partner': "N/A",
+                    'COST': f"${tariff_amount:.2f}",
+                    'COST VERIFIED?': "Yes",
+                    'SELL PRICE': f"${tariff_amount:.2f}"
                 })
 
     # Display line items table
@@ -1942,8 +2215,9 @@ else:
 
     # Display totals section
     st.write("")  # Spacing
+    st.markdown("**Summary Totals:**")
     totals_data = [
-        ["Subtotal (Pre-Tax)", f"${products_subtotal:.2f}"]
+        ["Subtotal", f"${products_subtotal:.2f}"]
     ]
 
     # Add discount line if applicable
@@ -1952,18 +2226,56 @@ else:
 
     totals_data.append(["Shipping", f"${shipping:.2f}"])
 
+    # Tariff is already in line items, so we show it separately
+    if tariff > 0:
+        totals_data.append(["Tariff", f"${tariff:.2f}"])
+
     # Add credit card fee if applicable
     if st.session_state.apply_cc_fee and cc_fee_amount > 0:
         totals_data.append([f"Credit Card Fee ({st.session_state.cc_fee_percent}%)", f"${cc_fee_amount:.2f}"])
 
-    totals_data.append(["**Final Total**", f"**${total_quote:.2f}**"])
+    totals_data.append(["**TOTAL**", f"**${total_quote:.2f}**"])
 
     totals_df = pd.DataFrame(totals_data, columns=["Item", "Amount"])
     st.table(totals_df)
 
-    st.caption("Copy this table and paste into your invoice template.")
+    st.divider()
 
-    # Add download button for complete invoice
+    # === NOTES SECTION ===
+    st.markdown("#### NOTES")
+    st.caption("""
+    Enter any specific details, kitting specs, client requests, add-on samples for
+    Peace by Piece to be added to purchase orders. Remember to attach titled artwork
+    that matches your purchase order request and any additional spec sheets for our partners.
+    """)
+
+    order_notes = st.session_state.order_notes
+
+    # Display notes if any are filled
+    notes_content = []
+    if order_notes.get('kitting_specs'):
+        notes_content.append(f"**Kitting Specs:**\n{order_notes['kitting_specs']}")
+    if order_notes.get('client_requests'):
+        notes_content.append(f"**Client Requests:**\n{order_notes['client_requests']}")
+    if order_notes.get('addon_samples'):
+        notes_content.append(f"**Add-on Samples:**\n{order_notes['addon_samples']}")
+    if order_notes.get('artwork_attachments'):
+        notes_content.append(f"**Artwork Attachments:**\n{order_notes['artwork_attachments']}")
+    if order_notes.get('general_notes'):
+        notes_content.append(f"**General Notes:**\n{order_notes['general_notes']}")
+
+    if notes_content:
+        for note in notes_content:
+            st.markdown(note)
+    else:
+        st.caption("No notes added")
+
+    st.divider()
+
+    # === DOWNLOAD SECTION ===
+    st.markdown("#### Download Invoice & Purchase Order")
+
+    # Add download button for complete invoice/PO
     # Combine line items and totals into one downloadable file
     invoice_complete = invoice_df.copy()
 
@@ -1971,214 +2283,55 @@ else:
     blank_row = pd.DataFrame([{col: "" for col in invoice_df.columns}])
     invoice_complete = pd.concat([invoice_complete, blank_row], ignore_index=True)
 
-    # Add totals section
+    # Add totals section (map to new column names)
     for total_item in totals_data:
         total_row = pd.DataFrame([{
-            'Product/Service Name': total_item[0],
-            'Description': '',
-            'Quantity': '',
-            'Pricing Tier': '',
-            'Price (Per-Unit)': '',
-            'Total (Per-Item)': total_item[1]
+            'PARTNER': '',
+            'ITEMS + SPECS': total_item[0],
+            'QTY': '',
+            'IN-HANDS from Partner': '',
+            'COST': '',
+            'COST VERIFIED?': '',
+            'SELL PRICE': total_item[1]
         }])
         invoice_complete = pd.concat([invoice_complete, total_row], ignore_index=True)
 
+    # Add notes section
+    notes_row = pd.DataFrame([{
+        'PARTNER': '',
+        'ITEMS + SPECS': '',
+        'QTY': '',
+        'IN-HANDS from Partner': '',
+        'COST': '',
+        'COST VERIFIED?': '',
+        'SELL PRICE': ''
+    }])
+    invoice_complete = pd.concat([invoice_complete, notes_row], ignore_index=True)
+
+    # Add notes content
+    if notes_content:
+        for note in notes_content:
+            notes_row = pd.DataFrame([{
+                'PARTNER': '',
+                'ITEMS + SPECS': note.replace('**', '').replace('\n', ' '),
+                'QTY': '',
+                'IN-HANDS from Partner': '',
+                'COST': '',
+                'COST VERIFIED?': '',
+                'SELL PRICE': ''
+            }])
+            invoice_complete = pd.concat([invoice_complete, notes_row], ignore_index=True)
+
     invoice_csv = invoice_complete.to_csv(index=False)
     st.download_button(
-        label="Download Complete Invoice (CSV)",
+        label="Download Invoice & Purchase Order (CSV)",
         data=invoice_csv,
-        file_name=f"invoice_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        file_name=f"invoice_po_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
         mime="text/csv",
-        key="download_invoice_complete"
+        key="download_invoice_po_complete"
     )
 
-# ===== PURCHASE ORDER GENERATION =====
-st.divider()
-st.header("11. Purchase Order")
-
-if len(st.session_state.order_items) == 0:
-    st.caption("Add products to your order to generate a purchase order.")
-else:
-    st.subheader("Purchase Order")
-    po_date = datetime.now().strftime("%Y-%m-%d")
-    po_number = f"PO-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-
-    # Display PO header information
-    st.markdown("#### Purchase Order Information")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write(f"**PO Number:** {po_number}")
-        st.write(f"**PO Date:** {po_date}")
-        st.write(f"**Total Units:** {sum(item['quantity'] for item in st.session_state.order_items)}")
-        st.write(f"**Total Amount:** ${total_quote:.2f}")
-
-    with col2:
-        client_info = st.session_state.client_info
-        st.write(f"**Client:** {client_info['company_name'] if client_info['company_name'] else 'Not specified'}")
-        st.write(f"**Contact:** {client_info['contact_name'] if client_info['contact_name'] else 'Not specified'}")
-        st.write(f"**Email:** {client_info['contact_email'] if client_info['contact_email'] else 'Not specified'}")
-        if client_info['client_po']:
-            st.write(f"**Client PO Reference:** {client_info['client_po']}")
-
-    st.divider()
-
-    # Build PO line items table - show customization as SEPARATE line items
-    st.markdown("#### Order Details")
-
-    po_line_items = []
-    for item in st.session_state.order_items:
-        if item.get('is_custom', False):
-            partner = "Custom"
-            product_ref = "N/A"
-            description = item.get('custom_description', 'Custom line item')
-
-            po_line_items.append({
-                'Partner': partner,
-                'Product/Service': item['product_name'],
-                'Product Ref': product_ref,
-                'Quantity': item['quantity'],
-                'Unit Cost': f"${item['total_per_unit']:.2f}",
-                'Total': f"${item['product_total']:.2f}",
-                'Notes': description
-            })
-        else:
-            # Regular product
-            partner = item['partner']
-            product_ref = item['product_ref']
-            description = f"Tier: {item['tier_range']}"
-
-            # Calculate base product price WITHOUT customization
-            base_product_only = item['product_subtotal'] + item['markup_amount']
-            base_product_per_unit = base_product_only / item['quantity']
-
-            # Add base product line
-            po_line_items.append({
-                'Partner': partner,
-                'Product/Service': item['product_name'],
-                'Product Ref': product_ref,
-                'Quantity': item['quantity'],
-                'Unit Cost': f"${base_product_per_unit:.2f}",
-                'Total': f"${base_product_only:.2f}",
-                'Notes': description
-            })
-
-            # Add customization line items if present
-            if item.get('include_customization', False):
-                customization_desc = item.get('customization_description', 'Custom work')
-                customization_setup = item.get('customization_setup_total', 0)
-                customization_unit = item.get('customization_unit_total', 0)
-
-                # Setup fee line item
-                if customization_setup > 0:
-                    po_line_items.append({
-                        'Partner': partner,
-                        'Product/Service': f"Setup Fee: {customization_desc}",
-                        'Product Ref': product_ref,
-                        'Quantity': 1,
-                        'Unit Cost': f"${customization_setup:.2f}",
-                        'Total': f"${customization_setup:.2f}",
-                        'Notes': f"One-time setup for {item['product_name']}"
-                    })
-
-                # Per-unit customization line item
-                if customization_unit > 0:
-                    customization_per_unit_price = customization_unit / item['quantity']
-                    po_line_items.append({
-                        'Partner': partner,
-                        'Product/Service': f"Customization: {customization_desc}",
-                        'Product Ref': product_ref,
-                        'Quantity': item['quantity'],
-                        'Unit Cost': f"${customization_per_unit_price:.2f}",
-                        'Total': f"${customization_unit:.2f}",
-                        'Notes': f"Per-unit customization for {item['product_name']}"
-                    })
-
-            # Add tariff line item if applicable
-            if item.get('tariff_amount', 0) > 0:
-                tariff_amount = item.get('tariff_amount', 0)
-                country = item.get('country_of_origin', 'Unknown')
-                tariff_rate = item.get('tariff_rate_percent', 0)
-
-                po_line_items.append({
-                    'Partner': partner,
-                    'Product/Service': f"Tariff: {item['product_name']}",
-                    'Product Ref': product_ref,
-                    'Quantity': 1,
-                    'Unit Cost': f"${tariff_amount:.2f}",
-                    'Total': f"${tariff_amount:.2f}",
-                    'Notes': f"Import duty ({tariff_rate}% from {country})"
-                })
-
-    po_df = pd.DataFrame(po_line_items)
-    st.table(po_df)
-
-    # Display order summary
-    st.markdown("#### Order Summary")
-
-    summary_data = [
-        ["Products Subtotal", f"${products_subtotal:.2f}"]
-    ]
-
-    if discount_percent > 0:
-        summary_data.append([f"Discount ({discount_description})", f"-${discount_amount:.2f}"])
-
-    summary_data.append(["Shipping", f"${shipping:.2f}"])
-
-    if st.session_state.apply_cc_fee and cc_fee_amount > 0:
-        summary_data.append([f"Credit Card Fee ({st.session_state.cc_fee_percent}%)", f"${cc_fee_amount:.2f}"])
-
-    summary_data.append(["**Total Order Value**", f"**${total_quote:.2f}**"])
-
-    summary_df = pd.DataFrame(summary_data, columns=["Item", "Amount"])
-    st.table(summary_df)
-
-    # Payment and shipping information
-    st.markdown("#### Payment & Shipping")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write(f"**Payment Terms:** {client_info['payment_timeline']}")
-        st.write(f"**Payment Method:** {client_info['payment_preference']}")
-    with col2:
-        st.write(f"**Shipping Type:** {client_info['shipping_type']}")
-        if client_info['shipping_type'] == 'One Location' and client_info['shipping_address']:
-            st.write(f"**Shipping Address:**")
-            st.caption(client_info['shipping_address'])
-
-    if client_info['billing_address']:
-        st.write(f"**Billing Address:**")
-        st.caption(client_info['billing_address'])
-
-    st.caption("Copy this purchase order for your records.")
-
-    # Download button for PO
-    po_complete = po_df.copy()
-
-    # Add summary section
-    blank_row = pd.DataFrame([{col: "" for col in po_df.columns}])
-    po_complete = pd.concat([po_complete, blank_row], ignore_index=True)
-
-    for summary_item in summary_data:
-        summary_row = pd.DataFrame([{
-            'Partner': summary_item[0],
-            'Product/Service': '',
-            'Product Ref': '',
-            'Quantity': '',
-            'Unit Cost': '',
-            'Total': summary_item[1],
-            'Notes': ''
-        }])
-        po_complete = pd.concat([po_complete, summary_row], ignore_index=True)
-
-    po_csv = po_complete.to_csv(index=False)
-    st.download_button(
-        label="Download Purchase Order (CSV)",
-        data=po_csv,
-        file_name=f"purchase_order_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-        mime="text/csv",
-        key="download_po"
-    )
+    st.caption("Download the CSV and send to bookkeeper, or copy the tables above into your template.")
 
 # ===== FOOTER =====
 st.divider()

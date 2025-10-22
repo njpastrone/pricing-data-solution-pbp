@@ -1,21 +1,50 @@
-# Invoice Requirements
+# Invoice & Purchase Order Requirements
 
 ## Purpose
 
-This document defines the required information and format for generating invoices from the pricing app.
+This document defines the required information and format for generating invoices and purchase orders from the pricing app, aligned with the bookkeeper's standardized template.
 
-## Required Invoice Information
+## Template Reference
 
-An invoice must contain the following information in a table format:
+The app now generates combined Invoice & Purchase Order Request Forms based on:
+- `templates/TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED.md`
+- `templates/TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED.pdf`
+
+See also: `docs/INVOICE_PO_RESTRUCTURE_PLAN.md` for implementation details.
+
+## Required Invoice/PO Information
+
+The combined Invoice & Purchase Order form contains the following sections:
+
+### Header Section
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| **Company** | Client company name (Existing/New) | "Acme Corp (Existing)" |
+| **Contact + Email** | Client contact person and email | "John Smith (john@acme.com)" |
+| **IF NEW - Billing Address** | Billing address (shown only for new clients) | "123 Main St, City, State ZIP" |
+| **Client PO #** | Client purchase order number | "PO-2025-001" or "N/A" |
+| **Partner(s) + POC** | List of partners with point of contact | "Partner X - Jane Doe (jane@partnerx.com)" |
+| **Client In-Hands Date** | Target delivery date for client | "Oct 20, 2025" |
+| **Ship Method** | Shipping method | "Ground / Air / Freight / Other" |
+| **Payment Terms** | Payment timeline | "Net 30 / Net 60 / Due on Receipt / 50% Deposit" |
+| **Payment Method** | How client will pay | "Check / ACH / Credit Card / Wire Transfer" |
+| **Order Submitted by** | Person creating order | "Your Name" |
+| **Order Submitted Date** | Date order created | "2025-10-22" (auto-filled) |
+| **Cost Submitted by** | Person who verified costs | "Finance Contact" |
+| **Cost Submitted Date** | Date costs verified | "2025-10-22" |
+
+### Itemized Table
 
 | Column | Description | Example |
 |--------|-------------|---------|
-| **Product/Service Name** | Full name of the product or service | "Jaggery Organic Dark Chocolate Bar" |
-| **Description** | Brief description including product reference number and partner | "Product Ref: JA01, Partner: Jaggery" |
-| **Quantity** | Number of units ordered | 100 |
-| **Pricing Tier** | The quantity tier range used for pricing | "101-250" |
-| **Price (Per-Unit)** | Price per single unit including markup | $45.50 |
-| **Total (Per-Item)** | Total cost for this line item (Quantity × Price) | $4,550.00 |
+| **PARTNER** | Partner/supplier name | "Partner X" |
+| **ITEMS + SPECS** | Product name and specifications | "Chocolate Bar\n4oz, Dark, Organic" |
+| **QTY** | Quantity ordered | 100 |
+| **IN-HANDS from Partner** | When partner delivers to PBP | "Oct 17, 2025" |
+| **COST** | Partner cost per unit (before markup) | "$10.00" |
+| **COST VERIFIED?** | Cost verification status | "Yes / No / Pending" |
+| **SELL PRICE** | Total sell price to client for this line | "$1,500.00" |
 
 ## Invoice Calculation Requirements
 
@@ -71,8 +100,33 @@ Final Total = Subtotal + Shipping + Tariff
 - The subtotal calculation excludes shipping and tariff (these are added separately)
 - Per-unit pricing should reflect the "all-in" cost per unit (after markup and fees are applied)
 
+### Notes Section
+
+The form includes a notes section for:
+- **Kitting Specifications**: Box size, packaging requirements, assembly instructions
+- **Client Requests**: Rush delivery, special handling, custom messaging
+- **Add-on Samples**: Extra units for display, samples for approval
+- **Artwork Attachments**: List of artwork files (logo_final.ai, label_design_v3.pdf, etc.)
+- **General Notes**: Any other important details
+
 ## Current App Status
 
-**Status:** Needs refinement
+**Status:** ✅ Implemented (2025-10-22)
 
-The current Invoice section in the app displays detailed breakdowns but may not present information in the exact table format required for invoice generation. The Invoice section needs to be updated to match this specification.
+The Invoice & Purchase Order section has been completely restructured to match the bookkeeper's standardized template format. The app now:
+
+1. **Combines Invoice & PO**: Single unified form instead of separate sections
+2. **Matches Template**: All fields align with `TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED`
+3. **Auto-extracts Partner Contacts**: Pulls POC info from Google Sheets Partner-Specific Info
+4. **Validates Required Fields**: Warns users if critical data is missing before export
+5. **Exports in Template Format**: CSV download includes all required columns and notes
+
+### Key Features:
+- Standardized dropdowns for Payment Terms, Payment Method, Ship Method
+- Date pickers for Client In-Hands Date, Order/Cost Submitted Dates
+- Partner contact auto-population from Google Sheets
+- Comprehensive order notes section (5 categories)
+- Validation warnings for missing/incomplete data
+- Single CSV export with header, line items, totals, and notes
+
+See `docs/INVOICE_PO_RESTRUCTURE_PLAN.md` for complete implementation details.

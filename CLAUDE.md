@@ -110,10 +110,15 @@ pricing-data-solution-pbp/
 │   ├── PLANNING.md            # Project requirements & goals
 │   ├── DATA_STRUCTURE.md      # jaggery_demo data structure
 │   ├── METHODOLOGY_LOGIC.md   # Pricing calculations & business rules
-│   ├── INVOICE_REQUIREMENTS.md # Invoice format specification
+│   ├── INVOICE_REQUIREMENTS.md # Invoice/PO format specification (UPDATED 2025-10-22)
+│   ├── INVOICE_PO_RESTRUCTURE_PLAN.md # Bookkeeper template implementation plan
 │   ├── CLIENT_QUESTIONS.md    # Unanswered client questions
 │   ├── APP_UPDATE_PLAN.md     # Implementation plan & details
 │   └── MIGRATION_SUMMARY.md   # Migration history
+│
+├── templates/                  # Reference templates
+│   ├── TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED.md
+│   └── TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED.pdf
 │
 ├── scripts/                    # Utility scripts
 │   ├── test_connection.py     # Test Google Sheets connection
@@ -138,9 +143,9 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 2.0 - Multi-Partner Restructured System
+**Version:** 2.1 - Bookkeeper-Aligned Invoice & PO System
 
-**Last Updated:** 2025-10-14
+**Last Updated:** 2025-10-22
 
 **Features Implemented:**
 - ✅ Multi-partner support (Partner X and future partners)
@@ -154,9 +159,13 @@ pricing-data-solution-pbp/
 - ✅ Discount options (NGO preset 5% + custom discounts)
 - ✅ Marketing rounding (charm pricing: $60 → $59)
 - ✅ Custom line items for unique services/customizations
-- ✅ Professional 6-column invoice table format
 - ✅ Per-product proposal tables (4-column MOQ format)
-- ✅ Download buttons for all major tables
+- ✅ **NEW: Bookkeeper-standardized Invoice & PO template**
+- ✅ **NEW: Partner contact auto-extraction from Google Sheets**
+- ✅ **NEW: Comprehensive order notes system (5 categories)**
+- ✅ **NEW: Field validation with user warnings**
+- ✅ **NEW: Standardized payment/shipping dropdowns**
+- ✅ **NEW: Date tracking for order/cost submission**
 
 **Testing Status:**
 - ✅ Data loads from master_pricing_template_10_14
