@@ -36,9 +36,10 @@ Where:
 
 ## 🏭 Partner-Specific Methodologies
 
-### Partner: Jaggery
+### Partner: Jaggery (Historical Reference)
 
-**Data Source:** jaggery_demo Google Sheet
+**Data Source:** master_pricing_template_10_14 Google Sheet
+**Note:** The app now uses a flexible tier system that supports both tiered and flat-rate pricing per product
 
 #### 1. Tiered Pricing Structure
 
@@ -46,15 +47,17 @@ Where:
 - Base price varies by order quantity
 - 7 pricing tiers based on quantity ranges
 
-| Quantity Range | Column Name | Example Price |
-|----------------|-------------|---------------|
-| 1-25 units | PBP Cost w/o shipping (1-25) | $48.00 |
-| 26-50 units | PBP Cost w/o shipping (26-50) | $40.80 |
-| 51-100 units | PBP Cost w/o shipping (51-100) | $38.40 |
-| 101-250 units | PBP Cost w/o shipping (101-250) | (varies) |
-| 251-500 units | PBP Cost w/o shipping (251-500) | (varies) |
-| 501-1000 units | PBP Cost w/o shipping (501-1000) | (varies) |
-| 1000+ units | PBP Cost w/o shipping (1000+) | $36.00 |
+| Quantity Range | Column Name (Current System) | Example Price |
+|----------------|------------------------------|---------------|
+| Tier 1 | PBP Cost: Tier 1 | $48.00 |
+| Tier 2 | PBP Cost: Tier 2 | $40.80 |
+| Tier 3 | PBP Cost: Tier 3 | $38.40 |
+| Tier 4 | PBP Cost: Tier 4 | (varies) |
+| Tier 5 | PBP Cost: Tier 5 | (varies) |
+| Tier 6 | PBP Cost: Tier 6 | $36.00 |
+| Flat Rate | PBP Cost (No Tiers) | (varies) |
+
+**Note:** Tier ranges are defined in the "Pricing Tiers Info" column (e.g., "T1: 1-25, T2: 26-50, T3: 51-100")
 
 **Business Rule:**
 - Use the tier that matches the order quantity

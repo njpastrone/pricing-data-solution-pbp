@@ -2,7 +2,8 @@
 
 A Python/Streamlit application for calculating tiered pricing quotes for artisan products with custom labels and setup fees.
 
-**Current Status:** ✅ Production Ready (using jaggery_demo data)
+**Current Status:** ✅ Production Ready (using master_pricing_template_10_14 data)
+**Version:** 2.1 - Bookkeeper-Aligned Invoice & PO System
 
 ---
 
@@ -43,12 +44,10 @@ pricing-data-solution-pbp/
 │
 ├── docs/                       # Documentation
 │   ├── PLANNING.md            # Project requirements & goals
-│   ├── DATA_STRUCTURE.md      # jaggery_demo data structure
+│   ├── RESTRUCTURE_CONTEXT.md # Current data structure (master_pricing_template_10_14)
 │   ├── METHODOLOGY_LOGIC.md   # Pricing calculations & business rules
-│   ├── INVOICE_REQUIREMENTS.md # Invoice format specification
-│   ├── CLIENT_QUESTIONS.md    # Unanswered client questions
-│   ├── APP_UPDATE_PLAN.md     # Implementation plan & technical details
-│   └── MIGRATION_SUMMARY.md   # Migration history (jaggery_sample_6_23 → jaggery_demo)
+│   ├── INVOICE_AND_PROPOSAL_SPEC.md # Invoice & proposal format specification
+│   └── CLIENT_QUESTIONS.md    # Unanswered client questions
 │
 ├── scripts/                    # Utility scripts
 │   ├── test_connection.py     # Test Google Sheets connection
@@ -111,19 +110,21 @@ Where:
 
 ## 📊 Data Source
 
-**Active Sheet:** `jaggery_demo` (Google Sheets)
+**Active Sheet:** `master_pricing_template_10_14` (Google Sheets)
 
-**Structure:**
-- Row 1: Empty
-- Row 2: Headers
-- Row 3+: Product data
+**Structure:** 3-sheet workbook
+- **Template** (header at row 6): Partner-product pricing data
+- **Metadata**: Deliverable field definitions
+- **Partner-Specific Info**: Partner configuration reference
 
 **Key Fields:**
-- Product Ref. No., Gift Name, Artisan Partner
-- 7 pricing tier columns
-- Art Setup Fee, Label costs, Minimum quantities
+- Partner, Product/Service, Purchase Description
+- Pricing Tiers (Y/N) flag
+- Flexible tier definitions (PBP Cost: Tier 1-6 OR PBP Cost (No Tiers))
+- Customization Setup Fee, Customization Cost per Unit
+- Tariff Estimate, Shipping
 
-See [docs/DATA_STRUCTURE.md](docs/DATA_STRUCTURE.md) for complete details.
+See [docs/RESTRUCTURE_CONTEXT.md](docs/RESTRUCTURE_CONTEXT.md) for complete details.
 
 ---
 
@@ -153,15 +154,13 @@ Edit in `app.py` → `calculate_additional_costs()` function.
 
 **Essential Reading:**
 - [CLAUDE.md](CLAUDE.md) - Project rules & development guidelines
-- [docs/DATA_STRUCTURE.md](docs/DATA_STRUCTURE.md) - Data structure reference
+- [docs/RESTRUCTURE_CONTEXT.md](docs/RESTRUCTURE_CONTEXT.md) - Current data structure
 - [docs/METHODOLOGY_LOGIC.md](docs/METHODOLOGY_LOGIC.md) - Pricing calculations
+- [docs/INVOICE_AND_PROPOSAL_SPEC.md](docs/INVOICE_AND_PROPOSAL_SPEC.md) - Invoice & proposal formats
 
-**Planning & Implementation:**
+**Planning:**
 - [docs/PLANNING.md](docs/PLANNING.md) - Project requirements
-- [docs/APP_UPDATE_PLAN.md](docs/APP_UPDATE_PLAN.md) - Technical implementation details
-
-**History:**
-- [docs/MIGRATION_SUMMARY.md](docs/MIGRATION_SUMMARY.md) - Migration from jaggery_sample_6_23 to jaggery_demo
+- [docs/CLIENT_QUESTIONS.md](docs/CLIENT_QUESTIONS.md) - Tracking open questions
 
 ---
 
@@ -259,5 +258,5 @@ Peace by Piece International - Internal Tool
 
 ---
 
-**Last Updated:** 2025-10-03
-**Version:** 1.1 (Multi-Product Ordering with Per-Product Markup)
+**Last Updated:** 2025-10-27
+**Version:** 2.1 (Bookkeeper-Aligned Invoice & PO System)
