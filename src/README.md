@@ -50,17 +50,41 @@ df_template, df_metadata, df_partner_info = load_pricing_data()
 
 ---
 
-### `pricing_engine.py` (Planned)
+### `pricing_engine.py`
 **Purpose:** Pricing calculations and quote generation
 
-**Planned Functions:**
-- `determine_tier_number()` - Map quantity to tier number
-- `get_unit_price_new_system()` - Get price based on tier/flat logic
-- `calculate_customization_costs()` - Calculate setup fees and per-unit costs
+**Functions:**
+- `determine_tier_number()` - Map quantity to tier number (1-6)
+- `get_unit_price_new_system()` - Get price based on tier/flat logic (NEW SYSTEM)
+- `get_price_for_quantity()` - Get price based on quantity (OLD SYSTEM - deprecated)
+- `calculate_customization_costs()` - Calculate setup fees and per-unit costs (NEW SYSTEM)
+- `calculate_additional_costs()` - Calculate label/setup costs (OLD SYSTEM - deprecated)
 - `calculate_product_quote()` - Complete quote for single product
 - `calculate_order_total()` - Multi-product order total with shipping/tariff
 
-**Status:** Not yet extracted from app.py
+**Usage:**
+```python
+from src.pricing_engine import calculate_product_quote, calculate_order_total
+
+# Calculate quote for single product
+quote = calculate_product_quote(
+    row=product_row,
+    quantity=100,
+    markup_percent=50,
+    include_customization=True,
+    customization_minimum=100
+)
+
+# Calculate order total with multiple products
+summary = calculate_order_total(
+    order_items=[item1, item2],
+    shipping=100,
+    order_tariff=200,
+    discount_percent=5.0
+)
+```
+
+**Status:** ✅ Complete (7 functions extracted)
 
 ---
 
@@ -69,8 +93,8 @@ df_template, df_metadata, df_partner_info = load_pricing_data()
 **Phase 2 Progress:**
 - ✅ helpers.py - Complete (13 functions extracted)
 - ✅ data_loader.py - Complete (2 functions extracted)
-- ⏳ pricing_engine.py - Planned (5+ functions to extract)
-- ⏳ app.py refactor - Pending (update imports, remove extracted functions)
+- ✅ pricing_engine.py - Complete (7 functions extracted)
+- ⏳ app.py refactor - In Progress (update imports, remove extracted functions)
 
 **Next Steps:**
 1. Extract pricing engine functions from app.py

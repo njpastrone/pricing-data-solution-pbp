@@ -9,217 +9,33 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 from datetime import datetime
 
-# ===== HELPER FUNCTIONS =====
-def apply_marketing_rounding(price, enabled=True):
-    """Apply charm pricing: round whole dollar amounts down by $1 (e.g., $60 -> $59)"""
-    if enabled and price % 1 == 0:
-        return price - 1
-    return price
+# Import extracted modules
+from src.data_loader import load_pricing_data
+from src.helpers import (
+    clean_price,
+    apply_marketing_rounding,
+    round_to_nearest_five,
+    calculate_moq,
+    calculate_credit_card_fee,
+    extract_partner_contacts,
+    validate_invoice_completeness,
+    parse_tier_info,
+    parse_tariff_rate,
+    calculate_product_tariff
+)
+from src.pricing_engine import (
+    determine_tier_number,
+    get_unit_price_new_system,
+    get_price_for_quantity,
+    calculate_additional_costs,
+    calculate_customization_costs,
+    calculate_product_quote,
+    calculate_order_total
+)
 
-def round_to_nearest_five(price, enabled=True):
-    """Round price to the nearest multiple of 5 (e.g., $17.50 -> $20, $12.30 -> $10)"""
-    if enabled:
-        return round(price / 5) * 5
-    return price
-
-def calculate_moq(unit_price):
-    """
-    Calculate Minimum Order Quantity based on $1,000 minimum order value.
-    Formula: MOQ = ceil(1000 / Unit Price)
-    """
-    import math
-    if unit_price <= 0:
-        return None
-    return math.ceil(1000 / unit_price)
-
-def calculate_credit_card_fee(total, apply_fee=False, fee_percent=2.9):
-    """
-    Calculate credit card processing fee if applicable.
-    Default rate: 2.9%
-    """
-    if apply_fee:
-        return total * (fee_percent / 100)
-    return 0.0
-
-def extract_partner_contacts(df_partner_info):
-    """
-    Extract partner contact information from Partner-Specific Info sheet.
-    Returns dict: {partner_name: {poc_name, poc_email, poc_phone}}
-    """
-    partner_contacts = {}
-
-    for _, row in df_partner_info.iterrows():
-        partner_name = row.get('Partner', '').strip()
-        if not partner_name:
-            continue
-
-        partner_contacts[partner_name] = {
-            'poc_name': row.get('POC Name', '').strip() or row.get('Contact Name', '').strip() or '',
-            'poc_email': row.get('POC Email', '').strip() or row.get('Email', '').strip() or '',
-            'poc_phone': row.get('POC Phone', '').strip() or row.get('Phone', '').strip() or ''
-        }
-
-    return partner_contacts
-
-def validate_invoice_completeness(client_info, order_items):
-    """
-    Check if all required fields are filled before invoice/PO generation.
-    Returns list of missing/invalid fields as warning messages.
-    """
-    missing = []
-
-    # Check client info required fields
-    if not client_info.get('company_name'):
-        missing.append("Company Name is required")
-    if not client_info.get('contact_email'):
-        missing.append("Contact Email is required")
-    if not client_info.get('client_in_hands_date'):
-        missing.append("Client In-Hands Date is required")
-    if not client_info.get('order_submitted_by'):
-        missing.append("Order Submitted By is required")
-    if not client_info.get('cost_submitted_by'):
-        missing.append("Cost Submitted By is required")
-
-    # Check line items
-    for idx, item in enumerate(order_items, 1):
-        if not item.get('is_custom', False):
-            if not item.get('partner_in_hands_date'):
-                missing.append(f"Item #{idx} ({item.get('product_name', 'Unknown')}): Partner In-Hands Date not set")
-            if item.get('cost_verified') == 'Pending':
-                missing.append(f"Item #{idx} ({item.get('product_name', 'Unknown')}): Cost not verified")
-
-    return missing
-
-def parse_tier_info(tier_string):
-    """
-    Parse 'T1: 1-25, T2: 26-50, ...' into dict of tier ranges.
-    Returns: {1: (1, 25), 2: (26, 50), ...}
-    """
-    if pd.isna(tier_string) or tier_string == "" or tier_string == "NA":
-        return {}
-
-    tier_dict = {}
-    parts = tier_string.split(',')
-    for part in parts:
-        if ':' not in part:
-            continue
-        # Extract "T1: 1-25" → tier_num=1, range=(1, 25)
-        tier_label, range_str = part.split(':')
-        tier_num = int(tier_label.strip().replace('T', ''))
-        range_str = range_str.strip()
-        if '-' in range_str:
-            min_qty, max_qty = range_str.split('-')
-            tier_dict[tier_num] = (int(min_qty), int(max_qty))
-        elif '+' in range_str:
-            # Handle "1000+" format
-            min_qty = int(range_str.replace('+', ''))
-            tier_dict[tier_num] = (min_qty, float('inf'))
-
-    return tier_dict
-
-def parse_tariff_rate(tariff_string):
-    """
-    Parse tariff percentage from spreadsheet strings.
-
-    Examples:
-        "50.00%" -> 50.0
-        "50%" -> 50.0
-        "25.5%" -> 25.5
-        "" -> 0.0
-        "NA" -> 0.0
-
-    Returns:
-        float: Tariff rate as decimal percentage (0.0 if invalid)
-    """
-    if not tariff_string or tariff_string == '' or tariff_string == 'NA':
-        return 0.0
-    try:
-        cleaned = str(tariff_string).replace('%', '').strip()
-        return float(cleaned)
-    except (ValueError, AttributeError):
-        return 0.0
-
-def calculate_product_tariff(product_cost_with_markup, tariff_rate_percent):
-    """
-    Calculate tariff on product cost.
-
-    Args:
-        product_cost_with_markup: Base product cost (price + markup, excluding customization)
-        tariff_rate_percent: Tariff rate as percentage (e.g., 50.0 for 50%)
-
-    Returns:
-        float: Tariff dollar amount
-
-    Example:
-        product_cost = $4,000 (base $2,000 + markup $2,000)
-        tariff_rate = 50.0%
-        tariff_amount = $2,000
-    """
-    if tariff_rate_percent <= 0:
-        return 0.0
-    return product_cost_with_markup * (tariff_rate_percent / 100)
-
-def determine_tier_number(quantity, tier_info_string, has_tiers):
-    """
-    Returns tier number (1-6) based on quantity, or None if no tiers.
-    """
-    if has_tiers != 'Y':
-        return None
-
-    tier_ranges = parse_tier_info(tier_info_string)
-
-    if not tier_ranges:
-        return None
-
-    for tier_num, (min_qty, max_qty) in tier_ranges.items():
-        if min_qty <= quantity <= max_qty:
-            return tier_num
-
-    # If quantity exceeds all ranges, use highest tier
-    if tier_ranges:
-        return max(tier_ranges.keys())
-
-    return None
-
-def get_unit_price_new_system(row, quantity):
-    """
-    Get correct unit price based on new tier logic from master_pricing_template_10_14.
-    Handles both tiered and non-tiered pricing.
-    """
-    has_tiers = str(row.get('Pricing Tiers (Y/N)', '')).strip().upper()
-
-    if has_tiers != 'Y':
-        # Use flat rate
-        flat_price = clean_price(row.get('PBP Cost (No Tiers)', ''))
-        if flat_price is not None:
-            return flat_price, "No Tiers", "PBP Cost (No Tiers)"
-        else:
-            return None, None, None
-
-    # Determine tier and get price
-    tier_info = row.get('Pricing Tiers Info', '')
-    tier_num = determine_tier_number(quantity, tier_info, has_tiers)
-
-    if tier_num is None:
-        return None, None, None
-
-    tier_col = f'PBP Cost: Tier {tier_num}'
-    price = clean_price(row.get(tier_col, ''))
-
-    if price is not None:
-        # Get tier range for display
-        tier_ranges = parse_tier_info(tier_info)
-        if tier_num in tier_ranges:
-            min_qty, max_qty = tier_ranges[tier_num]
-            if max_qty == float('inf'):
-                tier_range = f"{min_qty}+"
-            else:
-                tier_range = f"{min_qty}-{max_qty}"
-            return price, tier_range, tier_col
-
-    return None, None, None
-
-# Page configuration
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
 st.set_page_config(
     page_title="PBP Pricing App",
     page_icon="💰",
@@ -227,7 +43,9 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# ===== SESSION STATE INITIALIZATION (MUST BE EARLY) =====
+# ============================================================
+# SESSION STATE INITIALIZATION
+# ============================================================
 # Initialize order_items if not exists
 if 'order_items' not in st.session_state:
     st.session_state.order_items = []
@@ -304,7 +122,9 @@ proposals with detailed pricing breakdowns.
 """)
 st.divider()
 
-# ===== SIDEBAR =====
+# ============================================================
+# SIDEBAR - APP INFORMATION
+# ============================================================
 with st.sidebar:
     st.markdown("## Instructions & Tools")
 
@@ -454,198 +274,9 @@ with st.sidebar:
             use_container_width=True
         )
 
-# ===== HELPER FUNCTIONS =====
-
-def clean_price(price_string):
-    """
-    Convert price string like '$48.00' or '$1,500.00' to float.
-    Returns None if empty or invalid.
-    """
-    if not price_string or price_string == '':
-        return None
-    try:
-        # Remove $, commas, whitespace
-        cleaned = str(price_string).replace('$', '').replace(',', '').strip()
-        return float(cleaned)
-    except (ValueError, AttributeError):
-        return None
-
-
-def get_price_for_quantity(product_row, quantity):
-    """
-    Select the appropriate price tier based on quantity.
-    Returns (price, tier_range, column_name) or (None, None, None) if not found.
-    """
-    # Define tier columns and their ranges (soft-coded for easy modification)
-    tier_columns = [
-        {'min': 1, 'max': 25, 'column': 'PBP Cost w/o shipping (1-25)'},
-        {'min': 26, 'max': 50, 'column': 'PBP Cost w/o shipping (26-50)'},
-        {'min': 51, 'max': 100, 'column': 'PBP Cost w/o shipping (51-100)'},
-        {'min': 101, 'max': 250, 'column': 'PBP Cost w/o shipping (101-250)'},
-        {'min': 251, 'max': 500, 'column': 'PBP Cost w/o shipping (251-500)'},
-        {'min': 501, 'max': 1000, 'column': 'PBP Cost w/o shipping (501-1000)'},
-        {'min': 1001, 'max': float('inf'), 'column': 'PBP Cost w/o shipping (1000+)'}
-    ]
-
-    # Find matching tier
-    for i, tier in enumerate(tier_columns):
-        if tier['min'] <= quantity <= tier['max']:
-            # Try exact tier match
-            if tier['column'] in product_row.index:
-                price = clean_price(product_row[tier['column']])
-                if price is not None:
-                    tier_range = f"{tier['min']}-{tier['max']}" if tier['max'] != float('inf') else f"{tier['min']}+"
-                    return price, tier_range, tier['column']
-
-            # Fallback: try higher tiers
-            for higher_tier in tier_columns[i+1:]:
-                if higher_tier['column'] in product_row.index:
-                    price = clean_price(product_row[higher_tier['column']])
-                    if price is not None:
-                        tier_range = f"{higher_tier['min']}-{higher_tier['max']}" if higher_tier['max'] != float('inf') else f"{higher_tier['min']}+"
-                        return price, tier_range, higher_tier['column']
-
-            # Fallback: try lower tiers
-            for lower_tier in reversed(tier_columns[:i]):
-                if lower_tier['column'] in product_row.index:
-                    price = clean_price(product_row[lower_tier['column']])
-                    if price is not None:
-                        tier_range = f"{lower_tier['min']}-{lower_tier['max']}" if lower_tier['max'] != float('inf') else f"{lower_tier['min']}+"
-                        return price, tier_range, lower_tier['column']
-
-    return None, None, None
-
-
-def calculate_additional_costs(product_row, quantity, include_labels=False):
-    """
-    Calculate additional costs (setup fees, labels, etc.)
-    Art Setup Fee only applies when labels are selected.
-    Returns dict with all additional costs.
-    """
-    additional_costs = {}
-
-    # Label Costs (optional, user chooses)
-    if include_labels:
-        # Art Setup Fee (one-time per order) - only when labels are selected
-        setup_fee = clean_price(product_row.get('Art Setup Fee', ''))
-        if setup_fee is None:
-            setup_fee = 0
-        additional_costs['art_setup_fee_total'] = setup_fee
-        additional_costs['art_setup_fee_per_unit'] = setup_fee / quantity if quantity > 0 else 0
-
-        # Label unit cost and minimum
-        label_cost_per_label = clean_price(product_row.get('Labels up to 1" x 2.5\'', ''))
-        if label_cost_per_label is None:
-            label_cost_per_label = 0
-
-        label_minimum_raw = clean_price(product_row.get('Minimum for labels', ''))
-        label_minimum = int(label_minimum_raw) if label_minimum_raw else 100
-
-        # Apply minimum: customer pays for at least label_minimum labels
-        labels_to_charge = max(quantity, label_minimum)
-        additional_costs['labels_charged'] = labels_to_charge
-        additional_costs['label_cost_per_label'] = label_cost_per_label
-        additional_costs['label_cost_total'] = label_cost_per_label * labels_to_charge
-        additional_costs['label_cost_per_unit'] = (label_cost_per_label * labels_to_charge) / quantity if quantity > 0 else 0
-
-        # Warning message if minimum applies
-        if quantity < label_minimum:
-            additional_costs['label_warning'] = f"Minimum {label_minimum} labels required. Charging for {labels_to_charge} labels even though ordering {quantity} units."
-    else:
-        # No labels requested - no costs apply
-        additional_costs['art_setup_fee_total'] = 0
-        additional_costs['art_setup_fee_per_unit'] = 0
-        additional_costs['label_cost_total'] = 0
-        additional_costs['labels_charged'] = 0
-        additional_costs['label_warning'] = None
-
-    return additional_costs
-
-
-# ===== GOOGLE SHEETS CONNECTION =====
-@st.cache_resource
-def connect_to_sheets():
-    """
-    Connect to Google Sheets using service account credentials.
-    Cached so we don't reconnect on every rerun.
-    """
-    creds_info = st.secrets["gcp_service_account"]
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-    return gspread.authorize(creds)
-
-@st.cache_data(ttl=300)  # Cache data for 5 minutes
-def load_pricing_data():
-    """
-    Load pricing data from master_pricing_template_10_14 Google Sheet.
-    Loads three sheets: Template, Metadata, Partner-Specific Info
-    Returns three DataFrames.
-    """
-    gc = connect_to_sheets()
-    spreadsheet = gc.open("master_pricing_template_10_14")
-
-    # Load Template sheet (header at row 6, index 5)
-    template_sheet = spreadsheet.worksheet("Template")
-    template_values = template_sheet.get_all_values()
-
-    # Row 6 has headers, but first column is empty - skip it
-    raw_headers = template_values[5]
-    raw_data = template_values[6:]
-
-    # Find first non-empty column index
-    first_col_idx = 0
-    for i, header in enumerate(raw_headers):
-        if header.strip():
-            first_col_idx = i
-            break
-
-    # Extract headers and data starting from first non-empty column
-    template_headers = [col.strip() for col in raw_headers[first_col_idx:]]
-    template_data = [row[first_col_idx:] for row in raw_data]
-
-    df_template = pd.DataFrame(template_data, columns=template_headers)
-
-    # Remove empty rows (where Partner column is empty)
-    df_template = df_template[df_template['Partner'].str.strip() != '']
-
-    # Load Metadata sheet (header at row 2, index 1)
-    metadata_sheet = spreadsheet.worksheet("Metadata")
-    metadata_values = metadata_sheet.get_all_values()
-    metadata_headers = [col.strip() if col else f"Unnamed_{i}" for i, col in enumerate(metadata_values[1])]  # Row 2 (index 1)
-    metadata_data = metadata_values[2:]
-    df_metadata = pd.DataFrame(metadata_data, columns=metadata_headers)
-
-    # Load Partner-Specific Info sheet (header at row 2, index 1)
-    partner_sheet = spreadsheet.worksheet("Partner-Specific Info")
-    partner_values = partner_sheet.get_all_values()
-
-    # Row 2 has headers, may have empty first column - skip it
-    raw_partner_headers = partner_values[1]
-    raw_partner_data = partner_values[2:]
-
-    # Find first non-empty column index for partner sheet
-    first_partner_col_idx = 0
-    for i, header in enumerate(raw_partner_headers):
-        if header.strip():
-            first_partner_col_idx = i
-            break
-
-    # Extract headers and data starting from first non-empty column
-    partner_headers = [col.strip() if col else f"Unnamed_{i}" for i, col in enumerate(raw_partner_headers[first_partner_col_idx:])]
-    partner_data = [row[first_partner_col_idx:] for row in raw_partner_data]
-
-    df_partner_info = pd.DataFrame(partner_data, columns=partner_headers)
-
-    # Remove empty rows from partner info (only if Partner column exists)
-    if 'Partner' in df_partner_info.columns:
-        df_partner_info = df_partner_info[df_partner_info['Partner'].str.strip() != '']
-
-    return df_template, df_metadata, df_partner_info
-
-# Load data
+# ============================================================
+# DATA LOADING
+# ============================================================
 try:
     if 'df_template' not in st.session_state:
         df_template, df_metadata, df_partner_info = load_pricing_data()
@@ -679,7 +310,9 @@ else:
 
 st.divider()
 
-# ===== CLIENT INFORMATION =====
+# ============================================================
+# CLIENT INFORMATION UI
+# ============================================================
 st.header("1. Client & Order Information")
 
 with st.expander("Client Details", expanded=False):
@@ -842,7 +475,9 @@ with st.expander("Client Details", expanded=False):
 
 st.divider()
 
-# ===== PRODUCT SELECTION =====
+# ============================================================
+# PRODUCT SELECTION UI
+# ============================================================
 st.header("2. Select Products")
 
 # Create dropdowns for filtering
@@ -894,7 +529,9 @@ if tier_info and tier_info.strip() and tier_info != "NA":
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ===== QUANTITY & PRICING =====
+# ============================================================
+# QUANTITY & PRICING UI
+# ============================================================
 st.header("3. Quantity & Pricing")
 
 # 3.1 - Quantity Selection
@@ -1019,7 +656,9 @@ if base_price_preview:
         else:
             st.caption("Your price matches Partner MSRP")
 
-# ===== CUSTOMIZATION OPTIONS =====
+# ============================================================
+# CUSTOMIZATION OPTIONS UI
+# ============================================================
 st.divider()
 st.header("4. Customization Options")
 
@@ -1131,7 +770,9 @@ else:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ===== PRODUCT PREVIEW & ADD TO ORDER =====
+# ============================================================
+# PRODUCT PREVIEW & ADD TO ORDER
+# ============================================================
 st.header("5. Product Preview")
 
 # Get price for quantity using new system
@@ -1272,7 +913,9 @@ with st.expander("Detailed Price Breakdown"):
     breakdown_df = pd.DataFrame(breakdown_items, columns=["Item", "Per Unit", "Total"])
     st.table(breakdown_df)
 
-# ===== CURRENT ORDER SUMMARY =====
+# ============================================================
+# CURRENT ORDER SUMMARY
+# ============================================================
 st.divider()
 st.header("6. Current Order")
 
@@ -1426,7 +1069,9 @@ else:
         st.session_state.edit_index = None
         st.rerun()
 
-# ===== ORDER SETTINGS =====
+# ============================================================
+# ORDER SETTINGS
+# ============================================================
 st.divider()
 st.header("7. Order Settings")
 
@@ -1683,7 +1328,9 @@ elif st.session_state.order_discount_type == "custom":
     discount_percent = st.session_state.order_discount_custom_value
     discount_description = st.session_state.order_discount_custom_desc if st.session_state.order_discount_custom_desc else f"Custom Discount ({discount_percent}%)"
 
-# ===== ORDER NOTES =====
+# ============================================================
+# ORDER NOTES
+# ============================================================
 st.divider()
 st.header("7.5. Order Notes")
 
@@ -1734,7 +1381,9 @@ with st.expander("Add Order Notes", expanded=False):
             help="Catch-all for any other notes or details"
         )
 
-# ===== TOTAL ORDER CALCULATION =====
+# ============================================================
+# TOTAL ORDER CALCULATION
+# ============================================================
 st.divider()
 st.header("8. Order Summary")
 
@@ -1835,7 +1484,9 @@ else:
         st.success("Quote saved to history!")
         st.rerun()
 
-# ===== PROPOSAL GENERATION =====
+# ============================================================
+# PROPOSAL GENERATION
+# ============================================================
 st.divider()
 st.header("9. Proposal")
 
@@ -2012,7 +1663,9 @@ else:
 
     st.caption("Copy these tables and paste into your proposal template.")
 
-# ===== INVOICE AND PURCHASE ORDER GENERATION =====
+# ============================================================
+# INVOICE AND PURCHASE ORDER GENERATION
+# ============================================================
 st.divider()
 st.header("10. Invoice & Purchase Order Request Form")
 
