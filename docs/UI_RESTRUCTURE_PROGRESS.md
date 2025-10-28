@@ -108,6 +108,8 @@ Restructuring the Peace by Piece Order Management System from a single-page work
 
 **Status:** NOT STARTED
 
+**See detailed continuation prompt:** [docs/CONTINUATION_PROMPT_PHASE_3.md](CONTINUATION_PROMPT_PHASE_3.md)
+
 ### Planned Changes:
 - [ ] Move order summary to Tab 3
 - [ ] Move invoice generation to Tab 3
