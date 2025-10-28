@@ -1,9 +1,9 @@
-# Peace by Piece International - Pricing & Quoting App
+# Peace by Piece International - Order Management System
 
-A Python/Streamlit application for calculating tiered pricing quotes for artisan products with custom labels and setup fees.
+A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
-**Current Status:** ✅ Production Ready (using master_pricing_template_10_14 data)
-**Version:** 2.1 - Bookkeeper-Aligned Invoice & PO System
+**Current Status:** ✅ Production Ready - Complete 3-Tab Workflow
+**Version:** 4.0 - UI Restructure Complete with Proposal-to-Order Integration
 
 ---
 
@@ -68,22 +68,35 @@ pricing-data-solution-pbp/
 
 ## 🎯 Features
 
-### Current Implementation (Jaggery Partner)
-- **Multi-Product Ordering:** Add multiple products to a single order with add-to-cart pattern
-- **Per-Product Markup:** Configure individual markup percentages for each product
-- **Tiered Pricing:** 7 quantity-based pricing tiers (1-25, 26-50, 51-100, 101-250, 251-500, 501-1000, 1000+)
-- **Smart Price Selection:** Automatically selects correct tier with fallback logic
-- **Custom Labels:** Optional label costs with minimum quantity enforcement (100 labels)
-- **Art Setup Fee:** One-time setup fee per product
-- **Order-Level Costs:** Shipping and tariff applied once to entire order
-- **Discount Options:** Preset NGO discount (5%) or custom discounts with description and percentage
-- **Marketing Rounding:** Optional charm pricing (e.g., $60 → $59) for whole dollar amounts
-- **Custom Line Items:** Add unique services or customizations not in the product catalog
-- **Markup Calculation:** Applies markup to product price only (not fees/shipping/tariff)
-- **Detailed Breakdowns:** Per-product and order-level cost breakdowns
-- **Order Management:** Edit, remove, or clear products from order
-- **Proposal Generation:** Detailed multi-product proposal with cost breakdowns
-- **Invoice Generation:** Professional 6-column invoice table with line items and totals
+### 3-Tab Workflow
+
+#### Tab 1: Proposals (for prospective clients)
+- **Product Filtering:** Filter by price range, partner, country of origin
+- **Product Catalog:** Browse all products with detailed specifications
+- **Proposal Configuration:** Set quantity, markup %, customization options, MSRP comparison
+- **MOQ-Based Pricing Tables:** Automatic minimum order quantity calculations
+- **CSV Downloads:** Export proposal tables and client order forms
+- **Terms & Conditions:** Customizable terms loaded from config file
+
+#### Tab 2: Order & Client Info (main workflow)
+- **Proposal-to-Order Connection:** Import products directly from Tab 1 proposals
+- **Multi-Product Ordering:** Add multiple products with add-to-cart pattern
+- **Client Information Collection:** Company details, contacts, payment terms
+- **Per-Product Markup:** Configure individual markup percentages
+- **Tiered & Flat-Rate Pricing:** Flexible pricing models per product
+- **Customization Options:** Setup fees + per-unit costs for custom branding
+- **Order-Level Costs:** Shipping and tariff applied to entire order
+- **Discount Options:** NGO preset (5%) or custom discounts
+- **Marketing Rounding:** Optional charm pricing (e.g., $60 → $59)
+- **Custom Line Items:** Add unique services not in catalog
+- **Order Notes:** 5 categories (kitting, client requests, samples, artwork, general)
+
+#### Tab 3: Execution & Accounting
+- **Order Validation:** Completeness check with warnings
+- **Editable Order Summary:** Quick edits for shipping, discounts, credit card fees
+- **Invoice Generation:** Bookkeeper-standardized invoice format
+- **Purchase Order Generation:** Partner-specific PO with auto-extracted contacts
+- **CSV Export:** Download order data for accounting systems
 
 ### Formula
 
@@ -258,5 +271,5 @@ Peace by Piece International - Internal Tool
 
 ---
 
-**Last Updated:** 2025-10-27
-**Version:** 2.1 (Bookkeeper-Aligned Invoice & PO System)
+**Last Updated:** 2025-10-28
+**Version:** 4.0 (Complete UI Restructure with Proposal-to-Order Integration)

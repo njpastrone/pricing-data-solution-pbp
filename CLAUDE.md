@@ -63,36 +63,53 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 
 ## Architecture
 
-- **Frontend:** Streamlit (Python-based web app)
+- **Frontend:** Streamlit (Python-based web app) with 3-tab structure
+  - **Tab 1: Proposals** - Product catalog, filtering, proposal generation
+  - **Tab 2: Order & Client Info** - Order management, client data collection
+  - **Tab 3: Execution & Accounting** - Invoice/PO generation, bookkeeping
 - **Data Source:** Google Sheets (master_pricing_template_10_14) with 3 sheets:
   - **Template**: Partner-product pricing data
   - **Metadata**: Deliverable field definitions
   - **Partner-Specific Info**: Partner configuration reference
+- **Code Structure:** Modular with helper functions in `src/` directory
+  - `src/data_loader.py` - Google Sheets data loading
+  - `src/helpers.py` - Utility functions, conversions, validation
+  - `src/pricing_engine.py` - Pricing calculations and quote generation
 - **Authentication:** Google Cloud service account
 - **Pricing Model:** Flexible tiered or flat-rate pricing per product
-- **Data Flow:**
-  1. App connects to Google Sheets via `gspread`
-  2. Loads three sheets into separate pandas DataFrames (headers at row 6 for Template, row 2 for others)
-  3. User selects partner, then product/service
-  4. App determines pricing structure (tiered Y/N) and selects appropriate price
-  5. For tiered products: parses tier ranges from "Pricing Tiers Info" column
-  6. Calculates quote: `Total = (Product Cost + Customization Costs + Markup) + Shipping + Tariff`
-     - Product Cost = Base Price (from tier or flat) × Quantity
-     - Customization = Setup Fee + (Per-Unit Cost × Quantity)
-     - Markup = Product Cost × (Markup % / 100) - applies to product only, NOT fees/shipping/tariff
-  7. Displays detailed breakdown, proposal, and invoice as copyable tables
+- **Workflow:**
+  1. **Tab 1 (Proposals):** Browse products → Configure proposal → Download CSV
+  2. **Tab 2 (Orders):** Import from proposal OR add products manually → Collect client info → Configure order settings
+  3. **Tab 3 (Execution):** Review/edit order → Generate invoice & PO → Download for bookkeeping
 
 ## Current Features
 
+### Tab 1: Proposals (for prospective clients)
+- **Product Filtering:** Price range, partner, country of origin
+- **Product Catalog:** Browse all products with detailed specifications
+- **Proposal Configuration:** Quantity, markup %, customization options, MSRP comparison
+- **MOQ-Based Pricing Tables:** Automatic minimum order quantity calculations
+- **CSV Downloads:** Export proposal tables and client order forms
+- **Terms & Conditions:** Customizable terms loaded from config file
+
+### Tab 2: Order & Client Info (main workflow)
+- **Proposal-to-Order Connection:** Import products from Tab 1 proposals
 - **Multi-Partner Support:** Select from multiple vendors/suppliers
 - **Flexible Pricing:** Both tiered and flat-rate products supported
 - **Dynamic Tier Parsing:** Tier ranges defined in data (not hardcoded)
 - **Customization Options:** Setup fees + per-unit costs for custom branding
 - **Smart Calculations:** Markup applies to product price only
-- **Detailed Breakdowns:** Per-unit and total cost breakdowns
 - **Discount Options:** NGO preset (5%) + custom discounts
 - **Marketing Rounding:** Charm pricing ($60 → $59)
 - **Custom Line Items:** Add unique services/customizations
+- **Order Notes:** 5 categories (kitting, client requests, samples, artwork, general)
+
+### Tab 3: Execution & Accounting
+- **Order Validation:** Completeness check with warnings
+- **Editable Summary:** Quick edits for shipping, discounts, credit card fees
+- **Invoice Generation:** Bookkeeper-standardized format
+- **Purchase Order Generation:** Partner-specific PO with contact auto-extraction
+- **CSV Export:** Download order data for accounting systems
 
 ## Project Structure
 
@@ -110,11 +127,17 @@ pricing-data-solution-pbp/
 │   ├── PLANNING.md            # Project requirements & goals
 │   ├── DATA_STRUCTURE.md      # jaggery_demo data structure
 │   ├── METHODOLOGY_LOGIC.md   # Pricing calculations & business rules
-│   ├── INVOICE_REQUIREMENTS.md # Invoice/PO format specification (UPDATED 2025-10-22)
-│   ├── INVOICE_PO_RESTRUCTURE_PLAN.md # Bookkeeper template implementation plan
+│   ├── INVOICE_REQUIREMENTS.md # Invoice/PO format specification
+│   ├── UI_RESTRUCTURE_PLAN.md # Original UI restructure plan
+│   ├── UI_RESTRUCTURE_PROGRESS.md # Implementation progress (COMPLETE)
+│   ├── UI_POLISH_PLAN.md      # Phase 5 implementation plan (COMPLETE)
 │   ├── CLIENT_QUESTIONS.md    # Unanswered client questions
-│   ├── APP_UPDATE_PLAN.md     # Implementation plan & details
 │   └── MIGRATION_SUMMARY.md   # Migration history
+│
+├── src/                        # Modular code (extracted from app.py)
+│   ├── data_loader.py         # Google Sheets data loading
+│   ├── helpers.py             # Utility functions, conversions, validation
+│   └── pricing_engine.py      # Pricing calculations and quote generation
 │
 ├── templates/                  # Reference templates
 │   ├── TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED.md
@@ -143,11 +166,22 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 2.1 - Bookkeeper-Aligned Invoice & PO System
+**Version:** 4.0 - Complete UI Restructure with Proposal-to-Order Integration
 
-**Last Updated:** 2025-10-22
+**Last Updated:** 2025-10-28
+
+**UI Restructure Complete:** All 5 phases implemented and tested
+- ✅ Phase 1: 3-tab structure created
+- ✅ Phase 2: Proposals extracted to Tab 1
+- ✅ Phase 3: Invoice/PO moved to Tab 3
+- ✅ Phase 4: Sidebar enhancements (progress indicator, clear all)
+- ✅ Phase 5: UI polish (proposal-to-order connection, CSV downloads, editable summary)
 
 **Features Implemented:**
+- ✅ **3-Tab Workflow:** Proposals → Order & Client Info → Execution & Accounting
+- ✅ **Proposal System:** Product filtering, catalog browser, MOQ-based pricing tables
+- ✅ **Proposal-to-Order Connection:** Import products from proposals to orders
+- ✅ **CSV Downloads:** Export proposals and client order forms
 - ✅ Multi-partner support (Partner X and future partners)
 - ✅ Flexible pricing: tiered AND flat-rate products
 - ✅ Dynamic tier parsing from Google Sheets data
@@ -160,7 +194,8 @@ pricing-data-solution-pbp/
 - ✅ Marketing rounding (charm pricing: $60 → $59)
 - ✅ Custom line items for unique services/customizations
 - ✅ Per-product proposal tables (4-column MOQ format)
-- ✅ **NEW: Bookkeeper-standardized Invoice & PO template**
+- ✅ Bookkeeper-standardized Invoice & PO template
+- ✅ **Editable order summary in Tab 3** (quick adjustments before invoice generation)
 - ✅ **NEW: Partner contact auto-extraction from Google Sheets**
 - ✅ **NEW: Comprehensive order notes system (5 categories)**
 - ✅ **NEW: Field validation with user warnings**
