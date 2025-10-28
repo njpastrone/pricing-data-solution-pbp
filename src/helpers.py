@@ -318,3 +318,113 @@ def calculate_product_tariff(product_cost_with_markup, tariff_rate_percent):
     if tariff_rate_percent <= 0:
         return 0.0
     return product_cost_with_markup * (tariff_rate_percent / 100)
+
+
+# ========== PROPOSAL TO ORDER CONVERSION ==========
+
+def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tariff_func):
+    """
+    Convert a proposal item from Tab 1 to an order item for Tab 2.
+
+    Proposal items have different structure than order items, so we need to
+    transform the data while preserving all settings.
+
+    Args:
+        proposal_item (dict): Item from st.session_state.proposal_products
+        get_unit_price_func: Function to get unit price (get_unit_price_new_system)
+        calculate_tariff_func: Function to calculate tariff (calculate_product_tariff)
+
+    Returns:
+        dict: Order item compatible with st.session_state.order_items
+
+    Example:
+        >>> from src.pricing_engine import get_unit_price_new_system
+        >>> order_item = convert_proposal_to_order(proposal_item, get_unit_price_new_system, calculate_product_tariff)
+    """
+    product_data = proposal_item['product_data']
+
+    # Calculate pricing components (same as add_product logic)
+    quantity = proposal_item['quantity']
+    markup_percent = proposal_item['markup_percent']
+
+    # Get base price for this quantity
+    base_price_per_unit, tier_info, tier_num = get_unit_price_func(product_data, quantity)
+
+    # Calculate customization costs
+    customization_setup_total = 0.0
+    customization_unit_total = 0.0
+    customization_per_unit = 0.0
+
+    if proposal_item.get('include_customization', False):
+        customization_setup_total = proposal_item['customization_setup_fee']
+        customization_per_unit = proposal_item['customization_per_unit']
+        customization_unit_total = customization_per_unit * quantity
+
+    # Calculate product cost (base price × quantity)
+    product_cost_subtotal = base_price_per_unit * quantity
+
+    # Calculate markup (on product cost only, not customization)
+    markup_amount = product_cost_subtotal * (markup_percent / 100)
+
+    # Calculate total for this line item
+    product_total = product_cost_subtotal + markup_amount + customization_setup_total + customization_unit_total
+
+    # Parse tariff info
+    tariff_rate_percent = parse_tariff_rate(product_data.get('Tariff Rate', ''))
+    tariff_base = product_cost_subtotal  # Tariff on product cost only (excludes customization)
+    tariff_amount = calculate_tariff_func(tariff_base, tariff_rate_percent)
+
+    # Build order item
+    order_item = {
+        # Product identification
+        'partner': product_data['Partner'],
+        'product_name': product_data['Product/Service'],
+        'product_data': product_data,  # Full product data for reference
+
+        # Quantity & pricing
+        'quantity': quantity,
+        'base_price': base_price_per_unit,
+        'partner_cost_per_unit': base_price_per_unit,  # For PO generation
+
+        # Tier info (if applicable)
+        'tier_info': tier_info,
+        'tier_number': tier_num,
+        'is_tiered': product_data.get('Pricing Tiers (Y/N)', '').upper() == 'Y',
+
+        # Markup
+        'markup_percent': markup_percent,
+        'markup_amount': markup_amount,
+
+        # Customization
+        'include_customization': proposal_item.get('include_customization', False),
+        'customization_setup_fee': proposal_item.get('customization_setup_fee', 0.0),
+        'customization_per_unit': customization_per_unit,
+        'customization_setup_total': customization_setup_total,
+        'customization_unit_total': customization_unit_total,
+        'customization_description': proposal_item.get('customization_description', 'Custom branding'),
+
+        # MSRP (if included in proposal)
+        'show_msrp': proposal_item.get('show_msrp', False),
+        'msrp_value': proposal_item.get('msrp_value', 0.0),
+
+        # Tariff
+        'tariff_rate_percent': tariff_rate_percent,
+        'tariff_base': tariff_base,
+        'tariff_amount': tariff_amount,
+        'country_of_origin': product_data.get('Country of Origin', 'Unknown'),
+
+        # Totals
+        'product_cost_subtotal': product_cost_subtotal,  # Base price × qty
+        'product_total': product_total,  # Product + markup + customization
+
+        # Metadata
+        'source': 'proposal',  # Track that this came from proposal
+        'is_custom': False,  # Not a custom line item
+
+        # Order fulfillment (to be filled in Tab 2 if needed)
+        'partner_in_hands_date': '',
+        'cost_verified': 'Pending',
+        'product_specs': product_data.get('Marketing Description', '')
+    }
+
+    return order_item

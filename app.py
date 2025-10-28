@@ -1,7 +1,7 @@
 """
 Peace by Piece International - Order Management System
 3-tab workflow: Proposals → Order & Client Info → Execution & Accounting
-Version: 3.1 (UI Restructure - Phase 4: Sidebar Enhancements)
+Version: 4.0 (UI Polish Complete - Proposal-to-Order Connection + CSV Downloads + Editable Summary)
 """
 
 import streamlit as st
@@ -22,7 +22,8 @@ from src.helpers import (
     validate_invoice_completeness,
     parse_tier_info,
     parse_tariff_rate,
-    calculate_product_tariff
+    calculate_product_tariff,
+    convert_proposal_to_order
 )
 from src.pricing_engine import (
     determine_tier_number,
@@ -141,6 +142,9 @@ if 'proposal_terms' not in st.session_state:
             st.session_state.proposal_terms = f.read()
     except:
         st.session_state.proposal_terms = "[PLACEHOLDER - Terms & Conditions]\n\nPayment terms, delivery expectations, liability clauses, etc. to be added."
+
+if 'using_proposal_data' not in st.session_state:
+    st.session_state.using_proposal_data = False
 
 # ============================================================
 # HEADER
@@ -818,6 +822,80 @@ with tab1:
 
         st.caption("Copy these tables and paste into your proposal template.")
 
+        # Download all proposals as CSV
+        st.markdown("---")
+        if st.button("📥 Download All Proposal Tables (CSV)", use_container_width=True, type="primary"):
+            # Generate comprehensive CSV
+            csv_lines = []
+            csv_lines.append("PEACE BY PIECE - PRODUCT PROPOSAL")
+            csv_lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            csv_lines.append("")
+
+            for idx, prop_item in enumerate(st.session_state.proposal_products, 1):
+                product_data = prop_item['product_data']
+
+                csv_lines.append(f"=== PRODUCT {idx}: {product_data['Product/Service']} ===")
+                csv_lines.append(f"Partner: {product_data['Partner']}")
+                csv_lines.append(f"Country of Origin: {product_data.get('Country of Origin', 'N/A')}")
+                csv_lines.append("")
+
+                # Calculate MOQ
+                base_price, _, _ = get_unit_price_new_system(product_data, 100)
+                moq = calculate_moq(base_price)
+
+                # Build tier table
+                csv_lines.append("Quantity,Unit Price,Customization,Markup,Total per Unit,Total Order")
+
+                # Calculate for different quantities (MOQ, 2×MOQ, 3×MOQ, 5×MOQ)
+                quantities = [moq, moq * 2, moq * 3, moq * 5]
+
+                for qty in quantities:
+                    unit_price, _, _ = get_unit_price_new_system(product_data, qty)
+
+                    # Customization cost
+                    custom_per_unit = prop_item.get('customization_per_unit', 0.0) if prop_item.get('include_customization', False) else 0.0
+                    custom_setup = prop_item.get('customization_setup_fee', 0.0) if prop_item.get('include_customization', False) else 0.0
+
+                    # Markup
+                    markup_percent = prop_item['markup_percent']
+                    product_cost = unit_price * qty
+                    markup_amount = product_cost * (markup_percent / 100)
+
+                    # Total per unit
+                    total_per_unit = unit_price + custom_per_unit + (markup_amount / qty)
+
+                    # Marketing rounding
+                    if st.session_state.get('proposal_marketing_rounding', False):
+                        total_per_unit = apply_marketing_rounding(total_per_unit)
+
+                    # Total order
+                    total_order = (total_per_unit * qty) + custom_setup
+
+                    csv_lines.append(f"{qty},${unit_price:.2f},${custom_per_unit:.2f},${markup_amount:.2f},${total_per_unit:.2f},${total_order:.2f}")
+
+                # Customization note
+                if prop_item.get('include_customization', False):
+                    csv_lines.append("")
+                    csv_lines.append(f"Note: Includes ${custom_setup:.2f} setup fee + ${custom_per_unit:.2f} per unit for customization")
+
+                csv_lines.append("")
+                csv_lines.append("")
+
+            # Terms & Conditions
+            csv_lines.append("=== TERMS & CONDITIONS ===")
+            csv_lines.append(st.session_state.proposal_terms)
+
+            proposal_csv = "\n".join(csv_lines)
+
+            st.download_button(
+                label="Click to Download CSV",
+                data=proposal_csv,
+                file_name=f"proposal_tables_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                key="download_all_proposals_csv",
+                use_container_width=True
+            )
+
     # ============================================================
     # SECTION 6: TERMS & CONDITIONS
     # ============================================================
@@ -867,13 +945,62 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
 
     st.text_area("Client Order Form", value=client_form_text, height=400, key="client_form_display")
 
-    st.download_button(
-        label="Download Client Order Form (TXT)",
-        data=client_form_text,
-        file_name="client_order_form.txt",
-        mime="text/plain",
-        key="download_client_form"
-    )
+    # Download buttons for CSV versions
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.download_button(
+            label="Download Client Order Form (TXT)",
+            data=client_form_text,
+            file_name="client_order_form.txt",
+            mime="text/plain",
+            key="download_client_form_txt"
+        )
+
+    with col2:
+        # Generate CSV version
+        csv_lines = []
+        csv_lines.append("FIELD,VALUE")
+        csv_lines.append("Client Type,")
+        csv_lines.append("Company Name,")
+        csv_lines.append("Contact Name,")
+        csv_lines.append("Contact Email,")
+        csv_lines.append("Drop Shipping?,")
+        csv_lines.append("Shipping Address,")
+        csv_lines.append("Destination Breakdown,")
+        csv_lines.append("Billing Address,")
+        csv_lines.append("Client In-Hands Date,")
+        csv_lines.append("")
+        csv_lines.append("ORDER DETAILS")
+        csv_lines.append("Product Name,Quantity,Customization Details")
+
+        # Add placeholder rows for each product in proposal
+        if len(st.session_state.proposal_products) > 0:
+            for prop_item in st.session_state.proposal_products:
+                product_name = prop_item['product_data']['Product/Service']
+                quantity = prop_item['quantity']
+                csv_lines.append(f"{product_name},{quantity},")
+        else:
+            # Add 3 blank rows
+            for i in range(3):
+                csv_lines.append(",,")
+
+        csv_lines.append("")
+        csv_lines.append("IMPACT CARDS")
+        csv_lines.append("Impact Card Type,")
+        csv_lines.append("")
+        csv_lines.append("PAYMENT")
+        csv_lines.append("Payment Preference,")
+
+        client_form_csv = "\n".join(csv_lines)
+
+        st.download_button(
+            label="Download Client Order Form (CSV)",
+            data=client_form_csv,
+            file_name=f"client_order_form_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            key="download_client_form_csv"
+        )
 
 # ============================================================
 # TAB 2: ORDER & CLIENT INFO (ALL CURRENT FUNCTIONALITY)
@@ -891,6 +1018,62 @@ with tab2:
         st.info("Current order: empty — Add your first product below")
 
     st.divider()
+
+    # ============================================================
+    # PROPOSAL PRODUCTS SELECTION (if available)
+    # ============================================================
+    if len(st.session_state.proposal_products) > 0:
+        st.header("Quick Add: Products from Proposal")
+        st.info(f"✓ {len(st.session_state.proposal_products)} product(s) available from Proposal (Tab 1). Select below to add to order.")
+        st.session_state.using_proposal_data = True
+
+        with st.expander("Select Products from Proposal", expanded=False):
+            st.markdown("Select products from your proposal to add to this order. You can edit quantities and settings after adding.")
+
+            # Build selection checkboxes
+            selected_proposal_indices = []
+
+            for idx, prop_item in enumerate(st.session_state.proposal_products):
+                product_data = prop_item['product_data']
+
+                col1, col2 = st.columns([4, 1])
+
+                with col1:
+                    is_selected = st.checkbox(
+                        f"{product_data['Product/Service']} - {product_data['Partner']}",
+                        key=f"select_proposal_{idx}"
+                    )
+
+                    # Show proposal details
+                    st.caption(f"Quantity: {prop_item['quantity']} | Markup: {prop_item['markup_percent']}%")
+
+                    if prop_item.get('include_customization', False):
+                        st.caption(f"Customization: ${prop_item['customization_setup_fee']:.2f} setup + ${prop_item['customization_per_unit']:.2f}/unit")
+
+                with col2:
+                    if is_selected:
+                        selected_proposal_indices.append(idx)
+
+            # Add selected button
+            if len(selected_proposal_indices) > 0:
+                if st.button(f"Add {len(selected_proposal_indices)} Selected Product(s) to Order", type="primary", use_container_width=True):
+                    # Convert and add to order
+                    for idx in selected_proposal_indices:
+                        order_item = convert_proposal_to_order(
+                            st.session_state.proposal_products[idx],
+                            get_unit_price_new_system,
+                            calculate_product_tariff
+                        )
+                        st.session_state.order_items.append(order_item)
+
+                    st.success(f"✓ Added {len(selected_proposal_indices)} product(s) to order!")
+                    st.rerun()
+            else:
+                st.caption("Select at least one product above to add to order.")
+
+        st.divider()
+    else:
+        st.session_state.using_proposal_data = False
 
     # ============================================================
     # CLIENT INFORMATION UI
@@ -2153,6 +2336,156 @@ with tab3:
                     st.write(f"- {warning}")
         else:
             st.success("All required fields complete - ready to generate Invoice/PO")
+
+        st.divider()
+
+        # ============================================================
+        # EDITABLE ORDER SUMMARY
+        # ============================================================
+        with st.expander("📊 View/Edit Order Summary", expanded=False):
+            st.markdown("### Order Summary (Editable)")
+            st.markdown("Make quick adjustments to order settings here. Changes sync to Tab 2.")
+
+            # Shipping
+            st.subheader("Shipping & Additional Costs")
+            col1, col2 = st.columns(2)
+
+            with col1:
+                new_shipping = st.number_input(
+                    "Shipping Cost ($)",
+                    min_value=0.0,
+                    value=st.session_state.order_shipping,
+                    step=10.0,
+                    key="tab3_shipping_edit"
+                )
+
+                if new_shipping != st.session_state.order_shipping:
+                    st.session_state.order_shipping = new_shipping
+                    st.success("✓ Shipping updated")
+
+            with col2:
+                # Show tariff total (read-only, calculated from products)
+                total_tariff = sum(item.get('tariff_amount', 0) for item in st.session_state.order_items)
+                st.metric("Total Tariff", f"${total_tariff:.2f}")
+                st.caption("Tariff calculated from product origins. Edit per-product in Tab 2.")
+
+            st.divider()
+
+            # Discount
+            st.subheader("Discount")
+
+            discount_type = st.selectbox(
+                "Discount Type",
+                options=["none", "preset", "custom"],
+                format_func=lambda x: {"none": "No Discount", "preset": "Preset (NGO 5%)", "custom": "Custom Amount"}[x],
+                index=["none", "preset", "custom"].index(st.session_state.order_discount_type),
+                key="tab3_discount_type"
+            )
+
+            if discount_type != st.session_state.order_discount_type:
+                st.session_state.order_discount_type = discount_type
+                st.success("✓ Discount type updated")
+
+            if discount_type == "preset":
+                st.session_state.order_discount_preset = "NGO Discount (5%)"
+                st.info("NGO Discount: 5% applied to products subtotal")
+            elif discount_type == "custom":
+                custom_discount = st.number_input(
+                    "Custom Discount ($)",
+                    min_value=0.0,
+                    value=st.session_state.get('order_discount_custom_value', 0.0),
+                    step=10.0,
+                    key="tab3_custom_discount"
+                )
+
+                if custom_discount != st.session_state.get('order_discount_custom_value', 0.0):
+                    st.session_state.order_discount_custom_value = custom_discount
+                    st.success("✓ Custom discount updated")
+
+            st.divider()
+
+            # Credit Card Fee
+            st.subheader("Payment Processing")
+
+            apply_cc_fee = st.checkbox(
+                "Apply Credit Card Processing Fee",
+                value=st.session_state.get('apply_cc_fee', False),
+                key="tab3_cc_fee_checkbox"
+            )
+
+            if apply_cc_fee != st.session_state.get('apply_cc_fee', False):
+                st.session_state.apply_cc_fee = apply_cc_fee
+                st.success("✓ CC fee setting updated")
+
+            if apply_cc_fee:
+                cc_fee_percent = st.number_input(
+                    "CC Fee (%)",
+                    min_value=0.0,
+                    max_value=10.0,
+                    value=st.session_state.get('cc_fee_percent', 2.9),
+                    step=0.1,
+                    key="tab3_cc_fee_percent"
+                )
+
+                if cc_fee_percent != st.session_state.get('cc_fee_percent', 2.9):
+                    st.session_state.cc_fee_percent = cc_fee_percent
+                    st.success("✓ CC fee percentage updated")
+
+            st.divider()
+
+            # Calculate and display totals
+            st.subheader("Order Totals")
+
+            # Calculate same as Tab 2 Section 8
+            products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
+
+            # Shipping
+            shipping_total = st.session_state.order_shipping
+
+            # Tariff
+            tariff_total = sum(item.get('tariff_amount', 0) for item in st.session_state.order_items)
+
+            # Discount
+            discount_amount = 0.0
+            if st.session_state.order_discount_type == "preset":
+                discount_amount = products_subtotal * 0.05
+            elif st.session_state.order_discount_type == "custom":
+                discount_amount = st.session_state.get('order_discount_custom_value', 0.0)
+
+            # Subtotal before CC fee
+            subtotal_before_cc = products_subtotal + shipping_total + tariff_total - discount_amount
+
+            # CC fee
+            cc_fee_amount = 0.0
+            if st.session_state.get('apply_cc_fee', False):
+                cc_fee_amount = calculate_credit_card_fee(
+                    subtotal_before_cc,
+                    st.session_state.get('cc_fee_percent', 2.9)
+                )
+
+            # Final total
+            final_total = subtotal_before_cc + cc_fee_amount
+
+            # Marketing rounding
+            if st.session_state.get('order_use_marketing_rounding', False):
+                final_total = apply_marketing_rounding(final_total)
+
+            # Display breakdown
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.write(f"**Products Subtotal:** ${products_subtotal:,.2f}")
+                st.write(f"**Shipping:** ${shipping_total:,.2f}")
+                st.write(f"**Tariff:** ${tariff_total:,.2f}")
+                st.write(f"**Discount:** -${discount_amount:,.2f}")
+
+            with col2:
+                st.write(f"**Subtotal:** ${subtotal_before_cc:,.2f}")
+                if cc_fee_amount > 0:
+                    st.write(f"**CC Fee ({st.session_state.get('cc_fee_percent', 2.9)}%):** ${cc_fee_amount:,.2f}")
+                st.write(f"**TOTAL:** ${final_total:,.2f}")
+
+            st.info("Changes made here automatically sync to Tab 2.")
 
         st.divider()
 
