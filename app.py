@@ -113,6 +113,35 @@ if 'apply_cc_fee' not in st.session_state:
 if 'cc_fee_percent' not in st.session_state:
     st.session_state.cc_fee_percent = 2.9
 
+# Initialize proposal-specific session state (Phase 2)
+if 'proposal_products' not in st.session_state:
+    st.session_state.proposal_products = []
+
+if 'proposal_marketing_rounding' not in st.session_state:
+    st.session_state.proposal_marketing_rounding = False
+
+if 'configuring_product' not in st.session_state:
+    st.session_state.configuring_product = None
+
+if 'editing_proposal_index' not in st.session_state:
+    st.session_state.editing_proposal_index = None
+
+if 'proposal_filters' not in st.session_state:
+    st.session_state.proposal_filters = {
+        'min_price': 0.0,
+        'max_price': None,
+        'partners': [],
+        'countries': []
+    }
+
+if 'proposal_terms' not in st.session_state:
+    # Load from config file if exists
+    try:
+        with open('config/terms_conditions.txt', 'r') as f:
+            st.session_state.proposal_terms = f.read()
+    except:
+        st.session_state.proposal_terms = "[PLACEHOLDER - Terms & Conditions]\n\nPayment terms, delivery expectations, liability clauses, etc. to be added."
+
 # ============================================================
 # HEADER
 # ============================================================
@@ -315,23 +344,440 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ============================================================
-# TAB 1: PROPOSALS (PLACEHOLDER - Phase 2)
+# TAB 1: PROPOSALS
 # ============================================================
 with tab1:
     st.header("Proposals - Product Catalog & Proposal Generation")
-    st.info("""
-    **Coming in Phase 2:**
-    - Filter products by price, partner, country
-    - Browse product catalog with detailed info
-    - Build proposals for prospective clients
-    - Generate client order forms
+    st.caption("Browse products, configure proposals, and generate client quotes")
+    st.divider()
 
-    **For now, use Tab 2 for all order management.**
-    """)
+    # ============================================================
+    # SECTION 1: FILTERS
+    # ============================================================
+    st.subheader("1. Filter Products")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("**Price Range**")
+        min_price = st.number_input(
+            "Min price per unit ($) - Optional",
+            min_value=0.0,
+            value=st.session_state.proposal_filters.get('min_price', 0.0),
+            step=1.0,
+            key="filter_min_price"
+        )
+        max_price = st.number_input(
+            "Max price per unit ($) - Optional",
+            min_value=0.0,
+            value=st.session_state.proposal_filters.get('max_price') or 0.0,
+            step=1.0,
+            key="filter_max_price"
+        )
+
+    with col2:
+        st.markdown("**Partner/Maker**")
+        all_partners = sorted(df_template["Partner"].unique().tolist())
+        selected_partners = st.multiselect(
+            "Select partners (leave empty for all)",
+            options=all_partners,
+            default=st.session_state.proposal_filters.get('partners', []),
+            key="filter_partners"
+        )
+
+    with col3:
+        st.markdown("**Country of Origin**")
+        all_countries = sorted(df_template["Country of Origin"].dropna().unique().tolist())
+        selected_countries = st.multiselect(
+            "Select countries (leave empty for all)",
+            options=all_countries,
+            default=st.session_state.proposal_filters.get('countries', []),
+            key="filter_countries"
+        )
+
+    # Update filters in session state
+    st.session_state.proposal_filters['min_price'] = min_price
+    st.session_state.proposal_filters['max_price'] = max_price if max_price > 0 else None
+    st.session_state.proposal_filters['partners'] = selected_partners
+    st.session_state.proposal_filters['countries'] = selected_countries
+
+    # Apply filters
+    filtered_df = df_template.copy()
+
+    if selected_partners:
+        filtered_df = filtered_df[filtered_df["Partner"].isin(selected_partners)]
+
+    if selected_countries:
+        filtered_df = filtered_df[filtered_df["Country of Origin"].isin(selected_countries)]
+
+    # Price filtering (estimate based on MOQ)
+    if min_price > 0 or (max_price and max_price > 0):
+        price_filtered_indices = []
+        for idx, row in filtered_df.iterrows():
+            # Get price estimate at quantity 100
+            base_price, _, _ = get_unit_price_new_system(row, 100)
+            if base_price:
+                if min_price > 0 and base_price < min_price:
+                    continue
+                if max_price and max_price > 0 and base_price > max_price:
+                    continue
+                price_filtered_indices.append(idx)
+        filtered_df = filtered_df.loc[price_filtered_indices]
+
+    st.info(f"Showing {len(filtered_df)} products matching filters")
 
     st.divider()
-    st.markdown("### Placeholder Content")
-    st.caption("This tab will contain the proposal workflow in Phase 2 of the restructure.")
+
+    # ============================================================
+    # SECTION 2: PRODUCT CATALOG
+    # ============================================================
+    st.subheader("2. Product Catalog")
+
+    if len(filtered_df) == 0:
+        st.warning("No products match your filters. Try adjusting the filter criteria above.")
+    else:
+        # Display filtered products
+        for idx, row in filtered_df.iterrows():
+            product_data = row
+
+            with st.expander(f"{product_data['Product/Service']} - {product_data['Partner']}"):
+                col1, col2 = st.columns([3, 1])
+
+                with col1:
+                    st.markdown(f"**Partner:** {product_data['Partner']}")
+                    st.markdown(f"**Country:** {product_data.get('Country of Origin', 'N/A')}")
+                    st.markdown(f"**Tiered Pricing:** {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
+
+                    # Calculate and show base price at MOQ estimate
+                    preliminary_price, _, _ = get_unit_price_new_system(product_data, 100)
+                    if preliminary_price:
+                        estimated_moq = calculate_moq(preliminary_price * 2)  # Estimate with markup
+                        if estimated_moq:
+                            moq_price, _, _ = get_unit_price_new_system(product_data, estimated_moq)
+                            if moq_price:
+                                st.markdown(f"**Est. Price at MOQ ({estimated_moq} units):** ${moq_price:.2f}/unit")
+
+                    # Show description if available
+                    desc = product_data.get("Marketing Description", "")
+                    if desc and str(desc).strip() and str(desc).strip() != 'nan':
+                        st.caption(f"**Description:** {desc}")
+
+                with col2:
+                    if st.button("Add to Proposal", key=f"add_proposal_{idx}", use_container_width=True):
+                        # Set flag to open configuration for this product
+                        st.session_state.configuring_product = product_data.to_dict()
+                        st.session_state.editing_proposal_index = None
+                        st.rerun()
+
+    # ============================================================
+    # SECTION 3: CONFIGURE PRODUCT (when "Add to Proposal" clicked)
+    # ============================================================
+    if st.session_state.configuring_product is not None:
+        st.divider()
+        st.subheader("3. Configure Product for Proposal")
+
+        product_config = st.session_state.configuring_product
+        editing_index = st.session_state.editing_proposal_index
+
+        # Check if editing existing or adding new
+        if editing_index is not None and editing_index < len(st.session_state.proposal_products):
+            existing_item = st.session_state.proposal_products[editing_index]
+            default_qty = existing_item['quantity']
+            default_markup = existing_item['markup_percent']
+            default_msrp = existing_item['msrp_value']
+            default_show_msrp = existing_item['show_msrp']
+            default_include_custom = existing_item['include_customization']
+            default_custom_setup = existing_item['customization_setup_fee']
+            default_custom_per_unit = existing_item['customization_per_unit']
+        else:
+            default_qty = 100
+            default_markup = 100.0
+            default_msrp = 0.0
+            default_show_msrp = False
+            default_include_custom = False
+            default_custom_setup = clean_price(product_config.get('Customization Setup Fee', '')) or 0.0
+            default_custom_per_unit = clean_price(product_config.get('Customization Cost per Unit', '')) or 0.0
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Quantity
+            quantity = st.number_input("Quantity", min_value=1, value=default_qty, step=1, key="config_quantity")
+
+            # Markup
+            markup = st.number_input("Markup %", min_value=0.0, value=default_markup, step=5.0, key="config_markup")
+
+        with col2:
+            # MSRP (optional)
+            show_msrp = st.checkbox("Include MSRP comparison", value=default_show_msrp, key="config_show_msrp")
+            msrp_value = 0.0
+            if show_msrp:
+                msrp_value = st.number_input("Partner MSRP", min_value=0.0, value=default_msrp, step=1.0, key="config_msrp")
+
+        # Customization
+        include_custom = st.checkbox("Include customization", value=default_include_custom, key="config_include_custom")
+        custom_setup = 0.0
+        custom_per_unit = 0.0
+        if include_custom:
+            col3, col4 = st.columns(2)
+            with col3:
+                custom_setup = st.number_input("Setup Fee", min_value=0.0, value=default_custom_setup, step=1.0, key="config_custom_setup")
+            with col4:
+                custom_per_unit = st.number_input("Per Unit Cost", min_value=0.0, value=default_custom_per_unit, step=0.1, key="config_custom_per_unit")
+
+        col5, col6 = st.columns(2)
+        with col5:
+            button_label = "Update in Proposal" if editing_index is not None else "Add to Proposal"
+            if st.button(button_label, type="primary", use_container_width=True):
+                # Create proposal item
+                proposal_item = {
+                    'product_data': product_config,
+                    'quantity': quantity,
+                    'markup_percent': markup,
+                    'msrp_value': msrp_value,
+                    'show_msrp': show_msrp,
+                    'include_customization': include_custom,
+                    'customization_setup_fee': custom_setup,
+                    'customization_per_unit': custom_per_unit
+                }
+
+                if editing_index is not None:
+                    st.session_state.proposal_products[editing_index] = proposal_item
+                    st.success("Updated in proposal!")
+                else:
+                    st.session_state.proposal_products.append(proposal_item)
+                    st.success("Added to proposal!")
+
+                st.session_state.configuring_product = None
+                st.session_state.editing_proposal_index = None
+                st.rerun()
+
+        with col6:
+            if st.button("Cancel", use_container_width=True):
+                st.session_state.configuring_product = None
+                st.session_state.editing_proposal_index = None
+                st.rerun()
+
+    # ============================================================
+    # SECTION 4: PROPOSAL PREVIEW
+    # ============================================================
+    st.divider()
+    st.subheader("4. Proposal Preview")
+
+    if len(st.session_state.proposal_products) == 0:
+        st.info("No products added to proposal yet. Add products from the catalog above.")
+    else:
+        st.success(f"{len(st.session_state.proposal_products)} product(s) in proposal")
+
+        # Global marketing rounding
+        st.session_state.proposal_marketing_rounding = st.checkbox(
+            "Apply marketing rounding (e.g., $60 → $59)",
+            value=st.session_state.proposal_marketing_rounding,
+            key="proposal_marketing_rounding_checkbox"
+        )
+
+        # Display each product
+        for idx, item in enumerate(st.session_state.proposal_products):
+            product_data = item['product_data']
+
+            with st.expander(f"{product_data['Product/Service']} - {item['quantity']} units"):
+                col1, col2, col3 = st.columns([2, 1, 1])
+
+                with col1:
+                    st.write(f"**Partner:** {product_data['Partner']}")
+                    st.write(f"**Quantity:** {item['quantity']}")
+                    st.write(f"**Markup:** {item['markup_percent']:.1f}%")
+                    if item['include_customization']:
+                        st.write(f"**Customization:** Yes (${item['customization_setup_fee']:.2f} setup + ${item['customization_per_unit']:.2f}/unit)")
+
+                with col2:
+                    if st.button("Edit", key=f"edit_proposal_{idx}", use_container_width=True):
+                        # Load product into configuration UI
+                        st.session_state.configuring_product = item['product_data']
+                        st.session_state.editing_proposal_index = idx
+                        st.rerun()
+
+                with col3:
+                    if st.button("Remove", key=f"remove_proposal_{idx}", use_container_width=True):
+                        st.session_state.proposal_products.pop(idx)
+                        st.rerun()
+
+    # ============================================================
+    # SECTION 5: GENERATE PROPOSAL TABLES
+    # ============================================================
+    st.divider()
+    st.subheader("5. Generate Proposal Tables")
+
+    if len(st.session_state.proposal_products) == 0:
+        st.caption("Add products to generate proposal tables")
+    else:
+        st.markdown("Each product is presented in a separate table with MOQ pricing.")
+        st.markdown("")
+
+        # Generate a separate table for each product
+        for idx, item in enumerate(st.session_state.proposal_products, 1):
+            st.markdown(f"### Product {idx}: {item['product_data']['Product/Service']}")
+
+            product_row = item['product_data']
+
+            # Calculate MOQ
+            preliminary_base_price, _, _ = get_unit_price_new_system(product_row, item['quantity'])
+
+            if preliminary_base_price is not None:
+                # Estimate customization per unit
+                temp_customization_per_unit = 0
+                if item.get('include_customization', False):
+                    temp_setup = item.get('customization_setup_fee', 0)
+                    temp_per_unit = item.get('customization_per_unit', 0)
+                    temp_customization_per_unit = (temp_setup / 100) + temp_per_unit
+
+                # Estimate total per-unit price with markup
+                temp_markup_multiplier = 1 + (item['markup_percent'] / 100)
+                estimated_unit_price = (preliminary_base_price + temp_customization_per_unit) * temp_markup_multiplier
+
+                # Calculate MOQ
+                moq = calculate_moq(estimated_unit_price)
+                if moq is None:
+                    moq = 5
+
+                # Get actual base price for MOQ quantity
+                moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
+
+                if moq_base_price is not None:
+                    # Calculate product price WITHOUT customization (for main table)
+                    moq_product_cost = moq_base_price * moq
+                    moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
+                    moq_product_only_total = moq_product_cost + moq_markup_amount
+                    moq_product_price_per_unit = moq_product_only_total / moq
+
+                    # Apply marketing rounding if enabled
+                    if st.session_state.proposal_marketing_rounding:
+                        moq_product_price_per_unit = apply_marketing_rounding(moq_product_price_per_unit, True)
+
+                    # Build proposal table
+                    col_moq = "MOQ"
+                    col_price = f"Price Ea (@ Qty {moq})"
+                    col_delivery = "Delivery"
+
+                    proposal_table = pd.DataFrame([{
+                        col_moq: moq,
+                        col_price: f"${moq_product_price_per_unit:.2f}",
+                        col_delivery: ""
+                    }])
+
+                    st.table(proposal_table)
+
+                    # Show MOQ calculation note
+                    moq_total_value = moq * moq_product_price_per_unit
+                    st.caption(f"MOQ calculated based on $1,000 minimum order value (MOQ {moq} units = ${moq_total_value:.2f})")
+
+                    # Build customization fees section
+                    if item.get('include_customization', False):
+                        moq_customization_setup = item.get('customization_setup_fee', 0)
+                        moq_customization_per_unit = item.get('customization_per_unit', 0)
+                        customization_desc = product_row.get('Customization Info', 'Custom work')
+
+                        if moq_customization_setup > 0 or moq_customization_per_unit > 0:
+                            st.markdown("**Additional Customization Fees:**")
+
+                            customization_fees = []
+                            if moq_customization_setup > 0:
+                                customization_fees.append({
+                                    "Item": f"Setup Fee: {customization_desc}",
+                                    "Quantity": 1,
+                                    "Unit Price": f"${moq_customization_setup:.2f}",
+                                    "Total": f"${moq_customization_setup:.2f}"
+                                })
+
+                            if moq_customization_per_unit > 0:
+                                customization_fees.append({
+                                    "Item": f"Customization: {customization_desc}",
+                                    "Quantity": moq,
+                                    "Unit Price": f"${moq_customization_per_unit:.2f}",
+                                    "Total": f"${moq_customization_per_unit * moq:.2f}"
+                                })
+
+                            if customization_fees:
+                                customization_df = pd.DataFrame(customization_fees)
+                                st.table(customization_df)
+                                st.caption("Customization fees are separate line items and not included in the product price above.")
+                    else:
+                        st.caption("No customization fees")
+
+                    # Add download button for this product's proposal table
+                    proposal_csv = proposal_table.to_csv(index=False)
+                    st.download_button(
+                        label=f"Download Product {idx} Proposal (CSV)",
+                        data=proposal_csv,
+                        file_name=f"proposal_product_{idx}_{item['product_data']['Product/Service'].replace(' ', '_')}.csv",
+                        mime="text/csv",
+                        key=f"download_proposal_{idx}"
+                    )
+                else:
+                    st.warning(f"Unable to calculate MOQ pricing for {item['product_data']['Product/Service']}")
+            else:
+                st.warning(f"Product data not available for {item['product_data']['Product/Service']}")
+
+            st.markdown("")
+
+        st.caption("Copy these tables and paste into your proposal template.")
+
+    # ============================================================
+    # SECTION 6: TERMS & CONDITIONS
+    # ============================================================
+    st.divider()
+    st.subheader("6. Terms & Conditions")
+
+    st.session_state.proposal_terms = st.text_area(
+        "Edit terms & conditions if needed",
+        value=st.session_state.proposal_terms,
+        height=200,
+        key="proposal_terms_input"
+    )
+
+    # ============================================================
+    # SECTION 7: CLIENT ORDER FORM
+    # ============================================================
+    st.divider()
+    st.subheader("7. Client Order Form")
+
+    st.markdown("""
+    Copy the form below and send to your client to collect order details:
+    """)
+
+    client_form_text = """CLIENT ORDER FORM
+
+Client Type: [ ] Existing  [ ] New
+Company Name: _______________________
+Contact: _______________________
+Contact Email: _______________________
+Drop Shipping? [ ] Y  [ ] N
+Shipping address if one location: _______________________
+Destination breakdown if drop shipping internationally: _______________________
+Billing address: _______________________
+Client In-Hands Date: _______________________
+
+Order Details:
+Product Name | Quantity | Customization/Branding Details
+___________|_________|_____________________________
+___________|_________|_____________________________
+___________|_________|_____________________________
+
+Impact Cards: [ ] Peace by Piece Impact Card  [ ] Custom Impact Card
+              [ ] Custom Message Card  [ ] Send us their own card
+
+Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
+"""
+
+    st.text_area("Client Order Form", value=client_form_text, height=400, key="client_form_display")
+
+    st.download_button(
+        label="Download Client Order Form (TXT)",
+        data=client_form_text,
+        file_name="client_order_form.txt",
+        mime="text/plain",
+        key="download_client_form"
+    )
 
 # ============================================================
 # TAB 2: ORDER & CLIENT INFO (ALL CURRENT FUNCTIONALITY)
@@ -1523,185 +1969,6 @@ with tab2:
             st.session_state.order_history.append(order_entry)
             st.success("Quote saved to history!")
             st.rerun()
-
-    # ============================================================
-    # PROPOSAL GENERATION
-    # ============================================================
-    st.divider()
-    st.header("9. Proposal")
-
-    if len(st.session_state.order_items) == 0:
-        st.caption("Add products to your order to generate a proposal.")
-    else:
-        st.subheader("Quote Proposal")
-
-        st.markdown("Each product is presented in a separate table with MOQ pricing and discount information.")
-        st.markdown("")
-
-        # Generate a separate table for each product
-        for idx, item in enumerate(st.session_state.order_items, 1):
-            # Check if custom item
-            if item.get('is_custom', False):
-                # Custom items: show simplified format
-                st.markdown(f"### Product {idx}: {item['product_name']}")
-
-                custom_table = pd.DataFrame([
-                    {
-                        "Description": item.get('custom_description', 'Custom line item'),
-                        "Quantity": item['quantity'],
-                        "Unit Price": f"${item['total_per_unit']:.2f}",
-                        "Total": f"${item['product_total']:.2f}"
-                    }
-                ])
-                st.table(custom_table)
-                st.caption("Custom line item")
-
-                # Add download button for custom item
-                custom_csv = custom_table.to_csv(index=False)
-                st.download_button(
-                    label=f"Download Product {idx} Proposal (CSV)",
-                    data=custom_csv,
-                    file_name=f"proposal_product_{idx}_{item['product_name'].replace(' ', '_')}.csv",
-                    mime="text/csv",
-                    key=f"download_proposal_{idx}"
-                )
-
-            else:
-                # Standard products: use new 4-column proposal format
-                st.markdown(f"### Product {idx}: {item['product_name']}")
-
-                # Calculate MOQ based on $1,000 minimum order value
-                # First, get a preliminary unit price (use current order quantity as reference)
-                product_row = item.get('product_data_row')
-                if product_row is not None:
-                    # Get base price using current quantity to estimate MOQ
-                    preliminary_base_price, _, _ = get_unit_price_new_system(product_row, item['quantity'])
-
-                    if preliminary_base_price is not None:
-                        # Calculate per-unit price including markup and customization
-                        temp_customization_per_unit = 0
-                        if item.get('include_customization', False):
-                            # Estimate customization per unit (setup fee amortized + per-unit cost)
-                            temp_setup = item.get('customization_setup_fee', 0)
-                            temp_per_unit = item.get('customization_per_unit', 0)
-                            # Use quantity of 100 as baseline for setup amortization estimate
-                            temp_customization_per_unit = (temp_setup / 100) + temp_per_unit
-
-                        # Estimate total per-unit price with markup
-                        temp_markup_multiplier = 1 + (item['markup_percent'] / 100)
-                        estimated_unit_price = (preliminary_base_price + temp_customization_per_unit) * temp_markup_multiplier
-
-                        # Calculate MOQ based on $1,000 minimum
-                        moq = calculate_moq(estimated_unit_price)
-                        if moq is None:
-                            moq = 5  # Fallback
-
-                        # Now get actual base price for MOQ quantity using new system
-                        moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
-                    else:
-                        moq = 5  # Fallback
-                        moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
-
-                    if moq_base_price is not None:
-                        # Calculate product price WITHOUT customization (for main table)
-                        moq_product_cost = moq_base_price * moq
-                        moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
-                        moq_product_only_total = moq_product_cost + moq_markup_amount
-                        moq_product_price_per_unit = moq_product_only_total / moq
-
-                        # Calculate discount price per unit (product only)
-                        moq_discount_price = moq_product_price_per_unit * (1 - discount_percent / 100)
-
-                        # Build column headers
-                        col_moq = "MOQ"
-                        col_price = f"Price Ea (@ Qty {moq})"
-
-                        # Discount column header
-                        if discount_percent > 0:
-                            col_discount = f"Price Ea {discount_description}"
-                        else:
-                            col_discount = "Price Ea (No Discount)"
-
-                        col_delivery = "Delivery"
-
-                        # Build proposal table (product only, no customization baked in)
-                        proposal_table = pd.DataFrame([
-                            {
-                                col_moq: moq,
-                                col_price: f"${moq_product_price_per_unit:.2f}",
-                                col_discount: f"${moq_discount_price:.2f}",
-                                col_delivery: ""
-                            }
-                        ])
-
-                        st.table(proposal_table)
-
-                        # Show MOQ calculation note
-                        moq_total_value = moq * moq_product_price_per_unit
-                        st.caption(f"MOQ calculated based on $1,000 minimum order value (MOQ {moq} units = ${moq_total_value:.2f})")
-
-                        # Build customization fees section - show as SEPARATE items
-                        if item.get('include_customization', False):
-                            moq_customization_setup = item.get('customization_setup_fee', 0)
-                            moq_customization_per_unit = item.get('customization_per_unit', 0)
-                            customization_desc = item.get('customization_description', 'Custom work')
-
-                            st.markdown("**Additional Customization Fees:**")
-
-                            customization_fees = []
-                            if moq_customization_setup > 0:
-                                customization_fees.append({
-                                    "Item": f"Setup Fee: {customization_desc}",
-                                    "Quantity": 1,
-                                    "Unit Price": f"${moq_customization_setup:.2f}",
-                                    "Total": f"${moq_customization_setup:.2f}"
-                                })
-
-                            if moq_customization_per_unit > 0:
-                                customization_fees.append({
-                                    "Item": f"Customization: {customization_desc}",
-                                    "Quantity": moq,
-                                    "Unit Price": f"${moq_customization_per_unit:.2f}",
-                                    "Total": f"${moq_customization_per_unit * moq:.2f}"
-                                })
-
-                            if customization_fees:
-                                customization_df = pd.DataFrame(customization_fees)
-                                st.table(customization_df)
-                                st.caption("Customization fees are separate line items and not included in the product price above.")
-                        else:
-                            st.caption("No customization fees")
-
-                        # Add tariff information if applicable
-                        if item.get('tariff_amount', 0) > 0:
-                            tariff_rate = item.get('tariff_rate_percent', 0)
-                            country = item.get('country_of_origin', 'Unknown')
-                            tariff_amount = item.get('tariff_amount', 0)
-
-                            st.markdown("**Tariff Information:**")
-                            st.caption(f"Import duty: {tariff_rate}% (from {country}) = ${tariff_amount:.2f}")
-
-                            tariff_info = item.get('tariff_info', '')
-                            if tariff_info:
-                                st.caption(f"Note: {tariff_info}")
-
-                        # Add download button for this product's proposal table
-                        proposal_csv = proposal_table.to_csv(index=False)
-                        st.download_button(
-                            label=f"Download Product {idx} Proposal (CSV)",
-                            data=proposal_csv,
-                            file_name=f"proposal_product_{idx}_{item['product_name'].replace(' ', '_')}.csv",
-                            mime="text/csv",
-                            key=f"download_proposal_{idx}"
-                        )
-                    else:
-                        st.warning(f"Unable to calculate MOQ pricing for {item['product_name']}")
-                else:
-                    st.warning(f"Product data not available for {item['product_name']}")
-
-            st.markdown("")  # Spacing between products
-
-        st.caption("Copy these tables and paste into your proposal template.")
 
     # ============================================================
     # INVOICE AND PURCHASE ORDER GENERATION
