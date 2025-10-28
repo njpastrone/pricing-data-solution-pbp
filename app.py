@@ -1,7 +1,7 @@
 """
 Peace by Piece International - Order Management System
 3-tab workflow: Proposals → Order & Client Info → Execution & Accounting
-Version: 3.0 (UI Restructure - Phase 1)
+Version: 3.1 (UI Restructure - Phase 4: Sidebar Enhancements)
 """
 
 import streamlit as st
@@ -161,25 +161,121 @@ st.divider()
 with st.sidebar:
     st.markdown("## Instructions & Tools")
 
-    # Section 1: Instructions
+    # Section 1: Progress Indicator
+    st.markdown("### Workflow Progress")
+
+    # Determine completion status for each tab
+    has_proposals = len(st.session_state.proposal_products) > 0
+    has_order = len(st.session_state.order_items) > 0
+    has_client_info = st.session_state.client_info.get('company_name', '').strip() != ''
+
+    # Tab 1: Proposals
+    tab1_status = "✓" if has_proposals else "○"
+    tab1_color = "green" if has_proposals else "gray"
+    st.markdown(f":{tab1_color}[{tab1_status}] **Tab 1:** Proposals ({len(st.session_state.proposal_products)} products)")
+
+    # Tab 2: Order & Client Info
+    tab2_status = "✓" if (has_order and has_client_info) else "○"
+    tab2_color = "green" if (has_order and has_client_info) else "gray"
+    st.markdown(f":{tab2_color}[{tab2_status}] **Tab 2:** Order & Client ({len(st.session_state.order_items)} products)")
+
+    # Tab 3: Invoice/PO ready indicator
+    tab3_ready = has_order and has_client_info
+    tab3_status = "✓" if tab3_ready else "○"
+    tab3_color = "green" if tab3_ready else "gray"
+    tab3_label = "Ready" if tab3_ready else "Not ready"
+    st.markdown(f":{tab3_color}[{tab3_status}] **Tab 3:** Invoice/PO ({tab3_label})")
+
+    st.caption("Complete Tab 2 to generate Invoice/PO in Tab 3")
+
+    st.markdown("---")
+
+    # Section 2: Clear All Data Button
+    st.markdown("### Session Management")
+
+    if st.button("Clear All Data", type="secondary", use_container_width=True):
+        st.session_state.confirm_clear = True
+
+    if st.session_state.get('confirm_clear', False):
+        st.warning("Are you sure? This will clear all proposals, orders, and client info.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Yes, Clear", type="primary", use_container_width=True):
+                # Clear all session state data
+                st.session_state.proposal_products = []
+                st.session_state.order_items = []
+                st.session_state.client_info = {
+                    'is_new_client': True,
+                    'company_name': '',
+                    'contact_name': '',
+                    'contact_email': '',
+                    'client_po': '',
+                    'billing_address': '',
+                    'shipping_type': 'Ground',
+                    'shipping_address': '',
+                    'payment_timeline': 'Net 30',
+                    'payment_preference': 'Check',
+                    'client_in_hands_date': None,
+                    'order_submitted_by': '',
+                    'order_submitted_date': datetime.now().date(),
+                    'cost_submitted_by': '',
+                    'cost_submitted_date': None
+                }
+                st.session_state.order_notes = {
+                    'kitting_specs': '',
+                    'client_requests': '',
+                    'addon_samples': '',
+                    'artwork_attachments': '',
+                    'general_notes': ''
+                }
+                st.session_state.order_shipping = 0.0
+                st.session_state.order_discount_type = "none"
+                st.session_state.order_history = []
+                st.session_state.confirm_clear = False
+                st.rerun()
+        with col2:
+            if st.button("Cancel", use_container_width=True):
+                st.session_state.confirm_clear = False
+                st.rerun()
+
+    st.markdown("---")
+
+    # Section 3: Instructions
     with st.expander("How to Use This App", expanded=False):
         st.markdown("""
-        **Step-by-step guide:**
+        **3-Tab Workflow:**
 
-        1. **Enter Client Information** - Company, contact, payment terms (optional but recommended)
-        2. **Select Partner & Product** - Choose from dropdowns
-        3. **Set Quantity & Markup** - See pricing breakdown and markup impact
-        4. **Add Customization (Optional)** - Custom labels, branding, etc.
-        5. **Review Product Preview** - Check the final pricing breakdown
-        6. **Add to Order** - Click "Add to Order" button
-        7. **Repeat** - Add more products if needed
-        8. **Configure Order Settings** - Shipping, tariff, discounts, credit card fees
-        9. **Generate Deliverables** - Proposal (with MOQ), Invoice, or Purchase Order
+        **Tab 1: Proposals** (for prospective clients)
+        - Browse product catalog with filters
+        - Add products to proposal
+        - Configure quantity, markup, MSRP comparison
+        - Generate MOQ-based proposal tables
+        - Download client order form
+
+        **Tab 2: Order & Client Info** (main workflow)
+        1. Enter client information (company, contact, payment)
+        2. Select partner and product from dropdowns
+        3. Set quantity, markup, and customization options
+        4. Add to order (repeat for multiple products)
+        5. Configure shipping, discounts, custom items
+        6. Add order notes (kitting, artwork, requests)
+        7. Review order summary
+
+        **Tab 3: Execution & Accounting** (final step)
+        - View order summary and validation warnings
+        - Generate invoice and purchase order
+        - Download CSV for bookkeeping
+        - Export to accounting (coming soon)
+
+        **Tips:**
+        - Start with Tab 2 for actual orders
+        - Use Tab 1 for quick quotes/proposals
+        - Tab 3 requires completed order in Tab 2
         """)
 
     st.markdown("---")
 
-    # Section 2: Recent Orders
+    # Section 4: Recent Orders
     st.markdown("### Recent Orders")
     if len(st.session_state.order_history) == 0:
         st.caption("No recent orders this session")
@@ -214,7 +310,7 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Section 3: Data Status
+    # Section 5: Data Status
     st.markdown("### Data Status")
     if 'data_loaded_at' in st.session_state:
         load_time = st.session_state.data_loaded_at
