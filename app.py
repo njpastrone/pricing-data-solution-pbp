@@ -1971,17 +1971,83 @@ with tab2:
             st.rerun()
 
     # ============================================================
-    # INVOICE AND PURCHASE ORDER GENERATION
+    # NEXT STEP: GENERATE INVOICE & PURCHASE ORDER
     # ============================================================
     st.divider()
-    st.header("10. Invoice & Purchase Order Request Form")
+    st.success("Order complete! Your order summary is ready.")
+    st.info("Go to **Tab 3: Execution & Accounting** to generate Invoice & Purchase Order for this order.")
 
+# ============================================================
+# TAB 3: EXECUTION & ACCOUNTING
+# ============================================================
+with tab3:
+    st.header("Execution & Accounting - Invoice & Purchase Order Management")
+    st.caption("Generate invoices and purchase orders for confirmed orders")
+    st.divider()
+
+    # Check if order exists in Tab 2
     if len(st.session_state.order_items) == 0:
-        st.caption("Add products to your order to generate an invoice and purchase order.")
+        st.info("No order found. Please build an order in Tab 2 first.")
+        st.markdown("### To create an invoice/PO:")
+        st.markdown("1. Go to **Tab 2: Order & Client Info**")
+        st.markdown("2. Complete Sections 1-8 (client info, products, settings, summary)")
+        st.markdown("3. Return to this tab to generate Invoice/PO")
     else:
-        client_info = st.session_state.client_info
+        # ============================================================
+        # SECTION 1: ORDER SUMMARY PREVIEW
+        # ============================================================
+        st.subheader("1. Order Summary")
 
-        # Validate completeness
+        # Quick summary display
+        total_products = len(st.session_state.order_items)
+        total_units = sum(item['quantity'] for item in st.session_state.order_items)
+
+        # Calculate order total (same logic as Tab 2)
+        products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
+
+        # Get discount info
+        discount_percent = 0.0
+        discount_description = ""
+        if st.session_state.order_discount_type == "preset":
+            preset = st.session_state.order_discount_preset
+            discount_description = preset
+            if "(" in preset and "%" in preset:
+                percent_str = preset.split("(")[1].split("%")[0]
+                discount_percent = float(percent_str)
+        elif st.session_state.order_discount_type == "custom":
+            discount_percent = st.session_state.order_discount_custom_value
+            discount_description = st.session_state.order_discount_custom_desc if st.session_state.order_discount_custom_desc else f"Custom Discount ({discount_percent}%)"
+
+        discount_amount = products_subtotal * (discount_percent / 100)
+        subtotal_after_discount = products_subtotal - discount_amount
+
+        # Add shipping and tariff
+        shipping = st.session_state.order_shipping
+        tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
+
+        total_before_cc = subtotal_after_discount + shipping + tariff
+        cc_fee_amount = calculate_credit_card_fee(total_before_cc, st.session_state.apply_cc_fee, st.session_state.cc_fee_percent)
+        total_quote = total_before_cc + cc_fee_amount
+        total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
+
+        # Display quick summary
+        client_name = st.session_state.client_info.get('company_name', 'Not specified')
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Client", client_name)
+        with col2:
+            st.metric("Products", f"{total_products} items ({total_units} units)")
+        with col3:
+            st.metric("Total Quote", f"${total_quote:,.2f}")
+
+        st.divider()
+
+        # ============================================================
+        # SECTION 2: COMPLETENESS CHECK
+        # ============================================================
+        st.subheader("2. Completeness Check")
+
+        client_info = st.session_state.client_info
         validation_warnings = validate_invoice_completeness(client_info, st.session_state.order_items)
 
         if validation_warnings:
@@ -1989,6 +2055,15 @@ with tab2:
                 st.warning("The following fields are missing or incomplete. The invoice/PO can still be generated, but these should be completed before sending to the bookkeeper:")
                 for warning in validation_warnings:
                     st.write(f"- {warning}")
+        else:
+            st.success("All required fields complete - ready to generate Invoice/PO")
+
+        st.divider()
+
+        # ============================================================
+        # SECTION 3: INVOICE & PURCHASE ORDER GENERATION
+        # ============================================================
+        st.subheader("3. Generate Invoice & Purchase Order")
 
         st.markdown("### INVOICE AND PURCHASE ORDER REQUEST FORM")
 
@@ -2050,17 +2125,6 @@ with tab2:
             st.write(f"**Payment Method:** {client_info.get('payment_preference', 'Not specified')}")
 
         st.divider()
-
-        # Calculate totals (same as order summary)
-        products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
-        discount_amount = products_subtotal * (discount_percent / 100)
-        subtotal_after_discount = products_subtotal - discount_amount
-        total_before_cc = subtotal_after_discount + shipping + tariff
-        cc_fee_amount = calculate_credit_card_fee(total_before_cc, st.session_state.apply_cc_fee, st.session_state.cc_fee_percent)
-        total_quote = total_before_cc + cc_fee_amount
-
-        # Apply marketing rounding if enabled
-        total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
 
         # === ITEMIZED TABLE SECTION ===
         st.markdown("#### INVOICE AND PURCHASE ORDER ITEM DETAILS")
@@ -2293,26 +2357,11 @@ with tab2:
 
         st.caption("Download the CSV and send to bookkeeper, or copy the tables above into your template.")
 
-    # ===== FOOTER =====
-    st.divider()
-    st.caption(f"Last data refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    st.caption("Click menu → 'Rerun' to refresh pricing data from Google Sheets")
+        st.divider()
 
-# ============================================================
-# TAB 3: EXECUTION & ACCOUNTING (PLACEHOLDER - Phase 3)
-# ============================================================
-with tab3:
-    st.header("Execution & Accounting - Invoice & PO Generation")
-    st.info("""
-    **Coming in Phase 3:**
-    - Final order review and validation
-    - Invoice generation for clients
-    - Purchase order generation for partners
-    - Export and download finalized documents
-
-    **For now, use Tab 2 Section 10 for Invoice & PO generation.**
-    """)
-
-    st.divider()
-    st.markdown("### Placeholder Content")
-    st.caption("This tab will contain the invoice/PO workflow in Phase 3 of the restructure.")
+        # ============================================================
+        # SECTION 4: ACCOUNTING EXPORT (FUTURE)
+        # ============================================================
+        st.subheader("4. Export for Accounting")
+        st.caption("Future: QuickBooks export, accounting reports, etc.")
+        st.info("Accounting export features will be added in Phase 4")
