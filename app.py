@@ -438,9 +438,9 @@ except Exception as e:
 # TAB STRUCTURE
 # ============================================================
 tab1, tab2, tab3 = st.tabs([
-    "📋 Proposals",
-    "🛒 Order & Client Info",
-    "💼 Execution & Accounting"
+    "Proposals",
+    "Order & Client Info",
+    "Execution & Accounting"
 ])
 
 # ============================================================
@@ -824,7 +824,7 @@ with tab1:
 
         # Download all proposals as CSV
         st.markdown("---")
-        if st.button("📥 Download All Proposal Tables (CSV)", use_container_width=True, type="primary"):
+        if st.button("Download All Proposal Tables (CSV)", use_container_width=True, type="primary"):
             # Generate comprehensive CSV
             csv_lines = []
             csv_lines.append("PEACE BY PIECE - PRODUCT PROPOSAL")
@@ -1024,7 +1024,7 @@ with tab2:
     # ============================================================
     if len(st.session_state.proposal_products) > 0:
         st.header("Quick Add: Products from Proposal")
-        st.info(f"✓ {len(st.session_state.proposal_products)} product(s) available from Proposal (Tab 1). Select below to add to order.")
+        st.info(f"{len(st.session_state.proposal_products)} product(s) available from Proposal (Tab 1). Select below to add to order.")
         st.session_state.using_proposal_data = True
 
         with st.expander("Select Products from Proposal", expanded=False):
@@ -1066,7 +1066,7 @@ with tab2:
                         )
                         st.session_state.order_items.append(order_item)
 
-                    st.success(f"✓ Added {len(selected_proposal_indices)} product(s) to order!")
+                    st.success(f"Added {len(selected_proposal_indices)} product(s) to order!")
                     st.rerun()
             else:
                 st.caption("Select at least one product above to add to order.")
@@ -2342,7 +2342,7 @@ with tab3:
         # ============================================================
         # EDITABLE ORDER SUMMARY
         # ============================================================
-        with st.expander("📊 View/Edit Order Summary", expanded=False):
+        with st.expander("View/Edit Order Summary", expanded=False):
             st.markdown("### Order Summary (Editable)")
             st.markdown("Make quick adjustments to order settings here. Changes sync to Tab 2.")
 
@@ -2361,7 +2361,7 @@ with tab3:
 
                 if new_shipping != st.session_state.order_shipping:
                     st.session_state.order_shipping = new_shipping
-                    st.success("✓ Shipping updated")
+                    st.success("Shipping updated")
 
             with col2:
                 # Show tariff total (read-only, calculated from products)
@@ -2384,7 +2384,7 @@ with tab3:
 
             if discount_type != st.session_state.order_discount_type:
                 st.session_state.order_discount_type = discount_type
-                st.success("✓ Discount type updated")
+                st.success("Discount type updated")
 
             if discount_type == "preset":
                 st.session_state.order_discount_preset = "NGO Discount (5%)"
@@ -2400,7 +2400,7 @@ with tab3:
 
                 if custom_discount != st.session_state.get('order_discount_custom_value', 0.0):
                     st.session_state.order_discount_custom_value = custom_discount
-                    st.success("✓ Custom discount updated")
+                    st.success("Custom discount updated")
 
             st.divider()
 
@@ -2415,7 +2415,7 @@ with tab3:
 
             if apply_cc_fee != st.session_state.get('apply_cc_fee', False):
                 st.session_state.apply_cc_fee = apply_cc_fee
-                st.success("✓ CC fee setting updated")
+                st.success("CC fee setting updated")
 
             if apply_cc_fee:
                 cc_fee_percent = st.number_input(
@@ -2429,7 +2429,7 @@ with tab3:
 
                 if cc_fee_percent != st.session_state.get('cc_fee_percent', 2.9):
                     st.session_state.cc_fee_percent = cc_fee_percent
-                    st.success("✓ CC fee percentage updated")
+                    st.success("CC fee percentage updated")
 
             st.divider()
 
