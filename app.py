@@ -1117,10 +1117,12 @@ with tab1:
         for prop_item in st.session_state.proposal_products:
             product_name = prop_item.get('product_data', {}).get('Product/Service', 'Unknown Product')
             quantity = prop_item.get('quantity', '')
+            # Show placeholder text if quantity is empty
+            quantity_display = quantity if quantity else '<span style="color: #7f8c8d; font-style: italic;">[Input Qty]</span>'
             html_form += f"""
         <tr>
             <td class="product-table">{product_name}</td>
-            <td class="product-table">{quantity}</td>
+            <td class="product-table">{quantity_display}</td>
             <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Describe any customization, logo placement, colors, etc.]</td>
         </tr>"""
     else:
