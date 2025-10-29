@@ -588,38 +588,18 @@ with tab1:
                     st.markdown("—")
 
             with col4:
-                col_btn1, col_btn2 = st.columns(2)
-                with col_btn1:
-                    # Quick Add with defaults (100 units, 100% markup, no customization)
-                    if st.button("Add", key=f"quick_add_{idx}", use_container_width=True, type="primary"):
-                        # Create proposal item with sensible defaults
-                        default_custom_setup = clean_price(product_data.get('Customization Setup Fee', '')) or 0.0
-                        default_custom_per_unit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0
+                # Add button - adds product to proposal with 100% markup default
+                if st.button("Add to Proposal", key=f"add_{idx}", use_container_width=True, type="primary"):
+                    proposal_item = {
+                        'product_data': product_data.to_dict(),
+                        'markup_percent': 100.0
+                    }
+                    st.session_state.proposal_products.append(proposal_item)
 
-                        proposal_item = {
-                            'product_data': product_data.to_dict(),
-                            'quantity': 100,
-                            'markup_percent': 100.0,
-                            'msrp_value': 0.0,
-                            'show_msrp': False,
-                            'include_customization': False,
-                            'customization_setup_fee': default_custom_setup,
-                            'customization_per_unit': default_custom_per_unit
-                        }
-                        st.session_state.proposal_products.append(proposal_item)
-
-                        # Set success message
-                        st.session_state.show_success_message = True
-                        st.session_state.success_product_name = product_data['Product/Service']
-                        st.rerun()
-
-                with col_btn2:
-                    # Configure button for advanced options
-                    if st.button("Config", key=f"configure_{idx}", use_container_width=True):
-                        # Set flag to open configuration for this product
-                        st.session_state.configuring_product = product_data.to_dict()
-                        st.session_state.editing_proposal_index = None
-                        st.rerun()
+                    # Set success message
+                    st.session_state.show_success_message = True
+                    st.session_state.success_product_name = product_data['Product/Service']
+                    st.rerun()
 
             # Expandable details section
             with st.expander(f"View details for {product_data['Product/Service']}", expanded=False):
@@ -639,99 +619,10 @@ with tab1:
             st.divider()
 
     # ============================================================
-    # SECTION 3: CONFIGURE PRODUCT (when "Add to Proposal" clicked)
-    # ============================================================
-    if st.session_state.configuring_product is not None:
-        st.divider()
-        st.subheader("3. Configure Product for Proposal")
-
-        product_config = st.session_state.configuring_product
-        editing_index = st.session_state.editing_proposal_index
-
-        # Check if editing existing or adding new
-        if editing_index is not None and editing_index < len(st.session_state.proposal_products):
-            existing_item = st.session_state.proposal_products[editing_index]
-            default_qty = existing_item['quantity']
-            default_markup = existing_item['markup_percent']
-            default_msrp = existing_item['msrp_value']
-            default_show_msrp = existing_item['show_msrp']
-            default_include_custom = existing_item['include_customization']
-            default_custom_setup = existing_item['customization_setup_fee']
-            default_custom_per_unit = existing_item['customization_per_unit']
-        else:
-            default_qty = 100
-            default_markup = 100.0
-            default_msrp = 0.0
-            default_show_msrp = False
-            default_include_custom = False
-            default_custom_setup = clean_price(product_config.get('Customization Setup Fee', '')) or 0.0
-            default_custom_per_unit = clean_price(product_config.get('Customization Cost per Unit', '')) or 0.0
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            # Quantity
-            quantity = st.number_input("Quantity", min_value=1, value=default_qty, step=1, key="config_quantity")
-
-            # Markup
-            markup = st.number_input("Markup %", min_value=0.0, value=default_markup, step=5.0, key="config_markup")
-
-        with col2:
-            # MSRP (optional)
-            show_msrp = st.checkbox("Include MSRP comparison", value=default_show_msrp, key="config_show_msrp")
-            msrp_value = 0.0
-            if show_msrp:
-                msrp_value = st.number_input("Partner MSRP", min_value=0.0, value=default_msrp, step=1.0, key="config_msrp")
-
-        # Customization
-        include_custom = st.checkbox("Include customization", value=default_include_custom, key="config_include_custom")
-        custom_setup = 0.0
-        custom_per_unit = 0.0
-        if include_custom:
-            col3, col4 = st.columns(2)
-            with col3:
-                custom_setup = st.number_input("Setup Fee", min_value=0.0, value=default_custom_setup, step=1.0, key="config_custom_setup")
-            with col4:
-                custom_per_unit = st.number_input("Per Unit Cost", min_value=0.0, value=default_custom_per_unit, step=0.1, key="config_custom_per_unit")
-
-        col5, col6 = st.columns(2)
-        with col5:
-            button_label = "Update in Proposal" if editing_index is not None else "Add to Proposal"
-            if st.button(button_label, type="primary", use_container_width=True):
-                # Create proposal item
-                proposal_item = {
-                    'product_data': product_config,
-                    'quantity': quantity,
-                    'markup_percent': markup,
-                    'msrp_value': msrp_value,
-                    'show_msrp': show_msrp,
-                    'include_customization': include_custom,
-                    'customization_setup_fee': custom_setup,
-                    'customization_per_unit': custom_per_unit
-                }
-
-                if editing_index is not None:
-                    st.session_state.proposal_products[editing_index] = proposal_item
-                    st.success("Updated in proposal!")
-                else:
-                    st.session_state.proposal_products.append(proposal_item)
-                    st.success("Added to proposal!")
-
-                st.session_state.configuring_product = None
-                st.session_state.editing_proposal_index = None
-                st.rerun()
-
-        with col6:
-            if st.button("Cancel", use_container_width=True):
-                st.session_state.configuring_product = None
-                st.session_state.editing_proposal_index = None
-                st.rerun()
-
-    # ============================================================
-    # SECTION 4: PROPOSAL PREVIEW
+    # SECTION 3: PROPOSAL PREVIEW & SETTINGS
     # ============================================================
     st.divider()
-    st.subheader("4. Proposal Preview")
+    st.subheader("3. Proposal Preview & Settings")
 
     if len(st.session_state.proposal_products) == 0:
         st.info("No products added to proposal yet. Add products from the catalog above.")
@@ -793,37 +684,66 @@ with tab1:
 
         st.divider()
 
-        # Display each product
+        # Product table with MSRP and editable markup
+        st.markdown("### Products in Proposal")
+
+        # Table header
+        header_col1, header_col2, header_col3, header_col4 = st.columns([3, 1.5, 1.5, 1])
+        with header_col1:
+            st.markdown("**Product**")
+        with header_col2:
+            st.markdown("**MSRP** (if available)")
+        with header_col3:
+            st.markdown("**Markup %**")
+        with header_col4:
+            st.markdown("**Remove**")
+
+        st.divider()
+
+        # Display each product in table format
         for idx, item in enumerate(st.session_state.proposal_products):
             product_data = item['product_data']
 
-            with st.expander(f"{product_data['Product/Service']} - {item['quantity']} units"):
-                col1, col2, col3 = st.columns([2, 1, 1])
+            col1, col2, col3, col4 = st.columns([3, 1.5, 1.5, 1])
 
-                with col1:
-                    st.write(f"**Partner:** {product_data['Partner']}")
-                    st.write(f"**Quantity:** {item['quantity']}")
-                    st.write(f"**Markup:** {item['markup_percent']:.1f}%")
-                    if item['include_customization']:
-                        st.write(f"**Customization:** Yes (${item['customization_setup_fee']:.2f} setup + ${item['customization_per_unit']:.2f}/unit)")
+            with col1:
+                st.markdown(f"{product_data['Product/Service']}")
+                st.caption(f"Partner: {product_data['Partner']}")
 
-                with col2:
-                    if st.button("Edit", key=f"edit_proposal_{idx}", use_container_width=True):
-                        # Load product into configuration UI
-                        st.session_state.configuring_product = item['product_data']
-                        st.session_state.editing_proposal_index = idx
-                        st.rerun()
+            with col2:
+                # Show MSRP if available
+                msrp = clean_price(product_data.get('MSRP', ''))
+                if msrp and msrp > 0:
+                    st.markdown(f"${msrp:.2f}")
+                else:
+                    st.markdown("—")
 
-                with col3:
-                    if st.button("Remove", key=f"remove_proposal_{idx}", use_container_width=True):
-                        st.session_state.proposal_products.pop(idx)
-                        st.rerun()
+            with col3:
+                # Editable markup field
+                new_markup = st.number_input(
+                    f"Markup for {idx}",
+                    min_value=0.0,
+                    value=item['markup_percent'],
+                    step=5.0,
+                    key=f"markup_{idx}",
+                    label_visibility="collapsed"
+                )
+                # Update markup if changed
+                if new_markup != item['markup_percent']:
+                    st.session_state.proposal_products[idx]['markup_percent'] = new_markup
+
+            with col4:
+                if st.button("✕", key=f"remove_{idx}", help=f"Remove {product_data['Product/Service']}", use_container_width=True):
+                    st.session_state.proposal_products.pop(idx)
+                    st.rerun()
+
+            st.divider()
 
     # ============================================================
-    # SECTION 5: GENERATE PROPOSAL TABLES
+    # SECTION 4: GENERATE PROPOSAL TABLES
     # ============================================================
     st.divider()
-    st.subheader("5. Generate Proposal Tables")
+    st.subheader("4. Generate Proposal Tables")
 
     if len(st.session_state.proposal_products) == 0:
         st.caption("Add products to generate proposal tables")
@@ -837,20 +757,13 @@ with tab1:
 
             product_row = item['product_data']
 
-            # Calculate MOQ
-            preliminary_base_price, _, _ = get_unit_price_new_system(product_row, item['quantity'])
+            # Calculate MOQ using a standard preliminary quantity (100 units)
+            preliminary_base_price, _, _ = get_unit_price_new_system(product_row, 100)
 
             if preliminary_base_price is not None:
-                # Estimate customization per unit
-                temp_customization_per_unit = 0
-                if item.get('include_customization', False):
-                    temp_setup = item.get('customization_setup_fee', 0)
-                    temp_per_unit = item.get('customization_per_unit', 0)
-                    temp_customization_per_unit = (temp_setup / 100) + temp_per_unit
-
-                # Estimate total per-unit price with markup
+                # Estimate total per-unit price with markup (no customization in MOQ calc)
                 temp_markup_multiplier = 1 + (item['markup_percent'] / 100)
-                estimated_unit_price = (preliminary_base_price + temp_customization_per_unit) * temp_markup_multiplier
+                estimated_unit_price = preliminary_base_price * temp_markup_multiplier
 
                 # Calculate MOQ
                 moq = calculate_moq(estimated_unit_price)
@@ -1061,10 +974,10 @@ with tab1:
             )
 
     # ============================================================
-    # SECTION 6: PRICING FOR CARDS & KITTING
+    # SECTION 5: PRICING FOR CARDS & KITTING
     # ============================================================
     st.divider()
-    st.subheader("6. Pricing for Cards & Kitting")
+    st.subheader("5. Pricing for Cards & Kitting")
 
     st.session_state.proposal_kitting_pricing = st.text_area(
         "Edit kitting pricing if needed",
@@ -1074,10 +987,10 @@ with tab1:
     )
 
     # ============================================================
-    # SECTION 7: TERMS & CONDITIONS
+    # SECTION 6: TERMS & CONDITIONS
     # ============================================================
     st.divider()
-    st.subheader("7. Terms & Conditions")
+    st.subheader("6. Terms & Conditions")
 
     st.session_state.proposal_terms = st.text_area(
         "Edit terms & conditions if needed",
@@ -1087,10 +1000,10 @@ with tab1:
     )
 
     # ============================================================
-    # SECTION 8: CLIENT ORDER FORM
+    # SECTION 7: CLIENT ORDER FORM
     # ============================================================
     st.divider()
-    st.subheader("8. Client Order Form")
+    st.subheader("7. Client Order Form")
 
     st.markdown("""
     Copy the form below and send to your client to collect order details:
