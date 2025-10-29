@@ -903,10 +903,10 @@ with tab1:
             csv_lines.append("")
 
             for idx, prop_item in enumerate(st.session_state.proposal_products, 1):
-                product_data = prop_item['product_data']
+                product_data = prop_item.get('product_data', {})
 
-                csv_lines.append(f"=== PRODUCT {idx}: {product_data['Product/Service']} ===")
-                csv_lines.append(f"Partner: {product_data['Partner']}")
+                csv_lines.append(f"=== PRODUCT {idx}: {product_data.get('Product/Service', 'Unknown Product')} ===")
+                csv_lines.append(f"Partner: {product_data.get('Partner', 'N/A')}")
                 csv_lines.append(f"Country of Origin: {product_data.get('Country of Origin', 'N/A')}")
                 csv_lines.append("")
 
@@ -928,7 +928,7 @@ with tab1:
                     custom_setup = prop_item.get('customization_setup_fee', 0.0) if prop_item.get('include_customization', False) else 0.0
 
                     # Markup
-                    markup_percent = prop_item['markup_percent']
+                    markup_percent = prop_item.get('markup_percent', 0)
                     product_cost = unit_price * qty
                     markup_amount = product_cost * (markup_percent / 100)
 
@@ -1346,21 +1346,23 @@ with tab2:
             selected_proposal_indices = []
 
             for idx, prop_item in enumerate(st.session_state.proposal_products):
-                product_data = prop_item['product_data']
+                product_data = prop_item.get('product_data', {})
 
                 col1, col2 = st.columns([4, 1])
 
                 with col1:
                     is_selected = st.checkbox(
-                        f"{product_data['Product/Service']} - {product_data['Partner']}",
+                        f"{product_data.get('Product/Service', 'Unknown Product')} - {product_data.get('Partner', 'N/A')}",
                         key=f"select_proposal_{idx}"
                     )
 
                     # Show proposal details
-                    st.caption(f"Quantity: {prop_item['quantity']} | Markup: {prop_item['markup_percent']}%")
+                    st.caption(f"Quantity: {prop_item.get('quantity', 'N/A')} | Markup: {prop_item.get('markup_percent', 0)}%")
 
                     if prop_item.get('include_customization', False):
-                        st.caption(f"Customization: ${prop_item['customization_setup_fee']:.2f} setup + ${prop_item['customization_per_unit']:.2f}/unit")
+                        setup_fee = prop_item.get('customization_setup_fee', 0)
+                        per_unit = prop_item.get('customization_per_unit', 0)
+                        st.caption(f"Customization: ${setup_fee:.2f} setup + ${per_unit:.2f}/unit")
 
                 with col2:
                     if is_selected:
