@@ -536,17 +536,17 @@ with tab1:
     if len(filtered_df) == 0:
         st.warning("No products match your filters. Try adjusting the filter criteria above.")
     else:
-        # Display filtered products
+        # Display filtered products in a compact, user-friendly format
         for idx, row in filtered_df.iterrows():
             product_data = row
 
-            with st.expander(f"{product_data['Product/Service']} - {product_data['Partner']}"):
-                col1, col2 = st.columns([3, 1])
+            # Compact product card with quick actions
+            with st.container():
+                col1, col2 = st.columns([4, 1])
 
                 with col1:
-                    st.markdown(f"**Partner:** {product_data['Partner']}")
-                    st.markdown(f"**Country:** {product_data.get('Country of Origin', 'N/A')}")
-                    st.markdown(f"**Tiered Pricing:** {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
+                    st.markdown(f"### {product_data['Product/Service']}")
+                    st.caption(f"Partner: {product_data['Partner']} | Country: {product_data.get('Country of Origin', 'N/A')} | Tiered: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
 
                     # Calculate and show base price at MOQ estimate
                     preliminary_price, _, _ = get_unit_price_new_system(product_data, 100)
@@ -560,14 +560,37 @@ with tab1:
                     # Show description if available
                     desc = product_data.get("Marketing Description", "")
                     if desc and str(desc).strip() and str(desc).strip() != 'nan':
-                        st.caption(f"**Description:** {desc}")
+                        st.caption(f"{desc}")
 
                 with col2:
-                    if st.button("Add to Proposal", key=f"add_proposal_{idx}", use_container_width=True):
+                    # Quick Add with defaults (100 units, 100% markup, no customization)
+                    if st.button("Quick Add", key=f"quick_add_{idx}", use_container_width=True, type="primary"):
+                        # Create proposal item with sensible defaults
+                        default_custom_setup = clean_price(product_data.get('Customization Setup Fee', '')) or 0.0
+                        default_custom_per_unit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0
+
+                        proposal_item = {
+                            'product_data': product_data.to_dict(),
+                            'quantity': 100,
+                            'markup_percent': 100.0,
+                            'msrp_value': 0.0,
+                            'show_msrp': False,
+                            'include_customization': False,
+                            'customization_setup_fee': default_custom_setup,
+                            'customization_per_unit': default_custom_per_unit
+                        }
+                        st.session_state.proposal_products.append(proposal_item)
+                        st.toast(f"Added {product_data['Product/Service']} to proposal with defaults (100 units, 100% markup)")
+                        st.rerun()
+
+                    # Configure button for advanced options
+                    if st.button("Configure", key=f"configure_{idx}", use_container_width=True):
                         # Set flag to open configuration for this product
                         st.session_state.configuring_product = product_data.to_dict()
                         st.session_state.editing_proposal_index = None
                         st.rerun()
+
+                st.divider()
 
     # ============================================================
     # SECTION 3: CONFIGURE PRODUCT (when "Add to Proposal" clicked)
