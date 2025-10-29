@@ -459,14 +459,7 @@ with tab1:
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown("**Price Range**")
-        min_price = st.number_input(
-            "Min price per unit ($) - Optional",
-            min_value=0.0,
-            value=st.session_state.proposal_filters.get('min_price', 0.0),
-            step=1.0,
-            key="filter_min_price"
-        )
+        st.markdown("**Max Price**")
         max_price = st.number_input(
             "Max price per unit ($) - Optional",
             min_value=0.0,
@@ -496,7 +489,6 @@ with tab1:
         )
 
     # Update filters in session state
-    st.session_state.proposal_filters['min_price'] = min_price
     st.session_state.proposal_filters['max_price'] = max_price if max_price > 0 else None
     st.session_state.proposal_filters['partners'] = selected_partners
     st.session_state.proposal_filters['countries'] = selected_countries
@@ -511,15 +503,13 @@ with tab1:
         filtered_df = filtered_df[filtered_df["Country of Origin"].isin(selected_countries)]
 
     # Price filtering (estimate based on MOQ)
-    if min_price > 0 or (max_price and max_price > 0):
+    if max_price and max_price > 0:
         price_filtered_indices = []
         for idx, row in filtered_df.iterrows():
             # Get price estimate at quantity 100
             base_price, _, _ = get_unit_price_new_system(row, 100)
             if base_price:
-                if min_price > 0 and base_price < min_price:
-                    continue
-                if max_price and max_price > 0 and base_price > max_price:
+                if max_price > 0 and base_price > max_price:
                     continue
                 price_filtered_indices.append(idx)
         filtered_df = filtered_df.loc[price_filtered_indices]
@@ -536,35 +526,53 @@ with tab1:
     if len(filtered_df) == 0:
         st.warning("No products match your filters. Try adjusting the filter criteria above.")
     else:
-        # Display filtered products in a compact, user-friendly format
+        # Display success message if a product was just added
+        if 'show_success_message' in st.session_state and st.session_state.show_success_message:
+            st.success(f"✓ Added **{st.session_state.success_product_name}** to proposal!")
+            st.session_state.show_success_message = False
+
+        # Table-style header
+        header_col1, header_col2, header_col3, header_col4 = st.columns([3, 1.5, 1, 1.5])
+        with header_col1:
+            st.markdown("**Product Name**")
+        with header_col2:
+            st.markdown("**Partner**")
+        with header_col3:
+            st.markdown("**Price/Unit**")
+        with header_col4:
+            st.markdown("**Actions**")
+
+        st.divider()
+
+        # Display filtered products in a compact table-style format
         for idx, row in filtered_df.iterrows():
             product_data = row
 
-            # Compact product card with quick actions
-            with st.container():
-                col1, col2 = st.columns([4, 1])
+            # Calculate price for display
+            preliminary_price, _, _ = get_unit_price_new_system(product_data, 100)
+            estimated_moq = calculate_moq(preliminary_price * 2) if preliminary_price else None
+            moq_price, _, _ = get_unit_price_new_system(product_data, estimated_moq) if estimated_moq else (None, None, None)
 
-                with col1:
-                    st.markdown(f"### {product_data['Product/Service']}")
-                    st.caption(f"Partner: {product_data['Partner']} | Country: {product_data.get('Country of Origin', 'N/A')} | Tiered: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
+            # Compact row with all essential info
+            col1, col2, col3, col4 = st.columns([3, 1.5, 1, 1.5])
 
-                    # Calculate and show base price at MOQ estimate
-                    preliminary_price, _, _ = get_unit_price_new_system(product_data, 100)
-                    if preliminary_price:
-                        estimated_moq = calculate_moq(preliminary_price * 2)  # Estimate with markup
-                        if estimated_moq:
-                            moq_price, _, _ = get_unit_price_new_system(product_data, estimated_moq)
-                            if moq_price:
-                                st.markdown(f"**Est. Price at MOQ ({estimated_moq} units):** ${moq_price:.2f}/unit")
+            with col1:
+                st.markdown(f"**{product_data['Product/Service']}**")
 
-                    # Show description if available
-                    desc = product_data.get("Marketing Description", "")
-                    if desc and str(desc).strip() and str(desc).strip() != 'nan':
-                        st.caption(f"{desc}")
+            with col2:
+                st.markdown(f"{product_data['Partner']}")
 
-                with col2:
+            with col3:
+                if moq_price:
+                    st.markdown(f"${moq_price:.2f}")
+                else:
+                    st.markdown("—")
+
+            with col4:
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
                     # Quick Add with defaults (100 units, 100% markup, no customization)
-                    if st.button("Quick Add", key=f"quick_add_{idx}", use_container_width=True, type="primary"):
+                    if st.button("Add", key=f"quick_add_{idx}", use_container_width=True, type="primary"):
                         # Create proposal item with sensible defaults
                         default_custom_setup = clean_price(product_data.get('Customization Setup Fee', '')) or 0.0
                         default_custom_per_unit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0
@@ -580,17 +588,36 @@ with tab1:
                             'customization_per_unit': default_custom_per_unit
                         }
                         st.session_state.proposal_products.append(proposal_item)
-                        st.toast(f"Added {product_data['Product/Service']} to proposal with defaults (100 units, 100% markup)")
+
+                        # Set success message
+                        st.session_state.show_success_message = True
+                        st.session_state.success_product_name = product_data['Product/Service']
                         st.rerun()
 
+                with col_btn2:
                     # Configure button for advanced options
-                    if st.button("Configure", key=f"configure_{idx}", use_container_width=True):
+                    if st.button("Config", key=f"configure_{idx}", use_container_width=True):
                         # Set flag to open configuration for this product
                         st.session_state.configuring_product = product_data.to_dict()
                         st.session_state.editing_proposal_index = None
                         st.rerun()
 
-                st.divider()
+            # Expandable details section
+            with st.expander(f"View details for {product_data['Product/Service']}", expanded=False):
+                st.caption(f"**Partner:** {product_data['Partner']} | **Country:** {product_data.get('Country of Origin', 'N/A')} | **Tiered Pricing:** {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
+
+                # Show estimated price at MOQ
+                if moq_price and estimated_moq:
+                    st.caption(f"**Est. Price at MOQ ({estimated_moq} units):** ${moq_price:.2f}/unit")
+
+                # Show description if available
+                desc = product_data.get("Marketing Description", "")
+                if desc and str(desc).strip() and str(desc).strip() != 'nan':
+                    st.write(desc)
+                else:
+                    st.caption("No description available")
+
+            st.divider()
 
     # ============================================================
     # SECTION 3: CONFIGURE PRODUCT (when "Add to Proposal" clicked)
@@ -792,40 +819,18 @@ with tab1:
 
                     # Show MOQ calculation note
                     moq_total_value = moq * moq_product_price_per_unit
-                    st.caption(f"MOQ calculated based on $1,000 minimum order value (MOQ {moq} units = ${moq_total_value:.2f})")
+                    st.caption(f"MOQ calculated based on \\$1,000 minimum order value (MOQ {moq} units = \\${moq_total_value:.2f})")
 
-                    # Build customization fees section
-                    if item.get('include_customization', False):
-                        moq_customization_setup = item.get('customization_setup_fee', 0)
-                        moq_customization_per_unit = item.get('customization_per_unit', 0)
-                        customization_desc = product_row.get('Customization Info', 'Custom work')
+                    # ALWAYS show customization costs from product data
+                    # Get customization costs from the product data
+                    setup_fee = clean_price(product_row.get('Customization Setup Fee', '')) or 0.0
+                    per_unit_cost = clean_price(product_row.get('Customization Cost per Unit', '')) or 0.0
 
-                        if moq_customization_setup > 0 or moq_customization_per_unit > 0:
-                            st.markdown("**Additional Customization Fees:**")
-
-                            customization_fees = []
-                            if moq_customization_setup > 0:
-                                customization_fees.append({
-                                    "Item": f"Setup Fee: {customization_desc}",
-                                    "Quantity": 1,
-                                    "Unit Price": f"${moq_customization_setup:.2f}",
-                                    "Total": f"${moq_customization_setup:.2f}"
-                                })
-
-                            if moq_customization_per_unit > 0:
-                                customization_fees.append({
-                                    "Item": f"Customization: {customization_desc}",
-                                    "Quantity": moq,
-                                    "Unit Price": f"${moq_customization_per_unit:.2f}",
-                                    "Total": f"${moq_customization_per_unit * moq:.2f}"
-                                })
-
-                            if customization_fees:
-                                customization_df = pd.DataFrame(customization_fees)
-                                st.table(customization_df)
-                                st.caption("Customization fees are separate line items and not included in the product price above.")
+                    # Display customization costs at the bottom
+                    if setup_fee > 0 or per_unit_cost > 0:
+                        st.caption(f"**Customization available:** Artwork set-up: \\${setup_fee:.2f} / Branding per piece: \\${per_unit_cost:.2f}")
                     else:
-                        st.caption("No customization fees")
+                        st.caption("**Customization available:** Contact for pricing")
 
                     # Add download button for this product's proposal table
                     proposal_csv = proposal_table.to_csv(index=False)
