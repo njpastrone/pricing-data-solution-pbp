@@ -1582,9 +1582,10 @@ with tab2:
     st.divider()
 
     # ============================================================
-    # PRODUCT SELECTION UI
+    # PRODUCT CONFIGURATION (Sections 2-4 combined)
     # ============================================================
-    st.header("2. Select Products")
+    st.header("2. Product Configuration")
+    st.caption("Select product, set pricing, and configure customization")
 
     # Create dropdowns for filtering
     col1, col2 = st.columns(2)
@@ -1637,15 +1638,8 @@ with tab2:
             st.markdown(f"**Tier Ranges:** {tier_info}")
             st.caption("Your order quantity will automatically match to the correct tier and price.")
 
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ============================================================
-    # QUANTITY & PRICING UI
-    # ============================================================
-    st.header("3. Quantity & Pricing")
-
-    # 3.1 - Quantity & Markup (2-column layout)
-    st.subheader("Quantity & Markup")
+    st.divider()
+    st.subheader("Quantity & Pricing")
 
     col_qty, col_markup = st.columns(2)
 
@@ -1767,16 +1761,13 @@ with tab2:
                 else:
                     st.caption("Your price matches Partner MSRP")
 
-    # ============================================================
-    # CUSTOMIZATION OPTIONS UI
-    # ============================================================
     st.divider()
-    st.header("4. Customization Options")
+    st.subheader("Customization (Optional)")
 
     # Customization options
     customization_info = product_data.get("Customization Info", "")
     if customization_info and customization_info.strip():
-        st.markdown(f"**Customization Options:** {customization_info}")
+        st.caption(f"Available: {customization_info}")
 
     include_customization = st.checkbox(
         "Add customization to this product",
@@ -1884,7 +1875,7 @@ with tab2:
     # ============================================================
     # PRODUCT PREVIEW & ADD TO ORDER
     # ============================================================
-    st.header("5. Product Preview")
+    st.header("3. Add to Order")
 
     # Get price for quantity using new system
     base_price, tier_range, tier_column = get_unit_price_new_system(product_data, quantity)
@@ -2022,7 +2013,7 @@ with tab2:
     # CURRENT ORDER SUMMARY
     # ============================================================
     st.divider()
-    st.header("6. Current Order")
+    st.header("4. Current Order")
 
     if len(st.session_state.order_items) == 0:
         st.info("""
@@ -2178,7 +2169,7 @@ with tab2:
     # ORDER SETTINGS
     # ============================================================
     st.divider()
-    st.header("7. Order Settings")
+    st.header("5. Order Settings")
 
     if len(st.session_state.order_items) == 0:
         st.caption("Add products to your order first, then configure order settings here.")
@@ -2437,7 +2428,7 @@ with tab2:
     # ORDER NOTES
     # ============================================================
     st.divider()
-    st.header("7.5. Order Notes")
+    st.header("5.5. Order Notes")
 
     st.markdown("Add any specific details for this order (kitting specs, client requests, artwork files, etc.)")
 
@@ -2490,7 +2481,7 @@ with tab2:
     # TOTAL ORDER CALCULATION
     # ============================================================
     st.divider()
-    st.header("8. Order Summary")
+    st.header("6. Order Summary")
 
     if len(st.session_state.order_items) == 0:
         st.caption("Add products to your order to see the total quote calculation.")
