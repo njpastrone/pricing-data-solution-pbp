@@ -1115,8 +1115,8 @@ with tab1:
     # Add product rows - either from proposal or blank rows
     if len(st.session_state.proposal_products) > 0:
         for prop_item in st.session_state.proposal_products:
-            product_name = prop_item['product_data']['Product/Service']
-            quantity = prop_item['quantity']
+            product_name = prop_item.get('product_data', {}).get('Product/Service', 'Unknown Product')
+            quantity = prop_item.get('quantity', '')
             html_form += f"""
         <tr>
             <td class="product-table">{product_name}</td>
@@ -1238,8 +1238,8 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
         # Add placeholder rows for each product in proposal
         if len(st.session_state.proposal_products) > 0:
             for prop_item in st.session_state.proposal_products:
-                product_name = prop_item['product_data']['Product/Service']
-                quantity = prop_item['quantity']
+                product_name = prop_item.get('product_data', {}).get('Product/Service', 'Unknown Product')
+                quantity = prop_item.get('quantity', '')
                 csv_lines.append(f"{product_name},{quantity},")
         else:
             # Add 3 blank rows
