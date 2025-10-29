@@ -1931,7 +1931,16 @@ with tab2:
                     breakdown_data.append(["Customization Setup", "one-time", f"${customization_setup_total:.2f}"])
 
                 if customization_unit_total > 0:
-                    breakdown_data.append(["Customization Per-Unit", f"${new_perunit_cost:.2f}/unit", f"${customization_unit_total:.2f}"])
+                    # Calculate effective quantity for customization
+                    effective_custom_qty = new_custom_min_qty if (new_apply_minimum and new_custom_min_qty > new_quantity) else new_quantity
+
+                    # Show per-unit cost with quantity used
+                    if new_apply_minimum and new_custom_min_qty > new_quantity:
+                        perunit_display = f"${new_perunit_cost:.2f}/unit × {effective_custom_qty} units"
+                    else:
+                        perunit_display = f"${new_perunit_cost:.2f}/unit"
+
+                    breakdown_data.append(["Customization Per-Unit", perunit_display, f"${customization_unit_total:.2f}"])
 
                 breakdown_data.append(["", "", ""])
                 breakdown_data.append(["**Subtotal**", "", f"**${subtotal_before_markup:.2f}**"])
@@ -1941,6 +1950,10 @@ with tab2:
 
                 breakdown_df = pd.DataFrame(breakdown_data, columns=["Item", "Per Unit", "Total"])
                 st.table(breakdown_df)
+
+                # Add note if minimum customization quantity is applied
+                if new_include_custom and new_apply_minimum and new_custom_min_qty > new_quantity:
+                    st.caption(f"Note: Customization minimum of {new_custom_min_qty} units applied (ordering {new_quantity} product units)")
 
         # Remove items marked for deletion
         for idx in sorted(items_to_remove, reverse=True):
