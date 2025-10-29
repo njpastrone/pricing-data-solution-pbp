@@ -1940,7 +1940,19 @@ with tab2:
                 st.markdown("##### Pricing Breakdown")
 
                 breakdown_data = []
-                breakdown_data.append(["Base Cost", f"${base_price:.2f}/unit", f"${product_subtotal:.2f}"])
+
+                # Base product cost and markup (together)
+                breakdown_data.append(["Base Cost (Partner)", f"${base_price:.2f}/unit", f"${product_subtotal:.2f}"])
+                breakdown_data.append([f"Your Markup ({new_markup:.0f}%)", f"${markup_amount/new_quantity:.2f}/unit", f"${markup_amount:.2f}"])
+                breakdown_data.append(["", "", ""])
+
+                # Product price to customer (before customization)
+                product_price_to_client = product_subtotal + markup_amount
+                breakdown_data.append(["Product Price to Client", f"${product_price_to_client/new_quantity:.2f}/unit", f"${product_price_to_client:.2f}"])
+
+                # Customization (added separately, no markup)
+                if customization_setup_total > 0 or customization_unit_total > 0:
+                    breakdown_data.append(["", "", ""])
 
                 if customization_setup_total > 0:
                     breakdown_data.append(["Customization Setup", "one-time", f"${customization_setup_total:.2f}"])
@@ -1957,17 +1969,18 @@ with tab2:
 
                     breakdown_data.append(["Customization Per-Unit", perunit_display, f"${customization_unit_total:.2f}"])
 
+                # Subtotal before rounding
                 breakdown_data.append(["", "", ""])
-                breakdown_data.append(["**Subtotal**", "", f"**${subtotal_before_markup:.2f}**"])
-                breakdown_data.append([f"Your Markup ({new_markup:.0f}%)", f"${markup_amount/new_quantity:.2f}/unit", f"${markup_amount:.2f}"])
-                breakdown_data.append(["", "", ""])
+                breakdown_data.append(["**Subtotal**", "", f"**${product_total_raw:.2f}**"])
 
                 # Show rounding note if applied
                 if new_round_to_five:
                     total_per_unit_raw = product_total_raw / new_quantity
-                    breakdown_data.append(["Rounding to nearest $5", f"(${total_per_unit_raw:.2f} → ${total_per_unit:.2f})", ""])
                     breakdown_data.append(["", "", ""])
+                    breakdown_data.append(["Rounding to nearest $5", f"(${total_per_unit_raw:.2f} → ${total_per_unit:.2f})", ""])
 
+                # Final customer price
+                breakdown_data.append(["", "", ""])
                 breakdown_data.append(["**Customer Price**", f"**${total_per_unit:.2f}/unit**", f"**${product_total:.2f}**"])
 
                 breakdown_df = pd.DataFrame(breakdown_data, columns=["Item", "Per Unit", "Total"])
