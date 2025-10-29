@@ -986,6 +986,11 @@ with tab1:
         key="proposal_kitting_pricing_input"
     )
 
+    # Add copy button for kitting pricing
+    if st.button("Copy Pricing for Cards & Kitting", key="copy_kitting_pricing", use_container_width=True):
+        st.code(st.session_state.proposal_kitting_pricing, language=None)
+        st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
+
     # ============================================================
     # SECTION 6: TERMS & CONDITIONS
     # ============================================================
@@ -999,6 +1004,11 @@ with tab1:
         key="proposal_terms_input"
     )
 
+    # Add copy button for terms & conditions
+    if st.button("Copy Terms & Conditions", key="copy_terms", use_container_width=True):
+        st.code(st.session_state.proposal_terms, language=None)
+        st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
+
     # ============================================================
     # SECTION 7: CLIENT ORDER FORM
     # ============================================================
@@ -1006,10 +1016,178 @@ with tab1:
     st.subheader("7. Client Order Form")
 
     st.markdown("""
-    Copy the form below and send to your client to collect order details:
+    Download the HTML form below and paste it into your email to send to clients.
+    The table will look professional and clients can fill it out directly.
     """)
 
-    client_form_text = """CLIENT ORDER FORM
+    # Generate HTML table
+    html_form = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 20px; background-color: #ffffff; }
+        h2 { color: #2c3e50; background-color: #ffffff; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        .instructions-box { background-color: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 20px 0; color: #000000; }
+        .instructions-box p { margin: 5px 0; color: #000000; }
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; background-color: #ffffff; }
+        th { background-color: #3498db !important; color: #ffffff !important; padding: 12px; text-align: left; font-weight: bold; }
+        td { border: 1px solid #ddd; padding: 10px; background-color: #ffffff; color: #000000; }
+        td:first-child { background-color: #f8f9fa !important; color: #000000 !important; font-weight: 500; width: 35%; vertical-align: top; }
+        .section-header { background-color: #2c3e50 !important; color: #ffffff !important; font-weight: bold; padding: 10px; }
+        .fill-in { background-color: #ffffff !important; color: #7f8c8d !important; min-height: 20px; font-style: italic; }
+        .product-table { margin: 10px 0; }
+        .product-table td { background-color: #ffffff !important; color: #000000 !important; }
+        .helper-text { color: #7f8c8d; font-size: 0.85em; display: block; margin-top: 3px; }
+        .required { color: #e74c3c !important; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h2>PEACE BY PIECE CLIENT ORDER FORM</h2>
+
+    <div class="instructions-box">
+        <p><strong>HOW TO FILL OUT THIS FORM:</strong></p>
+        <p>1. Copy & paste the entire form into Docs, Word, or directly into your email reply (the format should copy along with the text)</p>
+        <p>2. Click in the gray areas to type your answers</p>
+        <p>3. For multiple choice questions, delete the options you DON'T want and keep the one you DO want</p>
+        <p>4. When finished, select all (Ctrl+A or Cmd+A), copy, and paste into your email reply</p>
+        <p>5. Fields marked with <span class="required">*</span> are required</p>
+    </div>
+
+    <table>
+        <tr>
+            <td colspan="2" class="section-header">CLIENT INFORMATION</td>
+        </tr>
+        <tr>
+            <td>Client Type <span class="required">*</span></td>
+            <td class="fill-in">[Delete one: Existing / New]</td>
+        </tr>
+        <tr>
+            <td>Company Name <span class="required">*</span></td>
+            <td class="fill-in">[Type company name here]</td>
+        </tr>
+        <tr>
+            <td>Contact Name <span class="required">*</span></td>
+            <td class="fill-in">[Type your name here]</td>
+        </tr>
+        <tr>
+            <td>Contact Email <span class="required">*</span></td>
+            <td class="fill-in">[Type your email here]</td>
+        </tr>
+    </table>
+
+    <table>
+        <tr>
+            <td colspan="2" class="section-header">SHIPPING & DELIVERY</td>
+        </tr>
+        <tr>
+            <td>Drop Shipping? <span class="required">*</span></td>
+            <td class="fill-in">[Delete one: Yes / No]</td>
+        </tr>
+        <tr>
+            <td>Shipping Address<span class="helper-text">(if single location)</span></td>
+            <td class="fill-in">[Type full shipping address here, or N/A if drop shipping]</td>
+        </tr>
+        <tr>
+            <td>Destination Breakdown<span class="helper-text">(if drop shipping internationally)</span></td>
+            <td class="fill-in">[Example: 50 units to CA, 30 units to TX, or N/A if single location]</td>
+        </tr>
+        <tr>
+            <td>Billing Address</td>
+            <td class="fill-in">[Type billing address here, or "Same as shipping"]</td>
+        </tr>
+        <tr>
+            <td>Client In-Hands Date <span class="required">*</span></td>
+            <td class="fill-in">[Type date in format: MM/DD/YYYY]</td>
+        </tr>
+    </table>
+
+    <table>
+        <tr>
+            <td colspan="3" class="section-header">ORDER DETAILS</td>
+        </tr>
+        <tr>
+            <th>Product Name</th>
+            <th>Quantity</th>
+            <th>Customization/Branding Details</th>
+        </tr>"""
+
+    # Add product rows - either from proposal or blank rows
+    if len(st.session_state.proposal_products) > 0:
+        for prop_item in st.session_state.proposal_products:
+            product_name = prop_item['product_data']['Product/Service']
+            quantity = prop_item['quantity']
+            html_form += f"""
+        <tr>
+            <td class="product-table">{product_name}</td>
+            <td class="product-table">{quantity}</td>
+            <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Describe any customization, logo placement, colors, etc.]</td>
+        </tr>"""
+    else:
+        # Add 3 blank rows if no products in proposal
+        for i in range(3):
+            html_form += """
+        <tr>
+            <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Product name]</td>
+            <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Qty]</td>
+            <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Customization details]</td>
+        </tr>"""
+
+    html_form += """
+    </table>
+
+    <table>
+        <tr>
+            <td colspan="2" class="section-header">IMPACT CARDS</td>
+        </tr>
+        <tr>
+            <td>Impact Card Preference <span class="required">*</span></td>
+            <td class="fill-in">[Delete all except the ONE option you want]<br/><br/>
+                Peace by Piece Impact Card<br/>
+                Custom Impact Card<br/>
+                Custom Message Card<br/>
+                Send us your own card
+            </td>
+        </tr>
+    </table>
+
+    <table>
+        <tr>
+            <td colspan="2" class="section-header">PAYMENT</td>
+        </tr>
+        <tr>
+            <td>Payment Preference <span class="required">*</span></td>
+            <td class="fill-in">[Delete all except the ONE option you want]<br/><br/>
+                ACH<br/>
+                Check<br/>
+                Credit Card (3% processing fee applies)
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>"""
+
+    # Show preview in expander
+    with st.expander("Preview HTML Form", expanded=False):
+        st.components.v1.html(html_form, height=800, scrolling=True)
+
+    # Download buttons
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.download_button(
+            label="Download HTML Form",
+            data=html_form,
+            file_name=f"client_order_form_{datetime.now().strftime('%Y%m%d')}.html",
+            mime="text/html",
+            key="download_client_form_html",
+            type="primary"
+        )
+
+    with col2:
+        # Keep TXT version for backup
+        client_form_text = """CLIENT ORDER FORM
 
 Client Type: [ ] Existing  [ ] New
 Company Name: _______________________
@@ -1032,22 +1210,15 @@ Impact Cards: [ ] Peace by Piece Impact Card  [ ] Custom Impact Card
 
 Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
 """
-
-    st.text_area("Client Order Form", value=client_form_text, height=400, key="client_form_display")
-
-    # Download buttons for CSV versions
-    col1, col2 = st.columns(2)
-
-    with col1:
         st.download_button(
-            label="Download Client Order Form (TXT)",
+            label="Download TXT (Backup)",
             data=client_form_text,
             file_name="client_order_form.txt",
             mime="text/plain",
             key="download_client_form_txt"
         )
 
-    with col2:
+    with col3:
         # Generate CSV version
         csv_lines = []
         csv_lines.append("FIELD,VALUE")
@@ -1085,12 +1256,14 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
         client_form_csv = "\n".join(csv_lines)
 
         st.download_button(
-            label="Download Client Order Form (CSV)",
+            label="Download CSV (Backup)",
             data=client_form_csv,
             file_name=f"client_order_form_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv",
             key="download_client_form_csv"
         )
+
+    st.info("Tip: Download the HTML form, open it in your browser, then copy the entire page and paste it into your email. It will preserve all formatting!")
 
 # ============================================================
 # TAB 2: ORDER & CLIENT INFO (ALL CURRENT FUNCTIONALITY)
