@@ -89,7 +89,14 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 - **Product Catalog:** Browse all products with detailed specifications
 - **Proposal Configuration:** Quantity, markup %, customization options, MSRP comparison
 - **MOQ-Based Pricing Tables:** Automatic minimum order quantity calculations
+- **Copy Buttons:** Easy copy for Kitting Pricing & Terms sections
 - **CSV Downloads:** Export proposal tables and client order forms
+- **HTML Client Order Form:** Professional, email-ready order form with:
+  - Styled table format (light/dark mode compatible)
+  - Clear instructional prompts for clients
+  - Pre-filled product names and quantities
+  - Multiple choice delete-to-select format
+  - Download as HTML, TXT, or CSV
 - **Terms & Conditions:** Customizable terms loaded from config file
 
 ### Tab 2: Order & Client Info (main workflow)

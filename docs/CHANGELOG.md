@@ -4,6 +4,35 @@ All notable changes to the Peace by Piece International Pricing App are document
 
 ---
 
+## [2.2] - Proposals Tab UX Improvements (October 2025)
+
+### Added
+- **HTML Client Order Form:** Professional, email-ready order form with:
+  - Styled table format with blue section headers and organized layout
+  - Light/dark mode color compatibility with explicit color definitions
+  - Clear instructional prompts for clients (delete-to-select for multiple choice)
+  - Pre-filled product names and quantities from proposals
+  - Download options: HTML (primary), TXT (backup), CSV (backup)
+  - Preview functionality with expandable viewer
+- **Copy Buttons for Sections 5 & 6:**
+  - "Copy Pricing for Cards & Kitting" button
+  - "Copy Terms & Conditions" button
+  - Displays text in selectable code block format
+
+### Changed
+- **Client Order Form Format:** Replaced plain text form with professional HTML table
+- **Form Instructions:** Updated with 5-step process for clients to fill out form
+- **Form Title:** Changed to "PEACE BY PIECE CLIENT ORDER FORM"
+- **Multiple Choice Fields:** Changed from checkboxes to [Delete one: X / Y] format
+- **Text Fields:** Added clear prompts like [Type your answer here]
+
+### Improved
+- **User Workflow:** Streamlined process for sending proposals to clients
+- **Email Integration:** Form maintains formatting when copied into email clients
+- **Client Experience:** Clearer instructions reduce friction for clients filling out forms
+
+---
+
 ## [2.1] - Bookkeeper-Aligned Invoice & PO (October 2025)
 
 ### Added
@@ -137,7 +166,8 @@ All notable changes to the Peace by Piece International Pricing App are document
 
 | Version | Date | Key Feature | Status |
 |---------|------|-------------|--------|
-| 2.1 | Oct 2025 | Bookkeeper-aligned Invoice & PO | ✅ Current |
+| 2.2 | Oct 2025 | Proposals Tab UX improvements | ✅ Current |
+| 2.1 | Oct 2025 | Bookkeeper-aligned Invoice & PO | ✅ Implemented |
 | 2.0 | Oct 2025 | Multi-sheet data system | ✅ Implemented |
 | 1.2 | Oct 2025 | Customization minimum feature | ✅ Implemented |
 | 1.1 | Oct 2025 | Multi-product ordering | ✅ Implemented |
@@ -168,4 +198,4 @@ All notable changes to the Peace by Piece International Pricing App are document
 ---
 
 **Document Maintained By:** Development Team
-**Last Updated:** 2025-10-27
+**Last Updated:** 2025-10-29
