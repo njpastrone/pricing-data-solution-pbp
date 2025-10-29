@@ -1787,6 +1787,21 @@ with tab2:
                     help="Rounds customer price to nearest $5"
                 )
 
+                # Calculate and show client price (base + markup, before customization)
+                if base_price:
+                    product_subtotal_calc = base_price * new_quantity
+                    markup_amount_calc = product_subtotal_calc * (new_markup / 100)
+                    client_price_raw = product_subtotal_calc + markup_amount_calc
+                    client_price_per_unit_raw = client_price_raw / new_quantity
+
+                    # Apply rounding if enabled
+                    if new_round_to_five:
+                        client_price_per_unit = round_to_nearest_five(client_price_per_unit_raw, True)
+                    else:
+                        client_price_per_unit = client_price_per_unit_raw
+
+                    st.caption(f"Client price: ${client_price_per_unit:.2f}/unit (before customization)")
+
             # CUSTOMIZATION SECTION (if available)
             customization_info = product_data.get("Customization Info", "")
             if customization_info and customization_info.strip():
