@@ -1725,7 +1725,7 @@ with tab2:
                     st.write(f"**Description:** {item.get('custom_description', 'N/A')}")
                     st.write(f"**Quantity:** {item['quantity']} | **Unit Price:** ${item['total_per_unit']:.2f} | **Total:** ${item['product_total']:.2f}")
                 with col2:
-                    if st.button("🗑️ Remove", key=f"remove_custom_{idx}", type="secondary"):
+                    if st.button("Remove", key=f"remove_custom_{idx}", type="secondary"):
                         items_to_remove.append(idx)
                 continue
 
@@ -1781,7 +1781,7 @@ with tab2:
                 )
 
                 new_round_to_five = st.checkbox(
-                    "Round to nearest $5",
+                    "Round to nearest multiple of $5",
                     value=item.get('round_to_five', False),
                     key=f"prod_round_{idx}",
                     help="Rounds customer price to nearest $5"
@@ -1961,6 +1961,13 @@ with tab2:
                 breakdown_data.append(["**Subtotal**", "", f"**${subtotal_before_markup:.2f}**"])
                 breakdown_data.append([f"Your Markup ({new_markup:.0f}%)", f"${markup_amount/new_quantity:.2f}/unit", f"${markup_amount:.2f}"])
                 breakdown_data.append(["", "", ""])
+
+                # Show rounding note if applied
+                if new_round_to_five:
+                    total_per_unit_raw = product_total_raw / new_quantity
+                    breakdown_data.append(["Rounding to nearest $5", f"(${total_per_unit_raw:.2f} → ${total_per_unit:.2f})", ""])
+                    breakdown_data.append(["", "", ""])
+
                 breakdown_data.append(["**Customer Price**", f"**${total_per_unit:.2f}/unit**", f"**${product_total:.2f}**"])
 
                 breakdown_df = pd.DataFrame(breakdown_data, columns=["Item", "Per Unit", "Total"])
@@ -1980,7 +1987,7 @@ with tab2:
         st.write("---")
 
         # Clear order button
-        if st.button("🗑️ Clear Entire Order", type="secondary"):
+        if st.button("Clear Entire Order", type="secondary"):
             st.session_state.order_items = []
             st.rerun()
 
