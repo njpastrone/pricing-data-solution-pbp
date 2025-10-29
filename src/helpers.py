@@ -345,11 +345,11 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         >>> from src.pricing_engine import get_unit_price_new_system
         >>> order_item = convert_proposal_to_order(proposal_item, get_unit_price_new_system, calculate_product_tariff)
     """
-    product_data = proposal_item['product_data']
+    product_data = proposal_item.get('product_data', {})
 
     # Calculate pricing components (same as add_product logic)
-    quantity = proposal_item['quantity']
-    markup_percent = proposal_item['markup_percent']
+    quantity = proposal_item.get('quantity', 1)
+    markup_percent = proposal_item.get('markup_percent', 0)
 
     # Get base price for this quantity
     base_price_per_unit, tier_info, tier_num = get_unit_price_func(product_data, quantity)
@@ -360,8 +360,8 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
     customization_per_unit = 0.0
 
     if proposal_item.get('include_customization', False):
-        customization_setup_total = proposal_item['customization_setup_fee']
-        customization_per_unit = proposal_item['customization_per_unit']
+        customization_setup_total = proposal_item.get('customization_setup_fee', 0.0)
+        customization_per_unit = proposal_item.get('customization_per_unit', 0.0)
         customization_unit_total = customization_per_unit * quantity
 
     # Calculate product cost (base price × quantity)
@@ -384,9 +384,9 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
     # Build order item (matching structure from Tab 2 line 1606-1640)
     order_item = {
         # Product identification
-        'product_name': product_data['Product/Service'],
+        'product_name': product_data.get('Product/Service', 'Unknown Product'),
         'product_ref': product_data.get('Purchase Description', ''),
-        'partner': product_data['Partner'],
+        'partner': product_data.get('Partner', 'Unknown Partner'),
         'product_data_row': product_data,  # Store full product row for proposal generation
 
         # Quantity & pricing
