@@ -1841,10 +1841,15 @@ with tab2:
                     )
 
                     if new_apply_minimum:
+                        # Get stored minimum or default to max(100, current_quantity)
+                        stored_min = item.get('customization_minimum_qty', 0)
+                        default_min = max(100, new_quantity)
+                        display_min = stored_min if stored_min > 0 else default_min
+
                         new_custom_min_qty = st.number_input(
                             "Minimum Customization Quantity",
                             min_value=1,
-                            value=item.get('customization_minimum_qty', max(100, new_quantity)),
+                            value=display_min,
                             step=1,
                             key=f"prod_min_qty_{idx}"
                         )
