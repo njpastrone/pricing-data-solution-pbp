@@ -1624,7 +1624,6 @@ with tab2:
                 'product_data': product_data.to_dict(),
                 'quantity': 1,
                 'markup_percent': 100.0,
-                'round_to_five': False,
                 'include_customization': False,
                 'customization_setup_fee': float(default_setup_fee),
                 'customization_per_unit': float(default_per_unit),
@@ -1780,25 +1779,12 @@ with tab2:
                     help="Your profit margin. 100% = double the cost (2x)"
                 )
 
-                new_round_to_five = st.checkbox(
-                    "Round to nearest multiple of $5",
-                    value=item.get('round_to_five', False),
-                    key=f"prod_round_{idx}",
-                    help="Rounds customer price to nearest $5"
-                )
-
                 # Calculate and show client price (base + markup, before customization)
                 if base_price:
                     product_subtotal_calc = base_price * new_quantity
                     markup_amount_calc = product_subtotal_calc * (new_markup / 100)
                     client_price_raw = product_subtotal_calc + markup_amount_calc
-                    client_price_per_unit_raw = client_price_raw / new_quantity
-
-                    # Apply rounding if enabled
-                    if new_round_to_five:
-                        client_price_per_unit = round_to_nearest_five(client_price_per_unit_raw, True)
-                    else:
-                        client_price_per_unit = client_price_per_unit_raw
+                    client_price_per_unit = client_price_raw / new_quantity
 
                     st.caption(f"Client price: ${client_price_per_unit:.2f}/unit (before customization)")
 
@@ -1903,22 +1889,13 @@ with tab2:
                 product_subtotal = base_price * new_quantity
                 subtotal_before_markup = product_subtotal + customization_setup_total + customization_unit_total
                 markup_amount = product_subtotal * (new_markup / 100)
-                product_total_raw = subtotal_before_markup + markup_amount
-
-                # Apply rounding if enabled
-                if new_round_to_five:
-                    total_per_unit_raw = product_total_raw / new_quantity
-                    total_per_unit = round_to_nearest_five(total_per_unit_raw, True)
-                    product_total = total_per_unit * new_quantity
-                else:
-                    total_per_unit = product_total_raw / new_quantity
-                    product_total = product_total_raw
+                product_total = subtotal_before_markup + markup_amount
+                total_per_unit = product_total / new_quantity
 
                 # Update item in session state
                 st.session_state.order_items[idx].update({
                     'quantity': new_quantity,
                     'markup_percent': new_markup,
-                    'round_to_five': new_round_to_five,
                     'include_customization': new_include_custom,
                     'customization_setup_fee': new_setup_fee,
                     'customization_per_unit': new_perunit_cost,
@@ -1968,16 +1945,6 @@ with tab2:
                         perunit_display = f"${new_perunit_cost:.2f}/unit"
 
                     breakdown_data.append(["Customization Per-Unit", perunit_display, f"${customization_unit_total:.2f}"])
-
-                # Subtotal before rounding
-                breakdown_data.append(["", "", ""])
-                breakdown_data.append(["**Subtotal**", "", f"**${product_total_raw:.2f}**"])
-
-                # Show rounding note if applied
-                if new_round_to_five:
-                    total_per_unit_raw = product_total_raw / new_quantity
-                    breakdown_data.append(["", "", ""])
-                    breakdown_data.append(["Rounding to nearest $5", f"(${total_per_unit_raw:.2f} → ${total_per_unit:.2f})", ""])
 
                 # Final customer price
                 breakdown_data.append(["", "", ""])

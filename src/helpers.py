@@ -412,7 +412,6 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         'customization_unit_total': 0.0,
         'apply_custom_minimum': False,
         'customization_minimum_qty': 0,
-        'round_to_five': False,
 
         # Subtotals and totals
         'product_subtotal': product_cost_subtotal,  # Base price × qty
