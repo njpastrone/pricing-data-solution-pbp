@@ -1419,7 +1419,7 @@ with tab2:
     # ============================================================
     # CLIENT INFORMATION UI
     # ============================================================
-    st.header("1. Client & Order Information")
+    st.header("Client & Order Information")
 
     with st.expander("Client Details", expanded=False):
         st.markdown("Enter client information for invoices and purchase orders.")
@@ -1582,54 +1582,109 @@ with tab2:
     st.divider()
 
     # ============================================================
-    # PRODUCT CONFIGURATION (Sections 2-4 combined)
+    # PARTNER & PRODUCT SELECTION
     # ============================================================
-    st.header("2. Product Configuration")
-    st.caption("Select product, set pricing, and configure customization")
+    st.header("1. Partner & Product Selection")
+    st.caption("Add products to your order, then configure settings for each product below")
 
     # Create dropdowns for filtering
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([2, 1])
 
     with col1:
-        # Partner dropdown (using "Partner" column from Template sheet)
-        partners = sorted(df_template["Partner"].unique().tolist())
-        selected_partner = st.selectbox("Select Partner", partners)
+        col_partner, col_product = st.columns(2)
+
+        with col_partner:
+            # Partner dropdown (using "Partner" column from Template sheet)
+            partners = sorted(df_template["Partner"].unique().tolist())
+            selected_partner = st.selectbox("Select Partner", partners, key="add_partner_select")
+
+        with col_product:
+            # Filter products based on partner selection (using "Product/Service" column)
+            available_products = df_template[df_template["Partner"] == selected_partner]["Product/Service"].unique().tolist()
+            selected_product = st.selectbox("Select Product/Service", available_products, key="add_product_select")
 
     with col2:
-        # Filter products based on partner selection (using "Product/Service" column)
-        available_products = df_template[df_template["Partner"] == selected_partner]["Product/Service"].unique().tolist()
-        selected_product = st.selectbox("Select Product/Service", available_products)
+        st.write("")  # Spacing
+        st.write("")  # Spacing
+        if st.button("➕ Add to Order", type="primary", use_container_width=True):
+            # Get selected product details
+            product_data = df_template[
+                (df_template["Partner"] == selected_partner) &
+                (df_template["Product/Service"] == selected_product)
+            ].iloc[0]
 
-    # Get selected product details
-    product_data = df_template[
+            # Add product with defaults
+            new_item = {
+                'product_name': product_data.get('Product/Service', 'Unknown Product'),
+                'partner': product_data.get('Partner', 'Unknown Partner'),
+                'product_data': product_data.to_dict(),
+                'quantity': 1,
+                'markup_percent': 100.0,
+                'round_to_five': False,
+                'include_customization': False,
+                'customization_setup_fee': 0.0,
+                'customization_per_unit': 0.0,
+                'customization_minimum_qty': 0,
+                'apply_custom_minimum': False,
+                'include_tariff': False,
+                'is_custom': False
+            }
+
+            # Calculate pricing for this item (will be recalculated when edited)
+            base_price, tier_range, tier_column = get_unit_price_new_system(product_data, 1)
+
+            if base_price:
+                # Add calculated fields
+                new_item.update({
+                    'base_price': base_price,
+                    'tier_range': tier_range,
+                    'tier_column': tier_column,
+                    'product_ref': product_data.get('Partner Product SKU/REF', 'N/A'),
+                    'country_of_origin': product_data.get('Country of Origin', 'N/A'),
+                    'customization_description': product_data.get('Customization Info', ''),
+                    'product_subtotal': base_price * 1,
+                    'customization_setup_total': 0.0,
+                    'customization_unit_total': 0.0,
+                    'subtotal_before_markup': base_price * 1,
+                    'markup_amount': (base_price * 1) * (100.0 / 100),
+                    'product_total': (base_price * 1) + ((base_price * 1) * (100.0 / 100)),
+                    'total_per_unit': ((base_price * 1) + ((base_price * 1) * (100.0 / 100))) / 1,
+                    'tariff_rate_percent': 0.0,
+                    'tariff_amount': 0.0
+                })
+
+                st.session_state.order_items.append(new_item)
+                st.rerun()
+            else:
+                st.error("Could not determine pricing for this product")
+
+    # Show product details in expander
+    product_data_preview = df_template[
         (df_template["Partner"] == selected_partner) &
         (df_template["Product/Service"] == selected_product)
     ].iloc[0]
 
-    # Compact product summary (1 line)
-    origin = product_data.get("Country of Origin", "N/A")
-    has_tiers = product_data.get("Pricing Tiers (Y/N)", "N/A")
-    st.caption(f"Selected: {product_data['Product/Service']} | Partner: {product_data['Partner']} | Origin: {origin if origin else 'N/A'} | Tiers: {has_tiers}")
+    origin = product_data_preview.get("Country of Origin", "N/A")
+    has_tiers = product_data_preview.get("Pricing Tiers (Y/N)", "N/A")
 
-    # Detailed product info in expander (collapsed by default)
     with st.expander("Show Product Details"):
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown(f"**Partner:** {product_data['Partner']}")
-            st.markdown(f"**Product/Service:** {product_data['Product/Service']}")
+            st.markdown(f"**Partner:** {product_data_preview['Partner']}")
+            st.markdown(f"**Product/Service:** {product_data_preview['Product/Service']}")
         with col2:
             st.markdown(f"**Country of Origin:** {origin if origin else 'N/A'}")
             st.markdown(f"**Tiered Pricing:** {has_tiers}")
 
         # Show product description if available
-        description = product_data.get("Marketing Description", "")
+        description = product_data_preview.get("Marketing Description", "")
         if description and description.strip():
             st.markdown("---")
             st.markdown("**Marketing Description:**")
             st.write(description)
 
         # Show pricing tier info if applicable
-        tier_info = product_data.get("Pricing Tiers Info", "")
+        tier_info = product_data_preview.get("Pricing Tiers Info", "")
         if tier_info and tier_info.strip() and tier_info != "NA":
             st.markdown("---")
             st.markdown("**Pricing Tier Information:**")
@@ -1639,537 +1694,254 @@ with tab2:
             st.caption("Your order quantity will automatically match to the correct tier and price.")
 
     st.divider()
-    st.subheader("Quantity & Pricing")
-
-    col_qty, col_markup = st.columns(2)
-
-    with col_qty:
-        quantity = st.number_input(
-            "Quantity",
-            min_value=1,
-            value=1,
-            step=1,
-            key="input_quantity"
-        )
-
-        # Show tier being used
-        base_price_preview, tier_range_preview, tier_column_preview = get_unit_price_new_system(product_data, quantity)
-        if base_price_preview:
-            if tier_range_preview == "No Tiers":
-                st.caption(f"Flat pricing: ${base_price_preview:.2f} per unit")
-            else:
-                st.caption(f"Using pricing tier: {tier_range_preview} units | Base price: ${base_price_preview:.2f} per unit")
-
-    with col_markup:
-        markup_percent = st.number_input(
-            "Markup %",
-            min_value=0.0,
-            value=100.0,
-            step=5.0,
-            key="input_markup",
-            help="Your profit margin. 100% = double the cost (2x), 50% = 1.5x the cost, 200% = triple the cost (3x)"
-        )
-
-        # Rounding option
-        round_to_five = st.checkbox(
-            "Round to nearest multiple of $5",
-            value=False,
-            key="round_to_five_checkbox",
-            help="Rounds the customer price per unit to the nearest $5 (e.g., $17.50 becomes $20, $12.30 becomes $10)"
-        )
-
-    st.divider()
-
-    # 3.2 - Partner MSRP (Reference) - Optional, collapsed
-    with st.expander("Partner MSRP Comparison (Optional)"):
-        show_msrp = st.checkbox(
-            "Show Partner MSRP comparison",
-            value=False,
-            key="show_msrp_checkbox",
-            help="Display partner's suggested retail price for reference"
-        )
-
-        partner_msrp = 0.0
-        if show_msrp:
-            # Check if MSRP exists in spreadsheet
-            default_msrp = clean_price(product_data.get('Partner MSRP', '')) or 0.0
-
-            partner_msrp = st.number_input(
-                "Partner MSRP (per unit)",
-                min_value=0.0,
-                value=float(default_msrp),
-                step=1.0,
-                key="input_partner_msrp",
-                help="Optional - Partner's suggested retail price for reference"
-            )
-
-            st.caption("This is the partner's suggested retail price - for reference only")
-
-    # Calculate pricing breakdown (no customization yet)
-    if base_price_preview:
-        product_subtotal_preview = base_price_preview * quantity
-        markup_amount_preview = product_subtotal_preview * (markup_percent / 100)
-        customer_price_no_custom_raw = product_subtotal_preview + markup_amount_preview
-        customer_price_per_unit_raw = customer_price_no_custom_raw / quantity
-
-        # Apply rounding if enabled
-        customer_price_per_unit = round_to_nearest_five(customer_price_per_unit_raw, round_to_five)
-        customer_price_no_custom = customer_price_per_unit * quantity
-
-        # Compact preview (1 line instead of full table)
-        st.markdown(f"**Preview:** ${customer_price_no_custom:.2f} total ({quantity} units @ ${customer_price_per_unit:.2f}/unit)")
-        st.caption("Base product price before customization, tariffs, or shipping")
-
-        # Detailed breakdown in expander (collapsed by default)
-        with st.expander("Show Detailed Pricing Breakdown"):
-            breakdown_data = [
-                ["Base Cost (Partner)", f"${base_price_preview:.2f}/unit", f"${product_subtotal_preview:.2f} total"],
-                ["Your Markup ({:.0f}%)".format(markup_percent), f"${markup_amount_preview/quantity:.2f}/unit", f"${markup_amount_preview:.2f} total"],
-                ["", "", ""],
-                ["**Customer Price (No Custom)**", f"**${customer_price_per_unit:.2f}/unit**", f"**${customer_price_no_custom:.2f}**"]
-            ]
-
-            # Show rounding note if enabled
-            if round_to_five:
-                breakdown_data.append(["", "", ""])
-                breakdown_data.append(["Rounding Applied", f"(${customer_price_per_unit_raw:.2f} → ${customer_price_per_unit:.2f})", ""])
-
-            breakdown_df = pd.DataFrame(breakdown_data, columns=["Item", "Per Unit", "Total"])
-            st.table(breakdown_df)
-
-            # MSRP Comparison (if enabled) - moved inside expander
-            if show_msrp and partner_msrp > 0:
-                st.markdown("---")
-                st.markdown("**Compare to Partner MSRP:**")
-
-                msrp_diff = customer_price_per_unit - partner_msrp
-                msrp_diff_percent = (msrp_diff / partner_msrp * 100) if partner_msrp > 0 else 0
-
-                comparison_data = [
-                    ["Partner MSRP", f"${partner_msrp:.2f}/unit"],
-                    ["Your Price", f"${customer_price_per_unit:.2f}/unit"],
-                    ["Difference", f"${msrp_diff:.2f} ({msrp_diff_percent:+.1f}%)"]
-                ]
-
-                comparison_df = pd.DataFrame(comparison_data, columns=["Item", "Price"])
-                st.table(comparison_df)
-
-                if msrp_diff < 0:
-                    st.caption(f"Your price is {abs(msrp_diff_percent):.1f}% below Partner MSRP")
-                elif msrp_diff > 0:
-                    st.caption(f"Your price is {msrp_diff_percent:.1f}% above Partner MSRP")
-                else:
-                    st.caption("Your price matches Partner MSRP")
-
-    st.divider()
-    st.subheader("Customization (Optional)")
-
-    # Customization options
-    customization_info = product_data.get("Customization Info", "")
-    if customization_info and customization_info.strip():
-        st.caption(f"Available: {customization_info}")
-
-    include_customization = st.checkbox(
-        "Add customization to this product",
-        value=False,
-        key="input_customization",
-        help="Adds setup fee and per-unit customization cost (e.g., custom labels, branding, engraving)"
-    )
-
-    # Show editable customization cost fields when customization is enabled
-    if include_customization:
-        st.divider()
-        st.subheader("Customization Minimum Quantity")
-
-        apply_custom_minimum = st.checkbox(
-            "Apply minimum quantity for customization",
-            value=False,
-            key="apply_custom_minimum_checkbox",
-            help="Charge for a minimum quantity of customization units even if ordering fewer items"
-        )
-
-        customization_minimum_qty = 0
-        if apply_custom_minimum:
-            customization_minimum_qty = st.number_input(
-                "Minimum Customization Quantity",
-                min_value=1,
-                value=max(100, quantity),
-                step=1,
-                key="input_custom_minimum_qty",
-                help="Minimum number of units to charge for customization"
-            )
-
-            if customization_minimum_qty > quantity:
-                st.info(f"Customer will be charged for {customization_minimum_qty} customization units (ordering {quantity} product units)")
-            else:
-                st.caption(f"Minimum ({customization_minimum_qty}) is not higher than order quantity ({quantity}) - no effect")
-
-        st.divider()
-        st.markdown("##### Customization Costs")
-        st.caption("Default values are from the spreadsheet. You can override them if needed.")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            default_setup_fee = clean_price(product_data.get('Customization Setup Fee', '')) or 0
-            customization_setup_fee_input = st.number_input(
-                "Customization Setup Fee",
-                min_value=0.0,
-                value=float(default_setup_fee),
-                step=1.0,
-                key="input_setup_fee",
-                help="One-time setup fee for this customization"
-            )
-
-        with col2:
-            default_per_unit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0
-            customization_per_unit_input = st.number_input(
-                "Customization Cost per Unit",
-                min_value=0.0,
-                value=float(default_per_unit),
-                step=0.1,
-                key="input_per_unit",
-                help="Additional cost per unit for customization"
-            )
-
-        # Show customization cost summary
-        st.markdown("**Total Customization Cost:**")
-
-        # Determine effective quantity for customization charges
-        if apply_custom_minimum and customization_minimum_qty > quantity:
-            effective_custom_qty = customization_minimum_qty
-        else:
-            effective_custom_qty = quantity
-
-        customization_setup_total_preview = customization_setup_fee_input
-        customization_unit_total_preview = customization_per_unit_input * effective_custom_qty
-        total_customization_preview = customization_setup_total_preview + customization_unit_total_preview
-        per_unit_impact = total_customization_preview / quantity if quantity > 0 else 0
-
-        summary_data = [
-            ["Setup Fee", f"${customization_setup_total_preview:.2f} (one-time)"],
-            ["Per-Unit Cost", f"${customization_per_unit_input:.2f} x {effective_custom_qty} = ${customization_unit_total_preview:.2f}"],
-        ]
-
-        # Show note if minimum is applied
-        if apply_custom_minimum and customization_minimum_qty > quantity:
-            summary_data.append(["", ""])
-            summary_data.append(["Note", f"Charging for {customization_minimum_qty} units (minimum)"])
-
-        summary_data.extend([
-            ["", ""],
-            ["**Total**", f"**${total_customization_preview:.2f}**"],
-            ["**Per-Unit Impact**", f"**${per_unit_impact:.2f}/unit**"]
-        ])
-
-        summary_df = pd.DataFrame(summary_data, columns=["Item", "Amount"])
-        st.table(summary_df)
-    else:
-        customization_setup_fee_input = 0
-        customization_per_unit_input = 0
-        apply_custom_minimum = False
-        customization_minimum_qty = 0
-
-    st.markdown("<br>", unsafe_allow_html=True)
 
     # ============================================================
-    # PRODUCT PREVIEW & ADD TO ORDER
+    # CURRENT ORDER (with inline editing)
     # ============================================================
-    st.header("3. Add to Order")
-
-    # Get price for quantity using new system
-    base_price, tier_range, tier_column = get_unit_price_new_system(product_data, quantity)
-
-    if base_price is None:
-        st.error("No pricing available for this quantity. Please contact the partner.")
-        # DEBUG: Show available pricing data
-        with st.expander("Debug: Available Pricing Data"):
-            st.write(f"Pricing Tiers (Y/N): {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
-            st.write(f"Pricing Tiers Info: {product_data.get('Pricing Tiers Info', 'N/A')}")
-            st.write(f"PBP Cost (No Tiers): {product_data.get('PBP Cost (No Tiers)', 'N/A')}")
-            for i in range(1, 7):
-                col_name = f'PBP Cost: Tier {i}'
-                st.write(f"{col_name}: {product_data.get(col_name, 'N/A')}")
-        st.stop()
-
-    # Calculate customization costs - use user input values
-    customization_setup_fee = 0
-    customization_per_unit = 0
-
-    if include_customization:
-        customization_setup_fee = customization_setup_fee_input
-        customization_per_unit = customization_per_unit_input
-
-        # Apply minimum if set
-        if apply_custom_minimum and customization_minimum_qty > quantity:
-            effective_custom_qty = customization_minimum_qty
-        else:
-            effective_custom_qty = quantity
-    else:
-        effective_custom_qty = quantity
-
-    # Calculate product totals (without shipping/tariff)
-    product_subtotal = base_price * quantity
-    customization_setup_total = customization_setup_fee
-    customization_unit_total = customization_per_unit * effective_custom_qty
-    subtotal_before_markup = product_subtotal + customization_setup_total + customization_unit_total
-    markup_amount = product_subtotal * (markup_percent / 100)
-    product_total = subtotal_before_markup + markup_amount
-
-    # Per-unit for this product
-    total_per_unit = product_total / quantity
-
-    # Display product summary
-    st.success(f"Product Total: ${product_total:.2f}  ({quantity} units @ ${total_per_unit:.2f} each)")
-
-    # Add to Order button
-    button_label = "Update Product in Order" if st.session_state.edit_index is not None else "Add to Order"
-    if st.button(button_label, type="primary", use_container_width=True):
-        # Parse tariff data from product
-        tariff_estimate_raw = product_data.get('Tariff Estimate (if available)', '')
-        default_tariff_rate = parse_tariff_rate(tariff_estimate_raw)
-
-        # Calculate tariff base (product + markup, no customization)
-        tariff_base = product_subtotal + markup_amount
-        tariff_amount = calculate_product_tariff(tariff_base, default_tariff_rate)
-
-        # Create order item
-        order_item = {
-            'product_name': product_data["Product/Service"],
-            'product_ref': product_data.get("Purchase Description", ""),
-            'partner': product_data["Partner"],
-            'minimum_qty': "",  # Not in new structure
-            'quantity': quantity,
-            'markup_percent': markup_percent,
-            'include_customization': include_customization,
-            'customization_description': customization_info if customization_info else "Custom work",
-            'base_price': base_price,
-            'tier_range': tier_range,
-            'tier_column': tier_column,
-            'customization_setup_fee': customization_setup_fee,
-            'customization_per_unit': customization_per_unit,
-            'product_subtotal': product_subtotal,
-            'customization_setup_total': customization_setup_total,
-            'customization_unit_total': customization_unit_total,
-            'subtotal_before_markup': subtotal_before_markup,
-            'markup_amount': markup_amount,
-            'product_total': product_total,
-            'total_per_unit': total_per_unit,
-            'product_data_row': product_data,  # Store full product row for proposal generation
-            'country_of_origin': product_data.get("Country of Origin", ""),
-            'tariff_rate_percent': default_tariff_rate,
-            'tariff_info': product_data.get("Tariff Info", ""),
-            'tariff_base': tariff_base,
-            'tariff_amount': tariff_amount,
-            'partner_msrp_per_unit': partner_msrp if show_msrp else 0.0,
-            'show_msrp_comparison': show_msrp,
-            'round_to_five': round_to_five,
-            'apply_custom_minimum': apply_custom_minimum if include_customization else False,
-            'customization_minimum_qty': customization_minimum_qty if (include_customization and apply_custom_minimum) else 0,
-            'effective_custom_qty': effective_custom_qty if include_customization else 0,
-            # NEW FIELDS for invoice/PO template
-            'product_specs': product_data.get("Product Description", "").strip() or f"{product_data.get('Product/Service', '')} - {tier_range}",
-            'partner_in_hands_date': None,  # To be set in UI
-            'partner_cost_per_unit': base_price,  # Partner cost before markup
-            'cost_verified': 'Pending',  # Default to Pending
-            'sell_price_total': product_total,  # Total sell price to client
-            'sell_price_per_unit': total_per_unit  # Per-unit sell price to client
-        }
-
-        # Add or update item
-        if st.session_state.edit_index is not None:
-            st.session_state.order_items[st.session_state.edit_index] = order_item
-            st.session_state.edit_index = None
-            st.success("Product updated in order!")
-        else:
-            st.session_state.order_items.append(order_item)
-            st.success("Product added to order!")
-
-        st.rerun()
-
-    # Show detailed breakdown in expander
-    with st.expander("Detailed Price Breakdown"):
-        breakdown_items = [
-            ["Base Price (tier: " + tier_range + ")", f"${base_price:.2f}", f"${product_subtotal:.2f}"]
-        ]
-
-        if include_customization:
-            if customization_setup_total > 0:
-                breakdown_items.append(["Customization Setup Fee", f"${customization_setup_total / quantity:.2f}", f"${customization_setup_total:.2f}"])
-            if customization_unit_total > 0:
-                if apply_custom_minimum and customization_minimum_qty > quantity:
-                    breakdown_items.append([f"Customization per Unit ({effective_custom_qty} units @ ${customization_per_unit:.2f}) [minimum applied]", f"${customization_per_unit:.2f}", f"${customization_unit_total:.2f}"])
-                else:
-                    breakdown_items.append([f"Customization per Unit ({quantity} @ ${customization_per_unit:.2f})", f"${customization_per_unit:.2f}", f"${customization_unit_total:.2f}"])
-
-        breakdown_items.append(["**Subtotal**", f"**${subtotal_before_markup / quantity:.2f}**", f"**${subtotal_before_markup:.2f}**"])
-        breakdown_items.append([f"Markup ({markup_percent}% on product only)", f"${markup_amount / quantity:.2f}", f"${markup_amount:.2f}"])
-        breakdown_items.append(["**Product Total**", f"**${total_per_unit:.2f}**", f"**${product_total:.2f}**"])
-
-        breakdown_df = pd.DataFrame(breakdown_items, columns=["Item", "Per Unit", "Total"])
-        st.table(breakdown_df)
-
-    # ============================================================
-    # CURRENT ORDER SUMMARY
-    # ============================================================
-    st.divider()
-    st.header("4. Current Order")
+    st.header("2. Current Order")
 
     if len(st.session_state.order_items) == 0:
-        st.info("""
-        **Your order is empty.**
-
-        Select a product from Section 1, customize the details in Section 2,
-        then click "Add to Order" in Section 3 to add items here.
-        """)
+        st.info("No products in order yet. Add products above to get started.")
     else:
-        st.success(f"{len(st.session_state.order_items)} product(s) in order")
+        st.caption("Edit settings for each product below. Changes update totals in real-time.")
+        st.write("")
 
-        # Display order items
+        # Iterate through order items and display editable cards
+        items_to_remove = []
+
         for idx, item in enumerate(st.session_state.order_items):
-            # Calculate what will show as separate line items in deliverables
-            has_customization = item.get('include_customization', False)
-            customization_setup = item.get('customization_setup_total', 0) if has_customization else 0
-            customization_unit = item.get('customization_unit_total', 0) if has_customization else 0
+            # Skip custom items for now (they have different structure)
+            if item.get('is_custom', False):
+                st.write("---")
+                st.subheader(f"{item['product_name']}")
+                st.caption(f"Custom Line Item")
 
-            # Count line items for display
-            line_item_count = 1  # Base product
-            if customization_setup > 0:
-                line_item_count += 1
-            if customization_unit > 0:
-                line_item_count += 1
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.write(f"**Description:** {item.get('custom_description', 'N/A')}")
+                    st.write(f"**Quantity:** {item['quantity']} | **Unit Price:** ${item['total_per_unit']:.2f} | **Total:** ${item['product_total']:.2f}")
+                with col2:
+                    if st.button("🗑️ Remove", key=f"remove_custom_{idx}", type="secondary"):
+                        items_to_remove.append(idx)
+                continue
 
-            line_count_text = f" ({line_item_count} line items)" if has_customization and line_item_count > 1 else ""
+            # Regular product card
+            st.write("---")
 
-            with st.expander(f"{item['product_name']}  -  {item['quantity']} units @ ${item['total_per_unit']:.2f} each  =  ${item['product_total']:.2f}{line_count_text}"):
-                # Check if custom item
-                if item.get('is_custom', False):
-                    # Custom item display
-                    col1, col2 = st.columns([3, 1])
+            # Header with product name and remove button
+            col_header, col_remove = st.columns([5, 1])
+            with col_header:
+                st.subheader(f"{item['product_name']}")
+                st.caption(f"Partner: {item['partner']} | Origin: {item.get('country_of_origin', 'N/A')}")
+            with col_remove:
+                if st.button("🗑️ Remove", key=f"remove_{idx}", type="secondary"):
+                    items_to_remove.append(idx)
 
-                    with col1:
-                        st.write(f"**Type:** Custom Line Item")
-                        st.write(f"**Description:** {item.get('custom_description', 'N/A')}")
-                        st.write(f"**Quantity:** {item['quantity']}")
-                        st.write(f"**Unit Price:** ${item['total_per_unit']:.2f}")
-                        st.write(f"**Total Price:** ${item['product_total']:.2f}")
+            # Get product data for recalculations
+            product_data = item['product_data']
 
-                    with col2:
-                        if st.button("Remove", key=f"remove_custom_{idx}"):
-                            st.session_state.order_items.pop(idx)
-                            st.rerun()
+            # QUANTITY & PRICING SECTION
+            st.markdown("##### Quantity & Pricing")
 
+            col_qty, col_markup = st.columns(2)
+
+            with col_qty:
+                new_quantity = st.number_input(
+                    "Quantity",
+                    min_value=1,
+                    value=item['quantity'],
+                    step=1,
+                    key=f"qty_{idx}",
+                    help="Number of units to order"
+                )
+
+                # Highlight if quantity is 1 (warning)
+                if new_quantity == 1:
+                    st.warning("⚠️ Quantity is 1 - did you mean to order more?")
+
+                # Show tier info
+                base_price, tier_range, tier_column = get_unit_price_new_system(product_data, new_quantity)
+                if tier_range == "No Tiers":
+                    st.caption(f"Flat pricing: ${base_price:.2f} per unit")
                 else:
-                    # Regular product display
-                    col1, col2, col3 = st.columns([2, 1, 1])
+                    st.caption(f"Using tier: {tier_range} units | ${base_price:.2f}/unit")
 
-                    with col1:
-                        st.write(f"**Partner:** {item['partner']}")
-                        st.write(f"**Product Ref:** {item['product_ref']}")
-                        st.write(f"**Quantity:** {item['quantity']}")
-                        st.write(f"**Pricing Tier:** {item['tier_range']}")
-                        st.write(f"**Base Price:** ${item['base_price']:.2f} per unit")
-                        st.write(f"**Markup:** {item['markup_percent']:.1f}%")
-                        if has_customization:
-                            customization_desc = item.get('customization_description', 'Custom work')
-                            st.write(f"**Customization:** {customization_desc}")
+            with col_markup:
+                new_markup = st.number_input(
+                    "Markup %",
+                    min_value=0.0,
+                    value=item['markup_percent'],
+                    step=5.0,
+                    key=f"markup_{idx}",
+                    help="Your profit margin. 100% = double the cost (2x)"
+                )
 
-                            # Show minimum if applied
-                            if item.get('apply_custom_minimum', False):
-                                custom_min = item.get('customization_minimum_qty', 0)
-                                if custom_min > item['quantity']:
-                                    st.write(f"**Customization Minimum:** {custom_min} units (applied)")
+                new_round_to_five = st.checkbox(
+                    "Round to nearest $5",
+                    value=item.get('round_to_five', False),
+                    key=f"round_{idx}",
+                    help="Rounds customer price to nearest $5"
+                )
 
-                    with col2:
-                        if st.button("✏️ Edit", key=f"edit_product_{idx}"):
-                            st.session_state.edit_index = idx
-                            st.rerun()
+            # CUSTOMIZATION SECTION (if available)
+            customization_info = product_data.get("Customization Info", "")
+            if customization_info and customization_info.strip():
+                st.markdown("##### Customization (Optional)")
+                st.caption(f"Available: {customization_info}")
 
-                    with col3:
-                        if st.button("Remove", key=f"remove_product_{idx}"):
-                            st.session_state.order_items.pop(idx)
-                            st.rerun()
+                new_include_custom = st.checkbox(
+                    "Include Customization",
+                    value=item.get('include_customization', False),
+                    key=f"custom_{idx}"
+                )
 
-                    # Show line item breakdown - how this will appear in invoices/proposals
-                    if has_customization and (customization_setup > 0 or customization_unit > 0):
-                        st.write("**Line Items (as they will appear in deliverables):**")
+                if new_include_custom:
+                    col_setup, col_perunit = st.columns(2)
 
-                        # Calculate base product price (without customization)
-                        base_product_only = item['product_subtotal'] + item['markup_amount']
+                    with col_setup:
+                        default_setup = clean_price(product_data.get('Customization Setup Fee', '')) or 0
+                        new_setup_fee = st.number_input(
+                            "Setup Fee",
+                            min_value=0.0,
+                            value=item.get('customization_setup_fee', float(default_setup)),
+                            step=1.0,
+                            key=f"setup_{idx}"
+                        )
 
-                        line_items_display = [
-                            [f"1. {item['product_name']}", item['quantity'], f"${base_product_only / item['quantity']:.2f}", f"${base_product_only:.2f}"]
-                        ]
+                    with col_perunit:
+                        default_perunit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0
+                        new_perunit_cost = st.number_input(
+                            "Per-Unit Cost",
+                            min_value=0.0,
+                            value=item.get('customization_per_unit', float(default_perunit)),
+                            step=0.1,
+                            key=f"perunit_{idx}"
+                        )
 
-                        line_num = 2
-                        if customization_setup > 0:
-                            customization_desc = item.get('customization_description', 'Custom work')
-                            line_items_display.append([f"{line_num}. Setup Fee: {customization_desc}", 1, f"${customization_setup:.2f}", f"${customization_setup:.2f}"])
-                            line_num += 1
+                    # Customization minimum
+                    new_apply_minimum = st.checkbox(
+                        "Apply minimum quantity for customization",
+                        value=item.get('apply_custom_minimum', False),
+                        key=f"apply_min_{idx}",
+                        help="Charge for minimum units even if ordering fewer"
+                    )
 
-                        if customization_unit > 0:
-                            customization_desc = item.get('customization_description', 'Custom work')
-                            line_items_display.append([f"{line_num}. Customization: {customization_desc}", item['quantity'], f"${customization_unit / item['quantity']:.2f}", f"${customization_unit:.2f}"])
-                            line_num += 1
+                    if new_apply_minimum:
+                        new_custom_min_qty = st.number_input(
+                            "Minimum Customization Quantity",
+                            min_value=1,
+                            value=item.get('customization_minimum_qty', max(100, new_quantity)),
+                            step=1,
+                            key=f"min_qty_{idx}"
+                        )
 
-                        # Add tariff line item if applicable
-                        tariff_amount = item.get('tariff_amount', 0)
-                        if tariff_amount > 0:
-                            country = item.get('country_of_origin', 'Unknown')
-                            tariff_rate = item.get('tariff_rate_percent', 0)
-                            line_items_display.append([
-                                f"{line_num}. Tariff ({tariff_rate}% - {country})",
-                                1,
-                                f"${tariff_amount:.2f}",
-                                f"${tariff_amount:.2f}"
-                            ])
-
-                        line_items_display.append(["**TOTAL**", "", "", f"**${item['product_total']:.2f}**"])
-
-                        line_items_df = pd.DataFrame(line_items_display, columns=["Item", "Qty", "Per Unit", "Total"])
-                        st.table(line_items_df)
+                        if new_custom_min_qty > new_quantity:
+                            st.info(f"Charging for {new_custom_min_qty} customization units (ordering {new_quantity} product units)")
                     else:
-                        st.write("**Line Item:**")
-                        simple_display = pd.DataFrame([
-                            {
-                                "Item": item['product_name'],
-                                "Qty": item['quantity'],
-                                "Per Unit": f"${item['total_per_unit']:.2f}",
-                                "Total": f"${item['product_total']:.2f}"
-                            }
-                        ])
-                        st.table(simple_display)
+                        new_custom_min_qty = 0
+                else:
+                    new_setup_fee = 0.0
+                    new_perunit_cost = 0.0
+                    new_apply_minimum = False
+                    new_custom_min_qty = 0
+            else:
+                new_include_custom = False
+                new_setup_fee = 0.0
+                new_perunit_cost = 0.0
+                new_apply_minimum = False
+                new_custom_min_qty = 0
 
-                    # Show detailed cost breakdown with toggle
-                    show_breakdown = st.checkbox("Show detailed cost breakdown", key=f"breakdown_{idx}")
-                    if show_breakdown:
-                        breakdown_items = [
-                            ["Base Price", f"${item['base_price']:.2f}", f"${item['product_subtotal']:.2f}"]
-                        ]
+            # RECALCULATE PRICING
+            # Get base price for new quantity
+            base_price, tier_range, tier_column = get_unit_price_new_system(product_data, new_quantity)
 
-                        if customization_setup > 0:
-                            breakdown_items.append(["Customization Setup Fee", f"${customization_setup / item['quantity']:.2f}", f"${customization_setup:.2f}"])
-                        if customization_unit > 0:
-                            breakdown_items.append(["Customization per Unit", f"${customization_unit / item['quantity']:.2f}", f"${customization_unit:.2f}"])
+            if base_price:
+                # Calculate customization costs
+                if new_include_custom:
+                    effective_custom_qty = new_custom_min_qty if (new_apply_minimum and new_custom_min_qty > new_quantity) else new_quantity
+                    customization_setup_total = new_setup_fee
+                    customization_unit_total = new_perunit_cost * effective_custom_qty
+                else:
+                    customization_setup_total = 0.0
+                    customization_unit_total = 0.0
 
-                        breakdown_items.append(["**Subtotal**", f"**${item['subtotal_before_markup'] / item['quantity']:.2f}**", f"**${item['subtotal_before_markup']:.2f}**"])
-                        breakdown_items.append([f"Markup ({item['markup_percent']:.1f}%)", f"${item['markup_amount'] / item['quantity']:.2f}", f"${item['markup_amount']:.2f}"])
-                        breakdown_items.append(["**Product Total**", f"**${item['total_per_unit']:.2f}**", f"**${item['product_total']:.2f}**"])
+                # Calculate totals
+                product_subtotal = base_price * new_quantity
+                subtotal_before_markup = product_subtotal + customization_setup_total + customization_unit_total
+                markup_amount = product_subtotal * (new_markup / 100)
+                product_total_raw = subtotal_before_markup + markup_amount
 
-                        breakdown_df = pd.DataFrame(breakdown_items, columns=["Item", "Per Unit", "Total"])
-                        st.table(breakdown_df)
+                # Apply rounding if enabled
+                if new_round_to_five:
+                    total_per_unit_raw = product_total_raw / new_quantity
+                    total_per_unit = round_to_nearest_five(total_per_unit_raw, True)
+                    product_total = total_per_unit * new_quantity
+                else:
+                    total_per_unit = product_total_raw / new_quantity
+                    product_total = product_total_raw
+
+                # Update item in session state
+                st.session_state.order_items[idx].update({
+                    'quantity': new_quantity,
+                    'markup_percent': new_markup,
+                    'round_to_five': new_round_to_five,
+                    'include_customization': new_include_custom,
+                    'customization_setup_fee': new_setup_fee,
+                    'customization_per_unit': new_perunit_cost,
+                    'apply_custom_minimum': new_apply_minimum,
+                    'customization_minimum_qty': new_custom_min_qty,
+                    'base_price': base_price,
+                    'tier_range': tier_range,
+                    'tier_column': tier_column,
+                    'product_subtotal': product_subtotal,
+                    'customization_setup_total': customization_setup_total,
+                    'customization_unit_total': customization_unit_total,
+                    'subtotal_before_markup': subtotal_before_markup,
+                    'markup_amount': markup_amount,
+                    'product_total': product_total,
+                    'total_per_unit': total_per_unit
+                })
+
+                # PRICING BREAKDOWN DISPLAY
+                st.markdown("##### Pricing Breakdown")
+
+                breakdown_data = []
+                breakdown_data.append(["Base Cost", f"${base_price:.2f}/unit", f"${product_subtotal:.2f}"])
+
+                if customization_setup_total > 0:
+                    breakdown_data.append(["Customization Setup", "one-time", f"${customization_setup_total:.2f}"])
+
+                if customization_unit_total > 0:
+                    breakdown_data.append(["Customization Per-Unit", f"${new_perunit_cost:.2f}/unit", f"${customization_unit_total:.2f}"])
+
+                breakdown_data.append(["", "", ""])
+                breakdown_data.append(["**Subtotal**", "", f"**${subtotal_before_markup:.2f}**"])
+                breakdown_data.append([f"Your Markup ({new_markup:.0f}%)", f"${markup_amount/new_quantity:.2f}/unit", f"${markup_amount:.2f}"])
+                breakdown_data.append(["", "", ""])
+                breakdown_data.append(["**Customer Price**", f"**${total_per_unit:.2f}/unit**", f"**${product_total:.2f}**"])
+
+                breakdown_df = pd.DataFrame(breakdown_data, columns=["Item", "Per Unit", "Total"])
+                st.table(breakdown_df)
+
+        # Remove items marked for deletion
+        for idx in sorted(items_to_remove, reverse=True):
+            st.session_state.order_items.pop(idx)
+
+        if items_to_remove:
+            st.rerun()
+
+        st.write("---")
 
         # Clear order button
-        if st.button("Clear Entire Order", type="secondary"):
+        if st.button("🗑️ Clear Entire Order", type="secondary"):
             st.session_state.order_items = []
-            st.session_state.edit_index = None
             st.rerun()
 
     # ============================================================
     # ORDER SETTINGS
     # ============================================================
     st.divider()
-    st.header("5. Order Settings")
+    st.header("3. Order Settings")
 
     if len(st.session_state.order_items) == 0:
         st.caption("Add products to your order first, then configure order settings here.")
@@ -2428,7 +2200,7 @@ with tab2:
     # ORDER NOTES
     # ============================================================
     st.divider()
-    st.header("5.5. Order Notes")
+    st.header("4. Order Notes")
 
     st.markdown("Add any specific details for this order (kitting specs, client requests, artwork files, etc.)")
 
@@ -2481,7 +2253,7 @@ with tab2:
     # TOTAL ORDER CALCULATION
     # ============================================================
     st.divider()
-    st.header("6. Order Summary")
+    st.header("5. Order Summary")
 
     if len(st.session_state.order_items) == 0:
         st.caption("Add products to your order to see the total quote calculation.")

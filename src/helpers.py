@@ -331,7 +331,13 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
     Convert a proposal item from Tab 1 to an order item for Tab 2.
 
     Proposal items have different structure than order items, so we need to
-    transform the data while preserving all settings.
+    transform the data while preserving ONLY core settings:
+    - Product selection
+    - Quantity
+    - Markup %
+
+    All other settings (customization, rounding, etc.) are reset to defaults
+    so they can be configured fresh in the order.
 
     Args:
         proposal_item (dict): Item from st.session_state.proposal_products
@@ -347,22 +353,17 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
     """
     product_data = proposal_item.get('product_data', {})
 
-    # Calculate pricing components (same as add_product logic)
+    # PRESERVE: Quantity and markup from proposal
     quantity = proposal_item.get('quantity', 1)
-    markup_percent = proposal_item.get('markup_percent', 0)
+    markup_percent = proposal_item.get('markup_percent', 100.0)
 
     # Get base price for this quantity
     base_price_per_unit, tier_info, tier_num = get_unit_price_func(product_data, quantity)
 
-    # Calculate customization costs
+    # RESET: Customization settings to defaults (user will configure in order)
     customization_setup_total = 0.0
     customization_unit_total = 0.0
     customization_per_unit = 0.0
-
-    if proposal_item.get('include_customization', False):
-        customization_setup_total = proposal_item.get('customization_setup_fee', 0.0)
-        customization_per_unit = proposal_item.get('customization_per_unit', 0.0)
-        customization_unit_total = customization_per_unit * quantity
 
     # Calculate product cost (base price × quantity)
     product_cost_subtotal = base_price_per_unit * quantity
@@ -387,7 +388,9 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         'product_name': product_data.get('Product/Service', 'Unknown Product'),
         'product_ref': product_data.get('Purchase Description', ''),
         'partner': product_data.get('Partner', 'Unknown Partner'),
-        'product_data_row': product_data,  # Store full product row for proposal generation
+        'product_data': product_data,  # Store full product row for inline editing
+        'product_data_row': product_data,  # Keep for backward compatibility
+        'is_custom': False,  # Regular product (not custom line item)
 
         # Quantity & pricing
         'quantity': quantity,
@@ -399,13 +402,16 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         'markup_percent': markup_percent,
         'markup_amount': markup_amount,
 
-        # Customization
-        'include_customization': proposal_item.get('include_customization', False),
-        'customization_description': proposal_item.get('customization_description', 'Custom branding'),
-        'customization_setup_fee': proposal_item.get('customization_setup_fee', 0.0),
-        'customization_per_unit': customization_per_unit,
-        'customization_setup_total': customization_setup_total,
-        'customization_unit_total': customization_unit_total,
+        # Customization (RESET to defaults - user will configure in order)
+        'include_customization': False,
+        'customization_description': product_data.get('Customization Info', ''),
+        'customization_setup_fee': 0.0,
+        'customization_per_unit': 0.0,
+        'customization_setup_total': 0.0,
+        'customization_unit_total': 0.0,
+        'apply_custom_minimum': False,
+        'customization_minimum_qty': 0,
+        'round_to_five': False,
 
         # Subtotals and totals
         'product_subtotal': product_cost_subtotal,  # Base price × qty

@@ -4,6 +4,53 @@ All notable changes to the Peace by Piece International Pricing App are document
 
 ---
 
+## [2.4] - Tab 2 Restructure: Edit-After-Add Pattern (October 2025)
+
+### Changed
+- **Complete Tab 2 Redesign:** Restructured entire order workflow following "add first, configure after" pattern
+- **Section Flow:** New logical progression:
+  1. Partner & Product Selection (simplified one-click add)
+  2. Current Order (inline editing with always-visible settings)
+  3. Order Settings (shipping, discounts, payment)
+  4. Order Notes (5 categories)
+  5. Order Summary (final review)
+- **Product Addition:** Simplified to dropdown + "Add to Order" button with sensible defaults
+  - Default quantity: 1 (with visual warning to encourage editing)
+  - Default markup: 100%
+  - Customization: disabled by default
+- **Import from Proposals:** Now preserves ONLY quantity and markup (customization reset for fresh configuration)
+
+### Added
+- **Inline Product Editing:** All product settings always visible in Current Order section
+  - Quantity & Pricing (side-by-side columns)
+  - Customization options (if available for product)
+  - Customization minimum quantity
+  - Real-time pricing breakdown table
+- **Quantity Warning:** Visual alert (warning color) when quantity=1 to prevent accidental single-unit orders
+- **Real-time Calculation Updates:** Instant recalculation as user edits any field
+- **Product Cards:** Each product displayed as self-contained card with all settings and pricing
+- **Design Documentation:** Created TAB2_RESTRUCTURE_PLAN.md with comprehensive implementation plan
+
+### Removed
+- **Complex Pre-Add Configuration:** No longer need to configure quantity, markup, and customization before adding products
+- **Edit Mode UI:** Removed separate edit workflow - all editing is now inline
+- **Hidden Settings:** All product configuration now visible (no expand/collapse for core settings)
+
+### Improved
+- **User Experience:** Familiar "shopping cart" pattern (add first, configure after)
+- **Workflow Clarity:** Less confusion about when to configure vs when to add
+- **Visual Scanning:** Easier to see all products and their settings at once
+- **Fewer Clicks:** Faster to add multiple products, then configure each as needed
+- **Mental Model:** Matches e-commerce expectations (add to cart, then review/edit)
+
+### Technical
+- **Updated `convert_proposal_to_order()` function:** Now resets customization to defaults (only preserves quantity & markup)
+- **Added `product_data` field:** Required for inline editing to access product metadata
+- **Removed duplicate code:** Consolidated old "Product Configuration" and "Add to Order" sections
+- **Fixed section numbering:** Clean 1-5 progression without gaps
+
+---
+
 ## [2.3] - Tab Transition UX & Critical Bug Fixes (October 2025)
 
 ### Added

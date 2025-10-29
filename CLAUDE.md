@@ -78,8 +78,8 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 - **Authentication:** Google Cloud service account
 - **Pricing Model:** Flexible tiered or flat-rate pricing per product
 - **Workflow:**
-  1. **Tab 1 (Proposals):** Browse products → Configure proposal → Download CSV
-  2. **Tab 2 (Orders):** Import from proposal OR add products manually → Collect client info → Configure order settings
+  1. **Tab 1 (Proposals):** Browse products → Configure proposal → Download CSV/HTML client order form
+  2. **Tab 2 (Orders):** Add products (import OR manual) → Edit each product inline (quantity, markup, customization) → Configure order settings → Collect client info
   3. **Tab 3 (Execution):** Review/edit order → Generate invoice & PO → Download for bookkeeping
 
 ## Current Features
@@ -100,16 +100,20 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 - **Terms & Conditions:** Customizable terms loaded from config file
 
 ### Tab 2: Order & Client Info (main workflow)
-- **Proposal-to-Order Connection:** Import products from Tab 1 proposals
-- **Multi-Partner Support:** Select from multiple vendors/suppliers
+- **Simplified Product Addition:** One-click add from dropdown (defaults: qty=1, markup=100%)
+- **Proposal-to-Order Import:** Import all or individual products from Tab 1 (preserves quantity & markup only)
+- **Inline Product Editing:** Always-visible settings for each product (no expand/collapse)
+- **Real-time Pricing Updates:** Instant recalculation as you edit quantity, markup, or customization
+- **Quantity Warning:** Visual alert when quantity=1 to prevent accidental single-unit orders
 - **Flexible Pricing:** Both tiered and flat-rate products supported
 - **Dynamic Tier Parsing:** Tier ranges defined in data (not hardcoded)
-- **Customization Options:** Setup fees + per-unit costs for custom branding
-- **Smart Calculations:** Markup applies to product price only
+- **Customization Options:** Setup fees + per-unit costs with optional minimum quantities
+- **Smart Calculations:** Markup applies to product price only (not customization)
 - **Discount Options:** NGO preset (5%) + custom discounts
-- **Marketing Rounding:** Charm pricing ($60 → $59)
+- **Marketing Rounding:** Round to nearest $5 option
 - **Custom Line Items:** Add unique services/customizations
 - **Order Notes:** 5 categories (kitting, client requests, samples, artwork, general)
+- **Section Flow:** 1. Add Products → 2. Configure Each Product → 3. Order Settings → 4. Notes → 5. Summary
 
 ### Tab 3: Execution & Accounting
 - **Order Validation:** Completeness check with warnings
@@ -173,15 +177,18 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 2.3 - Tab Transition UX & Critical Bug Fixes
+**Version:** 2.4 - Tab 2 Restructure: Edit-After-Add Pattern
 
 **Last Updated:** 2025-10-29
 
 **Recent Improvements:**
-- ✅ **HTML Client Order Form:** Professional, email-ready form with light/dark mode support
-- ✅ **Tab Transition UX:** Clear guidance, import all button, success banners
-- ✅ **Critical Bug Fixes:** All KeyError and duplicate element key issues resolved
-- ✅ **Data Safety:** Comprehensive safe dictionary access throughout codebase
+- ✅ **Tab 2 Restructure:** Complete redesign following "add first, configure after" pattern
+- ✅ **Simplified Product Addition:** One-click add with sensible defaults (qty=1, markup=100%)
+- ✅ **Inline Editing:** All product settings always visible in Current Order section
+- ✅ **Real-time Pricing:** Instant calculation updates as you edit quantity, markup, customization
+- ✅ **Quantity Warning:** Visual warning when quantity=1 to prevent accidental single-unit orders
+- ✅ **Streamlined Import:** Import from proposals preserves only quantity and markup (customization reset)
+- ✅ **Cleaner Navigation:** Logical section flow (1. Add Products → 2. Configure → 3. Settings → 4. Notes → 5. Summary)
 
 **Features Implemented:**
 - ✅ **3-Tab Workflow:** Proposals → Order & Client Info → Execution & Accounting
