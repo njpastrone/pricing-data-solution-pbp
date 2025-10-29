@@ -1734,7 +1734,7 @@ with tab2:
                 st.subheader(f"{item['product_name']}")
                 st.caption(f"Partner: {item['partner']} | Origin: {item.get('country_of_origin', 'N/A')}")
             with col_remove:
-                if st.button("🗑️ Remove", key=f"remove_{idx}", type="secondary"):
+                if st.button("🗑️ Remove", key=f"remove_product_{idx}", type="secondary"):
                     items_to_remove.append(idx)
 
             # Get product data for recalculations
@@ -1751,7 +1751,7 @@ with tab2:
                     min_value=1,
                     value=item['quantity'],
                     step=1,
-                    key=f"qty_{idx}",
+                    key=f"prod_qty_{idx}",
                     help="Number of units to order"
                 )
 
@@ -1772,14 +1772,14 @@ with tab2:
                     min_value=0.0,
                     value=item['markup_percent'],
                     step=5.0,
-                    key=f"markup_{idx}",
+                    key=f"prod_markup_{idx}",
                     help="Your profit margin. 100% = double the cost (2x)"
                 )
 
                 new_round_to_five = st.checkbox(
                     "Round to nearest $5",
                     value=item.get('round_to_five', False),
-                    key=f"round_{idx}",
+                    key=f"prod_round_{idx}",
                     help="Rounds customer price to nearest $5"
                 )
 
@@ -1792,7 +1792,7 @@ with tab2:
                 new_include_custom = st.checkbox(
                     "Include Customization",
                     value=item.get('include_customization', False),
-                    key=f"custom_{idx}"
+                    key=f"prod_custom_{idx}"
                 )
 
                 if new_include_custom:
@@ -1805,7 +1805,7 @@ with tab2:
                             min_value=0.0,
                             value=item.get('customization_setup_fee', float(default_setup)),
                             step=1.0,
-                            key=f"setup_{idx}"
+                            key=f"prod_setup_{idx}"
                         )
 
                     with col_perunit:
@@ -1815,14 +1815,14 @@ with tab2:
                             min_value=0.0,
                             value=item.get('customization_per_unit', float(default_perunit)),
                             step=0.1,
-                            key=f"perunit_{idx}"
+                            key=f"prod_perunit_{idx}"
                         )
 
                     # Customization minimum
                     new_apply_minimum = st.checkbox(
                         "Apply minimum quantity for customization",
                         value=item.get('apply_custom_minimum', False),
-                        key=f"apply_min_{idx}",
+                        key=f"prod_apply_min_{idx}",
                         help="Charge for minimum units even if ordering fewer"
                     )
 
@@ -1832,7 +1832,7 @@ with tab2:
                             min_value=1,
                             value=item.get('customization_minimum_qty', max(100, new_quantity)),
                             step=1,
-                            key=f"min_qty_{idx}"
+                            key=f"prod_min_qty_{idx}"
                         )
 
                         if new_custom_min_qty > new_quantity:
