@@ -1265,6 +1265,29 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
 
     st.info("Tip: Download the HTML form, open it in your browser, then copy the entire page and paste it into your email. It will preserve all formatting!")
 
+    # ============================================================
+    # NEXT STEPS GUIDANCE
+    # ============================================================
+    st.divider()
+
+    if len(st.session_state.proposal_products) > 0:
+        st.success(f"""
+        **What's Next?**
+
+        1. Download and send the proposal to your client
+        2. Once your client confirms interest, move to **Tab 2: Order & Client Info** to finalize the order
+        3. Your {len(st.session_state.proposal_products)} proposal product(s) will be available for quick import in Tab 2
+        """)
+    else:
+        st.info("""
+        **What's Next?**
+
+        After adding products to your proposal, you can:
+        - Download proposal tables and client order forms
+        - Send to your client for review
+        - Move to **Tab 2: Order & Client Info** when client confirms
+        """)
+
 # ============================================================
 # TAB 2: ORDER & CLIENT INFO (ALL CURRENT FUNCTIONALITY)
 # ============================================================
@@ -1272,6 +1295,11 @@ with tab2:
     st.header("Order & Client Information")
     st.caption("Complete order workflow - All existing functionality is here")
     st.divider()
+
+    # Proposal products availability banner
+    proposal_count = len(st.session_state.proposal_products)
+    if proposal_count > 0:
+        st.success(f"✓ {proposal_count} product(s) ready to import from Proposal (Tab 1)")
 
     # Order status indicator
     total_products = len(st.session_state.order_items)
@@ -1290,8 +1318,29 @@ with tab2:
         st.info(f"{len(st.session_state.proposal_products)} product(s) available from Proposal (Tab 1). Select below to add to order.")
         st.session_state.using_proposal_data = True
 
-        with st.expander("Select Products from Proposal", expanded=False):
-            st.markdown("Select products from your proposal to add to this order. You can edit quantities and settings after adding.")
+        # Import All button at top level
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("Import All Products from Proposal", type="primary", use_container_width=True, key="import_all_proposal"):
+                # Import all proposal products to order
+                imported_count = 0
+                for prop_item in st.session_state.proposal_products:
+                    order_item = convert_proposal_to_order(
+                        prop_item,
+                        get_unit_price_new_system,
+                        calculate_product_tariff
+                    )
+                    st.session_state.order_items.append(order_item)
+                    imported_count += 1
+
+                st.success(f"Imported all {imported_count} product(s) from proposal!")
+                st.rerun()
+
+        with col2:
+            st.caption("Or select individually below:")
+
+        with st.expander("Select Individual Products from Proposal", expanded=False):
+            st.markdown("Select specific products from your proposal to add to this order. You can edit quantities and settings after adding.")
 
             # Build selection checkboxes
             selected_proposal_indices = []
