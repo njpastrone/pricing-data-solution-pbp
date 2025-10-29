@@ -1803,21 +1803,31 @@ with tab2:
                     col_setup, col_perunit = st.columns(2)
 
                     with col_setup:
-                        default_setup = clean_price(product_data.get('Customization Setup Fee', '')) or 0
+                        # Always read default from product_data, use item value if user has edited it
+                        default_setup = clean_price(product_data.get('Customization Setup Fee', '')) or 0.0
+                        stored_setup = item.get('customization_setup_fee', 0.0)
+                        # Use stored value if it's non-zero OR if no default exists, otherwise use default
+                        display_setup = stored_setup if (stored_setup > 0 or default_setup == 0) else default_setup
+
                         new_setup_fee = st.number_input(
                             "Setup Fee",
                             min_value=0.0,
-                            value=item.get('customization_setup_fee', float(default_setup)),
+                            value=float(display_setup),
                             step=1.0,
                             key=f"prod_setup_{idx}"
                         )
 
                     with col_perunit:
-                        default_perunit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0
+                        # Always read default from product_data, use item value if user has edited it
+                        default_perunit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0
+                        stored_perunit = item.get('customization_per_unit', 0.0)
+                        # Use stored value if it's non-zero OR if no default exists, otherwise use default
+                        display_perunit = stored_perunit if (stored_perunit > 0 or default_perunit == 0) else default_perunit
+
                         new_perunit_cost = st.number_input(
                             "Per-Unit Cost",
                             min_value=0.0,
-                            value=item.get('customization_per_unit', float(default_perunit)),
+                            value=float(display_perunit),
                             step=0.1,
                             key=f"prod_perunit_{idx}"
                         )
