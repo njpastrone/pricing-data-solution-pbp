@@ -46,7 +46,7 @@ def clean_price(price_string):
 
 def apply_marketing_rounding(price, enabled=True):
     """
-    Apply charm pricing: round whole dollar amounts down by $1 (e.g., $60 -> $59).
+    Apply charm pricing: round prices that are multiples of 10 down by $1 (e.g., $60 -> $59, $100 -> $99).
 
     Args:
         price (float): Original price
@@ -58,12 +58,16 @@ def apply_marketing_rounding(price, enabled=True):
     Examples:
         >>> apply_marketing_rounding(60.0, enabled=True)
         59.0
+        >>> apply_marketing_rounding(100.0, enabled=True)
+        99.0
+        >>> apply_marketing_rounding(77.0, enabled=True)
+        77.0
         >>> apply_marketing_rounding(60.50, enabled=True)
         60.5
         >>> apply_marketing_rounding(60.0, enabled=False)
         60.0
     """
-    if enabled and price % 1 == 0:
+    if enabled and price % 10 == 0:
         return price - 1
     return price
 

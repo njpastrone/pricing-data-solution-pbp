@@ -135,13 +135,32 @@ if 'proposal_filters' not in st.session_state:
         'countries': []
     }
 
+if 'proposal_kitting_pricing' not in st.session_state:
+    st.session_state.proposal_kitting_pricing = """• Impact Cards (about maker communities): No Charge
+• Custom Message Cards: $65 set up/$1.50 per card
+• Insertion of a card you provide: No Charge
+• Kitting for domestic shipments: $10.50/box
+• Kitting for international shipments: $19.00/box
+• Label making & shipping coordination: $2/box
+
+*kitting includes shipping logistics but does not include actual shipping charges
+*international kitting includes customs documentation, etc."""
+
 if 'proposal_terms' not in st.session_state:
     # Load from config file if exists
     try:
         with open('config/terms_conditions.txt', 'r') as f:
             st.session_state.proposal_terms = f.read()
     except:
-        st.session_state.proposal_terms = "[PLACEHOLDER - Terms & Conditions]\n\nPayment terms, delivery expectations, liability clauses, etc. to be added."
+        st.session_state.proposal_terms = """• Drop shipping and kitting are available
+• For shipments to California zip codes, sales tax will be added
+• Payment terms
+• 50% to initiate a custom order
+• 50% upon shipment
+• Customs charges for gifts shipped internationally will be billed to client, which may take up to 120 days post shipment
+• Due to the current uncertainty around US-imposed tariffs, Peace by Piece will bill client for any charges, which may take up to 120 days post shipment
+• No cancellations will be accepted after any custom order has been initiated
+• Gifts returned to Peace by Piece due to incorrect recipient information will incur a $20 fee plus any additional returned shipping charges from the carrier. If a new address is not provided within 30 days of the gift's return, the gift will be shipped back to the client for distribution"""
 
 if 'using_proposal_data' not in st.session_state:
     st.session_state.using_proposal_data = False
@@ -719,12 +738,60 @@ with tab1:
     else:
         st.success(f"{len(st.session_state.proposal_products)} product(s) in proposal")
 
-        # Global marketing rounding
-        st.session_state.proposal_marketing_rounding = st.checkbox(
-            "Apply marketing rounding (e.g., $60 → $59)",
-            value=st.session_state.proposal_marketing_rounding,
-            key="proposal_marketing_rounding_checkbox"
-        )
+        # Proposal Settings Section
+        st.markdown("### Proposal Settings")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            # Client Budget filter for volume pricing calculations
+            client_budget = st.number_input(
+                "Client Budget ($)",
+                min_value=0.0,
+                value=st.session_state.get('proposal_client_budget', 0.0),
+                step=100.0,
+                help="Total potential spend by client. Used to calculate volume pricing if budget allows higher quantities.",
+                key="proposal_client_budget_input"
+            )
+            st.session_state.proposal_client_budget = client_budget
+
+        with col2:
+            # Discount options
+            discount_type = st.selectbox(
+                "Client Discount",
+                options=["None", "NGO (5%)", "Custom"],
+                index=0 if not st.session_state.get('proposal_discount_type') else
+                      (1 if st.session_state.get('proposal_discount_type') == 'NGO' else 2),
+                key="proposal_discount_type_select"
+            )
+
+            if discount_type == "NGO (5%)":
+                st.session_state.proposal_discount_type = 'NGO'
+                st.session_state.proposal_discount_percent = 5.0
+            elif discount_type == "Custom":
+                st.session_state.proposal_discount_type = 'Custom'
+                custom_discount = st.number_input(
+                    "Custom discount %",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=st.session_state.get('proposal_discount_percent', 0.0),
+                    step=0.5,
+                    key="proposal_custom_discount"
+                )
+                st.session_state.proposal_discount_percent = custom_discount
+            else:
+                st.session_state.proposal_discount_type = None
+                st.session_state.proposal_discount_percent = 0.0
+
+        with col3:
+            # Marketing rounding
+            st.session_state.proposal_marketing_rounding = st.checkbox(
+                "Apply marketing rounding (e.g., $60 → $59)",
+                value=st.session_state.proposal_marketing_rounding,
+                key="proposal_marketing_rounding_checkbox"
+            )
+
+        st.divider()
 
         # Display each product
         for idx, item in enumerate(st.session_state.proposal_products):
@@ -804,14 +871,77 @@ with tab1:
                     if st.session_state.proposal_marketing_rounding:
                         moq_product_price_per_unit = apply_marketing_rounding(moq_product_price_per_unit, True)
 
+                    # Calculate Client Price based on discount and budget
+                    client_price = moq_product_price_per_unit
+                    client_price_note = ""
+
+                    # Get client budget and discount settings
+                    client_budget = st.session_state.get('proposal_client_budget', 0.0)
+                    discount_percent = st.session_state.get('proposal_discount_percent', 0.0)
+
+                    # Check if client budget allows for higher quantity (better pricing)
+                    volume_pricing_applied = False
+                    volume_pricing_quantity = None
+                    if client_budget > 0:
+                        moq_total = moq * moq_product_price_per_unit
+                        if client_budget > moq_total:
+                            # Calculate what quantity the client could afford at MOQ price
+                            potential_quantity = int(client_budget / moq_product_price_per_unit)
+
+                            # Get price at that higher quantity
+                            budget_qty_base_price, _, _ = get_unit_price_new_system(product_row, potential_quantity)
+
+                            if budget_qty_base_price is not None:
+                                # Calculate price at higher quantity with markup
+                                budget_qty_product_cost = budget_qty_base_price * potential_quantity
+                                budget_qty_markup_amount = budget_qty_product_cost * (item['markup_percent'] / 100)
+                                budget_qty_product_only_total = budget_qty_product_cost + budget_qty_markup_amount
+                                budget_qty_price_per_unit = budget_qty_product_only_total / potential_quantity
+
+                                # Apply marketing rounding if enabled
+                                if st.session_state.proposal_marketing_rounding:
+                                    budget_qty_price_per_unit = apply_marketing_rounding(budget_qty_price_per_unit, True)
+
+                                # Use the better price if different from MOQ price
+                                if budget_qty_price_per_unit < moq_product_price_per_unit:
+                                    client_price = budget_qty_price_per_unit
+                                    volume_pricing_applied = True
+                                    volume_pricing_quantity = potential_quantity
+
+                    # Apply discount to client price
+                    discount_applied = False
+                    if discount_percent > 0:
+                        client_price = client_price * (1 - discount_percent / 100)
+                        discount_applied = True
+
+                        # Apply marketing rounding again after discount if enabled
+                        if st.session_state.proposal_marketing_rounding:
+                            client_price = apply_marketing_rounding(client_price, True)
+
+                    # Build price note for column header
+                    client_price_header = "Client Price"
+                    if discount_applied or volume_pricing_applied:
+                        notes = []
+                        if volume_pricing_applied:
+                            notes.append(f"Price ea @ Qty {volume_pricing_quantity}")
+                        if discount_applied:
+                            discount_type = st.session_state.get('proposal_discount_type')
+                            if discount_type == 'NGO':
+                                notes.append("5% NGO discount")
+                            else:
+                                notes.append(f"{discount_percent:.1f}% discount")
+                        client_price_header = f"Client Price ({', '.join(notes)})"
+
                     # Build proposal table
                     col_moq = "MOQ"
                     col_price = f"Price Ea (@ Qty {moq})"
+                    col_client_price = client_price_header
                     col_delivery = "Delivery"
 
                     proposal_table = pd.DataFrame([{
                         col_moq: moq,
                         col_price: f"${moq_product_price_per_unit:.2f}",
+                        col_client_price: f"${client_price:.2f}",
                         col_delivery: ""
                     }])
 
@@ -909,6 +1039,12 @@ with tab1:
                 csv_lines.append("")
                 csv_lines.append("")
 
+            # Pricing for Cards & Kitting
+            csv_lines.append("=== PRICING FOR CARDS & KITTING ===")
+            csv_lines.append(st.session_state.proposal_kitting_pricing)
+            csv_lines.append("")
+            csv_lines.append("")
+
             # Terms & Conditions
             csv_lines.append("=== TERMS & CONDITIONS ===")
             csv_lines.append(st.session_state.proposal_terms)
@@ -925,10 +1061,23 @@ with tab1:
             )
 
     # ============================================================
-    # SECTION 6: TERMS & CONDITIONS
+    # SECTION 6: PRICING FOR CARDS & KITTING
     # ============================================================
     st.divider()
-    st.subheader("6. Terms & Conditions")
+    st.subheader("6. Pricing for Cards & Kitting")
+
+    st.session_state.proposal_kitting_pricing = st.text_area(
+        "Edit kitting pricing if needed",
+        value=st.session_state.proposal_kitting_pricing,
+        height=200,
+        key="proposal_kitting_pricing_input"
+    )
+
+    # ============================================================
+    # SECTION 7: TERMS & CONDITIONS
+    # ============================================================
+    st.divider()
+    st.subheader("7. Terms & Conditions")
 
     st.session_state.proposal_terms = st.text_area(
         "Edit terms & conditions if needed",
@@ -938,10 +1087,10 @@ with tab1:
     )
 
     # ============================================================
-    # SECTION 7: CLIENT ORDER FORM
+    # SECTION 8: CLIENT ORDER FORM
     # ============================================================
     st.divider()
-    st.subheader("7. Client Order Form")
+    st.subheader("8. Client Order Form")
 
     st.markdown("""
     Copy the form below and send to your client to collect order details:
