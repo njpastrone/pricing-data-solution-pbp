@@ -4,6 +4,41 @@ All notable changes to the Peace by Piece International Pricing App are document
 
 ---
 
+## [2.3] - Tab Transition UX & Critical Bug Fixes (October 2025)
+
+### Added
+- **Tab 1 → Tab 2 Transition Improvements:**
+  - "Next Steps" guidance box at end of Tab 1 with dynamic messaging
+  - Success banner in Tab 2 showing available proposal product count
+  - "Import All Products from Proposal" primary button for one-click import
+  - Reorganized proposal import UI with individual selection in expander
+- **Analysis Documentation:**
+  - Created TAB_TRANSITION_ANALYSIS.md with comprehensive workflow analysis
+  - Identified 5 UX pain points with impact ratings
+  - Documented 9 prioritized improvement recommendations
+
+### Fixed
+- **Critical KeyError Fixes:**
+  - Fixed Client Order Form HTML/CSV generation when accessing proposal data
+  - Fixed Tab 1 proposal CSV download with missing product data
+  - Fixed Tab 2 individual product selection with missing fields
+  - Fixed `convert_proposal_to_order` function in helpers.py
+  - All proposal_products iteration now uses safe `.get()` method with defaults
+- **Duplicate Element Key Error:**
+  - Fixed duplicate 'remove_{idx}' keys in Tab 2 order items
+  - Added unique prefixes: `remove_custom_{idx}` and `remove_product_{idx}`
+  - Added unique prefix for edit button: `edit_product_{idx}`
+- **UI Polish:**
+  - Added placeholder text "[Input Qty]" for empty quantity cells in HTML form
+
+### Improved
+- **Data Safety:** All dictionary access now handles missing/malformed data gracefully
+- **User Experience:** Clear guidance on workflow progression between tabs
+- **Import Efficiency:** Reduced clicks for importing all proposal products
+- **Visual Feedback:** Better visibility of available proposal products in Tab 2
+
+---
+
 ## [2.2] - Proposals Tab UX Improvements (October 2025)
 
 ### Added
@@ -166,7 +201,8 @@ All notable changes to the Peace by Piece International Pricing App are document
 
 | Version | Date | Key Feature | Status |
 |---------|------|-------------|--------|
-| 2.2 | Oct 2025 | Proposals Tab UX improvements | ✅ Current |
+| 2.3 | Oct 2025 | Tab transition UX & critical bug fixes | ✅ Current |
+| 2.2 | Oct 2025 | Proposals Tab UX improvements | ✅ Implemented |
 | 2.1 | Oct 2025 | Bookkeeper-aligned Invoice & PO | ✅ Implemented |
 | 2.0 | Oct 2025 | Multi-sheet data system | ✅ Implemented |
 | 1.2 | Oct 2025 | Customization minimum feature | ✅ Implemented |
