@@ -2040,7 +2040,7 @@ with tab2:
                         st.write(f"**Total Price:** ${item['product_total']:.2f}")
 
                     with col2:
-                        if st.button("Remove", key=f"remove_{idx}"):
+                        if st.button("Remove", key=f"remove_custom_{idx}"):
                             st.session_state.order_items.pop(idx)
                             st.rerun()
 
@@ -2066,12 +2066,12 @@ with tab2:
                                     st.write(f"**Customization Minimum:** {custom_min} units (applied)")
 
                     with col2:
-                        if st.button("✏️ Edit", key=f"edit_{idx}"):
+                        if st.button("✏️ Edit", key=f"edit_product_{idx}"):
                             st.session_state.edit_index = idx
                             st.rerun()
 
                     with col3:
-                        if st.button("Remove", key=f"remove_{idx}"):
+                        if st.button("Remove", key=f"remove_product_{idx}"):
                             st.session_state.order_items.pop(idx)
                             st.rerun()
 
