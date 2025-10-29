@@ -403,10 +403,11 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         'markup_amount': markup_amount,
 
         # Customization (RESET to defaults - user will configure in order)
+        # Pull default costs from spreadsheet but leave customization disabled
         'include_customization': False,
         'customization_description': product_data.get('Customization Info', ''),
-        'customization_setup_fee': 0.0,
-        'customization_per_unit': 0.0,
+        'customization_setup_fee': float(clean_price(product_data.get('Customization Setup Fee', '')) or 0.0),
+        'customization_per_unit': float(clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0),
         'customization_setup_total': 0.0,
         'customization_unit_total': 0.0,
         'apply_custom_minimum': False,

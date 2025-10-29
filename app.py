@@ -1613,6 +1613,10 @@ with tab2:
                 (df_template["Product/Service"] == selected_product)
             ].iloc[0]
 
+            # Get default customization costs from spreadsheet
+            default_setup_fee = clean_price(product_data.get('Customization Setup Fee', '')) or 0.0
+            default_per_unit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0
+
             # Add product with defaults
             new_item = {
                 'product_name': product_data.get('Product/Service', 'Unknown Product'),
@@ -1622,8 +1626,8 @@ with tab2:
                 'markup_percent': 100.0,
                 'round_to_five': False,
                 'include_customization': False,
-                'customization_setup_fee': 0.0,
-                'customization_per_unit': 0.0,
+                'customization_setup_fee': float(default_setup_fee),
+                'customization_per_unit': float(default_per_unit),
                 'customization_minimum_qty': 0,
                 'apply_custom_minimum': False,
                 'include_tariff': False,
@@ -1757,7 +1761,7 @@ with tab2:
 
                 # Highlight if quantity is 1 (warning)
                 if new_quantity == 1:
-                    st.warning("⚠️ Quantity is 1 - did you mean to order more?")
+                    st.warning("Quantity is 1 - did you mean to order more?")
 
                 # Show tier info
                 base_price, tier_range, tier_column = get_unit_price_new_system(product_data, new_quantity)
