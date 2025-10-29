@@ -1605,29 +1605,33 @@ with tab2:
         (df_template["Product/Service"] == selected_product)
     ].iloc[0]
 
-    # Display product details in cleaner layout
-    st.markdown("##### Product Details")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(f"**Partner:** {product_data['Partner']}")
-        st.markdown(f"**Product/Service:** {product_data['Product/Service']}")
-    with col2:
-        origin = product_data.get("Country of Origin", "N/A")
-        st.markdown(f"**Country of Origin:** {origin if origin else 'N/A'}")
-        has_tiers = product_data.get("Pricing Tiers (Y/N)", "N/A")
-        st.markdown(f"**Tiered Pricing:** {has_tiers}")
+    # Compact product summary (1 line)
+    origin = product_data.get("Country of Origin", "N/A")
+    has_tiers = product_data.get("Pricing Tiers (Y/N)", "N/A")
+    st.caption(f"Selected: {product_data['Product/Service']} | Partner: {product_data['Partner']} | Origin: {origin if origin else 'N/A'} | Tiers: {has_tiers}")
 
-    # Show product description if available
-    description = product_data.get("Marketing Description", "")
-    if description and description.strip():
-        with st.expander("Marketing Description"):
+    # Detailed product info in expander (collapsed by default)
+    with st.expander("Show Product Details"):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"**Partner:** {product_data['Partner']}")
+            st.markdown(f"**Product/Service:** {product_data['Product/Service']}")
+        with col2:
+            st.markdown(f"**Country of Origin:** {origin if origin else 'N/A'}")
+            st.markdown(f"**Tiered Pricing:** {has_tiers}")
+
+        # Show product description if available
+        description = product_data.get("Marketing Description", "")
+        if description and description.strip():
+            st.markdown("---")
+            st.markdown("**Marketing Description:**")
             st.write(description)
 
-    # Show pricing tier info if applicable
-    tier_info = product_data.get("Pricing Tiers Info", "")
-    if tier_info and tier_info.strip() and tier_info != "NA":
-        with st.expander("Pricing Tier Information"):
-            st.markdown("**How Pricing Tiers Work:**")
+        # Show pricing tier info if applicable
+        tier_info = product_data.get("Pricing Tiers Info", "")
+        if tier_info and tier_info.strip() and tier_info != "NA":
+            st.markdown("---")
+            st.markdown("**Pricing Tier Information:**")
             st.markdown("This product uses tiered pricing - the price per unit decreases as you order more. The tier ranges below show which price applies based on your order quantity.")
             st.markdown("")
             st.markdown(f"**Tier Ranges:** {tier_info}")
@@ -1718,48 +1722,50 @@ with tab2:
         customer_price_per_unit = round_to_nearest_five(customer_price_per_unit_raw, round_to_five)
         customer_price_no_custom = customer_price_per_unit * quantity
 
-        # Display pricing breakdown
-        st.markdown("**Pricing Breakdown (Before Customization)**")
+        # Compact preview (1 line instead of full table)
+        st.markdown(f"**Preview:** ${customer_price_no_custom:.2f} total ({quantity} units @ ${customer_price_per_unit:.2f}/unit)")
+        st.caption("Base product price before customization, tariffs, or shipping")
 
-        breakdown_data = [
-            ["Base Cost (Partner)", f"${base_price_preview:.2f}/unit", f"${product_subtotal_preview:.2f} total"],
-            ["Your Markup ({:.0f}%)".format(markup_percent), f"${markup_amount_preview/quantity:.2f}/unit", f"${markup_amount_preview:.2f} total"],
-            ["", "", ""],
-            ["**Customer Price (No Custom)**", f"**${customer_price_per_unit:.2f}/unit**", f"**${customer_price_no_custom:.2f}**"]
-        ]
-
-        # Show rounding note if enabled
-        if round_to_five:
-            breakdown_data.append(["", "", ""])
-            breakdown_data.append(["Rounding Applied", f"(${customer_price_per_unit_raw:.2f} → ${customer_price_per_unit:.2f})", ""])
-
-        breakdown_df = pd.DataFrame(breakdown_data, columns=["Item", "Per Unit", "Total"])
-        st.table(breakdown_df)
-
-        st.caption("This is the base product price before customization, tariffs, or shipping")
-
-        # MSRP Comparison (if enabled)
-        if show_msrp and partner_msrp > 0:
-            st.markdown("**Compare to Partner MSRP:**")
-
-            msrp_diff = customer_price_per_unit - partner_msrp
-            msrp_diff_percent = (msrp_diff / partner_msrp * 100) if partner_msrp > 0 else 0
-
-            comparison_data = [
-                ["Partner MSRP", f"${partner_msrp:.2f}/unit"],
-                ["Your Price", f"${customer_price_per_unit:.2f}/unit"],
-                ["Difference", f"${msrp_diff:.2f} ({msrp_diff_percent:+.1f}%)"]
+        # Detailed breakdown in expander (collapsed by default)
+        with st.expander("Show Detailed Pricing Breakdown"):
+            breakdown_data = [
+                ["Base Cost (Partner)", f"${base_price_preview:.2f}/unit", f"${product_subtotal_preview:.2f} total"],
+                ["Your Markup ({:.0f}%)".format(markup_percent), f"${markup_amount_preview/quantity:.2f}/unit", f"${markup_amount_preview:.2f} total"],
+                ["", "", ""],
+                ["**Customer Price (No Custom)**", f"**${customer_price_per_unit:.2f}/unit**", f"**${customer_price_no_custom:.2f}**"]
             ]
 
-            comparison_df = pd.DataFrame(comparison_data, columns=["Item", "Price"])
-            st.table(comparison_df)
+            # Show rounding note if enabled
+            if round_to_five:
+                breakdown_data.append(["", "", ""])
+                breakdown_data.append(["Rounding Applied", f"(${customer_price_per_unit_raw:.2f} → ${customer_price_per_unit:.2f})", ""])
 
-            if msrp_diff < 0:
-                st.caption(f"Your price is {abs(msrp_diff_percent):.1f}% below Partner MSRP")
-            elif msrp_diff > 0:
-                st.caption(f"Your price is {msrp_diff_percent:.1f}% above Partner MSRP")
-            else:
-                st.caption("Your price matches Partner MSRP")
+            breakdown_df = pd.DataFrame(breakdown_data, columns=["Item", "Per Unit", "Total"])
+            st.table(breakdown_df)
+
+            # MSRP Comparison (if enabled) - moved inside expander
+            if show_msrp and partner_msrp > 0:
+                st.markdown("---")
+                st.markdown("**Compare to Partner MSRP:**")
+
+                msrp_diff = customer_price_per_unit - partner_msrp
+                msrp_diff_percent = (msrp_diff / partner_msrp * 100) if partner_msrp > 0 else 0
+
+                comparison_data = [
+                    ["Partner MSRP", f"${partner_msrp:.2f}/unit"],
+                    ["Your Price", f"${customer_price_per_unit:.2f}/unit"],
+                    ["Difference", f"${msrp_diff:.2f} ({msrp_diff_percent:+.1f}%)"]
+                ]
+
+                comparison_df = pd.DataFrame(comparison_data, columns=["Item", "Price"])
+                st.table(comparison_df)
+
+                if msrp_diff < 0:
+                    st.caption(f"Your price is {abs(msrp_diff_percent):.1f}% below Partner MSRP")
+                elif msrp_diff > 0:
+                    st.caption(f"Your price is {msrp_diff_percent:.1f}% above Partner MSRP")
+                else:
+                    st.caption("Your price matches Partner MSRP")
 
     # ============================================================
     # CUSTOMIZATION OPTIONS UI
@@ -1894,12 +1900,6 @@ with tab2:
                 col_name = f'PBP Cost: Tier {i}'
                 st.write(f"{col_name}: {product_data.get(col_name, 'N/A')}")
         st.stop()
-
-    # Show which tier is being used
-    if tier_range == "No Tiers":
-        st.caption(f"Flat pricing: ${base_price:.2f} per unit")
-    else:
-        st.caption(f"Using pricing tier: {tier_range} units | Base price: ${base_price:.2f} per unit")
 
     # Calculate customization costs - use user input values
     customization_setup_fee = 0
