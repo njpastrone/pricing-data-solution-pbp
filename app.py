@@ -1303,12 +1303,37 @@ with tab2:
     if proposal_count > 0:
         st.success(f"✓ {proposal_count} product(s) ready to import from Proposal (Tab 1)")
 
-    # Order status indicator
+    # Compact order summary (4-column layout)
     total_products = len(st.session_state.order_items)
     if total_products > 0:
-        st.info(f"Current order: {total_products} product(s)")
+        # Calculate totals for summary
+        products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
+
+        # Check if order is complete
+        client_complete = all([
+            st.session_state.client_info.get('company_name', ''),
+            st.session_state.client_info.get('contact_name', ''),
+            st.session_state.client_info.get('contact_email', '')
+        ])
+
+        # Display compact 4-column summary
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Products", total_products)
+        with col2:
+            st.metric("Subtotal", f"${products_subtotal:.2f}")
+        with col3:
+            shipping = st.session_state.order_shipping
+            tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
+            grand_total = products_subtotal + shipping + tariff
+            st.metric("Total", f"${grand_total:.2f}")
+        with col4:
+            if client_complete and total_products > 0:
+                st.success("Ready for Tab 3")
+            else:
+                st.warning("Not Complete")
     else:
-        st.info("Current order: empty — Add your first product below")
+        st.info("Current order: empty - Add your first product below")
 
     st.divider()
 
@@ -1615,73 +1640,72 @@ with tab2:
     # ============================================================
     st.header("3. Quantity & Pricing")
 
-    # 3.1 - Quantity Selection
-    st.subheader("Quantity Selection")
-    quantity = st.number_input(
-        "Quantity",
-        min_value=1,
-        value=1,
-        step=1,
-        key="input_quantity"
-    )
+    # 3.1 - Quantity & Markup (2-column layout)
+    st.subheader("Quantity & Markup")
 
-    # Show tier being used
-    base_price_preview, tier_range_preview, tier_column_preview = get_unit_price_new_system(product_data, quantity)
-    if base_price_preview:
-        if tier_range_preview == "No Tiers":
-            st.caption(f"Flat pricing: ${base_price_preview:.2f} per unit")
-        else:
-            st.caption(f"Using pricing tier: {tier_range_preview} units | Base price: ${base_price_preview:.2f} per unit")
+    col_qty, col_markup = st.columns(2)
 
-    st.divider()
-
-    # 3.2 - Partner MSRP (Reference)
-    st.subheader("Partner MSRP (Reference)")
-
-    show_msrp = st.checkbox(
-        "Show Partner MSRP comparison",
-        value=False,
-        key="show_msrp_checkbox",
-        help="Display partner's suggested retail price for reference"
-    )
-
-    partner_msrp = 0.0
-    if show_msrp:
-        # Check if MSRP exists in spreadsheet
-        default_msrp = clean_price(product_data.get('Partner MSRP', '')) or 0.0
-
-        partner_msrp = st.number_input(
-            "Partner MSRP (per unit)",
-            min_value=0.0,
-            value=float(default_msrp),
-            step=1.0,
-            key="input_partner_msrp",
-            help="Optional - Partner's suggested retail price for reference"
+    with col_qty:
+        quantity = st.number_input(
+            "Quantity",
+            min_value=1,
+            value=1,
+            step=1,
+            key="input_quantity"
         )
 
-        st.caption("This is the partner's suggested retail price - for reference only")
+        # Show tier being used
+        base_price_preview, tier_range_preview, tier_column_preview = get_unit_price_new_system(product_data, quantity)
+        if base_price_preview:
+            if tier_range_preview == "No Tiers":
+                st.caption(f"Flat pricing: ${base_price_preview:.2f} per unit")
+            else:
+                st.caption(f"Using pricing tier: {tier_range_preview} units | Base price: ${base_price_preview:.2f} per unit")
+
+    with col_markup:
+        markup_percent = st.number_input(
+            "Markup %",
+            min_value=0.0,
+            value=100.0,
+            step=5.0,
+            key="input_markup",
+            help="Your profit margin. 100% = double the cost (2x), 50% = 1.5x the cost, 200% = triple the cost (3x)"
+        )
+
+        # Rounding option
+        round_to_five = st.checkbox(
+            "Round to nearest multiple of $5",
+            value=False,
+            key="round_to_five_checkbox",
+            help="Rounds the customer price per unit to the nearest $5 (e.g., $17.50 becomes $20, $12.30 becomes $10)"
+        )
 
     st.divider()
 
-    # 3.3 - Markup Configuration
-    st.subheader("Markup Configuration")
+    # 3.2 - Partner MSRP (Reference) - Optional, collapsed
+    with st.expander("Partner MSRP Comparison (Optional)"):
+        show_msrp = st.checkbox(
+            "Show Partner MSRP comparison",
+            value=False,
+            key="show_msrp_checkbox",
+            help="Display partner's suggested retail price for reference"
+        )
 
-    markup_percent = st.number_input(
-        "Markup %",
-        min_value=0.0,
-        value=100.0,
-        step=5.0,
-        key="input_markup",
-        help="Your profit margin. 100% = double the cost (2x), 50% = 1.5x the cost, 200% = triple the cost (3x)"
-    )
+        partner_msrp = 0.0
+        if show_msrp:
+            # Check if MSRP exists in spreadsheet
+            default_msrp = clean_price(product_data.get('Partner MSRP', '')) or 0.0
 
-    # Rounding option
-    round_to_five = st.checkbox(
-        "Round to nearest multiple of $5",
-        value=False,
-        key="round_to_five_checkbox",
-        help="Rounds the customer price per unit to the nearest $5 (e.g., $17.50 becomes $20, $12.30 becomes $10)"
-    )
+            partner_msrp = st.number_input(
+                "Partner MSRP (per unit)",
+                min_value=0.0,
+                value=float(default_msrp),
+                step=1.0,
+                key="input_partner_msrp",
+                help="Optional - Partner's suggested retail price for reference"
+            )
+
+            st.caption("This is the partner's suggested retail price - for reference only")
 
     # Calculate pricing breakdown (no customization yet)
     if base_price_preview:
