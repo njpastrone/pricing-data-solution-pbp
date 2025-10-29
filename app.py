@@ -1336,86 +1336,6 @@ with tab2:
         st.info("Current order: empty - Add your first product below")
 
     st.divider()
-
-    # ============================================================
-    # PROPOSAL PRODUCTS SELECTION (if available)
-    # ============================================================
-    if len(st.session_state.proposal_products) > 0:
-        st.header("Quick Add: Products from Proposal")
-        st.info(f"{len(st.session_state.proposal_products)} product(s) available from Proposal (Tab 1). Select below to add to order.")
-        st.session_state.using_proposal_data = True
-
-        # Import All button at top level
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button("Import All Products from Proposal", type="primary", use_container_width=True, key="import_all_proposal"):
-                # Import all proposal products to order
-                imported_count = 0
-                for prop_item in st.session_state.proposal_products:
-                    order_item = convert_proposal_to_order(
-                        prop_item,
-                        get_unit_price_new_system,
-                        calculate_product_tariff
-                    )
-                    st.session_state.order_items.append(order_item)
-                    imported_count += 1
-
-                st.success(f"Imported all {imported_count} product(s) from proposal!")
-                st.rerun()
-
-        with col2:
-            st.caption("Or select individually below:")
-
-        with st.expander("Select Individual Products from Proposal", expanded=False):
-            st.markdown("Select specific products from your proposal to add to this order. You can edit quantities and settings after adding.")
-
-            # Build selection checkboxes
-            selected_proposal_indices = []
-
-            for idx, prop_item in enumerate(st.session_state.proposal_products):
-                product_data = prop_item.get('product_data', {})
-
-                col1, col2 = st.columns([4, 1])
-
-                with col1:
-                    is_selected = st.checkbox(
-                        f"{product_data.get('Product/Service', 'Unknown Product')} - {product_data.get('Partner', 'N/A')}",
-                        key=f"select_proposal_{idx}"
-                    )
-
-                    # Show proposal details
-                    st.caption(f"Quantity: {prop_item.get('quantity', 'N/A')} | Markup: {prop_item.get('markup_percent', 0)}%")
-
-                    if prop_item.get('include_customization', False):
-                        setup_fee = prop_item.get('customization_setup_fee', 0)
-                        per_unit = prop_item.get('customization_per_unit', 0)
-                        st.caption(f"Customization: ${setup_fee:.2f} setup + ${per_unit:.2f}/unit")
-
-                with col2:
-                    if is_selected:
-                        selected_proposal_indices.append(idx)
-
-            # Add selected button
-            if len(selected_proposal_indices) > 0:
-                if st.button(f"Add {len(selected_proposal_indices)} Selected Product(s) to Order", type="primary", use_container_width=True):
-                    # Convert and add to order
-                    for idx in selected_proposal_indices:
-                        order_item = convert_proposal_to_order(
-                            st.session_state.proposal_products[idx],
-                            get_unit_price_new_system,
-                            calculate_product_tariff
-                        )
-                        st.session_state.order_items.append(order_item)
-
-                    st.success(f"Added {len(selected_proposal_indices)} product(s) to order!")
-                    st.rerun()
-            else:
-                st.caption("Select at least one product above to add to order.")
-
-        st.divider()
-    else:
-        st.session_state.using_proposal_data = False
-
     # ============================================================
     # CLIENT INFORMATION UI
     # ============================================================
@@ -1582,9 +1502,89 @@ with tab2:
     st.divider()
 
     # ============================================================
+    # PROPOSAL PRODUCTS SELECTION (if available)
+    # ============================================================
+    if len(st.session_state.proposal_products) > 0:
+        st.header("Option A: Import from Proposal")
+        st.info(f"{len(st.session_state.proposal_products)} product(s) available from Proposal (Tab 1). Select below to add to order.")
+        st.session_state.using_proposal_data = True
+
+        # Import All button at top level
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("Import All Products from Proposal", type="primary", use_container_width=True, key="import_all_proposal"):
+                # Import all proposal products to order
+                imported_count = 0
+                for prop_item in st.session_state.proposal_products:
+                    order_item = convert_proposal_to_order(
+                        prop_item,
+                        get_unit_price_new_system,
+                        calculate_product_tariff
+                    )
+                    st.session_state.order_items.append(order_item)
+                    imported_count += 1
+
+                st.success(f"Imported all {imported_count} product(s) from proposal!")
+                st.rerun()
+
+        with col2:
+            st.caption("Or select individually below:")
+
+        with st.expander("Select Individual Products from Proposal", expanded=False):
+            st.markdown("Select specific products from your proposal to add to this order. You can edit quantities and settings after adding.")
+
+            # Build selection checkboxes
+            selected_proposal_indices = []
+
+            for idx, prop_item in enumerate(st.session_state.proposal_products):
+                product_data = prop_item.get('product_data', {})
+
+                col1, col2 = st.columns([4, 1])
+
+                with col1:
+                    is_selected = st.checkbox(
+                        f"{product_data.get('Product/Service', 'Unknown Product')} - {product_data.get('Partner', 'N/A')}",
+                        key=f"select_proposal_{idx}"
+                    )
+
+                    # Show proposal details
+                    st.caption(f"Quantity: {prop_item.get('quantity', 'N/A')} | Markup: {prop_item.get('markup_percent', 0)}%")
+
+                    if prop_item.get('include_customization', False):
+                        setup_fee = prop_item.get('customization_setup_fee', 0)
+                        per_unit = prop_item.get('customization_per_unit', 0)
+                        st.caption(f"Customization: ${setup_fee:.2f} setup + ${per_unit:.2f}/unit")
+
+                with col2:
+                    if is_selected:
+                        selected_proposal_indices.append(idx)
+
+            # Add selected button
+            if len(selected_proposal_indices) > 0:
+                if st.button(f"Add {len(selected_proposal_indices)} Selected Product(s) to Order", type="primary", use_container_width=True):
+                    # Convert and add to order
+                    for idx in selected_proposal_indices:
+                        order_item = convert_proposal_to_order(
+                            st.session_state.proposal_products[idx],
+                            get_unit_price_new_system,
+                            calculate_product_tariff
+                        )
+                        st.session_state.order_items.append(order_item)
+
+                    st.success(f"Added {len(selected_proposal_indices)} product(s) to order!")
+                    st.rerun()
+            else:
+                st.caption("Select at least one product above to add to order.")
+
+        st.divider()
+    else:
+        st.session_state.using_proposal_data = False
+
+
+    # ============================================================
     # PARTNER & PRODUCT SELECTION
     # ============================================================
-    st.header("1. Partner & Product Selection")
+    st.header("Option B: Manual Product Selection")
     st.caption("Add products to your order, then configure settings for each product below")
 
     # Create dropdowns for filtering
@@ -1737,7 +1737,7 @@ with tab2:
                 st.subheader(f"{item['product_name']}")
                 st.caption(f"Partner: {item['partner']} | Origin: {item.get('country_of_origin', 'N/A')}")
             with col_remove:
-                if st.button("🗑️ Remove", key=f"remove_product_{idx}", type="secondary"):
+                if st.button("Remove", key=f"remove_product_{idx}", type="secondary"):
                     items_to_remove.append(idx)
 
             # Get product data for recalculations
