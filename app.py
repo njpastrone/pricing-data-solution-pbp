@@ -2862,19 +2862,20 @@ with tab3:
 
                 # Add tariff line item if applicable
                 if item.get('tariff_amount', 0) > 0:
-                    tariff_amount = item.get('tariff_amount', 0)
+                    tariff_amount_total = item.get('tariff_amount', 0)
                     tariff_rate = item.get('tariff_rate_percent', 0)
+                    tariff_per_unit = tariff_amount_total / qty if qty > 0 else 0
 
                     invoice_line_items.append({
                         'PARTNER': partner,
                         'ITEMS + SPECS': f"  └ Tariff ({tariff_rate}%)",
-                        'QTY': 1,
+                        'QTY': qty,
                         'IN-HANDS from Partner': "N/A",
-                        'COST/UNIT': f"${tariff_amount:.2f}",
-                        'TOTAL COST': f"${tariff_amount:.2f}",
+                        'COST/UNIT': f"${tariff_per_unit:.2f}",
+                        'TOTAL COST': f"${tariff_amount_total:.2f}",
                         'COST VERIFIED?': "Yes",
-                        'SELL PRICE/UNIT': f"${tariff_amount:.2f}",
-                        'TOTAL SELL PRICE': f"${tariff_amount:.2f}"
+                        'SELL PRICE/UNIT': f"${tariff_per_unit:.2f}",
+                        'TOTAL SELL PRICE': f"${tariff_amount_total:.2f}"
                     })
 
         # Display line items table with better column sizing
