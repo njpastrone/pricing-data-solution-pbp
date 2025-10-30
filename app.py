@@ -2652,24 +2652,22 @@ Rates default to current estimates but can be adjusted as needed.
                     st.session_state.order_discount_custom_desc = ""
 
             with col2:
-                marketing_rounding = st.checkbox(
+                st.session_state.order_use_marketing_rounding = st.checkbox(
                     "Apply marketing rounding (e.g., $60 → $59)",
-                    value=st.session_state.get('order_use_marketing_rounding', False),
+                    value=st.session_state.order_use_marketing_rounding,
                     key="tab3_marketing_rounding_checkbox"
                 )
-                st.session_state.order_use_marketing_rounding = marketing_rounding
 
             with col3:
-                apply_cc_fee = st.checkbox(
+                st.session_state.apply_cc_fee = st.checkbox(
                     "Credit card fee",
-                    value=st.session_state.get('apply_cc_fee', False),
+                    value=st.session_state.apply_cc_fee,
                     key="tab3_cc_fee_checkbox",
                     help="Add credit card processing fee to total (default 2.9%)"
                 )
-                st.session_state.apply_cc_fee = apply_cc_fee
 
             # Row 2: Conditional inputs for Custom Discount and CC Fee
-            if discount_selection == "Custom" or apply_cc_fee:
+            if discount_selection == "Custom" or st.session_state.apply_cc_fee:
                 col1_row2, col2_row2, col3_row2 = st.columns(3)
 
                 with col1_row2:
