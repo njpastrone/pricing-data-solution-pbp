@@ -3195,16 +3195,202 @@ Rates default to current estimates but can be adjusted as needed.
                 }])
                 invoice_complete = pd.concat([invoice_complete, notes_row], ignore_index=True)
 
-        invoice_csv = invoice_complete.to_csv(index=False)
-        st.download_button(
-            label="Download Invoice & Purchase Order (CSV)",
-            data=invoice_csv,
-            file_name=f"invoice_po_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv",
-            key="download_invoice_po_complete"
-        )
+        # Generate HTML Invoice/PO Form
+        html_invoice = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{ font-family: Arial, sans-serif; max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #ffffff; }}
+        h2 {{ color: #2c3e50; background-color: #ffffff; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
+        h3 {{ color: #34495e; margin-top: 25px; margin-bottom: 10px; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 15px 0; background-color: #ffffff; }}
+        th {{ background-color: #3498db !important; color: #ffffff !important; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #2980b9; }}
+        td {{ border: 1px solid #ddd; padding: 10px; background-color: #ffffff; color: #000000; }}
+        td:first-child {{ background-color: #f8f9fa !important; color: #000000 !important; font-weight: 500; width: 30%; }}
+        .section-header {{ background-color: #2c3e50 !important; color: #ffffff !important; font-weight: bold; padding: 12px; text-align: center; }}
+        .notes-section {{ background-color: #e8f4f8; border: 1px solid #3498db; padding: 15px; margin: 15px 0; }}
+        .notes-header {{ font-weight: bold; color: #2c3e50; margin-bottom: 10px; }}
+        .company-header {{ background-color: #34495e; color: #ffffff; padding: 15px; text-align: center; margin-bottom: 20px; }}
+    </style>
+</head>
+<body>
+    <div class="company-header">
+        <h2 style="margin: 0; color: #ffffff; border: none;">PEACE BY PIECE INTERNATIONAL</h2>
+        <p style="margin: 5px 0; color: #ecf0f1;">Invoice and Purchase Order Request Form</p>
+    </div>
 
-        st.caption("Download the CSV and send to bookkeeper, or copy the tables above into your template.")
+    <h3>1. Client/Company Information</h3>
+    <table>
+        <tr>
+            <td>Company/Client Name</td>
+            <td>{client_info.get('company_name', 'Not specified')} ({'New' if client_info.get('is_new_client', False) else 'Existing'})</td>
+        </tr>
+        <tr>
+            <td>Contact + Email</td>
+            <td>{client_info.get('contact_name', 'Not specified')} &lt;{client_info.get('contact_email', 'Not specified')}&gt;</td>
+        </tr>
+        <tr>
+            <td>Company Billing Address + Email</td>
+            <td>{client_info.get('billing_address', 'Not specified').replace(chr(10), ', ')} | {client_info.get('contact_email', 'Not specified')}</td>
+        </tr>
+        <tr>
+            <td>Company Shipping Address</td>
+            <td>{client_info.get('shipping_address', 'Not specified').replace(chr(10), ', ')} ({client_info.get('shipping_type', 'Not specified')})</td>
+        </tr>
+        <tr>
+            <td>Client PO #</td>
+            <td>{client_info.get('client_po', 'N/A')}</td>
+        </tr>
+    </table>
+
+    <h3>2. Partners + Point of Contacts</h3>
+    <table>
+        <tr>
+            <th>Partner</th>
+            <th>Point of Contact (POC)</th>
+        </tr>"""
+
+        # Add partner rows
+        if partners_in_order and hasattr(st.session_state, 'partner_contacts'):
+            for partner_name in partners_in_order:
+                partner_contact = st.session_state.partner_contacts.get(partner_name, {})
+                poc_name = partner_contact.get('poc_name', 'Not specified')
+                poc_email = partner_contact.get('poc_email', 'Not specified')
+                html_invoice += f"""
+        <tr>
+            <td style="width: 40%;">{partner_name}</td>
+            <td>{poc_name} &lt;{poc_email}&gt;</td>
+        </tr>"""
+        else:
+            html_invoice += """
+        <tr>
+            <td colspan="2" style="text-align: center; color: #7f8c8d;">No partners in order</td>
+        </tr>"""
+
+        html_invoice += f"""
+    </table>
+
+    <h3>3. Order Details</h3>
+    <table>
+        <tr>
+            <td>Client In-Hands Date</td>
+            <td>{client_in_hands}</td>
+        </tr>
+        <tr>
+            <td>Ship Method</td>
+            <td>{ship_method}</td>
+        </tr>
+        <tr>
+            <td>Payment Terms</td>
+            <td>{payment_terms}</td>
+        </tr>
+        <tr>
+            <td>Payment Method</td>
+            <td>{payment_method}</td>
+        </tr>
+        <tr>
+            <td>Order Submitted By</td>
+            <td>{order_submitted_by} (Date: {order_submitted_date})</td>
+        </tr>
+        <tr>
+            <td>Cost Submitted By</td>
+            <td>{cost_submitted_by} (Date: {cost_submitted_date if cost_submitted_date else 'Not specified'})</td>
+        </tr>
+    </table>
+
+    <h3>4. Invoice and Purchase Order Item Details</h3>
+    <p style="color: #7f8c8d; font-size: 0.9em; margin: 10px 0;">
+        This cost-to-sell segment outlines our partners' cost, our sell price to client,
+        and our partners' requested in-hands date.
+    </p>
+    <table>
+        <tr>
+            <th>Partner</th>
+            <th>Items + Specs</th>
+            <th>Qty</th>
+            <th>In-Hands from Partner</th>
+            <th>Cost/Unit</th>
+            <th>Total Cost</th>
+            <th>Cost Verified?</th>
+            <th>Sell Price/Unit</th>
+            <th>Total Sell Price</th>
+        </tr>"""
+
+        # Add all line items
+        for line_item in invoice_line_items:
+            html_invoice += f"""
+        <tr>
+            <td>{line_item['PARTNER']}</td>
+            <td>{line_item['ITEMS + SPECS'].replace(chr(10), '<br>')}</td>
+            <td style="text-align: center;">{line_item['QTY']}</td>
+            <td>{line_item['IN-HANDS from Partner']}</td>
+            <td style="text-align: right;">{line_item['COST/UNIT']}</td>
+            <td style="text-align: right;">{line_item['TOTAL COST']}</td>
+            <td style="text-align: center;">{line_item['COST VERIFIED?']}</td>
+            <td style="text-align: right;">{line_item['SELL PRICE/UNIT']}</td>
+            <td style="text-align: right;">{line_item['TOTAL SELL PRICE']}</td>
+        </tr>"""
+
+        html_invoice += """
+    </table>
+
+    <h3>Summary Totals</h3>
+    <table>"""
+
+        # Add totals
+        for total_item in totals_data:
+            is_total_row = total_item[0].startswith('**')
+            style = ' style="background-color: #f8f9fa; font-weight: bold;"' if is_total_row else ''
+            html_invoice += f"""
+        <tr{style}>
+            <td>{total_item[0].replace('**', '')}</td>
+            <td style="text-align: right;">{total_item[1].replace('**', '')}</td>
+        </tr>"""
+
+        html_invoice += """
+    </table>"""
+
+        # Add notes if any
+        if notes_content:
+            html_invoice += """
+    <div class="notes-section">
+        <div class="notes-header">NOTES</div>"""
+            for note in notes_content:
+                html_invoice += f"""
+        <p><strong>{note.split(':')[0] if ':' in note else 'Note'}:</strong> {note.split(':', 1)[1] if ':' in note else note}</p>"""
+            html_invoice += """
+    </div>"""
+
+        html_invoice += """
+</body>
+</html>"""
+
+        # Download buttons side by side
+        col1, col2 = st.columns(2)
+
+        with col1:
+            invoice_csv = invoice_complete.to_csv(index=False)
+            st.download_button(
+                label="📄 Download as CSV",
+                data=invoice_csv,
+                file_name=f"invoice_po_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                key="download_invoice_po_csv",
+                use_container_width=True
+            )
+
+        with col2:
+            st.download_button(
+                label="🌐 Download as HTML",
+                data=html_invoice,
+                file_name=f"invoice_po_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
+                mime="text/html",
+                key="download_invoice_po_html",
+                use_container_width=True
+            )
+
+        st.caption("💡 CSV for spreadsheet import | HTML for email-ready professional format")
 
         st.divider()
 
