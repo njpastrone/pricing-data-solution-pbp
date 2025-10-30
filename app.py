@@ -2534,7 +2534,7 @@ with tab3:
         # ============================================================
         # EDITABLE ORDER SETTINGS
         # ============================================================
-        with st.expander("⚙️ Edit Order Settings", expanded=False):
+        with st.expander("Edit Order Settings", expanded=False):
             st.caption("Make adjustments to order settings here. Changes sync to Tab 2.")
 
             # Shipping & Tariffs - Side by Side
@@ -2652,22 +2652,24 @@ Rates default to current estimates but can be adjusted as needed.
                     st.session_state.order_discount_custom_desc = ""
 
             with col2:
-                st.session_state.order_use_marketing_rounding = st.checkbox(
+                marketing_rounding = st.checkbox(
                     "Apply marketing rounding (e.g., $60 → $59)",
-                    value=st.session_state.order_use_marketing_rounding,
+                    value=st.session_state.get('order_use_marketing_rounding', False),
                     key="tab3_marketing_rounding_checkbox"
                 )
+                st.session_state.order_use_marketing_rounding = marketing_rounding
 
             with col3:
-                st.session_state.apply_cc_fee = st.checkbox(
+                apply_cc_fee = st.checkbox(
                     "Credit card fee",
-                    value=st.session_state.apply_cc_fee,
+                    value=st.session_state.get('apply_cc_fee', False),
                     key="tab3_cc_fee_checkbox",
                     help="Add credit card processing fee to total (default 2.9%)"
                 )
+                st.session_state.apply_cc_fee = apply_cc_fee
 
             # Row 2: Conditional inputs for Custom Discount and CC Fee
-            if discount_selection == "Custom" or st.session_state.apply_cc_fee:
+            if discount_selection == "Custom" or apply_cc_fee:
                 col1_row2, col2_row2, col3_row2 = st.columns(3)
 
                 with col1_row2:
