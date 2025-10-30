@@ -3215,10 +3215,7 @@ Rates default to current estimates but can be adjusted as needed.
     </style>
 </head>
 <body>
-    <div class="company-header">
-        <h2 style="margin: 0; color: #ffffff; border: none;">PEACE BY PIECE INTERNATIONAL</h2>
-        <p style="margin: 5px 0; color: #ecf0f1;">Invoice and Purchase Order Request Form</p>
-    </div>
+    <h2>INVOICE AND PURCHASE ORDER REQUEST FORM</h2>
 
     <h3>1. Client/Company Information</h3>
     <table>
