@@ -2801,9 +2801,12 @@ with tab3:
 
                 cost_verified = item.get('cost_verified', 'Pending')
 
-                # Sell price (total to client for this line)
-                sell_price_total = item.get('sell_price_total', item.get('product_total', 0))
-                sell_price = f"${sell_price_total:.2f}"
+                # Sell price for base product ONLY (product + markup, NO customization)
+                # This prevents double counting since customization is shown as separate line items
+                product_subtotal = item.get('product_subtotal', 0)
+                markup_amount = item.get('markup_amount', 0)
+                sell_price_base_product = product_subtotal + markup_amount
+                sell_price = f"${sell_price_base_product:.2f}"
 
                 # Add base product line
                 invoice_line_items.append({
@@ -2862,9 +2865,22 @@ with tab3:
                         'SELL PRICE': f"${tariff_amount:.2f}"
                     })
 
-        # Display line items table
+        # Display line items table with better column sizing
         invoice_df = pd.DataFrame(invoice_line_items)
-        st.table(invoice_df)
+        st.dataframe(
+            invoice_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "PARTNER": st.column_config.TextColumn("PARTNER", width="medium"),
+                "ITEMS + SPECS": st.column_config.TextColumn("ITEMS + SPECS", width="large"),
+                "QTY": st.column_config.NumberColumn("QTY", width="small"),
+                "IN-HANDS from Partner": st.column_config.TextColumn("IN-HANDS from Partner", width="medium"),
+                "COST": st.column_config.TextColumn("COST", width="small"),
+                "COST VERIFIED?": st.column_config.TextColumn("COST VERIFIED?", width="medium"),
+                "SELL PRICE": st.column_config.TextColumn("SELL PRICE", width="medium")
+            }
+        )
 
         # Display totals section
         st.write("")  # Spacing
