@@ -1294,218 +1294,14 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
 # TAB 2: ORDER & CLIENT INFO (ALL CURRENT FUNCTIONALITY)
 # ============================================================
 with tab2:
-    st.header("Order & Client Information")
-    st.caption("Complete order workflow - All existing functionality is here")
-    st.divider()
-
-    # Proposal products availability banner
-    proposal_count = len(st.session_state.proposal_products)
-    if proposal_count > 0:
-        st.success(f"✓ {proposal_count} product(s) ready to import from Proposal (Tab 1)")
-
-    # Compact order summary (4-column layout)
-    total_products = len(st.session_state.order_items)
-    if total_products > 0:
-        # Calculate totals for summary
-        products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
-
-        # Check if order is complete
-        client_complete = all([
-            st.session_state.client_info.get('company_name', ''),
-            st.session_state.client_info.get('contact_name', ''),
-            st.session_state.client_info.get('contact_email', '')
-        ])
-
-        # Display compact 4-column summary
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Products", total_products)
-        with col2:
-            st.metric("Subtotal", f"${products_subtotal:.2f}")
-        with col3:
-            shipping = st.session_state.order_shipping
-            tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
-            grand_total = products_subtotal + shipping + tariff
-            st.metric("Total", f"${grand_total:.2f}")
-        with col4:
-            if client_complete and total_products > 0:
-                st.success("Ready for Tab 3")
-            else:
-                st.warning("Not Complete")
-    else:
-        st.info("Current order: empty - Add your first product below")
-
-    st.divider()
-    # ============================================================
-    # CLIENT INFORMATION UI
-    # ============================================================
-    st.header("Client & Order Information")
-
-    with st.expander("Client Details", expanded=False):
-        st.markdown("Enter client information for invoices and purchase orders.")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.session_state.client_info['is_new_client'] = st.checkbox(
-                "New Client?",
-                value=st.session_state.client_info['is_new_client']
-            )
-
-            st.session_state.client_info['company_name'] = st.text_input(
-                "Company Name",
-                value=st.session_state.client_info['company_name'],
-                placeholder="e.g., Acme Corp"
-            )
-
-            st.session_state.client_info['contact_name'] = st.text_input(
-                "Contact Name",
-                value=st.session_state.client_info['contact_name'],
-                placeholder="e.g., John Smith"
-            )
-
-            st.session_state.client_info['contact_email'] = st.text_input(
-                "Contact Email",
-                value=st.session_state.client_info['contact_email'],
-                placeholder="e.g., john@acme.com"
-            )
-
-            st.session_state.client_info['client_po'] = st.text_input(
-                "Client PO Number (optional)",
-                value=st.session_state.client_info['client_po'],
-                placeholder="e.g., PO-2025-001"
-            )
-
-        with col2:
-            st.session_state.client_info['billing_address'] = st.text_area(
-                "Billing Address",
-                value=st.session_state.client_info['billing_address'],
-                placeholder="123 Main St\nCity, State ZIP",
-                height=100
-            )
-
-            st.session_state.client_info['shipping_type'] = st.selectbox(
-                "Shipping Type",
-                options=['One Location', 'Drop Shipping'],
-                index=0 if st.session_state.client_info['shipping_type'] == 'One Location' else 1
-            )
-
-            if st.session_state.client_info['shipping_type'] == 'One Location':
-                st.session_state.client_info['shipping_address'] = st.text_area(
-                    "Shipping Address",
-                    value=st.session_state.client_info['shipping_address'],
-                    placeholder="456 Shipping Lane\nCity, State ZIP",
-                    height=100
-                )
-            else:
-                st.session_state.client_info['shipping_address'] = ''
-                st.caption("Drop shipping details to be arranged separately")
-
-        st.markdown("---")
-        st.markdown("**Payment & Delivery Terms**")
-
-        col3, col4 = st.columns(2)
-
-        with col3:
-            # Updated to dropdown
-            payment_terms_options = ['Net 30', 'Net 60', 'Due on Receipt', '50% Deposit']
-            current_timeline = st.session_state.client_info.get('payment_timeline', 'Net 30')
-            if current_timeline not in payment_terms_options:
-                payment_terms_options.append(current_timeline)
-
-            st.session_state.client_info['payment_timeline'] = st.selectbox(
-                "Payment Terms",
-                options=payment_terms_options,
-                index=payment_terms_options.index(current_timeline) if current_timeline in payment_terms_options else 0
-            )
-
-        with col4:
-            # Updated to match template options
-            payment_method_options = ['Check', 'ACH', 'Credit Card', 'Wire Transfer']
-            current_preference = st.session_state.client_info.get('payment_preference', 'Check')
-            if current_preference not in payment_method_options:
-                payment_method_options.append(current_preference)
-
-            st.session_state.client_info['payment_preference'] = st.selectbox(
-                "Payment Method",
-                options=payment_method_options,
-                index=payment_method_options.index(current_preference) if current_preference in payment_method_options else 0
-            )
-
-        col5, col6 = st.columns(2)
-
-        with col5:
-            # NEW: Ship method dropdown
-            ship_method_options = ['Ground', 'Air', 'Freight', 'Other']
-            current_ship_type = st.session_state.client_info.get('shipping_type', 'Ground')
-            # Map old values to new
-            if current_ship_type == 'One Location':
-                current_ship_type = 'Ground'
-            elif current_ship_type == 'Drop Shipping':
-                current_ship_type = 'Other'
-
-            if current_ship_type not in ship_method_options:
-                ship_method_options.append(current_ship_type)
-
-            # Note: We're overriding shipping_type to use ship method
-            ship_method = st.selectbox(
-                "Ship Method",
-                options=ship_method_options,
-                index=ship_method_options.index(current_ship_type) if current_ship_type in ship_method_options else 0,
-                help="How products will be shipped to client"
-            )
-
-        with col6:
-            # NEW: Client in-hands date
-            st.session_state.client_info['client_in_hands_date'] = st.date_input(
-                "Client In-Hands Date",
-                value=st.session_state.client_info.get('client_in_hands_date'),
-                help="Target delivery date for client to receive products"
-            )
-
-        st.markdown("---")
-        st.markdown("**Order Submission Details**")
-
-        col7, col8 = st.columns(2)
-
-        with col7:
-            st.session_state.client_info['order_submitted_by'] = st.text_input(
-                "Order Submitted By",
-                value=st.session_state.client_info.get('order_submitted_by', ''),
-                placeholder="Your name",
-                help="Person creating this order"
-            )
-
-            st.session_state.client_info['cost_submitted_by'] = st.text_input(
-                "Cost Submitted By",
-                value=st.session_state.client_info.get('cost_submitted_by', ''),
-                placeholder="Finance contact name",
-                help="Person who submitted/verified costs"
-            )
-
-        with col8:
-            # Order submitted date (auto-filled, read-only display)
-            order_date = st.session_state.client_info.get('order_submitted_date', datetime.now().date())
-            st.date_input(
-                "Order Submitted Date",
-                value=order_date,
-                disabled=True,
-                help="Auto-filled when order created"
-            )
-
-            st.session_state.client_info['cost_submitted_date'] = st.date_input(
-                "Cost Submitted Date",
-                value=st.session_state.client_info.get('cost_submitted_date'),
-                help="Date when costs were submitted/verified"
-            )
-
+    st.header("Order & Client Info - Input Order & Client Details")
     st.divider()
 
     # ============================================================
     # PROPOSAL PRODUCTS SELECTION (if available)
     # ============================================================
     if len(st.session_state.proposal_products) > 0:
-        st.header("Option A: Import from Proposal")
+        st.header("Option A: Import Products from Proposal")
         st.info(f"{len(st.session_state.proposal_products)} product(s) available from Proposal (Tab 1). Select below to add to order.")
         st.session_state.using_proposal_data = True
 
@@ -1606,7 +1402,7 @@ with tab2:
     with col2:
         st.write("")  # Spacing
         st.write("")  # Spacing
-        if st.button("➕ Add to Order", type="primary", use_container_width=True):
+        if st.button("Add to Order", type="primary", use_container_width=True):
             # Get selected product details
             product_data = df_template[
                 (df_template["Partner"] == selected_partner) &
@@ -1788,19 +1584,21 @@ with tab2:
 
                     st.caption(f"Client price: ${client_price_per_unit:.2f}/unit (before customization)")
 
-            # CUSTOMIZATION SECTION (if available)
+            # CUSTOMIZATION SECTION (always available)
             customization_info = product_data.get("Customization Info", "")
+            st.markdown("##### Customization (Optional)")
             if customization_info and customization_info.strip():
-                st.markdown("##### Customization (Optional)")
                 st.caption(f"Available: {customization_info}")
+            else:
+                st.caption("No customization details from spreadsheet - set custom values below if needed")
 
-                new_include_custom = st.checkbox(
-                    "Include Customization",
-                    value=item.get('include_customization', False),
-                    key=f"prod_custom_{idx}"
-                )
+            new_include_custom = st.checkbox(
+                "Include Customization",
+                value=item.get('include_customization', False),
+                key=f"prod_custom_{idx}"
+            )
 
-                if new_include_custom:
+            if new_include_custom:
                     col_setup, col_perunit = st.columns(2)
 
                     with col_setup:
@@ -1859,13 +1657,7 @@ with tab2:
                             st.info(f"Charging for {new_custom_min_qty} customization units (ordering {new_quantity} product units)")
                     else:
                         new_custom_min_qty = 0
-                else:
-                    new_setup_fee = 0.0
-                    new_perunit_cost = 0.0
-                    new_apply_minimum = False
-                    new_custom_min_qty = 0
             else:
-                new_include_custom = False
                 new_setup_fee = 0.0
                 new_perunit_cost = 0.0
                 new_apply_minimum = False
@@ -1980,169 +1772,181 @@ with tab2:
     if len(st.session_state.order_items) == 0:
         st.caption("Add products to your order first, then configure order settings here.")
     else:
-        # Shipping
-        st.subheader("Shipping")
-        st.session_state.order_shipping = st.number_input(
-            "Shipping Cost ($)",
-            min_value=0.0,
-            value=st.session_state.order_shipping,
-            step=10.0,
-            key="shipping_input",
-            help="One-time shipping cost for the entire order (not per product)"
-        )
+        # Shipping & Tariffs - Side by Side
+        st.subheader("Shipping & Tariffs")
 
-        # Tariff Configuration
-        st.divider()
-        st.subheader("Tariff Configuration")
+        col_shipping, col_tariff = st.columns(2)
 
-        st.markdown("""
-    Tariffs are import duties based on product country of origin.
-    Rates default to current estimates but can be adjusted as needed.
-    """)
-
-        # Build editable tariff table with detailed breakdown
-        tariff_table_rows = []
-
-        for idx, item in enumerate(st.session_state.order_items):
-            # Get tariff base (product cost + markup, excludes customization)
-            tariff_base = item.get('tariff_base', 0.0)
-            tariff_base_per_unit = tariff_base / item['quantity'] if item['quantity'] > 0 else 0
-
-            # Display product info
-            st.markdown(f"**{idx + 1}. {item['product_name']}**")
-
-            col1, col2, col3 = st.columns([2, 2, 2])
-
-            with col1:
-                country = item.get('country_of_origin', 'N/A')
-                st.write(f"**Country:** {country if country else 'N/A'}")
-                st.write(f"**Quantity:** {item['quantity']} units")
-
-            with col2:
-                st.write(f"**Unit Cost:** ${tariff_base_per_unit:.2f}")
-                st.write(f"**Total Cost:** ${tariff_base:.2f}")
-                st.caption("(Product + Markup, excludes customization)")
-
-            with col3:
-                # Editable tariff rate
-                current_rate = item.get('tariff_rate_percent', 0.0)
-                new_rate = st.number_input(
-                    "Tariff Rate (%)",
-                    min_value=0.0,
-                    max_value=100.0,
-                    value=current_rate,
-                    step=0.5,
-                    key=f"tariff_rate_{idx}",
-                    format="%.1f"
-                )
-
-                # Update if changed
-                if new_rate != current_rate:
-                    item['tariff_rate_percent'] = new_rate
-                    item['tariff_amount'] = calculate_product_tariff(tariff_base, new_rate)
-
-                tariff_amount = item.get('tariff_amount', 0.0)
-                st.write(f"**Tariff Amount:** ${tariff_amount:.2f}")
-                if tariff_base > 0 and new_rate > 0:
-                    st.caption(f"${tariff_base:.2f} × {new_rate}% = ${tariff_amount:.2f}")
-
-            # Show tariff info if available
-            tariff_info = item.get('tariff_info', '')
-            if tariff_info and tariff_info.strip():
-                st.caption(f"ℹ️ {tariff_info}")
-
-            st.markdown("")  # Spacing
-
-        # Show total tariff
-        total_tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
-        st.markdown(f"**Total Tariff for Order:** ${total_tariff:.2f}")
-
-        st.caption("Tariff is calculated on product cost + markup (excludes customization fees and shipping)")
-
-        # Discount Options
-        st.divider()
-        st.subheader("Discount Options")
-
-        discount_type = st.radio(
-            "Select discount type:",
-            options=["none", "preset", "custom"],
-            format_func=lambda x: {"none": "No Discount", "preset": "Preset Discount", "custom": "Custom Discount"}[x],
-            horizontal=True,
-            key="discount_type_radio"
-        )
-        st.session_state.order_discount_type = discount_type
-
-        if discount_type == "preset":
-            preset_options = [
-                "NGO Discount (5%)"
-            ]
-            st.session_state.order_discount_preset = st.selectbox(
-                "Select preset discount:",
-                options=preset_options,
-                key="discount_preset_select"
+        with col_shipping:
+            st.session_state.order_shipping = st.number_input(
+                "Shipping Cost ($)",
+                min_value=0.0,
+                value=st.session_state.order_shipping,
+                step=10.0,
+                key="shipping_input",
+                help="One-time shipping cost for the entire order (not per product)"
             )
 
-        elif discount_type == "custom":
-            col1, col2 = st.columns(2)
-            with col1:
-                st.session_state.order_discount_custom_desc = st.text_input(
-                    "Discount Description",
-                    value=st.session_state.order_discount_custom_desc,
-                    key="discount_custom_desc",
-                    placeholder="e.g., Early Bird Special"
-                )
-            with col2:
-                st.session_state.order_discount_custom_value = st.number_input(
-                    "Discount Percentage (%)",
-                    min_value=0.0,
-                    max_value=100.0,
-                    value=st.session_state.order_discount_custom_value,
-                    step=1.0,
-                    key="discount_custom_value"
-                )
+        with col_tariff:
+            # Calculate total tariff for expander label
+            total_tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
 
-        # Additional Options
+            with st.expander(f"Tariff Configuration (Total: ${total_tariff:.2f})", expanded=False):
+                st.caption("Default rates applied based on country of origin. Expand to customize per product.")
+                st.markdown("""
+Tariffs are import duties based on product country of origin.
+Rates default to current estimates but can be adjusted as needed.
+""")
+
+                # Build editable tariff table with detailed breakdown
+                tariff_table_rows = []
+
+                for idx, item in enumerate(st.session_state.order_items):
+                    # Get tariff base (product cost + markup, excludes customization)
+                    tariff_base = item.get('tariff_base', 0.0)
+                    tariff_base_per_unit = tariff_base / item['quantity'] if item['quantity'] > 0 else 0
+
+                    # Display product info
+                    st.markdown(f"**{idx + 1}. {item['product_name']}**")
+
+                    col1, col2, col3 = st.columns([2, 2, 2])
+
+                    with col1:
+                        country = item.get('country_of_origin', 'N/A')
+                        st.write(f"**Country:** {country if country else 'N/A'}")
+                        st.write(f"**Quantity:** {item['quantity']} units")
+
+                    with col2:
+                        st.write(f"**Unit Cost:** ${tariff_base_per_unit:.2f}")
+                        st.write(f"**Total Cost:** ${tariff_base:.2f}")
+                        st.caption("(Product + Markup, excludes customization)")
+
+                    with col3:
+                        # Editable tariff rate
+                        current_rate = item.get('tariff_rate_percent', 0.0)
+                        new_rate = st.number_input(
+                            "Tariff Rate (%)",
+                            min_value=0.0,
+                            max_value=100.0,
+                            value=current_rate,
+                            step=0.5,
+                            key=f"tariff_rate_{idx}",
+                            format="%.1f"
+                        )
+
+                        # Update if changed
+                        if new_rate != current_rate:
+                            item['tariff_rate_percent'] = new_rate
+                            item['tariff_amount'] = calculate_product_tariff(tariff_base, new_rate)
+
+                        tariff_amount = item.get('tariff_amount', 0.0)
+                        st.write(f"**Tariff Amount:** ${tariff_amount:.2f}")
+                        if tariff_base > 0 and new_rate > 0:
+                            st.caption(f"${tariff_base:.2f} × {new_rate}% = ${tariff_amount:.2f}")
+
+                    # Show tariff info if available
+                    tariff_info = item.get('tariff_info', '')
+                    if tariff_info and tariff_info.strip():
+                        st.caption(f"ℹ️ {tariff_info}")
+
+                    st.markdown("")  # Spacing
+
+                st.caption("Tariff is calculated on product cost + markup (excludes customization fees and shipping)")
+
+        # Order Adjustments - Consolidated Section
         st.divider()
-        st.subheader("Additional Options")
+        st.subheader("Order Adjustments")
 
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
 
         with col1:
+            # Discount as dropdown (like in Proposals tab)
+            discount_options = ["None", "NGO (5%)", "Custom"]
+            current_discount = "None"
+            if st.session_state.order_discount_type == "preset":
+                current_discount = "NGO (5%)"
+            elif st.session_state.order_discount_type == "custom":
+                current_discount = "Custom"
+
+            discount_selection = st.selectbox(
+                "Client Discount",
+                options=discount_options,
+                index=discount_options.index(current_discount),
+                key="order_discount_select"
+            )
+
+            # Update session state based on selection
+            if discount_selection == "NGO (5%)":
+                st.session_state.order_discount_type = "preset"
+                st.session_state.order_discount_preset = "NGO Discount (5%)"
+                st.session_state.order_discount_custom_value = 0.0
+                st.session_state.order_discount_custom_desc = ""
+            elif discount_selection == "Custom":
+                st.session_state.order_discount_type = "custom"
+                # Show custom discount input below
+            else:
+                st.session_state.order_discount_type = "none"
+                st.session_state.order_discount_custom_value = 0.0
+                st.session_state.order_discount_custom_desc = ""
+
+        with col2:
             st.session_state.order_use_marketing_rounding = st.checkbox(
                 "Apply marketing rounding (e.g., $60 → $59)",
                 value=st.session_state.order_use_marketing_rounding,
-                key="marketing_rounding_checkbox",
-                help="Rounds whole dollar amounts down by $1 for charm pricing effect"
+                key="marketing_rounding_checkbox"
             )
 
-        with col2:
+        with col3:
             st.session_state.apply_cc_fee = st.checkbox(
-                "Apply credit card processing fee",
+                "Credit card fee",
                 value=st.session_state.apply_cc_fee,
                 key="cc_fee_checkbox",
                 help="Add credit card processing fee to total (default 2.9%)"
             )
 
-        if st.session_state.apply_cc_fee:
-            st.session_state.cc_fee_percent = st.number_input(
-                "Credit Card Fee Percentage (%)",
-                min_value=0.0,
-                max_value=10.0,
-                value=st.session_state.cc_fee_percent,
-                step=0.1,
-                key="cc_fee_percent_input",
-                help="Percentage fee charged for credit card payments"
-            )
+        # Row 2: Conditional inputs for Custom Discount and CC Fee
+        if discount_selection == "Custom" or st.session_state.apply_cc_fee:
+            col1_row2, col2_row2, col3_row2 = st.columns(3)
 
-        # Custom Line Items
+            with col1_row2:
+                if discount_selection == "Custom":
+                    st.session_state.order_discount_custom_value = st.number_input(
+                        "Custom discount %",
+                        min_value=0.0,
+                        max_value=100.0,
+                        value=st.session_state.order_discount_custom_value,
+                        step=0.5,
+                        key="order_custom_discount_input"
+                    )
+
+            with col2_row2:
+                pass  # Empty column for alignment
+
+            with col3_row2:
+                if st.session_state.apply_cc_fee:
+                    st.session_state.cc_fee_percent = st.number_input(
+                        "CC fee %",
+                        min_value=0.0,
+                        max_value=10.0,
+                        value=st.session_state.cc_fee_percent,
+                        step=0.1,
+                        key="cc_fee_percent_input",
+                        help="Percentage fee charged for credit card payments"
+                    )
+
+        # Custom Line Items & Order Notes - Side by Side
         st.divider()
-        st.subheader("Custom Line Items")
 
-        with st.expander("➕ Add Custom Line Item", expanded=False):
-            st.caption("Add unique services or customizations not in the catalog")
+        # Count custom items and filled notes
+        custom_item_count = sum(1 for item in st.session_state.order_items if item.get('is_custom', False))
+        filled_notes_count = sum(1 for note in st.session_state.order_notes.values() if note and note.strip())
 
-            col1, col2 = st.columns(2)
-            with col1:
+        col_custom, col_notes = st.columns(2)
+
+        with col_custom:
+            with st.expander(f"Add Custom Line Item ({custom_item_count} added)", expanded=False):
+                st.caption("Add unique services or customizations not in the catalog")
+
                 custom_name = st.text_input(
                     "Product/Service Name*",
                     key="custom_name_input",
@@ -2155,8 +1959,6 @@ with tab2:
                     step=1,
                     key="custom_quantity_input"
                 )
-
-            with col2:
                 custom_description = st.text_input(
                     "Description",
                     key="custom_description_input",
@@ -2171,42 +1973,86 @@ with tab2:
                     help="Total price for this line item (quantity × unit price)"
                 )
 
-            if st.button("Add Custom Item to Order", type="secondary", use_container_width=True, key="add_custom_item_btn"):
-                # Validation
-                if not custom_name or custom_price <= 0:
-                    st.error("Please fill in Product/Service Name and set Total Price greater than $0")
-                else:
-                    # Create custom item
-                    custom_item = {
-                        'product_name': custom_name,
-                        'product_ref': "CUSTOM",
-                        'partner': "Custom",
-                        'quantity': custom_quantity,
-                        'markup_percent': 0.0,
-                        'include_labels': False,
-                        'base_price': custom_price / custom_quantity,
-                        'tier_range': "N/A",
-                        'tier_column': "N/A",
-                        'additional_costs': {},
-                        'product_subtotal': custom_price,
-                        'art_setup_total': 0,
-                        'label_cost_total': 0,
-                        'subtotal_before_markup': custom_price,
-                        'markup_amount': 0,
-                        'product_total': custom_price,
-                        'total_per_unit': custom_price / custom_quantity,
-                        'is_custom': True,
-                        'custom_description': custom_description if custom_description else "Custom line item",
-                        'country_of_origin': '',
-                        'tariff_rate_percent': 0.0,
-                        'tariff_info': '',
-                        'tariff_base': 0.0,
-                        'tariff_amount': 0.0
-                    }
+                if st.button("Add Custom Item to Order", type="secondary", use_container_width=True, key="add_custom_item_btn"):
+                    # Validation
+                    if not custom_name or custom_price <= 0:
+                        st.error("Please fill in Product/Service Name and set Total Price greater than $0")
+                    else:
+                        # Create custom item
+                        custom_item = {
+                            'product_name': custom_name,
+                            'product_ref': "CUSTOM",
+                            'partner': "Custom",
+                            'quantity': custom_quantity,
+                            'markup_percent': 0.0,
+                            'include_labels': False,
+                            'base_price': custom_price / custom_quantity,
+                            'tier_range': "N/A",
+                            'tier_column': "N/A",
+                            'additional_costs': {},
+                            'product_subtotal': custom_price,
+                            'art_setup_total': 0,
+                            'label_cost_total': 0,
+                            'subtotal_before_markup': custom_price,
+                            'markup_amount': 0,
+                            'product_total': custom_price,
+                            'total_per_unit': custom_price / custom_quantity,
+                            'is_custom': True,
+                            'custom_description': custom_description if custom_description else "Custom line item",
+                            'country_of_origin': '',
+                            'tariff_rate_percent': 0.0,
+                            'tariff_info': '',
+                            'tariff_base': 0.0,
+                            'tariff_amount': 0.0
+                        }
 
-                    st.session_state.order_items.append(custom_item)
-                    st.success(f"Added custom item: {custom_name}")
-                    st.rerun()
+                        st.session_state.order_items.append(custom_item)
+                        st.success(f"Added custom item: {custom_name}")
+                        st.rerun()
+
+        with col_notes:
+            with st.expander(f"Add Order Notes ({filled_notes_count} filled)", expanded=False):
+                st.caption("Add specific details for this order")
+
+                st.session_state.order_notes['kitting_specs'] = st.text_area(
+                    "Kitting Specifications",
+                    value=st.session_state.order_notes.get('kitting_specs', ''),
+                    placeholder="Box size, packaging requirements...",
+                    height=70,
+                    help="Details about how products should be kitted/packaged"
+                )
+
+                st.session_state.order_notes['client_requests'] = st.text_area(
+                    "Client Requests",
+                    value=st.session_state.order_notes.get('client_requests', ''),
+                    placeholder="Rush delivery, special handling...",
+                    height=70,
+                    help="Special requests from the client"
+                )
+
+                st.session_state.order_notes['addon_samples'] = st.text_area(
+                    "Add-on Samples",
+                    value=st.session_state.order_notes.get('addon_samples', ''),
+                    placeholder="Extra units, samples for approval...",
+                    height=70,
+                    help="Additional samples to include with order"
+                )
+
+                st.session_state.order_notes['artwork_attachments'] = st.text_area(
+                    "Artwork Attachments",
+                    value=st.session_state.order_notes.get('artwork_attachments', ''),
+                    placeholder="logo_final.ai, label_design_v3.pdf...",
+                    height=70,
+                    help="List of artwork files attached to this order"
+                )
+
+                st.session_state.order_notes['general_notes'] = st.text_area(
+                    "General Notes",
+                    value=st.session_state.order_notes.get('general_notes', ''),
+                    placeholder="Any other important details...",
+                    height=70,
+                    help="Catch-all for any other notes or details"
+                )
 
     # Use session state values for calculations
     shipping = st.session_state.order_shipping
@@ -2231,63 +2077,10 @@ with tab2:
         discount_description = st.session_state.order_discount_custom_desc if st.session_state.order_discount_custom_desc else f"Custom Discount ({discount_percent}%)"
 
     # ============================================================
-    # ORDER NOTES
-    # ============================================================
-    st.divider()
-    st.header("4. Order Notes")
-
-    st.markdown("Add any specific details for this order (kitting specs, client requests, artwork files, etc.)")
-
-    with st.expander("Add Order Notes", expanded=False):
-        col_notes1, col_notes2 = st.columns(2)
-
-        with col_notes1:
-            st.session_state.order_notes['kitting_specs'] = st.text_area(
-                "Kitting Specifications",
-                value=st.session_state.order_notes.get('kitting_specs', ''),
-                placeholder="Box size, packaging requirements, assembly instructions...",
-                height=100,
-                help="Details about how products should be kitted/packaged"
-            )
-
-            st.session_state.order_notes['client_requests'] = st.text_area(
-                "Client Requests",
-                value=st.session_state.order_notes.get('client_requests', ''),
-                placeholder="Rush delivery, special handling, custom messaging...",
-                height=100,
-                help="Special requests from the client"
-            )
-
-            st.session_state.order_notes['addon_samples'] = st.text_area(
-                "Add-on Samples",
-                value=st.session_state.order_notes.get('addon_samples', ''),
-                placeholder="Extra units for display, samples for approval...",
-                height=100,
-                help="Additional samples to include with order"
-            )
-
-        with col_notes2:
-            st.session_state.order_notes['artwork_attachments'] = st.text_area(
-                "Artwork Attachments",
-                value=st.session_state.order_notes.get('artwork_attachments', ''),
-                placeholder="logo_final.ai, label_design_v3.pdf...",
-                height=100,
-                help="List of artwork files attached to this order"
-            )
-
-            st.session_state.order_notes['general_notes'] = st.text_area(
-                "General Notes",
-                value=st.session_state.order_notes.get('general_notes', ''),
-                placeholder="Any other important details...",
-                height=100,
-                help="Catch-all for any other notes or details"
-            )
-
-    # ============================================================
     # TOTAL ORDER CALCULATION
     # ============================================================
     st.divider()
-    st.header("5. Order Summary")
+    st.header("4. Order Summary")
 
     if len(st.session_state.order_items) == 0:
         st.caption("Add products to your order to see the total quote calculation.")
@@ -2312,13 +2105,52 @@ with tab2:
         total_units = sum(item['quantity'] for item in st.session_state.order_items)
 
         summary_items = []
+
+        # Break down each product into base cost + customization
         for item in st.session_state.order_items:
+            # If custom line item, show as-is
+            if item.get('is_custom', False):
+                summary_items.append([
+                    item['product_name'],
+                    item['quantity'],
+                    f"${item['total_per_unit']:.2f}",
+                    f"${item['product_total']:.2f}"
+                ])
+                continue
+
+            # Regular product: show base + markup
+            product_with_markup = item.get('product_subtotal', 0) + item.get('markup_amount', 0)
+            product_with_markup_per_unit = product_with_markup / item['quantity'] if item['quantity'] > 0 else 0
+
             summary_items.append([
-                item['product_name'],
+                f"{item['product_name']} (Base + Markup)",
                 item['quantity'],
-                f"${item['total_per_unit']:.2f}",
-                f"${item['product_total']:.2f}"
+                f"${product_with_markup_per_unit:.2f}",
+                f"${product_with_markup:.2f}"
             ])
+
+            # Show customization separately if present
+            customization_setup = item.get('customization_setup_total', 0)
+            customization_units = item.get('customization_unit_total', 0)
+
+            if customization_setup > 0:
+                summary_items.append([
+                    f"  └ Customization Setup",
+                    "one-time",
+                    "",
+                    f"${customization_setup:.2f}"
+                ])
+
+            if customization_units > 0:
+                effective_custom_qty = item.get('customization_minimum_qty', item['quantity']) if item.get('apply_custom_minimum', False) else item['quantity']
+                custom_per_unit = item.get('customization_per_unit', 0)
+
+                summary_items.append([
+                    f"  └ Customization Per-Unit",
+                    effective_custom_qty,
+                    f"${custom_per_unit:.2f}",
+                    f"${customization_units:.2f}"
+                ])
 
         summary_items.append(["**Products Subtotal**", "", "", f"**${products_subtotal:.2f}**"])
 
@@ -2387,11 +2219,193 @@ with tab2:
             st.rerun()
 
     # ============================================================
-    # NEXT STEP: GENERATE INVOICE & PURCHASE ORDER
+    # CLIENT INFORMATION UI
     # ============================================================
     st.divider()
-    st.success("Order complete! Your order summary is ready.")
-    st.info("Go to **Tab 3: Execution & Accounting** to generate Invoice & Purchase Order for this order.")
+    st.header("5. Client & Order Information")
+
+    with st.expander("Client Details", expanded=False):
+        st.markdown("Enter client information for invoices and purchase orders.")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.session_state.client_info['is_new_client'] = st.checkbox(
+                "New Client?",
+                value=st.session_state.client_info['is_new_client']
+            )
+
+            st.session_state.client_info['company_name'] = st.text_input(
+                "Company Name",
+                value=st.session_state.client_info['company_name'],
+                placeholder="e.g., Acme Corp"
+            )
+
+            st.session_state.client_info['contact_name'] = st.text_input(
+                "Contact Name",
+                value=st.session_state.client_info['contact_name'],
+                placeholder="e.g., John Smith"
+            )
+
+            st.session_state.client_info['contact_email'] = st.text_input(
+                "Contact Email",
+                value=st.session_state.client_info['contact_email'],
+                placeholder="e.g., john@acme.com"
+            )
+
+            st.session_state.client_info['client_po'] = st.text_input(
+                "Client PO Number (optional)",
+                value=st.session_state.client_info['client_po'],
+                placeholder="e.g., PO-2025-001"
+            )
+
+        with col2:
+            st.session_state.client_info['billing_address'] = st.text_area(
+                "Billing Address",
+                value=st.session_state.client_info['billing_address'],
+                placeholder="123 Main St\nCity, State ZIP",
+                height=100
+            )
+
+            st.session_state.client_info['shipping_type'] = st.selectbox(
+                "Shipping Type",
+                options=['One Location', 'Drop Shipping'],
+                index=0 if st.session_state.client_info['shipping_type'] == 'One Location' else 1
+            )
+
+            if st.session_state.client_info['shipping_type'] == 'One Location':
+                st.session_state.client_info['shipping_address'] = st.text_area(
+                    "Shipping Address",
+                    value=st.session_state.client_info['shipping_address'],
+                    placeholder="456 Shipping Lane\nCity, State ZIP",
+                    height=100
+                )
+            else:
+                st.session_state.client_info['shipping_address'] = ''
+                st.caption("Drop shipping details to be arranged separately")
+
+        st.markdown("---")
+        st.markdown("**Payment & Delivery Terms**")
+
+        col3, col4 = st.columns(2)
+
+        with col3:
+            # Updated to dropdown
+            payment_terms_options = ['Net 30', 'Net 60', 'Due on Receipt', '50% Deposit']
+            current_timeline = st.session_state.client_info.get('payment_timeline', 'Net 30')
+            if current_timeline not in payment_terms_options:
+                payment_terms_options.append(current_timeline)
+
+            st.session_state.client_info['payment_timeline'] = st.selectbox(
+                "Payment Terms",
+                options=payment_terms_options,
+                index=payment_terms_options.index(current_timeline) if current_timeline in payment_terms_options else 0
+            )
+
+        with col4:
+            # Updated to match template options
+            payment_method_options = ['Check', 'ACH', 'Credit Card', 'Wire Transfer']
+            current_preference = st.session_state.client_info.get('payment_preference', 'Check')
+            if current_preference not in payment_method_options:
+                payment_method_options.append(current_preference)
+
+            st.session_state.client_info['payment_preference'] = st.selectbox(
+                "Payment Method",
+                options=payment_method_options,
+                index=payment_method_options.index(current_preference) if current_preference in payment_method_options else 0
+            )
+
+        col5, col6 = st.columns(2)
+
+        with col5:
+            # NEW: Ship method dropdown
+            ship_method_options = ['Ground', 'Air', 'Freight', 'Other']
+            current_ship_type = st.session_state.client_info.get('shipping_type', 'Ground')
+            # Map old values to new
+            if current_ship_type == 'One Location':
+                current_ship_type = 'Ground'
+            elif current_ship_type == 'Drop Shipping':
+                current_ship_type = 'Other'
+
+            if current_ship_type not in ship_method_options:
+                ship_method_options.append(current_ship_type)
+
+            # Note: We're overriding shipping_type to use ship method
+            ship_method = st.selectbox(
+                "Ship Method",
+                options=ship_method_options,
+                index=ship_method_options.index(current_ship_type) if current_ship_type in ship_method_options else 0,
+                help="How products will be shipped to client"
+            )
+
+        with col6:
+            # NEW: Client in-hands date
+            st.session_state.client_info['client_in_hands_date'] = st.date_input(
+                "Client In-Hands Date",
+                value=st.session_state.client_info.get('client_in_hands_date'),
+                help="Target delivery date for client to receive products"
+            )
+
+        st.markdown("---")
+        st.markdown("**Order Submission Details**")
+
+        col7, col8 = st.columns(2)
+
+        with col7:
+            st.session_state.client_info['order_submitted_by'] = st.text_input(
+                "Order Submitted By",
+                value=st.session_state.client_info.get('order_submitted_by', ''),
+                placeholder="Your name",
+                help="Person creating this order"
+            )
+
+            st.session_state.client_info['cost_submitted_by'] = st.text_input(
+                "Cost Submitted By",
+                value=st.session_state.client_info.get('cost_submitted_by', ''),
+                placeholder="Finance contact name",
+                help="Person who submitted/verified costs"
+            )
+
+        with col8:
+            # Order submitted date (auto-filled, read-only display)
+            order_date = st.session_state.client_info.get('order_submitted_date', datetime.now().date())
+            st.date_input(
+                "Order Submitted Date",
+                value=order_date,
+                disabled=True,
+                help="Auto-filled when order created"
+            )
+
+            st.session_state.client_info['cost_submitted_date'] = st.date_input(
+                "Cost Submitted Date",
+                value=st.session_state.client_info.get('cost_submitted_date'),
+                help="Date when costs were submitted/verified"
+            )
+
+    # ============================================================
+    # CONFIRM ORDER
+    # ============================================================
+    st.divider()
+
+    # Initialize order_confirmed state if not exists
+    if 'order_confirmed' not in st.session_state:
+        st.session_state.order_confirmed = False
+
+    if not st.session_state.order_confirmed:
+        st.markdown("### Ready to finalize your order?")
+        st.caption("Review the order summary above and client information, then confirm to proceed to Tab 3.")
+
+        if st.button("Confirm Order", type="primary", use_container_width=True):
+            st.session_state.order_confirmed = True
+            st.rerun()
+    else:
+        st.success("Order complete! Your order summary is ready.")
+        st.info("Go to **Tab 3: Execution & Accounting** to generate Invoice & Purchase Order for this order.")
+
+        # Optional: Add button to go back and edit
+        if st.button("Edit Order", type="secondary"):
+            st.session_state.order_confirmed = False
+            st.rerun()
 
 # ============================================================
 # TAB 3: EXECUTION & ACCOUNTING

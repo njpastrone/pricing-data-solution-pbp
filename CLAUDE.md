@@ -107,12 +107,24 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 - **Quantity Warning:** Visual alert when quantity=1 to prevent accidental single-unit orders
 - **Flexible Pricing:** Both tiered and flat-rate products supported
 - **Dynamic Tier Parsing:** Tier ranges defined in data (not hardcoded)
-- **Customization Options:** Setup fees + per-unit costs with optional minimum quantities
+- **Universal Customization Options:** All products can add customization (setup fees + per-unit costs with optional minimum quantities)
+  - If spreadsheet has customization data, defaults are pre-filled
+  - If no spreadsheet data, defaults to $0 (user can still add custom values)
 - **Smart Calculations:** Markup applies to product price only (not customization)
 - **Discount Options:** NGO preset (5%) + custom discounts
-- **Marketing Rounding:** Round to nearest $5 option
+- **Marketing Rounding:** Only applies when total is divisible by 10 (e.g., $60 → $59)
 - **Custom Line Items:** Add unique services/customizations
 - **Order Notes:** 5 categories (kitting, client requests, samples, artwork, general)
+- **Detailed Order Summary:** Line-item breakdown showing:
+  - Base product cost + markup (separate line per product)
+  - Customization setup fee (if applicable)
+  - Customization per-unit cost (if applicable)
+  - Products subtotal
+  - Discount (if applicable)
+  - Shipping
+  - Tariffs (per product with country & rate)
+  - Credit card fee (if applicable)
+  - Total quote
 - **Section Flow:** 1. Add Products → 2. Configure Each Product → 3. Order Settings → 4. Notes → 5. Summary
 
 ### Tab 3: Execution & Accounting
@@ -177,11 +189,13 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 2.4 - Tab 2 Restructure: Edit-After-Add Pattern
+**Version:** 2.5 - Universal Customization & Detailed Order Summary
 
 **Last Updated:** 2025-10-29
 
 **Recent Improvements:**
+- ✅ **Universal Customization:** All products now show customization options (defaults to $0 if no spreadsheet data)
+- ✅ **Detailed Order Summary:** Line-item breakdown showing base cost, markup, and customization separately
 - ✅ **Tab 2 Restructure:** Complete redesign following "add first, configure after" pattern
 - ✅ **Simplified Product Addition:** One-click add with sensible defaults (qty=1, markup=100%)
 - ✅ **Inline Editing:** All product settings always visible in Current Order section
