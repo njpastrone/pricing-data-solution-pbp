@@ -2763,7 +2763,7 @@ with tab3:
         later than the in-hands date to Peace by Piece for kitting purposes.
         """)
 
-        # Build line items table in NEW template format
+        # Build line items table with per-unit and total columns
         invoice_line_items = []
         for item in st.session_state.order_items:
             # Check if custom item
@@ -2771,18 +2771,21 @@ with tab3:
                 partner = "Custom"
                 items_specs = item.get('custom_description', 'Custom line item')
                 partner_in_hands = "N/A"
-                cost = f"${item.get('total_per_unit', 0):.2f}"
+                qty = item['quantity']
+                cost_per_unit = item.get('total_per_unit', 0)
+                cost_total = item.get('product_total', 0)
                 cost_verified = "N/A"
-                sell_price = f"${item.get('product_total', 0):.2f}"
 
                 invoice_line_items.append({
                     'PARTNER': partner,
                     'ITEMS + SPECS': items_specs,
-                    'QTY': item['quantity'],
+                    'QTY': qty,
                     'IN-HANDS from Partner': partner_in_hands,
-                    'COST': cost,
+                    'COST/UNIT': f"${cost_per_unit:.2f}",
+                    'TOTAL COST': f"${cost_total:.2f}",
                     'COST VERIFIED?': cost_verified,
-                    'SELL PRICE': sell_price
+                    'SELL PRICE/UNIT': f"${cost_per_unit:.2f}",
+                    'TOTAL SELL PRICE': f"${cost_total:.2f}"
                 })
             else:
                 # Regular product
@@ -2790,14 +2793,15 @@ with tab3:
                 product_name = item['product_name']
                 product_specs = item.get('product_specs', item.get('tier_range', ''))
                 items_specs = f"{product_name}\n{product_specs}"
+                qty = item['quantity']
 
                 partner_in_hands = item.get('partner_in_hands_date', 'TBD')
                 if partner_in_hands and partner_in_hands != 'TBD':
                     partner_in_hands = str(partner_in_hands)
 
                 # Partner cost (before markup)
-                partner_cost = item.get('partner_cost_per_unit', item.get('base_price', 0))
-                cost = f"${partner_cost:.2f}"
+                partner_cost_per_unit = item.get('partner_cost_per_unit', item.get('base_price', 0))
+                partner_cost_total = item.get('product_subtotal', 0)  # base_price * quantity
 
                 cost_verified = item.get('cost_verified', 'Pending')
 
@@ -2805,18 +2809,20 @@ with tab3:
                 # This prevents double counting since customization is shown as separate line items
                 product_subtotal = item.get('product_subtotal', 0)
                 markup_amount = item.get('markup_amount', 0)
-                sell_price_base_product = product_subtotal + markup_amount
-                sell_price = f"${sell_price_base_product:.2f}"
+                sell_price_total = product_subtotal + markup_amount
+                sell_price_per_unit = sell_price_total / qty if qty > 0 else 0
 
                 # Add base product line
                 invoice_line_items.append({
                     'PARTNER': partner,
                     'ITEMS + SPECS': items_specs,
-                    'QTY': item['quantity'],
+                    'QTY': qty,
                     'IN-HANDS from Partner': partner_in_hands,
-                    'COST': cost,
+                    'COST/UNIT': f"${partner_cost_per_unit:.2f}",
+                    'TOTAL COST': f"${partner_cost_total:.2f}",
                     'COST VERIFIED?': cost_verified,
-                    'SELL PRICE': sell_price
+                    'SELL PRICE/UNIT': f"${sell_price_per_unit:.2f}",
+                    'TOTAL SELL PRICE': f"${sell_price_total:.2f}"
                 })
 
                 # Add customization line items if present
@@ -2830,24 +2836,28 @@ with tab3:
                     if customization_setup > 0:
                         invoice_line_items.append({
                             'PARTNER': partner,
-                            'ITEMS + SPECS': f"Setup Fee: {customization_desc}",
+                            'ITEMS + SPECS': f"  └ Setup Fee: {customization_desc}",
                             'QTY': 1,
                             'IN-HANDS from Partner': partner_in_hands,
-                            'COST': f"${customization_setup:.2f}",
+                            'COST/UNIT': f"${customization_setup:.2f}",
+                            'TOTAL COST': f"${customization_setup:.2f}",
                             'COST VERIFIED?': cost_verified,
-                            'SELL PRICE': f"${customization_setup:.2f}"
+                            'SELL PRICE/UNIT': f"${customization_setup:.2f}",
+                            'TOTAL SELL PRICE': f"${customization_setup:.2f}"
                         })
 
                     # Per-unit customization line item
                     if customization_unit_total > 0:
                         invoice_line_items.append({
                             'PARTNER': partner,
-                            'ITEMS + SPECS': f"Customization: {customization_desc}",
-                            'QTY': item['quantity'],
+                            'ITEMS + SPECS': f"  └ Customization: {customization_desc}",
+                            'QTY': qty,
                             'IN-HANDS from Partner': partner_in_hands,
-                            'COST': f"${customization_per_unit:.2f}",
+                            'COST/UNIT': f"${customization_per_unit:.2f}",
+                            'TOTAL COST': f"${customization_unit_total:.2f}",
                             'COST VERIFIED?': cost_verified,
-                            'SELL PRICE': f"${customization_unit_total:.2f}"
+                            'SELL PRICE/UNIT': f"${customization_per_unit:.2f}",
+                            'TOTAL SELL PRICE': f"${customization_unit_total:.2f}"
                         })
 
                 # Add tariff line item if applicable
@@ -2857,12 +2867,14 @@ with tab3:
 
                     invoice_line_items.append({
                         'PARTNER': partner,
-                        'ITEMS + SPECS': f"Tariff ({tariff_rate}%)",
+                        'ITEMS + SPECS': f"  └ Tariff ({tariff_rate}%)",
                         'QTY': 1,
                         'IN-HANDS from Partner': "N/A",
-                        'COST': f"${tariff_amount:.2f}",
+                        'COST/UNIT': f"${tariff_amount:.2f}",
+                        'TOTAL COST': f"${tariff_amount:.2f}",
                         'COST VERIFIED?': "Yes",
-                        'SELL PRICE': f"${tariff_amount:.2f}"
+                        'SELL PRICE/UNIT': f"${tariff_amount:.2f}",
+                        'TOTAL SELL PRICE': f"${tariff_amount:.2f}"
                     })
 
         # Display line items table with better column sizing
@@ -2872,13 +2884,15 @@ with tab3:
             use_container_width=True,
             hide_index=True,
             column_config={
-                "PARTNER": st.column_config.TextColumn("PARTNER", width="medium"),
+                "PARTNER": st.column_config.TextColumn("PARTNER", width="small"),
                 "ITEMS + SPECS": st.column_config.TextColumn("ITEMS + SPECS", width="large"),
                 "QTY": st.column_config.NumberColumn("QTY", width="small"),
-                "IN-HANDS from Partner": st.column_config.TextColumn("IN-HANDS from Partner", width="medium"),
-                "COST": st.column_config.TextColumn("COST", width="small"),
-                "COST VERIFIED?": st.column_config.TextColumn("COST VERIFIED?", width="medium"),
-                "SELL PRICE": st.column_config.TextColumn("SELL PRICE", width="medium")
+                "IN-HANDS from Partner": st.column_config.TextColumn("IN-HANDS from Partner", width="small"),
+                "COST/UNIT": st.column_config.TextColumn("COST/UNIT", width="small"),
+                "TOTAL COST": st.column_config.TextColumn("TOTAL COST", width="small"),
+                "COST VERIFIED?": st.column_config.TextColumn("COST VERIFIED?", width="small"),
+                "SELL PRICE/UNIT": st.column_config.TextColumn("SELL PRICE/UNIT", width="small"),
+                "TOTAL SELL PRICE": st.column_config.TextColumn("TOTAL SELL PRICE", width="small")
             }
         )
 
@@ -2959,9 +2973,11 @@ with tab3:
                 'ITEMS + SPECS': total_item[0],
                 'QTY': '',
                 'IN-HANDS from Partner': '',
-                'COST': '',
+                'COST/UNIT': '',
+                'TOTAL COST': '',
                 'COST VERIFIED?': '',
-                'SELL PRICE': total_item[1]
+                'SELL PRICE/UNIT': '',
+                'TOTAL SELL PRICE': total_item[1]
             }])
             invoice_complete = pd.concat([invoice_complete, total_row], ignore_index=True)
 
@@ -2971,9 +2987,11 @@ with tab3:
             'ITEMS + SPECS': '',
             'QTY': '',
             'IN-HANDS from Partner': '',
-            'COST': '',
+            'COST/UNIT': '',
+            'TOTAL COST': '',
             'COST VERIFIED?': '',
-            'SELL PRICE': ''
+            'SELL PRICE/UNIT': '',
+            'TOTAL SELL PRICE': ''
         }])
         invoice_complete = pd.concat([invoice_complete, notes_row], ignore_index=True)
 
@@ -2985,9 +3003,11 @@ with tab3:
                     'ITEMS + SPECS': note.replace('**', '').replace('\n', ' '),
                     'QTY': '',
                     'IN-HANDS from Partner': '',
-                    'COST': '',
+                    'COST/UNIT': '',
+                    'TOTAL COST': '',
                     'COST VERIFIED?': '',
-                    'SELL PRICE': ''
+                    'SELL PRICE/UNIT': '',
+                    'TOTAL SELL PRICE': ''
                 }])
                 invoice_complete = pd.concat([invoice_complete, notes_row], ignore_index=True)
 
