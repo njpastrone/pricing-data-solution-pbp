@@ -2424,69 +2424,110 @@ with tab3:
         st.markdown("3. Return to this tab to generate Invoice/PO")
     else:
         # ============================================================
-        # SECTION 1: ORDER SUMMARY PREVIEW
+        # SECTION 1: REVIEW & EDIT ORDER INFORMATION
         # ============================================================
-        st.subheader("1. Order Summary")
-
-        # Quick summary display
-        total_products = len(st.session_state.order_items)
-        total_units = sum(item['quantity'] for item in st.session_state.order_items)
-
-        # Calculate order total (same logic as Tab 2)
-        products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
-
-        # Get discount info
-        discount_percent = 0.0
-        discount_description = ""
-        if st.session_state.order_discount_type == "preset":
-            preset = st.session_state.order_discount_preset
-            discount_description = preset
-            if "(" in preset and "%" in preset:
-                percent_str = preset.split("(")[1].split("%")[0]
-                discount_percent = float(percent_str)
-        elif st.session_state.order_discount_type == "custom":
-            discount_percent = st.session_state.order_discount_custom_value
-            discount_description = st.session_state.order_discount_custom_desc if st.session_state.order_discount_custom_desc else f"Custom Discount ({discount_percent}%)"
-
-        discount_amount = products_subtotal * (discount_percent / 100)
-        subtotal_after_discount = products_subtotal - discount_amount
-
-        # Add shipping and tariff
-        shipping = st.session_state.order_shipping
-        tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
-
-        total_before_cc = subtotal_after_discount + shipping + tariff
-        cc_fee_amount = calculate_credit_card_fee(total_before_cc, st.session_state.apply_cc_fee, st.session_state.cc_fee_percent)
-        total_quote = total_before_cc + cc_fee_amount
-        total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
-
-        # Display quick summary
-        client_name = st.session_state.client_info.get('company_name', 'Not specified')
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Client", client_name)
-        with col2:
-            st.metric("Products", f"{total_products} items ({total_units} units)")
-        with col3:
-            st.metric("Total Quote", f"${total_quote:,.2f}")
-
-        st.divider()
-
-        # ============================================================
-        # SECTION 2: COMPLETENESS CHECK
-        # ============================================================
-        st.subheader("2. Completeness Check")
+        st.subheader("1. Review & Edit Order Information")
+        st.caption("Review and complete any missing information before generating the invoice/PO")
 
         client_info = st.session_state.client_info
         validation_warnings = validate_invoice_completeness(client_info, st.session_state.order_items)
 
         if validation_warnings:
-            with st.expander("Validation Warnings - Click to Review", expanded=True):
-                st.warning("The following fields are missing or incomplete. The invoice/PO can still be generated, but these should be completed before sending to the bookkeeper:")
-                for warning in validation_warnings:
-                    st.write(f"- {warning}")
+            st.warning(f"⚠️ {len(validation_warnings)} field(s) need attention. Complete the missing information below:")
         else:
-            st.success("All required fields complete - ready to generate Invoice/PO")
+            st.success("✓ All required fields complete - ready to generate Invoice/PO")
+
+        # Editable fields for missing information
+        with st.expander("📝 Edit Order Information", expanded=bool(validation_warnings)):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Client Information**")
+                st.session_state.client_info['company_name'] = st.text_input(
+                    "Company Name",
+                    value=st.session_state.client_info.get('company_name', ''),
+                    key="tab3_company_name"
+                )
+
+                st.session_state.client_info['contact_name'] = st.text_input(
+                    "Contact Name",
+                    value=st.session_state.client_info.get('contact_name', ''),
+                    key="tab3_contact_name"
+                )
+
+                st.session_state.client_info['contact_email'] = st.text_input(
+                    "Contact Email",
+                    value=st.session_state.client_info.get('contact_email', ''),
+                    key="tab3_contact_email"
+                )
+
+                st.session_state.client_info['billing_address'] = st.text_area(
+                    "Billing Address",
+                    value=st.session_state.client_info.get('billing_address', ''),
+                    key="tab3_billing_address",
+                    height=80
+                )
+
+                st.session_state.client_info['shipping_address'] = st.text_area(
+                    "Shipping Address",
+                    value=st.session_state.client_info.get('shipping_address', ''),
+                    key="tab3_shipping_address",
+                    height=80
+                )
+
+            with col2:
+                st.markdown("**Order Details**")
+
+                st.session_state.client_info['client_in_hands_date'] = st.date_input(
+                    "Client In-Hands Date",
+                    value=st.session_state.client_info.get('client_in_hands_date'),
+                    key="tab3_in_hands_date"
+                )
+
+                ship_method_options = ['Ground', 'Air', 'Freight', 'Other']
+                current_ship = st.session_state.client_info.get('shipping_type', 'Ground')
+                st.session_state.client_info['shipping_type'] = st.selectbox(
+                    "Ship Method",
+                    options=ship_method_options,
+                    index=ship_method_options.index(current_ship) if current_ship in ship_method_options else 0,
+                    key="tab3_ship_method"
+                )
+
+                payment_terms_options = ['Net 30', 'Net 60', 'Due on Receipt', '50% Deposit']
+                current_terms = st.session_state.client_info.get('payment_timeline', 'Net 30')
+                st.session_state.client_info['payment_timeline'] = st.selectbox(
+                    "Payment Terms",
+                    options=payment_terms_options,
+                    index=payment_terms_options.index(current_terms) if current_terms in payment_terms_options else 0,
+                    key="tab3_payment_terms"
+                )
+
+                payment_method_options = ['Check', 'ACH', 'Credit Card', 'Wire Transfer']
+                current_method = st.session_state.client_info.get('payment_preference', 'Check')
+                st.session_state.client_info['payment_preference'] = st.selectbox(
+                    "Payment Method",
+                    options=payment_method_options,
+                    index=payment_method_options.index(current_method) if current_method in payment_method_options else 0,
+                    key="tab3_payment_method"
+                )
+
+                st.session_state.client_info['order_submitted_by'] = st.text_input(
+                    "Order Submitted By",
+                    value=st.session_state.client_info.get('order_submitted_by', ''),
+                    key="tab3_order_submitted_by"
+                )
+
+                st.session_state.client_info['cost_submitted_by'] = st.text_input(
+                    "Cost Submitted By",
+                    value=st.session_state.client_info.get('cost_submitted_by', ''),
+                    key="tab3_cost_submitted_by"
+                )
+
+                st.session_state.client_info['cost_submitted_date'] = st.date_input(
+                    "Cost Submitted Date",
+                    value=st.session_state.client_info.get('cost_submitted_date'),
+                    key="tab3_cost_submitted_date"
+                )
 
         st.divider()
 
@@ -2643,7 +2684,7 @@ with tab3:
         # ============================================================
         # SECTION 3: INVOICE & PURCHASE ORDER GENERATION
         # ============================================================
-        st.subheader("3. Generate Invoice & Purchase Order")
+        st.subheader("2. Generate Invoice & Purchase Order")
 
         st.markdown("### INVOICE AND PURCHASE ORDER REQUEST FORM")
         st.caption("Complete form matching the bookkeeper template requirements")
@@ -2901,7 +2942,7 @@ with tab3:
         st.write("")  # Spacing
         st.markdown("**Summary Totals:**")
         totals_data = [
-            ["Subtotal", f"${products_subtotal:.2f}"]
+            ["Subtotal (Products + Customization)", f"${products_subtotal:.2f}"]
         ]
 
         # Add discount line if applicable
@@ -3028,6 +3069,6 @@ with tab3:
         # ============================================================
         # SECTION 4: ACCOUNTING EXPORT (FUTURE)
         # ============================================================
-        st.subheader("4. Export for Accounting")
+        st.subheader("3. Export for Accounting")
         st.caption("Future: QuickBooks export, accounting reports, etc.")
         st.info("Accounting export features will be added in Phase 4")
