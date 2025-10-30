@@ -2646,68 +2646,117 @@ with tab3:
         st.subheader("3. Generate Invoice & Purchase Order")
 
         st.markdown("### INVOICE AND PURCHASE ORDER REQUEST FORM")
+        st.caption("Complete form matching the bookkeeper template requirements")
 
-        # === HEADER SECTION ===
-        st.markdown("#### Header Information")
+        # ============================================================
+        # TABLE 1: CLIENT/COMPANY INFORMATION
+        # ============================================================
+        st.markdown("#### 1. Client/Company Information")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            company_status = "New" if client_info.get('is_new_client', False) else "Existing"
-            st.write(f"**Company:** {client_info.get('company_name', 'Not specified')} ({company_status})")
-            st.write(f"**Contact + Email:** {client_info.get('contact_name', 'Not specified')} ({client_info.get('contact_email', 'Not specified')})")
+        client_info_data = []
 
-            if client_info.get('is_new_client', False) and client_info.get('billing_address'):
-                st.write(f"**IF NEW - Billing Address:** {client_info['billing_address']}")
+        # Company/Client Name
+        company_status = "New" if client_info.get('is_new_client', False) else "Existing"
+        company_name = client_info.get('company_name', 'Not specified')
+        client_info_data.append(["Company/Client Name", f"{company_name} ({company_status})"])
 
-            po_number = client_info.get('client_po', 'N/A')
-            st.write(f"**Client PO #:** {po_number}")
+        # Contact + Email
+        contact_name = client_info.get('contact_name', 'Not specified')
+        contact_email = client_info.get('contact_email', 'Not specified')
+        client_info_data.append(["Contact + Email", f"{contact_name} <{contact_email}>"])
 
-        with col2:
-            order_submitted_by = client_info.get('order_submitted_by', 'Not specified')
-            order_submitted_date = client_info.get('order_submitted_date', datetime.now().date())
-            st.write(f"**Order Submitted by:** {order_submitted_by}")
-            st.write(f"**Date:** {order_submitted_date}")
+        # Company Billing Address + Email
+        billing_address = client_info.get('billing_address', 'Not specified')
+        billing_email = client_info.get('contact_email', 'Not specified')  # Using contact email as billing email
+        client_info_data.append(["Company Billing Address + Email", f"{billing_address} | {billing_email}"])
 
-            cost_submitted_by = client_info.get('cost_submitted_by', 'Not specified')
-            cost_submitted_date = client_info.get('cost_submitted_date', 'Not specified')
-            st.write(f"**Cost Submitted by:** {cost_submitted_by}")
-            st.write(f"**Date:** {cost_submitted_date if cost_submitted_date else 'Not specified'}")
+        # Company Shipping Address
+        shipping_address = client_info.get('shipping_address', 'Not specified')
+        shipping_type = client_info.get('shipping_type', 'Not specified')
+        client_info_data.append(["Company Shipping Address", f"{shipping_address} ({shipping_type})"])
 
-        st.markdown("---")
+        # Client PO #
+        po_number = client_info.get('client_po', 'N/A')
+        client_info_data.append(["Client PO #", po_number])
 
-        # === PARTNER(S) + POC SECTION ===
-        st.markdown("**Partner(s) + POC:**")
+        # Display as table
+        client_info_df = pd.DataFrame(client_info_data, columns=["Field", "Value"])
+        st.table(client_info_df)
+
+        st.divider()
+
+        # ============================================================
+        # TABLE 2: PARTNERS + POINT OF CONTACTS
+        # ============================================================
+        st.markdown("#### 2. Partners + Point of Contacts")
 
         # Get unique partners from order items
         partners_in_order = list(set(item['partner'] for item in st.session_state.order_items if not item.get('is_custom', False)))
 
+        partners_data = []
         if partners_in_order and hasattr(st.session_state, 'partner_contacts'):
             for partner_name in partners_in_order:
                 partner_contact = st.session_state.partner_contacts.get(partner_name, {})
                 poc_name = partner_contact.get('poc_name', 'Not specified')
                 poc_email = partner_contact.get('poc_email', 'Not specified')
-                st.write(f"- {partner_name} - {poc_name} ({poc_email})")
+                partners_data.append({
+                    "Partner": partner_name,
+                    "Point of Contact (POC)": f"{poc_name} <{poc_email}>"
+                })
         else:
-            st.write("No partners in order")
+            partners_data.append({
+                "Partner": "No partners in order",
+                "Point of Contact (POC)": "N/A"
+            })
 
-        st.markdown("---")
-
-        # === DELIVERY & PAYMENT DETAILS ===
-        col3, col4 = st.columns(2)
-        with col3:
-            client_in_hands = client_info.get('client_in_hands_date', 'Not specified')
-            st.write(f"**Client In-Hands Date:** {client_in_hands}")
-            st.write(f"**Payment Terms:** {client_info.get('payment_timeline', 'Not specified')}")
-
-        with col4:
-            ship_method = client_info.get('shipping_type', 'Not specified')
-            st.write(f"**Ship Method:** {ship_method}")
-            st.write(f"**Payment Method:** {client_info.get('payment_preference', 'Not specified')}")
+        partners_df = pd.DataFrame(partners_data)
+        st.table(partners_df)
 
         st.divider()
 
-        # === ITEMIZED TABLE SECTION ===
-        st.markdown("#### INVOICE AND PURCHASE ORDER ITEM DETAILS")
+        # ============================================================
+        # TABLE 3: ORDER DETAILS (DATES, SHIPPING, PAYMENT)
+        # ============================================================
+        st.markdown("#### 3. Order Details")
+
+        order_details_data = []
+
+        # Client In-Hands Date
+        client_in_hands = client_info.get('client_in_hands_date', 'Not specified')
+        order_details_data.append(["Client In-Hands Date", str(client_in_hands)])
+
+        # Ship Method
+        ship_method = client_info.get('shipping_type', 'Not specified')
+        order_details_data.append(["Ship Method", ship_method])
+
+        # Payment Terms
+        payment_terms = client_info.get('payment_timeline', 'Not specified')
+        order_details_data.append(["Payment Terms", payment_terms])
+
+        # Payment Method
+        payment_method = client_info.get('payment_preference', 'Not specified')
+        order_details_data.append(["Payment Method", payment_method])
+
+        # Order Submitted By + Date
+        order_submitted_by = client_info.get('order_submitted_by', 'Not specified')
+        order_submitted_date = client_info.get('order_submitted_date', datetime.now().date())
+        order_details_data.append(["Order Submitted By", f"{order_submitted_by} (Date: {order_submitted_date})"])
+
+        # Cost Submitted By + Date
+        cost_submitted_by = client_info.get('cost_submitted_by', 'Not specified')
+        cost_submitted_date = client_info.get('cost_submitted_date', 'Not specified')
+        order_details_data.append(["Cost Submitted By", f"{cost_submitted_by} (Date: {cost_submitted_date if cost_submitted_date else 'Not specified'})"])
+
+        # Display as table
+        order_details_df = pd.DataFrame(order_details_data, columns=["Field", "Value"])
+        st.table(order_details_df)
+
+        st.divider()
+
+        # ============================================================
+        # TABLE 4: INVOICE AND PURCHASE ORDER ITEM DETAILS
+        # ============================================================
+        st.markdown("#### 4. Invoice and Purchase Order Item Details")
         st.caption("""
         This cost-to-sell segment outlines our partners' cost, our sell price to client,
         and our partners' requested in-hands date. Our in-hands date for clients may be

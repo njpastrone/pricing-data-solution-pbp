@@ -128,11 +128,17 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 - **Section Flow:** 1. Add Products → 2. Configure Each Product → 3. Order Settings → 4. Notes → 5. Summary
 
 ### Tab 3: Execution & Accounting
-- **Order Validation:** Completeness check with warnings
+- **Order Summary Preview:** Quick overview of client, products, and total quote
+- **Order Validation:** Completeness check with warnings for missing fields
 - **Editable Summary:** Quick edits for shipping, discounts, credit card fees
-- **Invoice Generation:** Bookkeeper-standardized format
-- **Purchase Order Generation:** Partner-specific PO with contact auto-extraction
-- **CSV Export:** Download order data for accounting systems
+- **4-Table Invoice/PO Format:** Structured to match bookkeeper template requirements:
+  - **Table 1: Client/Company Information** - Company name, contact, billing/shipping addresses, PO number
+  - **Table 2: Partners + Point of Contacts** - All partners with POC details auto-populated from Google Sheets
+  - **Table 3: Order Details** - Client in-hands date, ship method, payment terms/method, submission details
+  - **Table 4: Invoice and PO Item Details** - Line items with partner, specs, quantity, in-hands date, cost, cost verification, sell price
+- **Line Item Details:** Each product shows base cost, customization (setup/per-unit), and tariffs as separate rows
+- **Notes Section:** Displays all order notes (kitting specs, client requests, samples, artwork, general)
+- **CSV Export:** Download complete invoice/PO with all tables for bookkeeper submission
 
 ## Project Structure
 
@@ -189,11 +195,16 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 2.5 - Universal Customization & Detailed Order Summary
+**Version:** 2.6 - Tab 3 Restructure with Bookkeeper Template Format
 
-**Last Updated:** 2025-10-29
+**Last Updated:** 2025-10-30
 
 **Recent Improvements:**
+- ✅ **Tab 3 4-Table Format:** Restructured Invoice/PO section to match bookkeeper template exactly
+  - Table 1: Client/Company Information (name, contact, addresses, PO number)
+  - Table 2: Partners + Point of Contacts (auto-populated from Google Sheets)
+  - Table 3: Order Details (dates, shipping, payment terms/method)
+  - Table 4: Invoice and PO Item Details (line items with cost verification)
 - ✅ **Universal Customization:** All products now show customization options (defaults to $0 if no spreadsheet data)
 - ✅ **Detailed Order Summary:** Line-item breakdown showing base cost, markup, and customization separately
 - ✅ **Tab 2 Restructure:** Complete redesign following "add first, configure after" pattern
