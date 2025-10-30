@@ -128,17 +128,24 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 - **Section Flow:** 1. Add Products → 2. Configure Each Product → 3. Order Settings → 4. Notes → 5. Summary
 
 ### Tab 3: Execution & Accounting
-- **Order Summary Preview:** Quick overview of client, products, and total quote
+- **Editable Order Information:** Review and complete any missing client/order information with inline editing
 - **Order Validation:** Completeness check with warnings for missing fields
-- **Editable Summary:** Quick edits for shipping, discounts, credit card fees
+- **Comprehensive Order Settings:** Full editing access to all Tab 2 settings (shipping, tariffs, discounts, custom line items, notes)
 - **4-Table Invoice/PO Format:** Structured to match bookkeeper template requirements:
   - **Table 1: Client/Company Information** - Company name, contact, billing/shipping addresses, PO number
   - **Table 2: Partners + Point of Contacts** - All partners with POC details auto-populated from Google Sheets
   - **Table 3: Order Details** - Client in-hands date, ship method, payment terms/method, submission details
-  - **Table 4: Invoice and PO Item Details** - Line items with partner, specs, quantity, in-hands date, cost, cost verification, sell price
-- **Line Item Details:** Each product shows base cost, customization (setup/per-unit), and tariffs as separate rows
+  - **Table 4: Invoice and PO Item Details** - Line items with partner, specs, quantity, in-hands date, cost/unit, total cost, sell price/unit, total sell price
+- **Detailed Line Items:** Each product shows:
+  - Base product with cost per unit and total cost
+  - Customization setup fee (separate line item)
+  - Customization per-unit costs (separate line item)
+  - Tariffs with per-unit breakdown (separate line item showing rate and quantity)
+- **Smart Pricing Display:** Sell price excludes customization to prevent double counting (customization shown separately)
 - **Notes Section:** Displays all order notes (kitting specs, client requests, samples, artwork, general)
-- **CSV Export:** Download complete invoice/PO with all tables for bookkeeper submission
+- **Dual Export Options:**
+  - CSV download for spreadsheet import and bookkeeper submission
+  - HTML download for professional, email-ready invoice/PO format
 
 ## Project Structure
 
@@ -195,16 +202,22 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 2.6 - Tab 3 Restructure with Bookkeeper Template Format
+**Version:** 2.7 - Tab 3 Enhancements with Detailed Pricing and HTML Export
 
 **Last Updated:** 2025-10-30
 
 **Recent Improvements:**
-- ✅ **Tab 3 4-Table Format:** Restructured Invoice/PO section to match bookkeeper template exactly
+- ✅ **Tab 3 Enhanced Invoice/PO Format:** Comprehensive 4-table structure with detailed line items
   - Table 1: Client/Company Information (name, contact, addresses, PO number)
   - Table 2: Partners + Point of Contacts (auto-populated from Google Sheets)
   - Table 3: Order Details (dates, shipping, payment terms/method)
-  - Table 4: Invoice and PO Item Details (line items with cost verification)
+  - Table 4: Invoice and PO Item Details with per-unit and total cost/price columns
+- ✅ **Detailed Line Item Breakdown:** Each product shows base, customization, and tariffs separately with per-unit costs
+- ✅ **Fixed Double Counting:** Sell price now excludes customization (shown as separate line items)
+- ✅ **Editable Order Review:** All client info and order settings editable directly in Tab 3
+- ✅ **Comprehensive Settings Access:** Full access to shipping, tariffs, discounts, custom items, and notes from Tab 3
+- ✅ **HTML Invoice Export:** Professional, email-ready HTML format alongside CSV download
+- ✅ **Workflow Display Fix:** Improved formatting of 3-tab workflow description at app header
 - ✅ **Universal Customization:** All products now show customization options (defaults to $0 if no spreadsheet data)
 - ✅ **Detailed Order Summary:** Line-item breakdown showing base cost, markup, and customization separately
 - ✅ **Tab 2 Restructure:** Complete redesign following "add first, configure after" pattern
@@ -236,13 +249,19 @@ pricing-data-solution-pbp/
 - ✅ Marketing rounding (charm pricing: $60 → $59)
 - ✅ Custom line items for unique services/customizations
 - ✅ Per-product proposal tables (4-column MOQ format)
-- ✅ Bookkeeper-standardized Invoice & PO template
-- ✅ Editable order summary in Tab 3 (quick adjustments before invoice generation)
+- ✅ Bookkeeper-standardized Invoice & PO template (4-table format)
+- ✅ Editable order information in Tab 3 (complete all missing fields before generation)
+- ✅ Comprehensive order settings access in Tab 3 (mirrors Tab 2 functionality)
+- ✅ Detailed per-unit and total pricing columns (cost/unit, total cost, sell price/unit, total sell price)
+- ✅ Smart sell price calculation (excludes customization to prevent double counting)
+- ✅ Tariff per-unit breakdown (shows rate and quantity-based calculation)
+- ✅ HTML invoice/PO export (professional, email-ready format)
+- ✅ Dual export options (CSV for bookkeeper, HTML for client communication)
 - ✅ Partner contact auto-extraction from Google Sheets
 - ✅ Comprehensive order notes system (5 categories)
 - ✅ Field validation with user warnings
 - ✅ Standardized payment/shipping dropdowns
-- ✅ **NEW: Date tracking for order/cost submission**
+- ✅ Date tracking for order/cost submission
 
 **Testing Status:**
 - ✅ Data loads from master_pricing_template_10_14

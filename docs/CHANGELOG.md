@@ -4,6 +4,81 @@ All notable changes to the Peace by Piece International Pricing App are document
 
 ---
 
+## [2.7] - Tab 3 Enhancements: Detailed Pricing & HTML Export (October 2025)
+
+### Added
+- **Per-Unit and Total Columns:** Table 4 now shows both unit and total values
+  - COST/UNIT and TOTAL COST columns
+  - SELL PRICE/UNIT and TOTAL SELL PRICE columns
+- **Detailed Line Item Breakdown:** Each product shows base, customization, and tariffs as separate rows
+  - Base product with per-unit and total pricing
+  - Customization setup fee (if applicable)
+  - Customization per-unit costs (if applicable)
+  - Tariffs with per-unit breakdown showing actual quantity
+- **HTML Invoice Export:** Professional, email-ready invoice/PO format
+  - Complete 4-table structure with all client and order information
+  - Styled for email compatibility (light/dark mode safe)
+  - Side-by-side download buttons (CSV and HTML)
+- **Editable Order Review Section:** Complete all missing information directly in Tab 3
+  - Inline editing for all client information fields
+  - Validation warnings guide user to incomplete fields
+  - No need to go back to Tab 2 to fix missing data
+- **Comprehensive Order Settings Access:** Full Tab 2 settings available in Tab 3
+  - Shipping & Tariffs (with per-product tariff editing)
+  - Order Adjustments (discounts, marketing rounding, CC fee)
+  - Custom Line Items
+  - Order Notes (all 5 categories)
+
+### Fixed
+- **Double Counting Issue:** Sell price now excludes customization costs
+  - Base product sell price = product cost + markup only
+  - Customization shown as separate line items
+  - Prevents double counting of customization in totals
+- **Tariff Display:** Tariffs now show per-unit breakdown
+  - QTY column shows actual product quantity (not 1)
+  - Calculated tariff_per_unit = tariff_amount_total / quantity
+  - Shows tariff rate percentage in item description
+- **Table Readability:** Switched from `st.table()` to `st.dataframe()` with column configuration
+  - Proper column widths for all fields
+  - Readable column headers
+  - Better data presentation
+- **Workflow Display:** Fixed formatting of 3-tab workflow at app header
+  - Separate markdown calls for each line ensure proper rendering
+  - Clear line breaks between each tab description
+
+### Changed
+- **Section 1 Redesign:** Replaced read-only order summary with editable review section
+  - Removed metrics display (product count, total quote)
+  - Added editable form fields for all client/order information
+  - Focus on completing missing data before invoice generation
+- **Edit Order Settings:** Expanded from simple adjustments to comprehensive settings
+  - Now mirrors Tab 2 Section 3 format exactly
+  - All order settings accessible and editable
+  - Changes sync bidirectionally with Tab 2
+
+### Removed
+- **Emojis from Tab 3:** Removed emojis per CLAUDE.md guidelines
+  - CSV/HTML download button labels (📄, 🌐)
+  - Download caption (💡)
+  - Maintains professional appearance
+
+### Improved
+- **Data Transparency:** Per-unit breakdown makes pricing clear and verifiable
+- **Export Options:** Dual format (CSV + HTML) serves different use cases
+  - CSV for bookkeeper/spreadsheet systems
+  - HTML for professional client communication
+- **Workflow Efficiency:** Edit everything in one place without tab switching
+- **Visual Clarity:** Table with proper column widths improves readability
+
+### Technical
+- **Column Configuration:** Using `st.column_config` for precise table formatting
+- **Sell Price Calculation:** `product_subtotal + markup_amount` (excludes customization)
+- **Tariff Per-Unit:** `tariff_amount_total / qty` for accurate unit pricing
+- **HTML Generation:** F-string template with comprehensive styling for email compatibility
+- **Session State Sync:** Bidirectional data flow between Tab 2 and Tab 3 settings
+
+---
+
 ## [2.4] - Tab 2 Restructure: Edit-After-Add Pattern (October 2025)
 
 ### Changed
@@ -248,7 +323,9 @@ All notable changes to the Peace by Piece International Pricing App are document
 
 | Version | Date | Key Feature | Status |
 |---------|------|-------------|--------|
-| 2.3 | Oct 2025 | Tab transition UX & critical bug fixes | ✅ Current |
+| 2.7 | Oct 2025 | Tab 3 detailed pricing & HTML export | ✅ Current |
+| 2.4 | Oct 2025 | Tab 2 edit-after-add restructure | ✅ Implemented |
+| 2.3 | Oct 2025 | Tab transition UX & critical bug fixes | ✅ Implemented |
 | 2.2 | Oct 2025 | Proposals Tab UX improvements | ✅ Implemented |
 | 2.1 | Oct 2025 | Bookkeeper-aligned Invoice & PO | ✅ Implemented |
 | 2.0 | Oct 2025 | Multi-sheet data system | ✅ Implemented |
@@ -281,4 +358,4 @@ All notable changes to the Peace by Piece International Pricing App are document
 ---
 
 **Document Maintained By:** Development Team
-**Last Updated:** 2025-10-29
+**Last Updated:** 2025-10-30
