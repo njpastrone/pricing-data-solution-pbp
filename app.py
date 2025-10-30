@@ -169,13 +169,11 @@ if 'using_proposal_data' not in st.session_state:
 # HEADER
 # ============================================================
 st.title("Peace by Piece Order Management System")
-st.markdown("""
-**Welcome to the PBP Order Management System** — Manage the complete order lifecycle:
-
-**→ Tab 1: Proposals** - Browse products, create proposals for prospective clients
-**→ Tab 2: Order & Client Info** - Build orders, collect client details *(Full workflow - Start here)*
-**→ Tab 3: Execution & Accounting** - Generate invoices and purchase orders
-""")
+st.markdown("**Welcome to the PBP Order Management System** — Manage the complete order lifecycle:")
+st.markdown("")
+st.markdown("**→ Tab 1: Proposals** - Browse products, create proposals for prospective clients")
+st.markdown("**→ Tab 2: Order & Client Info** - Build orders, collect client details")
+st.markdown("**→ Tab 3: Execution & Accounting** - Generate invoices and purchase orders")
 st.divider()
 
 # ============================================================
@@ -3369,7 +3367,7 @@ Rates default to current estimates but can be adjusted as needed.
         with col1:
             invoice_csv = invoice_complete.to_csv(index=False)
             st.download_button(
-                label="📄 Download as CSV",
+                label="Download as CSV",
                 data=invoice_csv,
                 file_name=f"invoice_po_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv",
@@ -3379,7 +3377,7 @@ Rates default to current estimates but can be adjusted as needed.
 
         with col2:
             st.download_button(
-                label="🌐 Download as HTML",
+                label="Download as HTML",
                 data=html_invoice,
                 file_name=f"invoice_po_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
                 mime="text/html",
@@ -3387,7 +3385,7 @@ Rates default to current estimates but can be adjusted as needed.
                 use_container_width=True
             )
 
-        st.caption("💡 CSV for spreadsheet import | HTML for email-ready professional format")
+        st.caption("CSV for spreadsheet import | HTML for email-ready professional format")
 
         st.divider()
 
