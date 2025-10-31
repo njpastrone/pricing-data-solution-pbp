@@ -447,6 +447,16 @@ try:
     unique_partners = len(df_template['Partner'].unique())
 
     st.success(f"Loaded {unique_products} products from {unique_partners} partners (master_pricing_template_10_14)")
+
+    # Status message for proposals and orders
+    num_proposals = len(st.session_state.proposal_products)
+    num_orders = len(st.session_state.order_items)
+
+    proposal_status = f"{num_proposals} product{'s' if num_proposals != 1 else ''}" if num_proposals > 0 else "Empty"
+    order_status = f"{num_orders} product{'s' if num_orders != 1 else ''}" if num_orders > 0 else "Empty"
+
+    st.info(f"Proposals: {proposal_status} | Orders: {order_status}")
+
 except Exception as e:
     st.error(f"Failed to load data: {e}")
     st.stop()
@@ -2551,15 +2561,19 @@ with tab3:
                 )
 
             with col_tariff:
-                # Calculate total tariff for expander label
+                # Calculate total tariff for display
                 total_tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
 
-                with st.expander(f"Tariff Configuration (Total: ${total_tariff:.2f})", expanded=False):
-                    st.caption("Default rates applied based on country of origin. Expand to customize per product.")
-                    st.markdown("""
-Tariffs are import duties based on product country of origin.
-Rates default to current estimates but can be adjusted as needed.
-""")
+                st.write(f"**Tariff Total:** ${total_tariff:.2f}")
+
+                show_tariff_details = st.checkbox(
+                    "Customize Tariff Rates",
+                    key="tab3_show_tariff_details",
+                    help="Default rates applied based on country of origin. Check to customize per product."
+                )
+
+                if show_tariff_details:
+                    st.caption("Tariffs are import duties based on product country of origin. Rates default to current estimates but can be adjusted as needed.")
 
                     # Build editable tariff table with detailed breakdown
                     for idx, item in enumerate(st.session_state.order_items):
@@ -2704,7 +2718,15 @@ Rates default to current estimates but can be adjusted as needed.
             col_custom, col_notes = st.columns(2)
 
             with col_custom:
-                with st.expander(f"Add Custom Line Item ({custom_item_count} added)", expanded=False):
+                st.write(f"**Custom Line Items** ({custom_item_count} added)")
+
+                show_custom_item_form = st.checkbox(
+                    "Add Custom Line Item",
+                    key="tab3_show_custom_item_form",
+                    help="Add unique services or customizations not in the catalog"
+                )
+
+                if show_custom_item_form:
                     st.caption("Add unique services or customizations not in the catalog")
 
                     custom_name = st.text_input(
@@ -2771,7 +2793,15 @@ Rates default to current estimates but can be adjusted as needed.
                             st.rerun()
 
             with col_notes:
-                with st.expander(f"Add Order Notes ({filled_notes_count} filled)", expanded=False):
+                st.write(f"**Order Notes** ({filled_notes_count} filled)")
+
+                show_notes_form = st.checkbox(
+                    "Add Order Notes",
+                    key="tab3_show_notes_form",
+                    help="Add specific details for this order"
+                )
+
+                if show_notes_form:
                     st.caption("Add specific details for this order")
 
                     st.session_state.order_notes['kitting_specs'] = st.text_area(
