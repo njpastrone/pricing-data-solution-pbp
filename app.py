@@ -2232,6 +2232,33 @@ Rates default to current estimates but can be adjusted as needed.
     st.divider()
     st.header("5. Client & Order Information")
 
+    # Import client order form section
+    st.info("💡 **New Feature:** Import completed client order forms (coming soon!)")
+
+    with st.expander("Import Completed Client Order Form", expanded=False):
+        st.caption("Upload an HTML order form completed by your client to auto-populate client information and products.")
+
+        uploaded_file = st.file_uploader(
+            "Upload Client Order Form (HTML)",
+            type=['html', 'htm'],
+            key="import_client_form",
+            help="Upload the HTML form that your client filled out and returned to you"
+        )
+
+        if uploaded_file is not None:
+            st.warning("⚠️ HTML parsing feature is under development. For now, please manually enter client information below.")
+            st.markdown("**Preview of uploaded file:**")
+            content = uploaded_file.read().decode('utf-8')
+            st.text(content[:500] + "..." if len(content) > 500 else content)
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Replace Current Order", type="secondary"):
+                    st.info("This feature will be available in the next update!")
+            with col2:
+                if st.button("Add to Existing Order", type="secondary"):
+                    st.info("This feature will be available in the next update!")
+
     with st.expander("Client Details", expanded=False):
         st.markdown("Enter client information for invoices and purchase orders.")
 
