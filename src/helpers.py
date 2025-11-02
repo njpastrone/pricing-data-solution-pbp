@@ -121,22 +121,22 @@ def calculate_moq(unit_price):
     return math.ceil(1000 / unit_price)
 
 
-def calculate_credit_card_fee(total, apply_fee=False, fee_percent=2.9):
+def calculate_credit_card_fee(total, apply_fee=False, fee_percent=3.0):
     """
     Calculate credit card processing fee if applicable.
-    Default rate: 2.9%
+    Default rate: 3%
 
     Args:
         total (float): Order total
         apply_fee (bool): Whether to apply credit card fee
-        fee_percent (float): Credit card fee percentage (default 2.9%)
+        fee_percent (float): Credit card fee percentage (default 3%)
 
     Returns:
         float: Credit card fee amount (0.0 if not applicable)
 
     Examples:
-        >>> calculate_credit_card_fee(1000.0, apply_fee=True, fee_percent=2.9)
-        29.0
+        >>> calculate_credit_card_fee(1000.0, apply_fee=True, fee_percent=3.0)
+        30.0
         >>> calculate_credit_card_fee(1000.0, apply_fee=False)
         0.0
     """
