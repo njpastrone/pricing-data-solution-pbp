@@ -1035,10 +1035,60 @@ with tab1:
         st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
 
     # ============================================================
-    # SECTION 8: CLIENT ORDER FORM
+    # SECTION 8: ORDER DETAILS
     # ============================================================
     st.divider()
-    st.subheader("8. Client Order Form")
+    st.subheader("8. Order Details")
+    st.caption("Add client information to pre-fill the order form")
+
+    # Initialize order details in session state if not exists
+    if 'order_details' not in st.session_state:
+        st.session_state.order_details = {
+            'client_type': 'New',
+            'company_name': '',
+            'contact_name': '',
+            'contact_email': ''
+        }
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.session_state.order_details['client_type'] = st.selectbox(
+            "Client Type",
+            options=['New', 'Existing'],
+            index=0 if st.session_state.order_details.get('client_type', 'New') == 'New' else 1,
+            key="order_detail_client_type"
+        )
+
+        st.session_state.order_details['company_name'] = st.text_input(
+            "Company Name",
+            value=st.session_state.order_details.get('company_name', ''),
+            key="order_detail_company_name"
+        )
+
+    with col2:
+        st.session_state.order_details['contact_name'] = st.text_input(
+            "Contact Name",
+            value=st.session_state.order_details.get('contact_name', ''),
+            key="order_detail_contact_name"
+        )
+
+        st.session_state.order_details['contact_email'] = st.text_input(
+            "Contact Email",
+            value=st.session_state.order_details.get('contact_email', ''),
+            key="order_detail_contact_email"
+        )
+
+    # Button to apply info to order form
+    if st.button("Add Info to Order Form", type="primary", use_container_width=True):
+        st.success("Order details saved! They will appear in the Client Order Form below.")
+        st.rerun()
+
+    # ============================================================
+    # SECTION 9: CLIENT ORDER FORM
+    # ============================================================
+    st.divider()
+    st.subheader("9. Client Order Form")
 
     st.markdown("""
     Download the HTML form below and paste it into your email to send to clients.
@@ -1046,25 +1096,31 @@ with tab1:
     """)
 
     # Generate HTML table
-    html_form = """<!DOCTYPE html>
+    # Get order details from session state
+    client_type = st.session_state.order_details.get('client_type', 'New')
+    company_name = st.session_state.order_details.get('company_name', '') or '[Type company name here]'
+    contact_name = st.session_state.order_details.get('contact_name', '') or '[Type your name here]'
+    contact_email = st.session_state.order_details.get('contact_email', '') or '[Type your email here]'
+
+    html_form = f"""<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <style>
-        body { font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 20px; background-color: #ffffff; }
-        h2 { color: #2c3e50; background-color: #ffffff; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
-        .instructions-box { background-color: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 20px 0; color: #000000; }
-        .instructions-box p { margin: 5px 0; color: #000000; }
-        table { border-collapse: collapse; width: 100%; margin: 20px 0; background-color: #ffffff; }
-        th { background-color: #3498db !important; color: #ffffff !important; padding: 12px; text-align: left; font-weight: bold; }
-        td { border: 1px solid #ddd; padding: 10px; background-color: #ffffff; color: #000000; }
-        td:first-child { background-color: #f8f9fa !important; color: #000000 !important; font-weight: 500; width: 35%; vertical-align: top; }
-        .section-header { background-color: #2c3e50 !important; color: #ffffff !important; font-weight: bold; padding: 10px; }
-        .fill-in { background-color: #ffffff !important; color: #7f8c8d !important; min-height: 20px; font-style: italic; }
-        .product-table { margin: 10px 0; }
-        .product-table td { background-color: #ffffff !important; color: #000000 !important; }
-        .helper-text { color: #7f8c8d; font-size: 0.85em; display: block; margin-top: 3px; }
-        .required { color: #e74c3c !important; font-weight: bold; }
+        body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 20px; background-color: #ffffff; }}
+        h2 {{ color: #2c3e50; background-color: #ffffff; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
+        .instructions-box {{ background-color: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 20px 0; color: #000000; }}
+        .instructions-box p {{ margin: 5px 0; color: #000000; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 20px 0; background-color: #ffffff; }}
+        th {{ background-color: #3498db !important; color: #ffffff !important; padding: 12px; text-align: left; font-weight: bold; }}
+        td {{ border: 1px solid #ddd; padding: 10px; background-color: #ffffff; color: #000000; }}
+        td:first-child {{ background-color: #f8f9fa !important; color: #000000 !important; font-weight: 500; width: 35%; vertical-align: top; }}
+        .section-header {{ background-color: #2c3e50 !important; color: #ffffff !important; font-weight: bold; padding: 10px; }}
+        .fill-in {{ background-color: #ffffff !important; color: #7f8c8d !important; min-height: 20px; font-style: italic; }}
+        .product-table {{ margin: 10px 0; }}
+        .product-table td {{ background-color: #ffffff !important; color: #000000 !important; }}
+        .helper-text {{ color: #7f8c8d; font-size: 0.85em; display: block; margin-top: 3px; }}
+        .required {{ color: #e74c3c !important; font-weight: bold; }}
     </style>
 </head>
 <body>
@@ -1085,23 +1141,23 @@ with tab1:
         </tr>
         <tr>
             <td>Client Type <span class="required">*</span></td>
-            <td class="fill-in">[Delete one: Existing / New]</td>
+            <td class="fill-in">{client_type}</td>
         </tr>
         <tr>
             <td>Company Name <span class="required">*</span></td>
-            <td class="fill-in">[Type company name here]</td>
+            <td class="fill-in">{company_name}</td>
         </tr>
         <tr>
             <td>Contact Name <span class="required">*</span></td>
-            <td class="fill-in">[Type your name here]</td>
+            <td class="fill-in">{contact_name}</td>
         </tr>
         <tr>
             <td>Contact Email <span class="required">*</span></td>
-            <td class="fill-in">[Type your email here]</td>
+            <td class="fill-in">{contact_email}</td>
         </tr>
     </table>
 
-    <table>
+    <table>"""
         <tr>
             <td colspan="2" class="section-header">SHIPPING & DELIVERY</td>
         </tr>
