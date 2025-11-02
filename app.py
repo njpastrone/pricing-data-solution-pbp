@@ -1592,6 +1592,18 @@ with tab2:
 
                     st.caption(f"Client price: ${client_price_per_unit:.2f}/unit (before customization)")
 
+                    # Show quoted price warning if this came from a proposal and price changed
+                    quoted_price = item.get('quoted_price_per_unit', 0.0)
+                    if quoted_price > 0:
+                        # Product came from proposal - show comparison
+                        if abs(client_price_per_unit - quoted_price) > 0.01:  # Allow for rounding errors
+                            st.warning(f"⚠️ Price changed from proposal: Quoted price was ${quoted_price:.2f}/unit")
+                        else:
+                            st.info(f"✓ Matches quoted price: ${quoted_price:.2f}/unit")
+                    else:
+                        # Product added manually (not from proposal)
+                        st.caption("Quoted price: Unknown (product added manually)")
+
             # CUSTOMIZATION SECTION (always available)
             customization_info = product_data.get("Customization Info", "")
             st.markdown("##### Customization (Optional)")
