@@ -159,6 +159,10 @@ if 'proposal_terms' not in st.session_state:
 • No cancellations will be accepted after any custom order has been initiated
 • Gifts returned to Peace by Piece due to incorrect recipient information will incur a $20 fee plus any additional returned shipping charges from the carrier. If a new address is not provided within 30 days of the gift's return, the gift will be shipped back to the client for distribution"""
 
+# Initialize dropshipping notes
+if 'dropshipping_notes' not in st.session_state:
+    st.session_state.dropshipping_notes = "Please enter the following information for dropshipping: x, y, z"
+
 if 'using_proposal_data' not in st.session_state:
     st.session_state.using_proposal_data = False
 
@@ -1012,10 +1016,29 @@ with tab1:
         st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
 
     # ============================================================
-    # SECTION 7: CLIENT ORDER FORM
+    # SECTION 7: DROPSHIPPING NOTES
     # ============================================================
     st.divider()
-    st.subheader("7. Client Order Form")
+    st.subheader("7. Notes on Dropshipping")
+
+    st.session_state.dropshipping_notes = st.text_area(
+        "Edit dropshipping instructions if needed",
+        value=st.session_state.dropshipping_notes,
+        height=150,
+        key="dropshipping_notes_input",
+        help="These notes will appear in the Client Order Form and final Invoice"
+    )
+
+    # Add copy button for dropshipping notes
+    if st.button("Copy Dropshipping Notes", key="copy_dropship", use_container_width=True):
+        st.code(st.session_state.dropshipping_notes, language=None)
+        st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
+
+    # ============================================================
+    # SECTION 8: CLIENT ORDER FORM
+    # ============================================================
+    st.divider()
+    st.subheader("8. Client Order Form")
 
     st.markdown("""
     Download the HTML form below and paste it into your email to send to clients.
@@ -1101,6 +1124,17 @@ with tab1:
         <tr>
             <td>Client In-Hands Date <span class="required">*</span></td>
             <td class="fill-in">[Type date in format: MM/DD/YYYY]</td>
+        </tr>
+    </table>
+
+    <table>
+        <tr>
+            <td colspan="2" class="section-header">DROPSHIPPING INSTRUCTIONS</td>
+        </tr>
+        <tr>
+            <td colspan="2" style="background-color: #f8f9fa !important; padding: 15px; color: #000000 !important;">
+                """ + st.session_state.dropshipping_notes.replace('\n', '<br/>') + """
+            </td>
         </tr>
     </table>
 
@@ -3339,6 +3373,14 @@ with tab3:
 
         html_invoice += """
     </table>"""
+
+        # Add dropshipping notes section (appears in Invoice only, not PO)
+        if st.session_state.dropshipping_notes:
+            html_invoice += f"""
+    <div class="notes-section">
+        <div class="notes-header">DROPSHIPPING INSTRUCTIONS</div>
+        <p>{st.session_state.dropshipping_notes.replace(chr(10), '<br/>')}</p>
+    </div>"""
 
         # Add notes if any
         if notes_content:
