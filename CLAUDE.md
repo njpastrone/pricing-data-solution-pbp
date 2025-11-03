@@ -72,8 +72,8 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - **Metadata**: Deliverable field definitions
   - **Partner-Specific Info**: Partner configuration reference
 - **Code Structure:** Modular with helper functions in `src/` directory
-  - `src/data_loader.py` - Google Sheets data loading
-  - `src/helpers.py` - Utility functions, conversions, validation
+  - `src/data_loader.py` - Google Sheets data loading and caching
+  - `src/helpers.py` - Utility functions, conversions, validation, HTML parsing
   - `src/pricing_engine.py` - Pricing calculations and quote generation
 - **Authentication:** Google Cloud service account
 - **Pricing Model:** Flexible tiered or flat-rate pricing per product
@@ -102,6 +102,12 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 ### Tab 2: Order & Client Info (main workflow)
 - **Simplified Product Addition:** One-click add from dropdown (defaults: qty=1, markup=100%)
 - **Proposal-to-Order Import:** Import all or individual products from Tab 1 (preserves quantity & markup only)
+- **HTML Order Form Import:** Upload completed client order forms (HTML format)
+  - Supports both our generated HTML and Google Docs exported HTML
+  - Extracts 11 fields automatically: client type, company, contact info, shipping/billing addresses, drop shipping, in-hands date, impact cards, payment preference
+  - Preview extracted data before applying
+  - Smart defaults: shipping address field shows unless drop shipping is explicitly "Yes"
+  - Handles user input errors gracefully
 - **Inline Product Editing:** Always-visible settings for each product (no expand/collapse)
 - **Real-time Pricing Updates:** Instant recalculation as you edit quantity, markup, or customization
 - **Quantity Warning:** Visual alert when quantity=1 to prevent accidental single-unit orders
@@ -202,41 +208,45 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 2.7 - Tab 3 Enhancements with Detailed Pricing and HTML Export
+**Version:** 3.0 - Feature Audit Fixes + HTML Import Complete
 
-**Last Updated:** 2025-10-30
+**Last Updated:** 2025-11-03
 
-**Recent Improvements:**
-- ✅ **Tab 3 Enhanced Invoice/PO Format:** Comprehensive 4-table structure with detailed line items
-  - Table 1: Client/Company Information (name, contact, addresses, PO number)
-  - Table 2: Partners + Point of Contacts (auto-populated from Google Sheets)
-  - Table 3: Order Details (dates, shipping, payment terms/method)
-  - Table 4: Invoice and PO Item Details with per-unit and total cost/price columns
-- ✅ **Detailed Line Item Breakdown:** Each product shows base, customization, and tariffs separately with per-unit costs
-- ✅ **Fixed Double Counting:** Sell price now excludes customization (shown as separate line items)
-- ✅ **Editable Order Review:** All client info and order settings editable directly in Tab 3
-- ✅ **Comprehensive Settings Access:** Full access to shipping, tariffs, discounts, custom items, and notes from Tab 3
-- ✅ **HTML Invoice Export:** Professional, email-ready HTML format alongside CSV download
-- ✅ **Workflow Display Fix:** Improved formatting of 3-tab workflow description at app header
-- ✅ **Universal Customization:** All products now show customization options (defaults to $0 if no spreadsheet data)
-- ✅ **Detailed Order Summary:** Line-item breakdown showing base cost, markup, and customization separately
-- ✅ **Tab 2 Restructure:** Complete redesign following "add first, configure after" pattern
-- ✅ **Simplified Product Addition:** One-click add with sensible defaults (qty=1, markup=100%)
-- ✅ **Inline Editing:** All product settings always visible in Current Order section
-- ✅ **Real-time Pricing:** Instant calculation updates as you edit quantity, markup, customization
-- ✅ **Quantity Warning:** Visual warning when quantity=1 to prevent accidental single-unit orders
-- ✅ **Streamlined Import:** Import from proposals preserves only quantity and markup (customization reset)
-- ✅ **Cleaner Navigation:** Logical section flow (1. Add Products → 2. Configure → 3. Settings → 4. Notes → 5. Summary)
+**Recent Improvements (2025-11-03):**
+- ✅ **HTML Client Order Form Import (Issue #27):** Major feature allowing import of completed forms
+  - Parses both our generated HTML and Google Docs exported HTML
+  - Extracts 11 fields: client type, company name, contact info, shipping/billing, drop shipping, in-hands date, impact cards, payment
+  - Preview UI showing extracted data before applying
+  - Smart defaults: shipping address shows unless drop shipping is explicitly "Yes"
+  - Handles user input errors gracefully (typos, unclear answers)
+- ✅ **UI/UX Polish (Issues #20, #22, #26, #28):**
+  - Fixed success message showing after adding info to order form
+  - Added tab navigation buttons at bottom of Tab 1 and Tab 2
+  - Removed all emojis from app (replaced [X]/[ ] checkboxes, removed page icon)
+  - Fixed progress tracker to update when order is confirmed
+- ✅ **Pricing Transparency (Issues #21, #23, #24, #25):**
+  - Restructured dropshipping instructions in HTML form (single row layout)
+  - Enhanced price change warnings showing old/new values and reasons (tier change, markup change)
+  - Added Partner Customization Costs section showing what PBP pays partners
+  - Always show "Discount Quoted to Client" warning in order adjustments
+- ✅ **Critical Bug Fix (Issue #19):**
+  - Fixed CSV download mismatch - completely rewrote to match UI display logic
+  - Both CSV and UI now use same MOQ calculation, pricing, discounts, marketing rounding
+  - Ensures data consistency across all exports
 
 **Features Implemented:**
 - ✅ **3-Tab Workflow:** Proposals → Order & Client Info → Execution & Accounting
 - ✅ **Proposal System:** Product filtering, catalog browser, MOQ-based pricing tables
-- ✅ **HTML Client Order Form:** Professional table format with clear instructions
+- ✅ **HTML Client Order Form Generation:** Professional table format with clear instructions
+- ✅ **HTML Order Form Import:** Parse completed forms (both our HTML and Google Docs formats)
 - ✅ **Copy Buttons:** Easy copy for Kitting Pricing & Terms sections
 - ✅ **Proposal-to-Order Connection:** Import all products or select individually
 - ✅ **Next Steps Guidance:** Dynamic messaging in Tab 1 guiding to Tab 2
 - ✅ **Success Banners:** Visual feedback on available proposal products
 - ✅ **CSV Downloads:** Export proposals and client order forms
+- ✅ **Tab Navigation Buttons:** Quick navigation between tabs with helpful prompts
+- ✅ **Enhanced Price Warnings:** Show old/new values and reasons for price changes
+- ✅ **Partner Cost Visibility:** Display what PBP pays partners for customization
 - ✅ Multi-partner support (Partner X and future partners)
 - ✅ Flexible pricing: tiered AND flat-rate products
 - ✅ Dynamic tier parsing from Google Sheets data
@@ -269,8 +279,11 @@ pricing-data-solution-pbp/
 - ✅ Tier selection working correctly for various quantities
 - ✅ New column structure compatible with app
 - ✅ Partner filtering functional
+- ✅ HTML import tested with both our HTML and Google Docs formats (11/11 fields)
+- ✅ CSV download matches UI display (pricing, MOQ, discounts)
+- ✅ All Phase 1-4 fixes tested and verified
 
-**Production Status:** ✅ Ready for testing with real partners
+**Production Status:** ✅ Ready for production use
 
 ---
 
