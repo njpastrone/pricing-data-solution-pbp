@@ -23,7 +23,8 @@ from src.helpers import (
     parse_tier_info,
     parse_tariff_rate,
     calculate_product_tariff,
-    convert_proposal_to_order
+    convert_proposal_to_order,
+    parse_client_order_form_html
 )
 from src.pricing_engine import (
     determine_tier_number,
@@ -2545,10 +2546,9 @@ Rates default to current estimates but can be adjusted as needed.
     st.header("5. Client & Order Information")
 
     # Import client order form section
-    st.info("**New Feature:** Import completed client order forms (coming soon!)")
-
     with st.expander("Import Completed Client Order Form", expanded=False):
-        st.caption("Upload an HTML order form completed by your client to auto-populate client information and products.")
+        st.caption("Upload an HTML order form completed by your client to auto-populate client information.")
+        st.info("Note: This will import client info, shipping, and payment details. Order products are NOT imported (keep your original proposal products).")
 
         uploaded_file = st.file_uploader(
             "Upload Client Order Form (HTML)",
@@ -2558,18 +2558,79 @@ Rates default to current estimates but can be adjusted as needed.
         )
 
         if uploaded_file is not None:
-            st.warning("WARNING: HTML parsing feature is under development. For now, please manually enter client information below.")
-            st.markdown("**Preview of uploaded file:**")
+            # Read and parse the HTML content
             content = uploaded_file.read().decode('utf-8')
-            st.text(content[:500] + "..." if len(content) > 500 else content)
+            parsed_data = parse_client_order_form_html(content)
 
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Replace Current Order", type="secondary"):
-                    st.info("This feature will be available in the next update!")
-            with col2:
-                if st.button("Add to Existing Order", type="secondary"):
-                    st.info("This feature will be available in the next update!")
+            # Show parsing errors if any
+            if parsed_data['parse_errors']:
+                st.warning("Parsing warnings:")
+                for error in parsed_data['parse_errors']:
+                    st.caption(f"- {error}")
+
+            # Show preview of extracted data
+            st.markdown("**Preview of Extracted Data:**")
+
+            preview_data = {
+                "Client Type": parsed_data['client_type'] or "[Not filled]",
+                "Company Name": parsed_data['company_name'] or "[Not filled]",
+                "Contact Name": parsed_data['contact_name'] or "[Not filled]",
+                "Contact Email": parsed_data['contact_email'] or "[Not filled]",
+                "Drop Shipping": parsed_data['drop_shipping'] or "[Not filled]",
+                "Shipping Address": parsed_data['shipping_address'] or "[Not filled]",
+                "Dropshipping Info": parsed_data['dropshipping_info'] or "[Not filled]",
+                "Billing Address": parsed_data['billing_address'] or "[Not filled]",
+                "Client In-Hands Date": parsed_data['client_in_hands_date'] or "[Not filled]",
+                "Impact Card Preference": parsed_data['impact_card_preference'] or "[Not filled]",
+                "Payment Preference": parsed_data['payment_preference'] or "[Not filled]"
+            }
+
+            # Display as table
+            import pandas as pd
+            df_preview = pd.DataFrame(list(preview_data.items()), columns=["Field", "Value"])
+            st.dataframe(df_preview, use_container_width=True, hide_index=True)
+
+            # Import button
+            st.divider()
+            if st.button("Import Client Information", type="primary", use_container_width=True, key="import_client_data_btn"):
+                # Apply to session state
+                st.session_state.client_info['is_new_client'] = (parsed_data['client_type'] == 'New')
+                st.session_state.client_info['company_name'] = parsed_data['company_name']
+                st.session_state.client_info['contact_name'] = parsed_data['contact_name']
+                st.session_state.client_info['contact_email'] = parsed_data['contact_email']
+                st.session_state.client_info['shipping_address'] = parsed_data['shipping_address']
+                st.session_state.client_info['billing_address'] = parsed_data['billing_address']
+
+                # Set shipping type based on drop shipping answer
+                # Default to 'One Location' (show shipping address) unless clearly "Yes" for drop shipping
+                if parsed_data['drop_shipping'] == 'Yes':
+                    st.session_state.client_info['shipping_type'] = 'Drop Shipping'
+                else:
+                    # For "No", empty, or any unclear answer, default to One Location
+                    st.session_state.client_info['shipping_type'] = 'One Location'
+
+                # Parse and apply date
+                if parsed_data['client_in_hands_date']:
+                    try:
+                        from datetime import datetime
+                        # Try to parse MM/DD/YYYY format
+                        date_obj = datetime.strptime(parsed_data['client_in_hands_date'], '%m/%d/%Y')
+                        st.session_state.client_info['client_in_hands_date'] = date_obj.date()
+                    except:
+                        # If parsing fails, leave empty and let user enter manually
+                        st.session_state.client_info['client_in_hands_date'] = None
+
+                # Map payment preference to our dropdown values
+                payment_map = {
+                    'ACH': 'ACH',
+                    'Check': 'Check',
+                    'Credit Card': 'Credit Card (3% processing fee applies)'
+                }
+                if parsed_data['payment_preference'] in payment_map:
+                    st.session_state.client_info['payment_preference'] = payment_map[parsed_data['payment_preference']]
+
+                st.success("Client information imported successfully! Review and edit the fields below as needed.")
+                st.rerun()
 
     with st.expander("Client Details", expanded=False):
         st.markdown("Enter client information for invoices and purchase orders.")

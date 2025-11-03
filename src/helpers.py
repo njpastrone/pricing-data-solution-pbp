@@ -450,3 +450,199 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
     }
 
     return order_item
+
+
+# ========== HTML FORM PARSING ==========
+
+def parse_client_order_form_html(html_content):
+    """
+    Parse completed HTML client order form and extract client information.
+
+    Extracts data from fill-in fields in the HTML form that clients complete.
+    Does NOT extract order details (products) to avoid errors.
+
+    Args:
+        html_content: String containing the HTML form content
+
+    Returns:
+        dict: Extracted data with keys:
+            - client_type: "Existing" or "New"
+            - company_name: str
+            - contact_name: str
+            - contact_email: str
+            - drop_shipping: "Yes" or "No"
+            - shipping_address: str
+            - dropshipping_info: str
+            - billing_address: str
+            - client_in_hands_date: str (format: MM/DD/YYYY)
+            - impact_card_preference: str
+            - payment_preference: str
+            - parse_errors: list of strings (warnings about fields that couldn't be parsed)
+
+    Example:
+        >>> html = "<td class=\"fill-in\">Acme Corp</td>"
+        >>> data = parse_client_order_form_html(html)
+        >>> data['company_name']
+        'Acme Corp'
+    """
+    import re
+    from html.parser import HTMLParser
+
+    extracted_data = {
+        'client_type': '',
+        'company_name': '',
+        'contact_name': '',
+        'contact_email': '',
+        'drop_shipping': '',
+        'shipping_address': '',
+        'dropshipping_info': '',
+        'billing_address': '',
+        'client_in_hands_date': '',
+        'impact_card_preference': '',
+        'payment_preference': '',
+        'parse_errors': []
+    }
+
+    # Strategy: Parse table rows to extract label-value pairs
+    # Supports both our generated HTML (class="fill-in") and Google Docs HTML (class="c1")
+
+    # Clean up HTML tags and decode entities
+    def clean_cell_content(content):
+        # Remove HTML tags
+        content = re.sub(r'<br\s*/?>', '\n', content, flags=re.IGNORECASE)  # Convert <br> to newline
+        content = re.sub(r'<[^>]+>', '', content)  # Remove all HTML tags
+        content = content.strip()
+        # Remove placeholder text in brackets
+        if content.startswith('[') and content.endswith(']'):
+            return ''  # Empty if still placeholder
+        return content
+
+    # Use a better approach: extract each <tr> tag separately, then parse its contents
+    # This avoids regex crossing row boundaries
+    tr_pattern = r'<tr[^>]*>(.*?)</tr>'
+    all_rows = re.findall(tr_pattern, html_content, re.DOTALL | re.IGNORECASE)
+
+    # Build a dictionary mapping labels to values
+    field_map = {}
+    for row_content in all_rows:
+        # Extract label and value from this specific row
+        td_pattern = r'<td[^>]*>(.*?)</td>'
+        tds = re.findall(td_pattern, row_content, re.DOTALL | re.IGNORECASE)
+
+        # Skip rows with colspan (section headers)
+        if len(tds) < 2:
+            continue
+
+        # Check if first TD has colspan="2" or higher (section headers)
+        # Google Docs adds colspan="1" to all TDs, so we need to check the value
+        first_td = row_content.split('</td>')[0]
+        colspan_match = re.search(r'colspan="?(\d+)"?', first_td)
+        if colspan_match and int(colspan_match.group(1)) > 1:
+            continue  # Skip section headers
+
+        # We need exactly 2 TDs for label-value pairs
+        if len(tds) == 2:
+            label_html = tds[0]
+            value_html = tds[1]
+
+            # Detect if this looks like a label-value pair:
+            # - Our generated HTML: second TD has class="fill-in"
+            # - Google Docs HTML: second TD has italic text (class="c1" or style)
+            # - Skip if first TD looks like a header (all caps, no asterisk)
+
+            label_text = re.sub(r'<[^>]+>', '', label_html).strip()
+
+            # Skip header rows (all content is uppercase or contains "Product Name", "Quantity", etc.)
+            if label_text.isupper() or 'Product Name' in label_text or 'Quantity' in label_text:
+                continue
+
+            # This looks like a data row if:
+            # 1. Our format: has class="fill-in" OR
+            # 2. Google Docs: has italic/styled text (class="c1" or font-style:italic) OR
+            # 3. Label has asterisk (required field marker)
+            is_data_row = (
+                'class="fill-in"' in row_content or
+                "class='fill-in'" in row_content or
+                'class="c1"' in value_html or
+                "class='c1'" in value_html or
+                'font-style:italic' in value_html or
+                '*' in label_text
+            )
+
+            if is_data_row:
+                # Clean label: remove all HTML tags, asterisks, and normalize whitespace
+                label_clean = re.sub(r'<[^>]+>', '', label_html).strip().lower()
+                label_clean = re.sub(r'\s+', ' ', label_clean)  # Normalize whitespace
+                label_clean = label_clean.rstrip('*').strip()  # Remove trailing asterisk (required field marker)
+
+                value_clean = clean_cell_content(value_html)
+                field_map[label_clean] = value_clean
+
+    # Map to our structure using field labels
+    if 'client type' in field_map:
+        client_type = field_map['client type']
+        if 'Existing' in client_type and 'New' not in client_type:
+            extracted_data['client_type'] = 'Existing'
+        elif 'New' in client_type and 'Existing' not in client_type:
+            extracted_data['client_type'] = 'New'
+        else:
+            extracted_data['client_type'] = client_type
+
+    if 'company name' in field_map:
+        extracted_data['company_name'] = field_map['company name']
+
+    if 'contact name' in field_map:
+        extracted_data['contact_name'] = field_map['contact name']
+
+    if 'contact email' in field_map:
+        extracted_data['contact_email'] = field_map['contact email']
+
+    if 'drop shipping?' in field_map:
+        drop_shipping = field_map['drop shipping?']
+        if 'Yes' in drop_shipping and 'No' not in drop_shipping:
+            extracted_data['drop_shipping'] = 'Yes'
+        elif 'No' in drop_shipping and 'Yes' not in drop_shipping:
+            extracted_data['drop_shipping'] = 'No'
+        else:
+            extracted_data['drop_shipping'] = drop_shipping
+
+    # Match "shipping address" with or without helper text
+    for key in field_map.keys():
+        if 'shipping address' in key:
+            extracted_data['shipping_address'] = field_map[key]
+            break
+
+    if 'dropshipping information' in field_map:
+        extracted_data['dropshipping_info'] = field_map['dropshipping information']
+
+    if 'billing address' in field_map:
+        extracted_data['billing_address'] = field_map['billing address']
+
+    if 'client in-hands date' in field_map:
+        extracted_data['client_in_hands_date'] = field_map['client in-hands date']
+
+    if 'impact card preference' in field_map:
+        value = field_map['impact card preference']
+        # Look for the selected option
+        impact_options = ['Peace by Piece Impact Card', 'Custom Impact Card', 'Custom Message Card', 'Send us your own card']
+        for option in impact_options:
+            if option in value and all(opt not in value or opt == option for opt in impact_options):
+                extracted_data['impact_card_preference'] = option
+                break
+
+    if 'payment preference' in field_map:
+        value = field_map['payment preference']
+        # Look for the selected option
+        payment_options = ['ACH', 'Check', 'Credit Card']
+        for option in payment_options:
+            if option in value and all(opt not in value or opt == option for opt in payment_options):
+                extracted_data['payment_preference'] = option
+                break
+
+    # Validate required fields
+    required_fields = ['company_name', 'contact_name', 'contact_email', 'client_in_hands_date']
+    for field in required_fields:
+        if not extracted_data[field]:
+            extracted_data['parse_errors'].append(f"Required field '{field}' is empty or could not be parsed")
+
+    return extracted_data
