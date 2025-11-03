@@ -2153,10 +2153,27 @@ Rates default to current estimates but can be adjusted as needed.
     if len(st.session_state.order_items) == 0:
         st.caption("Add products to your order to see the total quote calculation.")
     else:
-        # Calculate totals
-        products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
-        discount_amount = products_subtotal * (discount_percent / 100)
-        subtotal_after_discount = products_subtotal - discount_amount
+        # Calculate products subtotal (base + markup only, NO customization)
+        products_only_subtotal = sum(
+            item.get('product_subtotal', 0) + item.get('markup_amount', 0)
+            for item in st.session_state.order_items
+        )
+
+        # Calculate customization total separately
+        customization_total = sum(
+            item.get('customization_setup_total', 0) + item.get('customization_unit_total', 0)
+            for item in st.session_state.order_items
+        )
+
+        # Apply discount ONLY to products subtotal (not customization)
+        discount_amount = products_only_subtotal * (discount_percent / 100)
+        products_after_discount = products_only_subtotal - discount_amount
+
+        # Build subtotal: products after discount + customization (no discount on customization)
+        subtotal_after_discount = products_after_discount + customization_total
+
+        # For Tab 3 compatibility: combined products + customization (before discount)
+        products_subtotal = products_only_subtotal + customization_total
 
         # Calculate base total before CC fee
         total_before_cc = subtotal_after_discount + shipping + tariff
@@ -2220,11 +2237,16 @@ Rates default to current estimates but can be adjusted as needed.
                     f"${customization_units:.2f}"
                 ])
 
-        summary_items.append(["**Products Subtotal**", "", "", f"**${products_subtotal:.2f}**"])
+        # Show products subtotal (before discount, excludes customization)
+        summary_items.append(["**Products Subtotal**", "", "", f"**${products_only_subtotal:.2f}**"])
 
-        # Add discount line if applicable
+        # Add discount line if applicable (applies to products only, not customization)
         if discount_percent > 0:
             summary_items.append([f"Discount ({discount_description})", "", "", f"-${discount_amount:.2f}"])
+
+        # Add customization total (no discount applied)
+        if customization_total > 0:
+            summary_items.append(["**Customization Total**", "", "", f"**${customization_total:.2f}**"])
 
         summary_items.append(["Shipping", "", "", f"${shipping:.2f}"])
 
@@ -3202,9 +3224,9 @@ with tab3:
             ["Subtotal (Products + Customization)", f"${products_subtotal:.2f}"]
         ]
 
-        # Add discount line if applicable
+        # Add discount line if applicable (discount applies to products only, not customization)
         if discount_percent > 0:
-            totals_data.append([f"Discount ({discount_description})", f"-${discount_amount:.2f}"])
+            totals_data.append([f"Discount ({discount_description}) - on products only", f"-${discount_amount:.2f}"])
 
         totals_data.append(["Shipping", f"${shipping:.2f}"])
 
