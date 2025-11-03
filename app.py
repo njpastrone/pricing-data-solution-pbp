@@ -906,58 +906,129 @@ with tab1:
         # Download all proposals as CSV
         st.markdown("---")
         if st.button("Download All Proposal Tables (CSV)", use_container_width=True, type="primary"):
-            # Generate comprehensive CSV
+            # Generate comprehensive CSV matching UI display
             csv_lines = []
             csv_lines.append("PEACE BY PIECE - PRODUCT PROPOSAL")
             csv_lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             csv_lines.append("")
 
-            for idx, prop_item in enumerate(st.session_state.proposal_products, 1):
-                product_data = prop_item.get('product_data', {})
+            for idx, item in enumerate(st.session_state.proposal_products, 1):
+                product_row = item.get('product_data', {})
 
-                csv_lines.append(f"=== PRODUCT {idx}: {product_data.get('Product/Service', 'Unknown Product')} ===")
-                csv_lines.append(f"Partner: {product_data.get('Partner', 'N/A')}")
-                csv_lines.append(f"Country of Origin: {product_data.get('Country of Origin', 'N/A')}")
+                csv_lines.append(f"=== PRODUCT {idx}: {product_row.get('Product/Service', 'Unknown Product')} ===")
+                csv_lines.append(f"Partner: {product_row.get('Partner', 'N/A')}")
+                csv_lines.append(f"Country of Origin: {product_row.get('Country of Origin', 'N/A')}")
                 csv_lines.append("")
 
-                # Calculate MOQ
-                base_price, _, _ = get_unit_price_new_system(product_data, 100)
-                moq = calculate_moq(base_price)
+                # Calculate MOQ using same logic as UI display
+                preliminary_base_price, _, _ = get_unit_price_new_system(product_row, 100)
 
-                # Build tier table
-                csv_lines.append("Quantity,Unit Price,Customization,Markup,Total per Unit,Total Order")
+                if preliminary_base_price is not None:
+                    # Estimate total per-unit price with markup (no customization in MOQ calc)
+                    temp_markup_multiplier = 1 + (item['markup_percent'] / 100)
+                    estimated_unit_price = preliminary_base_price * temp_markup_multiplier
 
-                # Calculate for different quantities (MOQ, 2×MOQ, 3×MOQ, 5×MOQ)
-                quantities = [moq, moq * 2, moq * 3, moq * 5]
+                    # Calculate MOQ
+                    moq = calculate_moq(estimated_unit_price)
+                    if moq is None:
+                        moq = 5
 
-                for qty in quantities:
-                    unit_price, _, _ = get_unit_price_new_system(product_data, qty)
+                    # Get actual base price for MOQ quantity
+                    moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
 
-                    # Customization cost
-                    custom_per_unit = prop_item.get('customization_per_unit', 0.0) if prop_item.get('include_customization', False) else 0.0
-                    custom_setup = prop_item.get('customization_setup_fee', 0.0) if prop_item.get('include_customization', False) else 0.0
+                    if moq_base_price is not None:
+                        # Calculate product price WITHOUT customization (for main table)
+                        moq_product_cost = moq_base_price * moq
+                        moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
+                        moq_product_only_total = moq_product_cost + moq_markup_amount
+                        moq_product_price_per_unit = moq_product_only_total / moq
 
-                    # Markup
-                    markup_percent = prop_item.get('markup_percent', 0)
-                    product_cost = unit_price * qty
-                    markup_amount = product_cost * (markup_percent / 100)
+                        # Apply marketing rounding if enabled
+                        if st.session_state.proposal_marketing_rounding:
+                            moq_product_price_per_unit = apply_marketing_rounding(moq_product_price_per_unit, True)
 
-                    # Total per unit
-                    total_per_unit = unit_price + custom_per_unit + (markup_amount / qty)
+                        # Calculate Client Price based on discount and budget
+                        client_price = moq_product_price_per_unit
 
-                    # Marketing rounding
-                    if st.session_state.get('proposal_marketing_rounding', False):
-                        total_per_unit = apply_marketing_rounding(total_per_unit)
+                        # Get client budget and discount settings
+                        client_budget = st.session_state.get('proposal_client_budget', 0.0)
+                        discount_percent = st.session_state.get('proposal_discount_percent', 0.0)
 
-                    # Total order
-                    total_order = (total_per_unit * qty) + custom_setup
+                        # Check if client budget allows for higher quantity (better pricing)
+                        volume_pricing_applied = False
+                        volume_pricing_quantity = None
+                        if client_budget > 0:
+                            moq_total = moq * moq_product_price_per_unit
+                            if client_budget > moq_total:
+                                # Calculate what quantity the client could afford at MOQ price
+                                potential_quantity = int(client_budget / moq_product_price_per_unit)
 
-                    csv_lines.append(f"{qty},${unit_price:.2f},${custom_per_unit:.2f},${markup_amount:.2f},${total_per_unit:.2f},${total_order:.2f}")
+                                # Get price at that higher quantity
+                                budget_qty_base_price, _, _ = get_unit_price_new_system(product_row, potential_quantity)
 
-                # Customization note
-                if prop_item.get('include_customization', False):
-                    csv_lines.append("")
-                    csv_lines.append(f"Note: Includes ${custom_setup:.2f} setup fee + ${custom_per_unit:.2f} per unit for customization")
+                                if budget_qty_base_price is not None:
+                                    # Calculate price at higher quantity with markup
+                                    budget_qty_product_cost = budget_qty_base_price * potential_quantity
+                                    budget_qty_markup_amount = budget_qty_product_cost * (item['markup_percent'] / 100)
+                                    budget_qty_product_only_total = budget_qty_product_cost + budget_qty_markup_amount
+                                    budget_qty_price_per_unit = budget_qty_product_only_total / potential_quantity
+
+                                    # Apply marketing rounding if enabled
+                                    if st.session_state.proposal_marketing_rounding:
+                                        budget_qty_price_per_unit = apply_marketing_rounding(budget_qty_price_per_unit, True)
+
+                                    # Use the better price if different from MOQ price
+                                    if budget_qty_price_per_unit < moq_product_price_per_unit:
+                                        client_price = budget_qty_price_per_unit
+                                        volume_pricing_applied = True
+                                        volume_pricing_quantity = potential_quantity
+
+                        # Apply discount to client price
+                        discount_applied = False
+                        if discount_percent > 0:
+                            client_price = client_price * (1 - discount_percent / 100)
+                            discount_applied = True
+
+                            # Apply marketing rounding again after discount if enabled
+                            if st.session_state.proposal_marketing_rounding:
+                                client_price = apply_marketing_rounding(client_price, True)
+
+                        # Build price note for column header
+                        client_price_header = "Client Price"
+                        if discount_applied or volume_pricing_applied:
+                            notes = []
+                            if volume_pricing_applied:
+                                notes.append(f"Price ea @ Qty {volume_pricing_quantity}")
+                            if discount_applied:
+                                discount_type = st.session_state.get('proposal_discount_type')
+                                if discount_type == 'NGO':
+                                    notes.append("5% NGO discount")
+                                else:
+                                    notes.append(f"{discount_percent:.1f}% discount")
+                            client_price_header = f"Client Price ({', '.join(notes)})"
+
+                        # Build CSV table matching UI display
+                        csv_lines.append(f"MOQ,Price Ea (@ Qty {moq}),{client_price_header},Delivery")
+                        csv_lines.append(f"{moq},${moq_product_price_per_unit:.2f},${client_price:.2f},")
+
+                        # Show MOQ calculation note
+                        moq_total_value = moq * moq_product_price_per_unit
+                        csv_lines.append("")
+                        csv_lines.append(f"MOQ calculated based on $1,000 minimum order value (MOQ {moq} units = ${moq_total_value:.2f})")
+
+                        # ALWAYS show customization costs from product data
+                        setup_fee = clean_price(product_row.get('Customization Setup Fee', '')) or 0.0
+                        per_unit_cost = clean_price(product_row.get('Customization Cost per Unit', '')) or 0.0
+
+                        # Display customization costs
+                        if setup_fee > 0 or per_unit_cost > 0:
+                            csv_lines.append(f"Customization available: Artwork set-up: ${setup_fee:.2f} / Branding per piece: ${per_unit_cost:.2f}")
+                        else:
+                            csv_lines.append("Customization available: Contact for pricing")
+                    else:
+                        csv_lines.append(f"Unable to calculate MOQ pricing for {product_row.get('Product/Service', 'Unknown Product')}")
+                else:
+                    csv_lines.append(f"Product data not available for {product_row.get('Product/Service', 'Unknown Product')}")
 
                 csv_lines.append("")
                 csv_lines.append("")
