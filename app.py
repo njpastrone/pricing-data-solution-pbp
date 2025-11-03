@@ -1982,8 +1982,16 @@ with tab2:
                     'subtotal_before_markup': subtotal_before_markup,
                     'markup_amount': markup_amount,
                     'product_total': product_total,
-                    'total_per_unit': total_per_unit
+                    'total_per_unit': total_per_unit,
+                    'tariff_base': product_subtotal  # Base for tariff calculation (product cost only, excludes markup and customization)
                 })
+
+                # Recalculate tariff if rate is set
+                if item.get('tariff_rate_percent', 0) > 0:
+                    item['tariff_amount'] = calculate_product_tariff(
+                        product_subtotal,
+                        item['tariff_rate_percent']
+                    )
 
                 # PRICING BREAKDOWN DISPLAY
                 st.markdown("##### Pricing Breakdown")
