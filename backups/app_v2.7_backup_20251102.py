@@ -112,7 +112,7 @@ if 'order_notes' not in st.session_state:
 if 'apply_cc_fee' not in st.session_state:
     st.session_state.apply_cc_fee = False
 if 'cc_fee_percent' not in st.session_state:
-    st.session_state.cc_fee_percent = 3.0
+    st.session_state.cc_fee_percent = 2.9
 
 # Initialize proposal-specific session state (Phase 2)
 if 'proposal_products' not in st.session_state:
@@ -1909,7 +1909,7 @@ Rates default to current estimates but can be adjusted as needed.
                 "Credit card fee",
                 value=st.session_state.apply_cc_fee,
                 key="cc_fee_checkbox",
-                help="Add credit card processing fee to total (default 3%)"
+                help="Add credit card processing fee to total (default 2.9%)"
             )
 
         # Row 2: Conditional inputs for Custom Discount and CC Fee
@@ -2675,7 +2675,7 @@ with tab3:
                     "Credit card fee",
                     value=st.session_state.apply_cc_fee,
                     key="tab3_cc_fee_checkbox",
-                    help="Add credit card processing fee to total (default 3%)"
+                    help="Add credit card processing fee to total (default 2.9%)"
                 )
 
             # Row 2: Conditional inputs for Custom Discount and CC Fee
