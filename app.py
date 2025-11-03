@@ -79,6 +79,10 @@ if 'order_discount_custom_value' not in st.session_state:
 if 'order_use_marketing_rounding' not in st.session_state:
     st.session_state.order_use_marketing_rounding = False
 
+# Initialize order confirmed flag
+if 'order_confirmed' not in st.session_state:
+    st.session_state.order_confirmed = False
+
 # Initialize client information
 if 'client_info' not in st.session_state:
     st.session_state.client_info = {
@@ -202,7 +206,21 @@ with st.sidebar:
     tab2_complete = has_order and has_client_info and order_confirmed
     tab2_status = "[X]" if tab2_complete else "[ ]"
     tab2_color = "green" if tab2_complete else "gray"
-    st.markdown(f":{tab2_color}[{tab2_status}] **Tab 2:** Order & Client ({len(st.session_state.order_items)} products)")
+
+    # Debug info to show what's missing
+    if not tab2_complete:
+        missing = []
+        if not has_order:
+            missing.append("no order")
+        if not has_client_info:
+            missing.append("no client info")
+        if not order_confirmed:
+            missing.append("not confirmed")
+        debug_text = f" ({', '.join(missing)})" if missing else ""
+    else:
+        debug_text = ""
+
+    st.markdown(f":{tab2_color}[{tab2_status}] **Tab 2:** Order & Client ({len(st.session_state.order_items)} products){debug_text}")
 
     # Tab 3: Invoice/PO ready indicator
     tab3_ready = has_order and has_client_info
@@ -1156,8 +1174,13 @@ with tab1:
 
     # Button to apply info to order form
     if st.button("Add Info to Order Form", type="primary", use_container_width=True):
-        st.success("Information successfully added to order form!")
+        st.session_state.show_info_success = True
         st.rerun()
+
+    # Show success message if flag is set
+    if st.session_state.get('show_info_success', False):
+        st.success("Information successfully added to order form!")
+        st.session_state.show_info_success = False
 
     # ============================================================
     # SECTION 9: CLIENT ORDER FORM
@@ -1245,14 +1268,8 @@ with tab1:
             <td class="fill-in">[Type full shipping address here, or N/A if drop shipping]</td>
         </tr>
         <tr>
-            <td colspan="2" style="background-color: #f8f9fa !important; padding: 10px; color: #000000 !important; font-weight: bold;">
-                Dropshipping Instructions
-            </td>
-        </tr>
-        <tr>
-            <td colspan="2" style="background-color: #f8f9fa !important; padding: 10px; color: #000000 !important;">
-                """ + st.session_state.dropshipping_notes.replace('\n', '<br/>') + """
-            </td>
+            <td style="font-weight: bold;">Dropshipping Instructions</td>
+            <td style="background-color: #f8f9fa !important; padding: 10px; color: #000000 !important;">""" + st.session_state.dropshipping_notes.replace('\n', '<br/>') + """</td>
         </tr>
         <tr>
             <td>Dropshipping Information</td>
@@ -1461,7 +1478,13 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         if st.button("Continue to Tab 2: Order & Client Info", type="primary", use_container_width=True, key="tab1_to_tab2"):
-            st.info("Please click on the 'Order & Client Info' tab above to continue.")
+            st.session_state.show_tab2_prompt = True
+            st.rerun()
+
+    # Show navigation prompt if button was clicked
+    if st.session_state.get('show_tab2_prompt', False):
+        st.info("👆 Click on the **'Order & Client Info'** tab above to continue.")
+        st.session_state.show_tab2_prompt = False
 
 # ============================================================
 # TAB 2: ORDER & CLIENT INFO (ALL CURRENT FUNCTIONALITY)
@@ -2711,10 +2734,6 @@ Rates default to current estimates but can be adjusted as needed.
     # ============================================================
     st.divider()
 
-    # Initialize order_confirmed state if not exists
-    if 'order_confirmed' not in st.session_state:
-        st.session_state.order_confirmed = False
-
     if not st.session_state.order_confirmed:
         st.markdown("### Ready to finalize your order?")
         st.caption("Review the order summary above and client information, then confirm to proceed to Tab 3.")
@@ -2736,7 +2755,13 @@ Rates default to current estimates but can be adjusted as needed.
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         if st.button("Continue to Tab 3: Execution & Accounting", type="primary", use_container_width=True, key="tab2_to_tab3"):
-            st.info("Please click on the 'Execution & Accounting' tab above to continue.")
+            st.session_state.show_tab3_prompt = True
+            st.rerun()
+
+    # Show navigation prompt if button was clicked
+    if st.session_state.get('show_tab3_prompt', False):
+        st.info("👆 Click on the **'Execution & Accounting'** tab above to continue.")
+        st.session_state.show_tab3_prompt = False
 
 # ============================================================
 # TAB 3: EXECUTION & ACCOUNTING

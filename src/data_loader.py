@@ -44,7 +44,7 @@ def connect_to_sheets():
     return gspread.authorize(creds)
 
 
-@st.cache_data(ttl=300)  # Cache data for 5 minutes
+@st.cache_data(ttl=300, show_spinner="Loading pricing data from Google Sheets...")  # Cache data for 5 minutes
 def load_pricing_data():
     """
     Load pricing data from master_pricing_template_10_14 Google Sheet.
@@ -85,7 +85,10 @@ def load_pricing_data():
         ['Partner X', 'Partner Y']
     """
     gc = connect_to_sheets()
-    spreadsheet = gc.open("master_pricing_template_10_14")
+
+    # Open by URL (more reliable than by name)
+    spreadsheet_url = "https://docs.google.com/spreadsheets/d/1TSw50v7ydNSDdREkKRaM00LCg3-vj-ZcVNoYL9u8Lxs"
+    spreadsheet = gc.open_by_url(spreadsheet_url)
 
     # ========== LOAD TEMPLATE SHEET ==========
     # Header at row 6 (index 5), data starts at row 7 (index 6)
