@@ -378,6 +378,9 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
     # Calculate per-unit total
     total_per_unit = product_total / quantity
 
+    # Store quoted price (product + markup, before customization) for comparison in Tab 2
+    quoted_price_per_unit = (product_cost_subtotal + markup_amount) / quantity
+
     # Parse tariff info
     tariff_rate_percent = parse_tariff_rate(product_data.get('Tariff Rate', ''))
     tariff_base = product_cost_subtotal  # Tariff on product cost only (excludes customization)
@@ -419,6 +422,7 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         'subtotal_before_markup': product_cost_subtotal + customization_setup_total + customization_unit_total,
         'product_total': product_total,  # Product + markup + customization
         'total_per_unit': total_per_unit,  # Total divided by quantity
+        'quoted_price_per_unit': quoted_price_per_unit,  # Price quoted in proposal (for comparison)
 
         # Tariff
         'country_of_origin': product_data.get('Country of Origin', 'Unknown'),
