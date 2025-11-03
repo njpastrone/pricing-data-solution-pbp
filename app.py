@@ -1706,6 +1706,7 @@ with tab2:
                     col_setup, col_perunit = st.columns(2)
 
                     with col_setup:
+                        st.markdown("**Client Pricing:**")
                         # Always read default from product_data, use item value if user has edited it
                         default_setup = clean_price(product_data.get('Customization Setup Fee', '')) or 0.0
                         stored_setup = item.get('customization_setup_fee', 0.0)
@@ -1713,14 +1714,30 @@ with tab2:
                         display_setup = stored_setup if (stored_setup > 0 or default_setup == 0) else default_setup
 
                         new_setup_fee = st.number_input(
-                            "Setup Fee",
+                            "Setup Fee (to Client)",
                             min_value=0.0,
                             value=float(display_setup),
                             step=1.0,
                             key=f"prod_setup_{idx}"
                         )
 
+                        st.markdown("**Partner Cost:**")
+                        # Load partner cost from spreadsheet
+                        default_partner_setup = clean_price(product_data.get('PBP Price: Customization Setup Fee', '')) or 0.0
+                        stored_partner_setup = item.get('partner_customization_setup_fee', 0.0)
+                        display_partner_setup = stored_partner_setup if (stored_partner_setup > 0 or default_partner_setup == 0) else default_partner_setup
+
+                        new_partner_setup_fee = st.number_input(
+                            "Setup Fee (from Partner)",
+                            min_value=0.0,
+                            value=float(display_partner_setup),
+                            step=1.0,
+                            key=f"prod_partner_setup_{idx}",
+                            help="Cost PBP pays to partner for setup"
+                        )
+
                     with col_perunit:
+                        st.markdown("**Client Pricing:**")
                         # Always read default from product_data, use item value if user has edited it
                         default_perunit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0
                         stored_perunit = item.get('customization_per_unit', 0.0)
@@ -1728,11 +1745,26 @@ with tab2:
                         display_perunit = stored_perunit if (stored_perunit > 0 or default_perunit == 0) else default_perunit
 
                         new_perunit_cost = st.number_input(
-                            "Per-Unit Cost",
+                            "Per-Unit Cost (to Client)",
                             min_value=0.0,
                             value=float(display_perunit),
                             step=0.1,
                             key=f"prod_perunit_{idx}"
+                        )
+
+                        st.markdown("**Partner Cost:**")
+                        # Load partner cost from spreadsheet
+                        default_partner_perunit = clean_price(product_data.get('PBP Price: Customization Cost per Unit', '')) or 0.0
+                        stored_partner_perunit = item.get('partner_customization_per_unit', 0.0)
+                        display_partner_perunit = stored_partner_perunit if (stored_partner_perunit > 0 or default_partner_perunit == 0) else default_partner_perunit
+
+                        new_partner_perunit_cost = st.number_input(
+                            "Per-Unit Cost (from Partner)",
+                            min_value=0.0,
+                            value=float(display_partner_perunit),
+                            step=0.1,
+                            key=f"prod_partner_perunit_{idx}",
+                            help="Cost PBP pays to partner per unit"
                         )
 
                     # Customization minimum
@@ -1764,6 +1796,8 @@ with tab2:
             else:
                 new_setup_fee = 0.0
                 new_perunit_cost = 0.0
+                new_partner_setup_fee = 0.0
+                new_partner_perunit_cost = 0.0
                 new_apply_minimum = False
                 new_custom_min_qty = 0
 
@@ -1788,6 +1822,15 @@ with tab2:
                 product_total = subtotal_before_markup + markup_amount
                 total_per_unit = product_total / new_quantity
 
+                # Calculate partner customization costs (for accounting)
+                if new_include_custom:
+                    effective_custom_qty = new_custom_min_qty if (new_apply_minimum and new_custom_min_qty > new_quantity) else new_quantity
+                    partner_customization_setup_total = new_partner_setup_fee
+                    partner_customization_unit_total = new_partner_perunit_cost * effective_custom_qty
+                else:
+                    partner_customization_setup_total = 0.0
+                    partner_customization_unit_total = 0.0
+
                 # Update item in session state
                 st.session_state.order_items[idx].update({
                     'quantity': new_quantity,
@@ -1795,6 +1838,10 @@ with tab2:
                     'include_customization': new_include_custom,
                     'customization_setup_fee': new_setup_fee,
                     'customization_per_unit': new_perunit_cost,
+                    'partner_customization_setup_fee': new_partner_setup_fee,
+                    'partner_customization_per_unit': new_partner_perunit_cost,
+                    'partner_customization_setup_total': partner_customization_setup_total,
+                    'partner_customization_unit_total': partner_customization_unit_total,
                     'apply_custom_minimum': new_apply_minimum,
                     'customization_minimum_qty': new_custom_min_qty,
                     'base_price': base_price,
@@ -3160,33 +3207,40 @@ with tab3:
                 # Add customization line items if present
                 if item.get('include_customization', False):
                     customization_desc = item.get('customization_description', 'Custom work')
+
+                    # Client-facing prices
                     customization_setup = item.get('customization_setup_total', 0)
                     customization_unit_total = item.get('customization_unit_total', 0)
                     customization_per_unit = item.get('customization_per_unit', 0)
 
-                    # Setup fee line item
-                    if customization_setup > 0:
+                    # Partner costs
+                    partner_customization_setup = item.get('partner_customization_setup_total', 0)
+                    partner_customization_unit_total = item.get('partner_customization_unit_total', 0)
+                    partner_customization_per_unit = item.get('partner_customization_per_unit', 0)
+
+                    # Setup fee line item (show partner cost vs. client price)
+                    if customization_setup > 0 or partner_customization_setup > 0:
                         invoice_line_items.append({
                             'PARTNER': partner,
                             'ITEMS + SPECS': f"  └ Setup Fee: {customization_desc}",
                             'QTY': 1,
                             'IN-HANDS from Partner': partner_in_hands,
-                            'COST/UNIT': f"${customization_setup:.2f}",
-                            'TOTAL COST': f"${customization_setup:.2f}",
+                            'COST/UNIT': f"${partner_customization_setup:.2f}",
+                            'TOTAL COST': f"${partner_customization_setup:.2f}",
                             'COST VERIFIED?': cost_verified,
                             'SELL PRICE/UNIT': f"${customization_setup:.2f}",
                             'TOTAL SELL PRICE': f"${customization_setup:.2f}"
                         })
 
-                    # Per-unit customization line item
-                    if customization_unit_total > 0:
+                    # Per-unit customization line item (show partner cost vs. client price)
+                    if customization_unit_total > 0 or partner_customization_unit_total > 0:
                         invoice_line_items.append({
                             'PARTNER': partner,
                             'ITEMS + SPECS': f"  └ Customization: {customization_desc}",
                             'QTY': qty,
                             'IN-HANDS from Partner': partner_in_hands,
-                            'COST/UNIT': f"${customization_per_unit:.2f}",
-                            'TOTAL COST': f"${customization_unit_total:.2f}",
+                            'COST/UNIT': f"${partner_customization_per_unit:.2f}",
+                            'TOTAL COST': f"${partner_customization_unit_total:.2f}",
                             'COST VERIFIED?': cost_verified,
                             'SELL PRICE/UNIT': f"${customization_per_unit:.2f}",
                             'TOTAL SELL PRICE': f"${customization_unit_total:.2f}"
