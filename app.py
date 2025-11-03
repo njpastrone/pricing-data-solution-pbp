@@ -63,6 +63,8 @@ if 'order_history' not in st.session_state:
 # Initialize shipping in session state
 if 'order_shipping' not in st.session_state:
     st.session_state.order_shipping = 0.0
+if 'partner_shipping' not in st.session_state:
+    st.session_state.partner_shipping = 0.0
 
 # Initialize discount settings in session state
 if 'order_discount_type' not in st.session_state:
@@ -248,6 +250,7 @@ with st.sidebar:
                     'accounting_notes': ''
                 }
                 st.session_state.order_shipping = 0.0
+                st.session_state.partner_shipping = 0.0
                 st.session_state.order_discount_type = "none"
                 st.session_state.order_history = []
                 st.session_state.confirm_clear = False
@@ -1929,13 +1932,24 @@ with tab2:
         col_shipping, col_tariff = st.columns(2)
 
         with col_shipping:
+            st.markdown("**Client Shipping:**")
             st.session_state.order_shipping = st.number_input(
-                "Shipping Cost ($)",
+                "Shipping Price to Client ($)",
                 min_value=0.0,
                 value=st.session_state.order_shipping,
                 step=10.0,
                 key="shipping_input",
-                help="One-time shipping cost for the entire order (not per product)"
+                help="Shipping cost charged to client"
+            )
+
+            st.markdown("**Partner Shipping:**")
+            st.session_state.partner_shipping = st.number_input(
+                "Shipping Cost from Partner ($)",
+                min_value=0.0,
+                value=st.session_state.partner_shipping,
+                step=10.0,
+                key="partner_shipping_input",
+                help="Shipping cost PBP pays to partner (for Purchase Orders)"
             )
 
         with col_tariff:
@@ -2719,13 +2733,24 @@ with tab3:
             col_shipping, col_tariff = st.columns(2)
 
             with col_shipping:
+                st.markdown("**Client Shipping:**")
                 st.session_state.order_shipping = st.number_input(
-                    "Shipping Cost ($)",
+                    "Shipping Price to Client ($)",
                     min_value=0.0,
                     value=st.session_state.order_shipping,
                     step=10.0,
                     key="tab3_shipping_input",
-                    help="One-time shipping cost for the entire order (not per product)"
+                    help="Shipping cost charged to client"
+                )
+
+                st.markdown("**Partner Shipping:**")
+                st.session_state.partner_shipping = st.number_input(
+                    "Shipping Cost from Partner ($)",
+                    min_value=0.0,
+                    value=st.session_state.partner_shipping,
+                    step=10.0,
+                    key="tab3_partner_shipping_input",
+                    help="Shipping cost PBP pays to partner (for Purchase Orders)"
                 )
 
             with col_tariff:
@@ -3263,6 +3288,22 @@ with tab3:
                         'SELL PRICE/UNIT': f"${tariff_per_unit:.2f}",
                         'TOTAL SELL PRICE': f"${tariff_amount_total:.2f}"
                     })
+
+        # Add shipping line item (show partner cost vs. client price)
+        partner_shipping_cost = st.session_state.partner_shipping
+        client_shipping_price = shipping
+        if partner_shipping_cost > 0 or client_shipping_price > 0:
+            invoice_line_items.append({
+                'PARTNER': 'Shipping',
+                'ITEMS + SPECS': 'Shipping',
+                'QTY': 1,
+                'IN-HANDS from Partner': 'N/A',
+                'COST/UNIT': f"${partner_shipping_cost:.2f}",
+                'TOTAL COST': f"${partner_shipping_cost:.2f}",
+                'COST VERIFIED?': 'Yes',
+                'SELL PRICE/UNIT': f"${client_shipping_price:.2f}",
+                'TOTAL SELL PRICE': f"${client_shipping_price:.2f}"
+            })
 
         # Display line items table with better column sizing
         invoice_df = pd.DataFrame(invoice_line_items)
