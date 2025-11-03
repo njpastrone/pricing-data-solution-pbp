@@ -1174,8 +1174,18 @@ with tab1:
             <td class="fill-in">[Type full shipping address here, or N/A if drop shipping]</td>
         </tr>
         <tr>
-            <td>Destination Breakdown<span class="helper-text">(if drop shipping internationally)</span></td>
-            <td class="fill-in">[Example: 50 units to CA, 30 units to TX, or N/A if single location]</td>
+            <td colspan="2" style="background-color: #f8f9fa !important; padding: 10px; color: #000000 !important; font-weight: bold;">
+                Dropshipping Instructions
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" style="background-color: #f8f9fa !important; padding: 10px; color: #000000 !important;">
+                """ + st.session_state.dropshipping_notes.replace('\n', '<br/>') + """
+            </td>
+        </tr>
+        <tr>
+            <td>Dropshipping Information</td>
+            <td class="fill-in">[Input dropshipping info here]</td>
         </tr>
         <tr>
             <td>Billing Address</td>
@@ -1184,17 +1194,6 @@ with tab1:
         <tr>
             <td>Client In-Hands Date <span class="required">*</span></td>
             <td class="fill-in">[Type date in format: MM/DD/YYYY]</td>
-        </tr>
-    </table>
-
-    <table>
-        <tr>
-            <td colspan="2" class="section-header">DROPSHIPPING INSTRUCTIONS</td>
-        </tr>
-        <tr>
-            <td colspan="2" style="background-color: #f8f9fa !important; padding: 15px; color: #000000 !important;">
-                """ + st.session_state.dropshipping_notes.replace('\n', '<br/>') + """
-            </td>
         </tr>
     </table>
 
@@ -1692,7 +1691,31 @@ with tab2:
                     if quoted_price > 0:
                         # Product came from proposal - show comparison
                         if abs(client_price_per_unit - quoted_price) > 0.01:  # Allow for rounding errors
-                            st.warning(f"WARNING: Price changed from proposal: Quoted price was ${quoted_price:.2f}/unit")
+                            # Determine WHY the price changed
+                            reasons = []
+
+                            # Check if tier changed
+                            proposal_tier = item.get('proposal_tier_column', '')
+                            current_tier = item.get('tier_column', '')
+                            proposal_tier_range = item.get('proposal_tier_range', '')
+                            current_tier_range = tier_range
+
+                            if proposal_tier and current_tier and proposal_tier != current_tier:
+                                reasons.append(f"Tier change: {proposal_tier} ({proposal_tier_range}) → {current_tier} ({current_tier_range})")
+
+                            # Check if markup changed
+                            proposal_markup = item.get('proposal_markup_percent', 0)
+                            current_markup = new_markup
+
+                            if abs(proposal_markup - current_markup) > 0.01:
+                                reasons.append(f"Markup change: {proposal_markup:.0f}% → {current_markup:.0f}%")
+
+                            # Display warning with reasons
+                            if reasons:
+                                reason_text = " | ".join(reasons)
+                                st.warning(f"WARNING: Price changed from proposal (${quoted_price:.2f}/unit → ${client_price_per_unit:.2f}/unit)\n\nReason: {reason_text}")
+                            else:
+                                st.warning(f"WARNING: Price changed from proposal: Quoted price was ${quoted_price:.2f}/unit, current is ${client_price_per_unit:.2f}/unit")
                         else:
                             st.info(f"Matches quoted price: ${quoted_price:.2f}/unit")
                     else:
@@ -1884,6 +1907,7 @@ with tab2:
                 # Customization (added separately, no markup)
                 if customization_setup_total > 0 or customization_unit_total > 0:
                     breakdown_data.append(["", "", ""])
+                    breakdown_data.append(["**Client-Facing Customization:**", "", ""])
 
                 if customization_setup_total > 0:
                     breakdown_data.append(["Customization Setup", "one-time", f"${customization_setup_total:.2f}"])
@@ -1899,6 +1923,26 @@ with tab2:
                         perunit_display = f"${new_perunit_cost:.2f}/unit"
 
                     breakdown_data.append(["Customization Per-Unit", perunit_display, f"${customization_unit_total:.2f}"])
+
+                # Partner Customization Costs (what PBP pays partner)
+                if partner_customization_setup_total > 0 or partner_customization_unit_total > 0:
+                    breakdown_data.append(["", "", ""])
+                    breakdown_data.append(["**Partner Customization Costs:**", "", ""])
+
+                if partner_customization_setup_total > 0:
+                    breakdown_data.append(["Partner Setup Fee (PBP Cost)", "one-time", f"${partner_customization_setup_total:.2f}"])
+
+                if partner_customization_unit_total > 0:
+                    # Calculate effective quantity for customization
+                    effective_custom_qty = new_custom_min_qty if (new_apply_minimum and new_custom_min_qty > new_quantity) else new_quantity
+
+                    # Show per-unit cost with quantity used
+                    if new_apply_minimum and new_custom_min_qty > new_quantity:
+                        partner_perunit_display = f"${new_partner_perunit_cost:.2f}/unit × {effective_custom_qty} units"
+                    else:
+                        partner_perunit_display = f"${new_partner_perunit_cost:.2f}/unit"
+
+                    breakdown_data.append(["Partner Per-Unit (PBP Cost)", partner_perunit_display, f"${partner_customization_unit_total:.2f}"])
 
                 # Final customer price
                 breakdown_data.append(["", "", ""])
@@ -2047,6 +2091,17 @@ Rates default to current estimates but can be adjusted as needed.
                 index=discount_options.index(current_discount),
                 key="order_discount_select"
             )
+
+            # Show what discount was quoted in proposal (if any)
+            proposal_discount_type = st.session_state.get('proposal_discount_type')
+            proposal_discount_percent = st.session_state.get('proposal_discount_percent', 0.0)
+
+            if proposal_discount_type == 'NGO':
+                st.caption("Discount Quoted to Client: NGO Discount (5%)")
+            elif proposal_discount_type == 'Custom' and proposal_discount_percent > 0:
+                st.caption(f"Discount Quoted to Client: Custom ({proposal_discount_percent}%)")
+            else:
+                st.caption("Discount Quoted to Client: None")
 
             # Update session state based on selection
             if discount_selection == "NGO (5%)":

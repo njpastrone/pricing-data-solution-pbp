@@ -423,6 +423,10 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         'product_total': product_total,  # Product + markup + customization
         'total_per_unit': total_per_unit,  # Total divided by quantity
         'quoted_price_per_unit': quoted_price_per_unit,  # Price quoted in proposal (for comparison)
+        'proposal_quantity': quantity,  # Original quantity from proposal
+        'proposal_markup_percent': markup_percent,  # Original markup from proposal
+        'proposal_tier_range': tier_info if tier_info else '',  # Original tier from proposal
+        'proposal_tier_column': f'T{tier_num}' if tier_num else '',  # Original tier number
 
         # Tariff
         'country_of_origin': product_data.get('Country of Origin', 'Unknown'),
