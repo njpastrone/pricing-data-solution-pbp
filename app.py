@@ -98,14 +98,11 @@ if 'client_info' not in st.session_state:
         'cost_submitted_date': None  # NEW: Date costs were submitted
     }
 
-# Initialize order notes
+# Initialize order notes (simplified to 2 categories)
 if 'order_notes' not in st.session_state:
     st.session_state.order_notes = {
-        'kitting_specs': '',  # Details about kitting requirements
-        'client_requests': '',  # Special client requests
-        'addon_samples': '',  # Additional samples to include
-        'artwork_attachments': '',  # List of artwork files
-        'general_notes': ''  # Catch-all for other notes
+        'notes_to_partner': '',  # Notes for Purchase Orders (sent to partners)
+        'accounting_notes': ''  # Notes for Invoices (sent to clients/accounting)
     }
 
 # Initialize credit card fee settings
@@ -243,11 +240,8 @@ with st.sidebar:
                     'cost_submitted_date': None
                 }
                 st.session_state.order_notes = {
-                    'kitting_specs': '',
-                    'client_requests': '',
-                    'addon_samples': '',
-                    'artwork_attachments': '',
-                    'general_notes': ''
+                    'notes_to_partner': '',
+                    'accounting_notes': ''
                 }
                 st.session_state.order_shipping = 0.0
                 st.session_state.order_discount_type = "none"
@@ -279,7 +273,7 @@ with st.sidebar:
         3. Set quantity, markup, and customization options
         4. Add to order (repeat for multiple products)
         5. Configure shipping, discounts, custom items
-        6. Add order notes (kitting, artwork, requests)
+        6. Add order notes (partner notes, accounting notes)
         7. Review order summary
 
         **Tab 3: Execution & Accounting** (final step)
@@ -2022,44 +2016,20 @@ Rates default to current estimates but can be adjusted as needed.
             with st.expander(f"Add Order Notes ({filled_notes_count} filled)", expanded=False):
                 st.caption("Add specific details for this order")
 
-                st.session_state.order_notes['kitting_specs'] = st.text_area(
-                    "Kitting Specifications",
-                    value=st.session_state.order_notes.get('kitting_specs', ''),
-                    placeholder="Box size, packaging requirements...",
-                    height=70,
-                    help="Details about how products should be kitted/packaged"
+                st.session_state.order_notes['notes_to_partner'] = st.text_area(
+                    "Notes to Partner",
+                    value=st.session_state.order_notes.get('notes_to_partner', ''),
+                    placeholder="Kitting specs, packaging requirements, artwork files, special handling instructions...",
+                    height=100,
+                    help="These notes will appear in Purchase Orders sent to partners"
                 )
 
-                st.session_state.order_notes['client_requests'] = st.text_area(
-                    "Client Requests",
-                    value=st.session_state.order_notes.get('client_requests', ''),
-                    placeholder="Rush delivery, special handling...",
-                    height=70,
-                    help="Special requests from the client"
-                )
-
-                st.session_state.order_notes['addon_samples'] = st.text_area(
-                    "Add-on Samples",
-                    value=st.session_state.order_notes.get('addon_samples', ''),
-                    placeholder="Extra units, samples for approval...",
-                    height=70,
-                    help="Additional samples to include with order"
-                )
-
-                st.session_state.order_notes['artwork_attachments'] = st.text_area(
-                    "Artwork Attachments",
-                    value=st.session_state.order_notes.get('artwork_attachments', ''),
-                    placeholder="logo_final.ai, label_design_v3.pdf...",
-                    height=70,
-                    help="List of artwork files attached to this order"
-                )
-
-                st.session_state.order_notes['general_notes'] = st.text_area(
-                    "General Notes",
-                    value=st.session_state.order_notes.get('general_notes', ''),
-                    placeholder="Any other important details...",
-                    height=70,
-                    help="Catch-all for any other notes or details"
+                st.session_state.order_notes['accounting_notes'] = st.text_area(
+                    "Accounting Notes",
+                    value=st.session_state.order_notes.get('accounting_notes', ''),
+                    placeholder="Client requests, payment terms, special billing notes...",
+                    height=100,
+                    help="These notes will appear in Invoices sent to clients and accounting"
                 )
 
     # Use session state values for calculations
@@ -3148,16 +3118,10 @@ with tab3:
 
         # Display notes if any are filled
         notes_content = []
-        if order_notes.get('kitting_specs'):
-            notes_content.append(f"**Kitting Specs:**\n{order_notes['kitting_specs']}")
-        if order_notes.get('client_requests'):
-            notes_content.append(f"**Client Requests:**\n{order_notes['client_requests']}")
-        if order_notes.get('addon_samples'):
-            notes_content.append(f"**Add-on Samples:**\n{order_notes['addon_samples']}")
-        if order_notes.get('artwork_attachments'):
-            notes_content.append(f"**Artwork Attachments:**\n{order_notes['artwork_attachments']}")
-        if order_notes.get('general_notes'):
-            notes_content.append(f"**General Notes:**\n{order_notes['general_notes']}")
+        if order_notes.get('notes_to_partner'):
+            notes_content.append(f"**Notes to Partner (for Purchase Orders):**\n{order_notes['notes_to_partner']}")
+        if order_notes.get('accounting_notes'):
+            notes_content.append(f"**Accounting Notes (for Invoices):**\n{order_notes['accounting_notes']}")
 
         if notes_content:
             for note in notes_content:
