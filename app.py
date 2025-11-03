@@ -40,7 +40,6 @@ from src.pricing_engine import (
 # ============================================================
 st.set_page_config(
     page_title="PBP Order Management",
-    page_icon="📦",
     layout="wide",
     initial_sidebar_state="auto"
 )
@@ -192,20 +191,22 @@ with st.sidebar:
     has_proposals = len(st.session_state.proposal_products) > 0
     has_order = len(st.session_state.order_items) > 0
     has_client_info = st.session_state.client_info.get('company_name', '').strip() != ''
+    order_confirmed = st.session_state.get('order_confirmed', False)
 
     # Tab 1: Proposals
-    tab1_status = "✓" if has_proposals else "○"
+    tab1_status = "[X]" if has_proposals else "[ ]"
     tab1_color = "green" if has_proposals else "gray"
     st.markdown(f":{tab1_color}[{tab1_status}] **Tab 1:** Proposals ({len(st.session_state.proposal_products)} products)")
 
     # Tab 2: Order & Client Info
-    tab2_status = "✓" if (has_order and has_client_info) else "○"
-    tab2_color = "green" if (has_order and has_client_info) else "gray"
+    tab2_complete = has_order and has_client_info and order_confirmed
+    tab2_status = "[X]" if tab2_complete else "[ ]"
+    tab2_color = "green" if tab2_complete else "gray"
     st.markdown(f":{tab2_color}[{tab2_status}] **Tab 2:** Order & Client ({len(st.session_state.order_items)} products)")
 
     # Tab 3: Invoice/PO ready indicator
     tab3_ready = has_order and has_client_info
-    tab3_status = "✓" if tab3_ready else "○"
+    tab3_status = "[X]" if tab3_ready else "[ ]"
     tab3_color = "green" if tab3_ready else "gray"
     tab3_label = "Ready" if tab3_ready else "Not ready"
     st.markdown(f":{tab3_color}[{tab3_status}] **Tab 3:** Invoice/PO ({tab3_label})")
@@ -556,7 +557,7 @@ with tab1:
     else:
         # Display success message if a product was just added
         if 'show_success_message' in st.session_state and st.session_state.show_success_message:
-            st.success(f"✓ Added **{st.session_state.success_product_name}** to proposal!")
+            st.success(f"Added **{st.session_state.success_product_name}** to proposal!")
             st.session_state.show_success_message = False
 
         # Table-style header
@@ -1084,7 +1085,7 @@ with tab1:
 
     # Button to apply info to order form
     if st.button("Add Info to Order Form", type="primary", use_container_width=True):
-        st.success("Order details saved! They will appear in the Client Order Form below.")
+        st.success("Information successfully added to order form!")
         st.rerun()
 
     # ============================================================
@@ -1160,7 +1161,7 @@ with tab1:
         </tr>
     </table>
 
-    <table>"""
+    <table>
         <tr>
             <td colspan="2" class="section-header">SHIPPING & DELIVERY</td>
         </tr>
@@ -1384,6 +1385,13 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
         - Send to your client for review
         - Move to **Tab 2: Order & Client Info** when client confirms
         """)
+
+    # Navigation button at bottom of Tab 1
+    st.divider()
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("Continue to Tab 2: Order & Client Info", type="primary", use_container_width=True, key="tab1_to_tab2"):
+            st.info("Please click on the 'Order & Client Info' tab above to continue.")
 
 # ============================================================
 # TAB 2: ORDER & CLIENT INFO (ALL CURRENT FUNCTIONALITY)
@@ -1684,9 +1692,9 @@ with tab2:
                     if quoted_price > 0:
                         # Product came from proposal - show comparison
                         if abs(client_price_per_unit - quoted_price) > 0.01:  # Allow for rounding errors
-                            st.warning(f"⚠️ Price changed from proposal: Quoted price was ${quoted_price:.2f}/unit")
+                            st.warning(f"WARNING: Price changed from proposal: Quoted price was ${quoted_price:.2f}/unit")
                         else:
-                            st.info(f"✓ Matches quoted price: ${quoted_price:.2f}/unit")
+                            st.info(f"Matches quoted price: ${quoted_price:.2f}/unit")
                     else:
                         # Product added manually (not from proposal)
                         st.caption("Quoted price: Unknown (product added manually)")
@@ -2388,7 +2396,7 @@ Rates default to current estimates but can be adjusted as needed.
     st.header("5. Client & Order Information")
 
     # Import client order form section
-    st.info("💡 **New Feature:** Import completed client order forms (coming soon!)")
+    st.info("**New Feature:** Import completed client order forms (coming soon!)")
 
     with st.expander("Import Completed Client Order Form", expanded=False):
         st.caption("Upload an HTML order form completed by your client to auto-populate client information and products.")
@@ -2401,7 +2409,7 @@ Rates default to current estimates but can be adjusted as needed.
         )
 
         if uploaded_file is not None:
-            st.warning("⚠️ HTML parsing feature is under development. For now, please manually enter client information below.")
+            st.warning("WARNING: HTML parsing feature is under development. For now, please manually enter client information below.")
             st.markdown("**Preview of uploaded file:**")
             content = uploaded_file.read().decode('utf-8')
             st.text(content[:500] + "..." if len(content) > 500 else content)
@@ -2597,6 +2605,13 @@ Rates default to current estimates but can be adjusted as needed.
             st.session_state.order_confirmed = False
             st.rerun()
 
+    # Navigation button at bottom of Tab 2
+    st.divider()
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("Continue to Tab 3: Execution & Accounting", type="primary", use_container_width=True, key="tab2_to_tab3"):
+            st.info("Please click on the 'Execution & Accounting' tab above to continue.")
+
 # ============================================================
 # TAB 3: EXECUTION & ACCOUNTING
 # ============================================================
@@ -2625,7 +2640,7 @@ with tab3:
         if validation_warnings:
             st.warning(f"{len(validation_warnings)} field(s) need attention. Complete the missing information below:")
         else:
-            st.success("✓ All required fields complete - ready to generate Invoice/PO")
+            st.success("All required fields complete - ready to generate Invoice/PO")
 
         # Editable fields for missing information
         with st.expander("Edit Order Information", expanded=bool(validation_warnings)):
