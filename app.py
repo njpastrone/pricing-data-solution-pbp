@@ -35,6 +35,7 @@ from src.pricing_engine import (
     calculate_product_quote,
     calculate_order_total
 )
+from src.slide_matcher import SlideMatcher
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -444,6 +445,283 @@ with st.sidebar:
             mime="text/csv",
             use_container_width=True
         )
+
+# ============================================================
+# MATCH REVIEW UI FUNCTION (PHASE 1, DAY 2)
+# ============================================================
+def show_match_review_ui(match_results, pptx_product_names):
+    """
+    Display match review UI for user confirmation of fuzzy matches.
+
+    Args:
+        match_results: List of SlideMatchResult objects from SlideMatcher
+        pptx_product_names: List of all PowerPoint product names (for alternatives)
+
+    Returns:
+        Dict of confirmed matches {gs_product_name: pptx_product_name} or None if cancelled
+    """
+    st.markdown("---")
+    st.subheader("10. Review Matches & Generate PowerPoint")
+
+    # Separate matches by type
+    exact_matches = [r for r in match_results if r.match_type == 'exact']
+    fuzzy_matches = [r for r in match_results if r.match_type == 'fuzzy' and r.confidence >= 70]
+    poor_matches = [r for r in match_results if r.match_type == 'fuzzy' and r.confidence < 70]
+    no_matches = [r for r in match_results if r.match_type == 'none']
+
+    # Summary at top
+    st.markdown(f"""
+    **Match Summary:**
+    - {len(exact_matches)} exact matches (auto-confirmed)
+    - {len(fuzzy_matches)} fuzzy matches (need your confirmation)
+    - {len(poor_matches) + len(no_matches)} products with no good match (will be skipped)
+    """)
+
+    if len(fuzzy_matches) == 0 and len(exact_matches) == 0:
+        st.warning("No usable matches found. Cannot generate PowerPoint presentation.")
+        return None
+
+    # Initialize confirmation state if not exists
+    if 'match_confirmations' not in st.session_state:
+        st.session_state.match_confirmations = {}
+
+    # SECTION 1: Exact Matches (collapsed, informational)
+    if exact_matches:
+        with st.expander(f"✓ Exact Matches ({len(exact_matches)}) - Auto-confirmed", expanded=False):
+            for result in exact_matches:
+                st.markdown(f"- **{result.gs_product_name}** → {result.pptx_product_name}")
+
+    # SECTION 2: Fuzzy Matches (expanded, requires confirmation)
+    if fuzzy_matches:
+        st.markdown("### Fuzzy Matches - Confirm Each Match")
+        st.caption("Review each suggested match below. Click 'Yes' to confirm, or 'Show Alternatives' to see other options.")
+
+        for idx, result in enumerate(fuzzy_matches):
+            st.markdown(f"#### {idx + 1}. {result.gs_product_name}")
+
+            # Show suggested match with confidence
+            confidence_color = "green" if result.confidence >= 90 else "orange"
+            st.markdown(f"**Suggested match:** {result.pptx_product_name} (:{confidence_color}[{result.confidence}% confidence])")
+
+            # Create unique key for this match
+            match_key = f"match_{idx}"
+
+            # Radio button for confirmation
+            col1, col2, col3 = st.columns([1, 1, 1])
+
+            with col1:
+                yes_btn = st.button(f"✓ Yes, use this slide", key=f"{match_key}_yes", use_container_width=True)
+            with col2:
+                alt_btn = st.button(f"→ Show alternatives", key=f"{match_key}_alt", use_container_width=True)
+            with col3:
+                skip_btn = st.button(f"X Skip this product", key=f"{match_key}_skip", use_container_width=True)
+
+            # Handle button clicks
+            if yes_btn:
+                st.session_state.match_confirmations[result.gs_product_name] = {
+                    'confirmed': True,
+                    'pptx_name': result.pptx_product_name
+                }
+                st.success(f"✓ Confirmed: {result.pptx_product_name}")
+                st.rerun()
+
+            elif alt_btn:
+                st.session_state.match_confirmations[result.gs_product_name] = {
+                    'confirmed': False,
+                    'show_alternatives': True
+                }
+                st.rerun()
+
+            elif skip_btn:
+                st.session_state.match_confirmations[result.gs_product_name] = {
+                    'confirmed': False,
+                    'skipped': True
+                }
+                st.warning(f"Skipped: {result.gs_product_name}")
+                st.rerun()
+
+            # Show alternatives if requested
+            if st.session_state.match_confirmations.get(result.gs_product_name, {}).get('show_alternatives'):
+                with st.expander("Alternative Matches", expanded=True):
+                    if result.alternatives:
+                        st.caption("Select an alternative or go back to the suggested match:")
+                        for alt_idx, (alt_name, alt_score) in enumerate(result.alternatives[:3]):
+                            col_alt1, col_alt2 = st.columns([3, 1])
+                            with col_alt1:
+                                st.markdown(f"{alt_idx + 1}. {alt_name} ({alt_score}% confidence)")
+                            with col_alt2:
+                                if st.button(f"Use this", key=f"{match_key}_alt_{alt_idx}", use_container_width=True):
+                                    st.session_state.match_confirmations[result.gs_product_name] = {
+                                        'confirmed': True,
+                                        'pptx_name': alt_name
+                                    }
+                                    st.success(f"✓ Confirmed alternative: {alt_name}")
+                                    st.rerun()
+                    else:
+                        st.info("No alternatives available. Use the suggested match or skip this product.")
+
+            # Show current confirmation status
+            confirmation = st.session_state.match_confirmations.get(result.gs_product_name, {})
+            if confirmation.get('confirmed'):
+                st.success(f"✓ Match confirmed: {confirmation['pptx_name']}")
+            elif confirmation.get('skipped'):
+                st.warning(f"Product will be skipped")
+
+            st.divider()
+
+    # SECTION 3: Poor/No Matches (collapsed, informational)
+    if poor_matches or no_matches:
+        all_poor = poor_matches + no_matches
+        with st.expander(f"X Products with No Good Match ({len(all_poor)}) - Will be skipped", expanded=False):
+            for result in all_poor:
+                if result.pptx_product_name:
+                    st.markdown(f"- **{result.gs_product_name}** (best guess: {result.pptx_product_name}, {result.confidence}% confidence)")
+                else:
+                    st.markdown(f"- **{result.gs_product_name}** (no match found)")
+            st.caption("These products likely don't have slides in the PowerPoint deck yet.")
+
+    # SECTION 4: Validation and Generate Button
+    st.markdown("---")
+
+    # Check if all fuzzy matches are confirmed
+    all_confirmed = True
+    pending_confirmations = []
+
+    for result in fuzzy_matches:
+        confirmation = st.session_state.match_confirmations.get(result.gs_product_name, {})
+        if not confirmation.get('confirmed') and not confirmation.get('skipped'):
+            all_confirmed = False
+            pending_confirmations.append(result.gs_product_name)
+
+    if not all_confirmed:
+        st.warning(f"Please review {len(pending_confirmations)} pending fuzzy matches before generating PowerPoint.")
+        with st.expander("Pending Confirmations"):
+            for product in pending_confirmations:
+                st.markdown(f"- {product}")
+    else:
+        # Build final confirmed matches dict
+        confirmed_matches = {}
+
+        # Add exact matches (auto-confirmed)
+        for result in exact_matches:
+            confirmed_matches[result.gs_product_name] = result.pptx_product_name
+
+        # Add fuzzy matches (user-confirmed)
+        for result in fuzzy_matches:
+            confirmation = st.session_state.match_confirmations.get(result.gs_product_name, {})
+            if confirmation.get('confirmed'):
+                confirmed_matches[result.gs_product_name] = confirmation['pptx_name']
+
+        # Show summary
+        st.success(f"✓ Ready to generate PowerPoint with {len(confirmed_matches)} products!")
+
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.button("Reset Confirmations", use_container_width=True):
+                st.session_state.match_confirmations = {}
+                st.session_state.generated_pptx = None
+                st.rerun()
+
+        with col2:
+            if st.button("Generate PowerPoint Presentation", type="primary", use_container_width=True):
+                try:
+                    import time
+                    start_time = time.time()
+
+                    # Import generator functions
+                    from src.pptx_generator import (
+                        create_proposal_presentation,
+                        add_cover_slide,
+                        download_presentation
+                    )
+
+                    # Validation checks
+                    template_path = Path("templates/November All Slides.pptx")
+                    if not template_path.exists():
+                        st.error("PowerPoint template not found. Please ensure 'templates/November All Slides.pptx' exists.")
+                        return None
+
+                    if len(confirmed_matches) == 0:
+                        st.warning("No products confirmed for generation. Please confirm at least one product match.")
+                        return None
+
+                    # Create presentation with progress indicator
+                    progress_container = st.empty()
+                    progress_container.info(f"Step 1/4: Loading template with {len(list(Presentation(str(template_path)).slides))} slides...")
+
+                    # Get proposal settings
+                    marketing_rounding = st.session_state.get('proposal_marketing_rounding', False)
+                    discount_percent = st.session_state.get('proposal_discount_percent', 0.0)
+
+                    # Create presentation with cloned slides and updated tables
+                    progress_container.info(f"Step 2/4: Selecting and updating {len(confirmed_matches)} product slides...")
+                    prs = create_proposal_presentation(
+                        str(template_path),
+                        confirmed_matches,
+                        st.session_state.proposal_products,
+                        get_unit_price_new_system,
+                        marketing_rounding,
+                        discount_percent
+                    )
+
+                    # Add cover slide
+                    progress_container.info("Step 3/4: Adding cover slide...")
+                    client_name = st.session_state.order_details.get('company_name', 'Client')
+                    date_str = datetime.now().strftime('%B %d, %Y')
+                    add_cover_slide(prs, client_name, date_str)
+
+                    # Convert to downloadable format
+                    progress_container.info("Step 4/4: Preparing download...")
+                    pptx_file = download_presentation(prs, client_name)
+
+                    # Calculate generation time
+                    generation_time = time.time() - start_time
+
+                    # Store in session state to persist across reruns
+                    st.session_state.generated_pptx = pptx_file
+                    st.session_state.generated_pptx_filename = f"Proposal_{client_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pptx"
+                    st.session_state.pptx_product_count = len(confirmed_matches)
+                    st.session_state.pptx_generation_time = generation_time
+
+                    # Clear progress indicator
+                    progress_container.empty()
+
+                except Exception as e:
+                    st.error(f"PowerPoint generation failed: {str(e)}")
+                    st.error("Please check that all products have valid pricing data and try again.")
+                    with st.expander("View detailed error (for debugging)"):
+                        st.exception(e)
+                    return None
+
+        with col3:
+            if st.button("Close", use_container_width=True):
+                st.session_state.show_pptx_matching = False
+                st.session_state.match_confirmations = {}
+                st.session_state.generated_pptx = None
+                st.rerun()
+
+        # Show download button if presentation was generated
+        if 'generated_pptx' in st.session_state and st.session_state.generated_pptx is not None:
+            generation_time = st.session_state.get('pptx_generation_time', 0)
+            st.success(f"PowerPoint generated successfully in {generation_time:.1f} seconds!")
+
+            # Show generation summary
+            col_summary1, col_summary2 = st.columns(2)
+            with col_summary1:
+                st.metric("Products Included", st.session_state.pptx_product_count)
+            with col_summary2:
+                st.metric("File Name", st.session_state.generated_pptx_filename)
+
+            st.download_button(
+                label="Download PowerPoint Presentation",
+                data=st.session_state.generated_pptx,
+                file_name=st.session_state.generated_pptx_filename,
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                type="primary",
+                use_container_width=True
+            )
+
+    return None
 
 # ============================================================
 # DATA LOADING
@@ -1450,6 +1728,69 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
         )
 
     st.info("Tip: Download the HTML form, open it in your browser, then copy the entire page and paste it into your email. It will preserve all formatting!")
+
+    # ============================================================
+    # SECTION 10: POWERPOINT PROPOSAL GENERATION (PHASE 1, DAY 2)
+    # ============================================================
+    if len(st.session_state.proposal_products) > 0:
+        st.divider()
+        st.subheader("10. Generate PowerPoint Proposal (BETA)")
+        st.caption("Automatically create a customized PowerPoint presentation for your client")
+
+        # Button to trigger matching
+        if st.button("Review Matches & Generate PowerPoint", type="primary", use_container_width=True, key="trigger_pptx_matching"):
+            st.session_state.show_pptx_matching = True
+            st.session_state.generated_pptx = None  # Clear any previous generation
+            st.rerun()
+
+        # Show matching UI if triggered
+        if st.session_state.get('show_pptx_matching', False):
+            try:
+                # Load PowerPoint product names
+                from pathlib import Path
+                from pptx import Presentation
+
+                pptx_path = Path("templates/November All Slides.pptx")
+
+                if not pptx_path.exists():
+                    st.error("PowerPoint template not found at templates/November All Slides.pptx")
+                    st.session_state.show_pptx_matching = False
+                else:
+                    # Extract product names from PowerPoint
+                    with st.spinner("Loading PowerPoint slides..."):
+                        prs = Presentation(str(pptx_path))
+
+                        pptx_product_names = []
+                        slide_list = list(prs.slides)
+
+                        for slide_idx, slide in enumerate(slide_list):
+                            if len(slide.shapes) >= 1:
+                                first_shape = slide.shapes[0]
+                                if hasattr(first_shape, "text") and first_shape.text.strip():
+                                    product_name = first_shape.text.strip()
+                                    if product_name not in pptx_product_names:
+                                        pptx_product_names.append(product_name)
+
+                    st.success(f"Loaded {len(pptx_product_names)} product slides from PowerPoint")
+
+                    # Get proposal product names
+                    gs_product_names = [item['product_data']['Product/Service'] for item in st.session_state.proposal_products]
+
+                    # Create matcher and run matching
+                    with st.spinner("Matching products to slides..."):
+                        matcher = SlideMatcher(pptx_product_names)
+                        match_results = matcher.batch_match(gs_product_names)
+
+                    # Show match review UI
+                    confirmed_matches = show_match_review_ui(match_results, pptx_product_names)
+
+                    if confirmed_matches:
+                        st.session_state.show_pptx_matching = False
+                        st.rerun()
+
+            except Exception as e:
+                st.error(f"Error loading PowerPoint: {str(e)}")
+                st.session_state.show_pptx_matching = False
 
     # ============================================================
     # NEXT STEPS GUIDANCE
