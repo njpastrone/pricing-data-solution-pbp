@@ -2,3 +2,6 @@ streamlit
 gspread
 pandas
 google-auth
+python-pptx
+thefuzz
+python-Levenshtein
