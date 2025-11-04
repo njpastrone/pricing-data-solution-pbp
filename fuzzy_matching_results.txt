@@ -1,0 +1,84 @@
+FUZZY MATCHING RESULTS
+================================================================================
+
+Exact matches: 1
+Fuzzy matches: 6
+No matches: 12
+Total usable: 7
+
+NONE (50%)
+  GS: Product Y
+  PPTX: RENEW POUCH
+
+NONE (68%)
+  GS: Upcycled Pilot's Everyday Case
+  PPTX: UPCYCLED PENCIL CASE
+
+FUZZY (76%)
+  GS: Upcycled Multicompartment Briefcase (hustler)
+  PPTX: UPCYCLED MULTI-COMPARTMENT BRIEFCASE
+
+EXACT (100%)
+  GS: Upcycled Executive Urban Briefcase
+  PPTX: UPCYCLED EXECUTIVE URBAN BRIEFCASE
+
+NONE (59%)
+  GS: Upcycled Gym Duffle (CZI)
+  PPTX: UPCYCLED CANVAS SLING
+
+FUZZY (80%)
+  GS: Upcycled Laptop Sleeve (Enfold)-MOF
+  PPTX: UPCYCLED LAPTOP SLEEVE
+
+FUZZY (92%)
+  GS: Upcycled Day Tripper Backpack (Noir)
+  PPTX: UPCYCLED DAY TRIPPER BACKPACK
+
+NONE (58%)
+  GS: Alabaster + Tigerwood Cutting Board
+  PPTX: SELVA CUTTING BOARD
+
+NONE (56%)
+  GS: Angled Wood Spatula
+  PPTX: LARGE WOODEN VASE
+
+FUZZY (81%)
+  GS: Butcher Block - Large
+  PPTX: BUTCHER BLOCK
+
+FUZZY (79%)
+  GS: Butcher Block - Medium
+  PPTX: BUTCHER BLOCK
+
+FUZZY (81%)
+  GS: Candle Holders - Set of 3
+  PPTX: MINIMALIST CANDLE HOLDERS – Set of 3
+
+NONE (51%)
+  GS: LAVENDER SHORTBREAD MIX
+  PPTX: LEATHER MOUSEPAD
+
+NONE (47%)
+  GS: SAVORY HERB BISCUIT MIX
+  PPTX: CREAM SCONE MIX
+
+NONE (46%)
+  GS: CHOCOLATE ROSEMARY BROWNIE MIX
+  PPTX: COOKING UP PURPOSE GIFT BOX
+
+NONE (67%)
+  GS: STRAWBERRY PANCAKE MIX
+  PPTX: STRAWBERRY JAM
+
+NONE (52%)
+  GS: GARDEN HERB SEASON SALT
+  PPTX: LEATHER SUNGLASSES CASE
+
+NONE (53%)
+  GS: ZA'ATAR SEASON SALT
+  PPTX: SONIYA  BELT BAG
+
+NONE (48%)
+  GS: HERBS DE PROVENCE SEASONING
+  PPTX: LEATHER PENCIL CASE
+
