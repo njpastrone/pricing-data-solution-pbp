@@ -39,5 +39,10 @@ wheels/
 .DS_Store
 Thumbs.db
 
+# Office temporary files
+~$*.pptx
+~$*.xlsx
+~$*.docx
+
 # Playwright MCP
 .playwright-mcp/
