@@ -1,7 +1,7 @@
 """
 Peace by Piece International - Order Management System
-3-tab workflow: Proposals → Order & Client Info → Execution & Accounting
-Version: 4.0 (UI Polish Complete - Proposal-to-Order Connection + CSV Downloads + Editable Summary)
+4-tab workflow: Proposals → Client Order Forms → Order & Client Info → Execution & Accounting
+Version: 6.1 (Tab 3 Workflow Clarity + Filter Improvements)
 """
 
 import streamlit as st
@@ -134,7 +134,7 @@ if 'editing_proposal_index' not in st.session_state:
 if 'proposal_filters' not in st.session_state:
     st.session_state.proposal_filters = {
         'min_price': 0.0,
-        'max_price': None,
+        'client_budget': None,
         'partners': [],
         'countries': []
     }
@@ -955,13 +955,13 @@ with tab1:
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown("**Max Price**")
-        max_price = st.number_input(
-            "Max price per unit ($) - Optional",
+        st.markdown("**Client Budget**")
+        client_budget = st.number_input(
+            "Max client price per unit ($) - Optional",
             min_value=0.0,
-            value=st.session_state.proposal_filters.get('max_price') or 0.0,
+            value=st.session_state.proposal_filters.get('client_budget') or 0.0,
             step=1.0,
-            key="filter_max_price"
+            key="filter_client_budget"
         )
 
     with col2:
@@ -985,7 +985,7 @@ with tab1:
         )
 
     # Update filters in session state
-    st.session_state.proposal_filters['max_price'] = max_price if max_price > 0 else None
+    st.session_state.proposal_filters['client_budget'] = client_budget if client_budget > 0 else None
     st.session_state.proposal_filters['partners'] = selected_partners
     st.session_state.proposal_filters['countries'] = selected_countries
 
@@ -998,14 +998,16 @@ with tab1:
     if selected_countries:
         filtered_df = filtered_df[filtered_df["Country of Origin"].isin(selected_countries)]
 
-    # Price filtering (estimate based on MOQ)
-    if max_price and max_price > 0:
+    # Price filtering based on client price (cost * 2 for 100% markup)
+    if client_budget and client_budget > 0:
         price_filtered_indices = []
         for idx, row in filtered_df.iterrows():
-            # Get price estimate at quantity 100
-            base_price, _, _ = get_unit_price_new_system(row, 100)
-            if base_price:
-                if max_price > 0 and base_price > max_price:
+            # Get cost estimate at quantity 100
+            base_cost, _, _ = get_unit_price_new_system(row, 100)
+            if base_cost:
+                # Calculate client price (100% markup)
+                client_price = base_cost * 2
+                if client_price > client_budget:
                     continue
                 price_filtered_indices.append(idx)
         filtered_df = filtered_df.loc[price_filtered_indices]
@@ -1026,14 +1028,16 @@ with tab1:
 
         with st.expander(f"Browse Products ({len(filtered_df)} available)", expanded=default_expanded):
             # Table-style header
-            header_col1, header_col2, header_col3, header_col4 = st.columns([3, 1.5, 1, 1.5])
+            header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([3, 1.5, 1, 1.2, 1.5])
             with header_col1:
                 st.markdown("**Product Name**")
             with header_col2:
                 st.markdown("**Partner**")
             with header_col3:
-                st.markdown("**Price/Unit**")
+                st.markdown("**Cost/Unit**")
             with header_col4:
+                st.markdown("**Price/Unit (100% markup)**")
+            with header_col5:
                 st.markdown("**Actions**")
 
             st.divider()
@@ -1042,13 +1046,16 @@ with tab1:
             for idx, row in filtered_df.iterrows():
                 product_data = row
 
-                # Calculate price for display
-                preliminary_price, _, _ = get_unit_price_new_system(product_data, 100)
-                estimated_moq = calculate_moq(preliminary_price * 2) if preliminary_price else None
-                moq_price, _, _ = get_unit_price_new_system(product_data, estimated_moq) if estimated_moq else (None, None, None)
+                # Calculate cost and client price for display
+                preliminary_cost, _, _ = get_unit_price_new_system(product_data, 100)
+                estimated_moq = calculate_moq(preliminary_cost * 2) if preliminary_cost else None
+                moq_cost, _, _ = get_unit_price_new_system(product_data, estimated_moq) if estimated_moq else (None, None, None)
+
+                # Calculate client price (100% markup)
+                moq_client_price = moq_cost * 2 if moq_cost else None
 
                 # Compact row with all essential info
-                col1, col2, col3, col4 = st.columns([3, 1.5, 1, 1.5])
+                col1, col2, col3, col4, col5 = st.columns([3, 1.5, 1, 1.2, 1.5])
 
                 with col1:
                     st.markdown(f"**{product_data['Product/Service']}**")
@@ -1057,12 +1064,18 @@ with tab1:
                     st.markdown(f"{product_data['Partner']}")
 
                 with col3:
-                    if moq_price:
-                        st.markdown(f"${moq_price:.2f}")
+                    if moq_cost:
+                        st.markdown(f"${moq_cost:.2f}")
                     else:
                         st.markdown("—")
 
                 with col4:
+                    if moq_client_price:
+                        st.markdown(f"${moq_client_price:.2f}")
+                    else:
+                        st.markdown("—")
+
+                with col5:
                     # Add button - adds product to proposal with 100% markup default
                     if st.button("Add to Proposal", key=f"add_{idx}", use_container_width=True, type="primary"):
                         proposal_item = {
@@ -1076,19 +1089,19 @@ with tab1:
                         st.session_state.success_product_name = product_data['Product/Service']
                         st.rerun()
 
-            # Show additional details inline (no nested expander)
-            st.caption(f"Country: {product_data.get('Country of Origin', 'N/A')} | Tiered Pricing: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
+                # Show additional details inline (no nested expander)
+                st.caption(f"Country: {product_data.get('Country of Origin', 'N/A')} | Tiered Pricing: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
 
-            # Show estimated price at MOQ
-            if moq_price and estimated_moq:
-                st.caption(f"Est. Price at MOQ ({estimated_moq} units): ${moq_price:.2f}/unit")
+                # Show estimated prices at MOQ
+                if moq_cost and estimated_moq:
+                    st.caption(f"Est. Cost & Price at MOQ ({estimated_moq} units): ${moq_cost:.2f}/unit cost → ${moq_client_price:.2f}/unit client price (100% markup)")
 
-            # Show description if available
-            desc = product_data.get("Marketing Description", "")
-            if desc and str(desc).strip() and str(desc).strip() != 'nan':
-                st.caption(f"📝 {desc}")
+                # Show description if available
+                desc = product_data.get("Marketing Description", "")
+                if desc and str(desc).strip() and str(desc).strip() != 'nan':
+                    st.caption(f"📝 {desc}")
 
-            st.divider()
+                st.divider()
 
     # ============================================================
     # SECTION 2: PROPOSAL PREVIEW & SETTINGS
@@ -2178,10 +2191,134 @@ with tab3:
     st.divider()
 
     # ============================================================
-    # PROPOSAL PRODUCTS SELECTION (if available)
+    # WORKFLOW GUIDANCE
+    # ============================================================
+    st.subheader("Getting Started - Choose Your Workflow")
+
+    # Determine which options are available
+    has_proposal = len(st.session_state.proposal_products) > 0
+
+    if has_proposal:
+        st.markdown("""
+        There are **3 ways** to build an order in this tab. Choose the option that matches your situation:
+
+        **RECOMMENDED:** If you sent a client order form (from Tab 2) and received it back completed → Use **Option A** below
+
+        **Alternative:** If you have a proposal (from Tab 1) but no completed client form → Use **Option B** below
+
+        **Fallback:** If starting fresh without a proposal or form → Use **Option C** below
+        """)
+    else:
+        st.markdown("""
+        There are **2 ways** to build an order in this tab. Choose the option that matches your situation:
+
+        **RECOMMENDED:** If you sent a client order form (from Tab 2) and received it back completed → Use **Option A** below
+
+        **Alternative:** If starting fresh without a proposal or form → Use **Option B** below
+
+        **Tip:** If you want to create a proposal first, go back to Tab 1 to build a proposal, then return here to import it.
+        """)
+    st.divider()
+
+    # ============================================================
+    # OPTION A: HTML CLIENT ORDER FORM IMPORT (RECOMMENDED)
+    # ============================================================
+    st.header("Option A: Import Completed Client Order Form (RECOMMENDED)")
+    st.markdown("**Use this if:** You sent a client order form from Tab 2 and received it back completed")
+
+    with st.expander("Upload Completed Client Order Form", expanded=False):
+        st.caption("Upload an HTML order form completed by your client to auto-populate client information.")
+        st.info("This will import client info, shipping, payment details, and order products from the form.")
+
+        uploaded_file = st.file_uploader(
+            "Upload Client Order Form (HTML)",
+            type=['html', 'htm'],
+            key="import_client_form_top",
+            help="Upload the HTML form that your client filled out and returned to you"
+        )
+
+        if uploaded_file is not None:
+            # Read and parse the HTML content
+            content = uploaded_file.read().decode('utf-8')
+            parsed_data = parse_client_order_form_html(content)
+
+            # Show parsing errors if any
+            if parsed_data['parse_errors']:
+                st.warning("Parsing warnings:")
+                for error in parsed_data['parse_errors']:
+                    st.caption(f"- {error}")
+
+            # Show preview of extracted data
+            st.markdown("**Preview of Extracted Data:**")
+
+            preview_data = {
+                "Client Type": parsed_data['client_type'] or "[Not filled]",
+                "Company Name": parsed_data['company_name'] or "[Not filled]",
+                "Contact Name": parsed_data['contact_name'] or "[Not filled]",
+                "Contact Email": parsed_data['contact_email'] or "[Not filled]",
+                "Drop Shipping": parsed_data['drop_shipping'] or "[Not filled]",
+                "Shipping Address": parsed_data['shipping_address'] or "[Not filled]",
+                "Dropshipping Info": parsed_data['dropshipping_info'] or "[Not filled]",
+                "Billing Address": parsed_data['billing_address'] or "[Not filled]",
+                "Client In-Hands Date": parsed_data['client_in_hands_date'] or "[Not filled]",
+                "Impact Card Preference": parsed_data['impact_card_preference'] or "[Not filled]",
+                "Payment Preference": parsed_data['payment_preference'] or "[Not filled]"
+            }
+
+            # Display as table
+            df_preview = pd.DataFrame(list(preview_data.items()), columns=["Field", "Value"])
+            st.dataframe(df_preview, use_container_width=True, hide_index=True)
+
+            # Import button
+            st.divider()
+            if st.button("Import Client Information", type="primary", use_container_width=True, key="import_client_data_btn_top"):
+                # Apply to session state
+                st.session_state.client_info['is_new_client'] = (parsed_data['client_type'] == 'New')
+                st.session_state.client_info['company_name'] = parsed_data['company_name']
+                st.session_state.client_info['contact_name'] = parsed_data['contact_name']
+                st.session_state.client_info['contact_email'] = parsed_data['contact_email']
+                st.session_state.client_info['shipping_address'] = parsed_data['shipping_address']
+                st.session_state.client_info['billing_address'] = parsed_data['billing_address']
+
+                # Set shipping type based on drop shipping answer
+                # Default to 'One Location' (show shipping address) unless clearly "Yes" for drop shipping
+                if parsed_data['drop_shipping'] == 'Yes':
+                    st.session_state.client_info['shipping_type'] = 'Drop Shipping'
+                else:
+                    # For "No", empty, or any unclear answer, default to One Location
+                    st.session_state.client_info['shipping_type'] = 'One Location'
+
+                # Parse and apply date
+                if parsed_data['client_in_hands_date']:
+                    try:
+                        from datetime import datetime
+                        # Try to parse MM/DD/YYYY format
+                        date_obj = datetime.strptime(parsed_data['client_in_hands_date'], '%m/%d/%Y')
+                        st.session_state.client_info['client_in_hands_date'] = date_obj.date()
+                    except:
+                        # If parsing fails, leave empty and let user enter manually
+                        st.session_state.client_info['client_in_hands_date'] = None
+
+                # Map payment preference to our dropdown values
+                payment_map = {
+                    'ACH': 'ACH',
+                    'Check': 'Check',
+                    'Credit Card': 'Credit Card (3% processing fee applies)'
+                }
+                if parsed_data['payment_preference'] in payment_map:
+                    st.session_state.client_info['payment_preference'] = payment_map[parsed_data['payment_preference']]
+
+                st.success("Client information imported successfully! Review and edit the fields below as needed.")
+                st.rerun()
+
+    st.divider()
+
+    # ============================================================
+    # OPTION B: PROPOSAL PRODUCTS SELECTION (if available)
     # ============================================================
     if len(st.session_state.proposal_products) > 0:
-        st.header("Option A: Import Products from Proposal")
+        st.header("Option B: Import Products from Proposal (Tab 1)")
+        st.markdown("**Use this if:** You created a proposal in Tab 1 but don't have a completed client order form")
         st.info(f"{len(st.session_state.proposal_products)} product(s) available from Proposal (Tab 1). Select below to add to order.")
         st.session_state.using_proposal_data = True
 
@@ -2258,9 +2395,12 @@ with tab3:
 
 
     # ============================================================
-    # PARTNER & PRODUCT SELECTION
+    # OPTION C (or B): MANUAL PRODUCT SELECTION
     # ============================================================
-    st.header("Option B: Manual Product Selection")
+    # Adjust option label based on whether proposal exists
+    option_label = "Option C" if has_proposal else "Option B"
+    st.header(f"{option_label}: Manual Product Selection")
+    st.markdown("**Use this if:** You're starting from scratch without a proposal or completed form")
     st.caption("Add products to your order, then configure settings for each product below")
 
     # Create dropdowns for filtering
@@ -3235,93 +3375,6 @@ Rates default to current estimates but can be adjusted as needed.
     # ============================================================
     st.divider()
     st.header("5. Client & Order Information")
-
-    # Import client order form section
-    with st.expander("Import Completed Client Order Form", expanded=False):
-        st.caption("Upload an HTML order form completed by your client to auto-populate client information.")
-        st.info("Note: This will import client info, shipping, and payment details. Order products are NOT imported (keep your original proposal products).")
-
-        uploaded_file = st.file_uploader(
-            "Upload Client Order Form (HTML)",
-            type=['html', 'htm'],
-            key="import_client_form",
-            help="Upload the HTML form that your client filled out and returned to you"
-        )
-
-        if uploaded_file is not None:
-            # Read and parse the HTML content
-            content = uploaded_file.read().decode('utf-8')
-            parsed_data = parse_client_order_form_html(content)
-
-            # Show parsing errors if any
-            if parsed_data['parse_errors']:
-                st.warning("Parsing warnings:")
-                for error in parsed_data['parse_errors']:
-                    st.caption(f"- {error}")
-
-            # Show preview of extracted data
-            st.markdown("**Preview of Extracted Data:**")
-
-            preview_data = {
-                "Client Type": parsed_data['client_type'] or "[Not filled]",
-                "Company Name": parsed_data['company_name'] or "[Not filled]",
-                "Contact Name": parsed_data['contact_name'] or "[Not filled]",
-                "Contact Email": parsed_data['contact_email'] or "[Not filled]",
-                "Drop Shipping": parsed_data['drop_shipping'] or "[Not filled]",
-                "Shipping Address": parsed_data['shipping_address'] or "[Not filled]",
-                "Dropshipping Info": parsed_data['dropshipping_info'] or "[Not filled]",
-                "Billing Address": parsed_data['billing_address'] or "[Not filled]",
-                "Client In-Hands Date": parsed_data['client_in_hands_date'] or "[Not filled]",
-                "Impact Card Preference": parsed_data['impact_card_preference'] or "[Not filled]",
-                "Payment Preference": parsed_data['payment_preference'] or "[Not filled]"
-            }
-
-            # Display as table
-            import pandas as pd
-            df_preview = pd.DataFrame(list(preview_data.items()), columns=["Field", "Value"])
-            st.dataframe(df_preview, use_container_width=True, hide_index=True)
-
-            # Import button
-            st.divider()
-            if st.button("Import Client Information", type="primary", use_container_width=True, key="import_client_data_btn"):
-                # Apply to session state
-                st.session_state.client_info['is_new_client'] = (parsed_data['client_type'] == 'New')
-                st.session_state.client_info['company_name'] = parsed_data['company_name']
-                st.session_state.client_info['contact_name'] = parsed_data['contact_name']
-                st.session_state.client_info['contact_email'] = parsed_data['contact_email']
-                st.session_state.client_info['shipping_address'] = parsed_data['shipping_address']
-                st.session_state.client_info['billing_address'] = parsed_data['billing_address']
-
-                # Set shipping type based on drop shipping answer
-                # Default to 'One Location' (show shipping address) unless clearly "Yes" for drop shipping
-                if parsed_data['drop_shipping'] == 'Yes':
-                    st.session_state.client_info['shipping_type'] = 'Drop Shipping'
-                else:
-                    # For "No", empty, or any unclear answer, default to One Location
-                    st.session_state.client_info['shipping_type'] = 'One Location'
-
-                # Parse and apply date
-                if parsed_data['client_in_hands_date']:
-                    try:
-                        from datetime import datetime
-                        # Try to parse MM/DD/YYYY format
-                        date_obj = datetime.strptime(parsed_data['client_in_hands_date'], '%m/%d/%Y')
-                        st.session_state.client_info['client_in_hands_date'] = date_obj.date()
-                    except:
-                        # If parsing fails, leave empty and let user enter manually
-                        st.session_state.client_info['client_in_hands_date'] = None
-
-                # Map payment preference to our dropdown values
-                payment_map = {
-                    'ACH': 'ACH',
-                    'Check': 'Check',
-                    'Credit Card': 'Credit Card (3% processing fee applies)'
-                }
-                if parsed_data['payment_preference'] in payment_map:
-                    st.session_state.client_info['payment_preference'] = payment_map[parsed_data['payment_preference']]
-
-                st.success("Client information imported successfully! Review and edit the fields below as needed.")
-                st.rerun()
 
     with st.expander("Client Details", expanded=False):
         st.markdown("Enter client information for invoices and purchase orders.")

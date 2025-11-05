@@ -84,11 +84,16 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - `src/pricing_engine.py` - Pricing calculations and quote generation
 - **Authentication:** Google Cloud service account
 - **Pricing Model:** Flexible tiered or flat-rate pricing per product
-- **Workflow:**
-  1. **Tab 1 (Proposal Generator):** Browse & filter products → Configure proposal → Generate tables & PowerPoint
+- **Recommended Workflow:**
+  1. **Tab 1 (Proposal Generator):** Browse & filter products → Configure proposal → Generate tables & PowerPoint (optional: send to client)
   2. **Tab 2 (Client Order Form Generator):** Enter client info → Generate HTML order form → Send to client
-  3. **Tab 3 (Order & Client Info):** Import completed form or add products manually → Configure order → Collect client details
+  3. **Tab 3 (Order & Client Info):** Import completed HTML form (recommended) OR import from proposal OR add products manually → Configure order → Collect client details
   4. **Tab 4 (Execution & Accounting):** Review/edit order → Generate invoice & PO → Download for bookkeeping
+- **Workflow Notes:**
+  - Tab 3 has 3 entry points with clear guidance at the top
+  - HTML form import (Option A) is the recommended workflow when available
+  - Proposal import (Option B) is an alternative if you have a proposal but no completed form
+  - Manual selection (Option C) is a fallback for starting from scratch
 
 ## Current Features
 
@@ -120,14 +125,20 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - "Update Order Form with This Info" button for confirmation
 
 ### Tab 3: Order & Client Info (main workflow)
-- **Simplified Product Addition:** One-click add from dropdown (defaults: qty=1, markup=100%)
-- **Proposal-to-Order Import:** Import all or individual products from Tab 1 (preserves quantity & markup only)
-- **HTML Order Form Import:** Upload completed client order forms (HTML format)
+- **Workflow Guidance:** Clear instructions showing 3 pathways into Tab 3 with recommended workflow
+- **Option A - HTML Order Form Import (RECOMMENDED):** Upload completed client order forms (HTML format)
   - Supports both our generated HTML and Google Docs exported HTML
   - Extracts 11 fields automatically: client type, company, contact info, shipping/billing addresses, drop shipping, in-hands date, impact cards, payment preference
   - Preview extracted data before applying
   - Smart defaults: shipping address field shows unless drop shipping is explicitly "Yes"
   - Handles user input errors gracefully
+  - Prominently placed at top (no longer hidden in Section 5)
+- **Option B - Proposal-to-Order Import:** Import all or individual products from Tab 1 (preserves quantity & markup only)
+  - Only shows if proposal products exist
+  - Alternative workflow when you have a proposal but no completed form
+- **Option C - Manual Product Selection:** One-click add from dropdown (defaults: qty=1, markup=100%)
+  - Becomes "Option B" when no proposal exists
+  - Fallback for starting fresh without proposal or form
 - **Inline Product Editing:** Always-visible settings for each product (no expand/collapse)
 - **Real-time Pricing Updates:** Instant recalculation as you edit quantity, markup, or customization
 - **Quantity Warning:** Visual alert when quantity=1 to prevent accidental single-unit orders
@@ -151,7 +162,7 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - Tariffs (per product with country & rate)
   - Credit card fee (if applicable)
   - Total quote
-- **Section Flow:** 1. Add Products → 2. Configure Each Product → 3. Order Settings → 4. Notes → 5. Summary
+- **Section Flow:** Workflow Guidance → Options A/B/C (Add Products) → 2. Current Order → 3. Order Settings → 4. Order Summary → 5. Client & Order Information
 
 ### Tab 4: Execution & Accounting
 - **Editable Order Information:** Review and complete any missing client/order information with inline editing
@@ -241,11 +252,27 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.0 - UI Reorganization & Tab Structure Improvements
+**Version:** 6.1 - Tab 3 Workflow Clarity & Filter Improvements
 
 **Last Updated:** 2025-11-05
 
-**Recent Improvements (2025-11-05):**
+**Recent Improvements (2025-11-05 - v6.1):**
+- ✅ **Tab 3 Workflow Clarity (Major UX Improvement):**
+  - Added "Getting Started - Choose Your Workflow" guidance section at top of Tab 3
+  - Restructured Tab 3 to prioritize recommended workflow (HTML import first)
+  - Moved HTML order form import from Section 5 to Option A (prominently placed)
+  - Renamed sections: Option A (HTML import - recommended), Option B (Proposal import), Option C (Manual selection)
+  - Added conditional display: Option C becomes "Option B" when no proposal exists
+  - Updated all section numbers to be sequential (2. Current Order, 3. Order Settings, 4. Order Summary, 5. Client & Order Information)
+  - Clear "Use this if..." guidance for each workflow option
+- ✅ **Tab 1 Filter Improvements:**
+  - Renamed "Max Price" filter → "Client Budget" (more accurate description)
+  - Filter now based on client price (cost × 2 for 100% markup) instead of PBP cost
+  - Renamed "Price/Unit" column → "Cost/Unit" (what PBP pays partner)
+  - Added "Price/Unit (100% markup)" column showing client price with default markup
+  - Updated MOQ estimate caption to show both cost and client price
+
+**Previous Improvements (2025-11-05 - v6.0):**
 - ✅ **4-Tab Structure Reorganization:**
   - Split Tab 1 into two focused tabs: "Proposal Generator" and "Client Order Form Generator"
   - Moved Order Details and Client Order Form sections from Tab 1 to new Tab 2
