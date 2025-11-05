@@ -489,7 +489,12 @@ def show_match_review_ui(match_results, pptx_product_names):
     if exact_matches:
         with st.expander(f"✓ Exact Matches ({len(exact_matches)}) - Auto-confirmed", expanded=False):
             for result in exact_matches:
-                st.markdown(f"- **{result.gs_product_name}** → {result.pptx_product_name}")
+                # Show match source indicator
+                if result.match_source == 'manual':
+                    match_badge = "🎯 Manual"
+                    st.markdown(f"- **{result.gs_product_name}** → {result.pptx_product_name} ({match_badge})")
+                else:
+                    st.markdown(f"- **{result.gs_product_name}** → {result.pptx_product_name}")
 
     # SECTION 2: Fuzzy Matches (expanded, requires confirmation)
     if fuzzy_matches:
@@ -499,9 +504,18 @@ def show_match_review_ui(match_results, pptx_product_names):
         for idx, result in enumerate(fuzzy_matches):
             st.markdown(f"#### {idx + 1}. {result.gs_product_name}")
 
-            # Show suggested match with confidence
+            # Show suggested match with confidence and match source
             confidence_color = "green" if result.confidence >= 90 else "orange"
-            st.markdown(f"**Suggested match:** {result.pptx_product_name} (:{confidence_color}[{result.confidence}% confidence])")
+
+            # Add match source badge
+            if result.match_source == 'manual':
+                match_badge = "🎯 Manual"
+            else:
+                match_badge = f"🤖 Auto ({result.confidence}%)"
+
+            st.markdown(f"**Suggested match:** {result.pptx_product_name} (:{confidence_color}[{match_badge}])")
+            if hasattr(result, 'match_method') and result.match_method:
+                st.caption(f"Match method: {result.match_method}")
 
             # Create unique key for this match
             match_key = f"match_{idx}"
@@ -615,10 +629,129 @@ def show_match_review_ui(match_results, pptx_product_names):
         # Show summary
         st.success(f"✓ Ready to generate PowerPoint with {len(confirmed_matches)} products!")
 
+        # ============================================================
+        # IMPACT SLIDE SELECTION (SIMPLIFIED WITH AUTO-SELECTION)
+        # ============================================================
+        st.markdown("---")
+        st.subheader("Step 2: Impact Slides (Auto-Selected)")
+        st.caption("Impact slides are automatically selected based on partner. You can override if needed.")
+
+        # Import impact slide functions
+        from src.slide_matcher import extract_unique_partners, PARTNER_IMPACT_SLIDES, find_all_impact_slides
+
+        # Extract unique partners from proposal
+        unique_partners = extract_unique_partners(st.session_state.proposal_products)
+
+        if unique_partners:
+            # Initialize impact selections if not exists
+            if 'impact_slide_selections' not in st.session_state:
+                st.session_state.impact_slide_selections = {}
+
+            # Auto-select from reference table
+            st.markdown("**Impact slides for this proposal:**")
+
+            for partner in unique_partners:
+                # Get auto-selected slide from reference table
+                auto_selected = PARTNER_IMPACT_SLIDES.get(partner)
+
+                if auto_selected:
+                    # Check if user has overridden
+                    current_selection = st.session_state.impact_slide_selections.get(partner)
+
+                    if not current_selection or current_selection.get('slide_index') is None:
+                        # Use auto-selection
+                        st.session_state.impact_slide_selections[partner] = auto_selected.copy()
+
+                    # Display current selection
+                    active_selection = st.session_state.impact_slide_selections[partner]
+
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown(f"**{partner}:** {active_selection['slide_title']}")
+
+                    with col2:
+                        # Override button
+                        if st.button("Override", key=f"override_{partner}", use_container_width=True):
+                            st.session_state[f'show_override_{partner}'] = True
+                            st.rerun()
+
+                    # Show override UI if button was clicked
+                    if st.session_state.get(f'show_override_{partner}', False):
+                        pptx_path = Path("templates/November All Slides.pptx")
+                        all_impact_slides = find_all_impact_slides(str(pptx_path))
+
+                        dropdown_options = ["None - Skip impact slide"]
+                        dropdown_options.extend([f"{slide['slide_title']}" for slide in all_impact_slides])
+
+                        # Find current selection index
+                        try:
+                            default_index = dropdown_options.index(active_selection['slide_title'])
+                        except ValueError:
+                            default_index = 0
+
+                        selected_option = st.selectbox(
+                            f"Select impact slide for {partner}",
+                            options=dropdown_options,
+                            index=default_index,
+                            key=f"override_select_{partner}"
+                        )
+
+                        col_apply, col_cancel = st.columns(2)
+                        with col_apply:
+                            if st.button("Apply", key=f"apply_{partner}", use_container_width=True):
+                                if selected_option == "None - Skip impact slide":
+                                    st.session_state.impact_slide_selections[partner] = {
+                                        'slide_title': None,
+                                        'slide_index': None
+                                    }
+                                else:
+                                    selected_slide = next(
+                                        (slide for slide in all_impact_slides if slide['slide_title'] == selected_option),
+                                        None
+                                    )
+                                    if selected_slide:
+                                        st.session_state.impact_slide_selections[partner] = {
+                                            'slide_title': selected_slide['slide_title'],
+                                            'slide_index': selected_slide['slide_index']
+                                        }
+
+                                st.session_state[f'show_override_{partner}'] = False
+                                st.rerun()
+
+                        with col_cancel:
+                            if st.button("Cancel", key=f"cancel_{partner}", use_container_width=True):
+                                st.session_state[f'show_override_{partner}'] = False
+                                st.rerun()
+
+                else:
+                    st.warning(f"**{partner}:** No impact slide found in reference table. Please add manually or skip.")
+                    st.session_state.impact_slide_selections[partner] = {
+                        'slide_title': None,
+                        'slide_index': None
+                    }
+
+            # Summary
+            selected_count = sum(
+                1 for selection in st.session_state.impact_slide_selections.values()
+                if selection.get('slide_title') is not None
+            )
+
+            if selected_count > 0:
+                st.success(f"✓ {selected_count} impact slide(s) will be included")
+            else:
+                st.info("No impact slides selected")
+
+        else:
+            st.info("No products selected - add products to see impact slides")
+            st.session_state.impact_slide_selections = {}
+
+        st.markdown("---")
+
         col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
             if st.button("Reset Confirmations", use_container_width=True):
                 st.session_state.match_confirmations = {}
+                st.session_state.impact_slide_selections = {}
                 st.session_state.generated_pptx = None
                 st.rerun()
 
@@ -630,15 +763,20 @@ def show_match_review_ui(match_results, pptx_product_names):
 
                     # Import generator functions
                     from src.pptx_generator import (
-                        create_proposal_presentation,
-                        add_cover_slide,
+                        create_complete_proposal_presentation,
                         download_presentation
                     )
 
                     # Validation checks
-                    template_path = Path("templates/November All Slides.pptx")
-                    if not template_path.exists():
+                    november_template_path = Path("templates/November All Slides.pptx")
+                    intro_outro_template_path = Path("templates/Intro_Outro_Slides_PbP_Proposals.pptx")
+
+                    if not november_template_path.exists():
                         st.error("PowerPoint template not found. Please ensure 'templates/November All Slides.pptx' exists.")
+                        return None
+
+                    if not intro_outro_template_path.exists():
+                        st.error("Intro/Outro template not found. Please ensure 'templates/Intro_Outro_Slides_PbP_Proposals.pptx' exists.")
                         return None
 
                     if len(confirmed_matches) == 0:
@@ -647,31 +785,42 @@ def show_match_review_ui(match_results, pptx_product_names):
 
                     # Create presentation with progress indicator
                     progress_container = st.empty()
-                    progress_container.info(f"Step 1/4: Loading template with {len(list(Presentation(str(template_path)).slides))} slides...")
+                    progress_container.info(f"Step 1/5: Loading templates...")
 
                     # Get proposal settings
                     marketing_rounding = st.session_state.get('proposal_marketing_rounding', False)
                     discount_percent = st.session_state.get('proposal_discount_percent', 0.0)
 
-                    # Create presentation with cloned slides and updated tables
-                    progress_container.info(f"Step 2/4: Selecting and updating {len(confirmed_matches)} product slides...")
-                    prs = create_proposal_presentation(
-                        str(template_path),
+                    # Get selected impact slides (for overrides)
+                    # Build impact_slide_overrides dict: {partner: {"slide_index": X, "slide_title": Y}}
+                    impact_slide_overrides = {}
+                    if 'impact_slide_selections' in st.session_state:
+                        for partner, selection in st.session_state.impact_slide_selections.items():
+                            if selection.get('slide_index') is not None:
+                                impact_slide_overrides[partner] = selection
+
+                    # Count total slides
+                    num_products = len(confirmed_matches)
+                    num_impacts = len([s for s in impact_slide_overrides.values() if s.get('slide_index') is not None])
+
+                    # Create complete presentation (products + impacts + outro only)
+                    progress_container.info(f"Step 2/4: Selecting and updating {num_products} product slide(s) + {num_impacts} impact slide(s)...")
+                    prs = create_complete_proposal_presentation(
+                        str(november_template_path),
+                        str(intro_outro_template_path),
                         confirmed_matches,
                         st.session_state.proposal_products,
                         get_unit_price_new_system,
                         marketing_rounding,
-                        discount_percent
+                        discount_percent,
+                        impact_slide_overrides if impact_slide_overrides else None
                     )
 
-                    # Add cover slide
-                    progress_container.info("Step 3/4: Adding cover slide...")
-                    client_name = st.session_state.order_details.get('company_name', 'Client')
-                    date_str = datetime.now().strftime('%B %d, %Y')
-                    add_cover_slide(prs, client_name, date_str)
+                    progress_container.info(f"Step 3/4: Adding outro slides (4 slides)...")
 
                     # Convert to downloadable format
                     progress_container.info("Step 4/4: Preparing download...")
+                    client_name = st.session_state.order_details.get('company_name', 'Client')
                     pptx_file = download_presentation(prs, client_name)
 
                     # Calculate generation time
@@ -711,6 +860,9 @@ def show_match_review_ui(match_results, pptx_product_names):
                 st.metric("Products Included", st.session_state.pptx_product_count)
             with col_summary2:
                 st.metric("File Name", st.session_state.generated_pptx_filename)
+
+            # Show instructions for reordering intro slides
+            st.info("**Final step:** In PowerPoint, move the 8 intro slides (they're grouped together after products) to the beginning. Select slides → Drag to top (~5 seconds).")
 
             st.download_button(
                 label="Download PowerPoint Presentation",
@@ -1352,65 +1504,270 @@ with tab1:
             )
 
     # ============================================================
-    # SECTION 5: PRICING FOR CARDS & KITTING
+    # LEGACY SECTIONS (HIDDEN BY DEFAULT)
+    # ============================================================
+    # Toggle for showing legacy sections (pricing tables, copy buttons, etc.)
+    SHOW_LEGACY_SECTIONS = st.session_state.get('show_legacy_pricing_sections', False)
+
+    if SHOW_LEGACY_SECTIONS:
+        # ============================================================
+        # LEGACY SECTION 5: PRICING FOR CARDS & KITTING
+        # ============================================================
+        st.divider()
+        st.subheader("(Legacy) Pricing for Cards & Kitting")
+
+        st.session_state.proposal_kitting_pricing = st.text_area(
+            "Edit kitting pricing if needed",
+            value=st.session_state.proposal_kitting_pricing,
+            height=200,
+            key="proposal_kitting_pricing_input"
+        )
+
+        # Add copy button for kitting pricing
+        if st.button("Copy Pricing for Cards & Kitting", key="copy_kitting_pricing", use_container_width=True):
+            st.code(st.session_state.proposal_kitting_pricing, language=None)
+            st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
+
+        # ============================================================
+        # LEGACY SECTION 6: TERMS & CONDITIONS
+        # ============================================================
+        st.divider()
+        st.subheader("(Legacy) Terms & Conditions")
+
+        st.session_state.proposal_terms = st.text_area(
+            "Edit terms & conditions if needed",
+            value=st.session_state.proposal_terms,
+            height=200,
+            key="proposal_terms_input"
+        )
+
+        # Add copy button for terms & conditions
+        if st.button("Copy Terms & Conditions", key="copy_terms", use_container_width=True):
+            st.code(st.session_state.proposal_terms, language=None)
+            st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
+
+        # ============================================================
+        # LEGACY SECTION 7: DROPSHIPPING NOTES
+        # ============================================================
+        st.divider()
+        st.subheader("(Legacy) Notes on Dropshipping")
+
+        st.session_state.dropshipping_notes = st.text_area(
+            "Edit dropshipping instructions if needed",
+            value=st.session_state.dropshipping_notes,
+            height=150,
+            key="dropshipping_notes_input",
+            help="These notes will appear in the Client Order Form and final Invoice"
+        )
+
+        # Add copy button for dropshipping notes
+        if st.button("Copy Dropshipping Notes", key="copy_dropship", use_container_width=True):
+            st.code(st.session_state.dropshipping_notes, language=None)
+            st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
+
+    # ============================================================
+    # SECTION 5: POWERPOINT PROPOSAL GENERATION (PHASE 2.5 COMPLETE)
+    # Note: Logical Section 5 (Legacy Sections 5-7 hidden above)
+    # ============================================================
+    if len(st.session_state.proposal_products) > 0:
+        st.divider()
+        st.subheader("5. Generate PowerPoint Proposal (BETA)")
+        st.caption("Automatically create a customized PowerPoint presentation for your client")
+
+        # ============================================================
+        # MANUAL MATCH OVERRIDE UI
+        # ============================================================
+        with st.expander("Manual Match Override (Advanced)", expanded=False):
+            st.caption("Override automatic slide matching for products that need specific slides")
+
+            # Import match manager functions
+            from src.match_manager import (
+                save_manual_match,
+                delete_manual_match,
+                get_all_manual_matches
+            )
+
+            # Check if pricing data is loaded
+            if 'pricing_data' not in st.session_state or not st.session_state.pricing_data:
+                st.warning("Pricing data not loaded yet. Please wait for data to load.")
+            else:
+                # Subsection A: Create new manual match
+                st.markdown("#### Add Manual Match")
+
+                col1, col2 = st.columns([1, 1])
+
+                with col1:
+                    # Dropdown of all products from catalog
+                    all_product_names = sorted([row['Product Name'] for row in st.session_state.pricing_data])
+                    selected_product = st.selectbox(
+                        "Select Product",
+                        all_product_names,
+                        key="manual_match_product_selector"
+                    )
+
+                with col2:
+                    # Dropdown of all slides from template
+                    try:
+                        from pathlib import Path
+                        from pptx import Presentation
+
+                        pptx_path = Path("templates/November All Slides.pptx")
+
+                        if pptx_path.exists():
+                            # Load slides only once per session
+                            if 'all_slide_options' not in st.session_state:
+                                with st.spinner("Loading slides..."):
+                                    prs = Presentation(str(pptx_path))
+                                    all_slide_options = []
+                                    for i, slide in enumerate(prs.slides):
+                                        if slide.shapes.title and slide.shapes.title.text.strip():
+                                            slide_title = slide.shapes.title.text.strip()
+                                            all_slide_options.append((i, slide_title))
+                                        else:
+                                            all_slide_options.append((i, f"(Slide {i} - No Title)"))
+                                    st.session_state.all_slide_options = all_slide_options
+
+                            # Create dropdown options
+                            slide_display_options = [f"{title} (Slide {idx})" for idx, title in st.session_state.all_slide_options]
+
+                            selected_slide_display = st.selectbox(
+                                "Select Slide",
+                                slide_display_options,
+                                key="manual_match_slide_selector"
+                            )
+
+                            # Parse selected index and title
+                            selected_idx = slide_display_options.index(selected_slide_display)
+                            selected_slide_index, selected_slide_title = st.session_state.all_slide_options[selected_idx]
+
+                        else:
+                            st.error("PowerPoint template not found")
+                            selected_slide_index = None
+                            selected_slide_title = None
+
+                    except Exception as e:
+                        st.error(f"Error loading slides: {str(e)}")
+                        selected_slide_index = None
+                        selected_slide_title = None
+
+                # Save button
+                if st.button("Save Manual Match", use_container_width=True, key="save_manual_match_btn"):
+                    if selected_slide_index is not None and selected_slide_title:
+                        success = save_manual_match(
+                            selected_product,
+                            selected_slide_index,
+                            selected_slide_title,
+                            match_category="product"
+                        )
+                        if success:
+                            st.success(f"✓ Saved: {selected_product} → {selected_slide_title}")
+                            st.rerun()
+                        else:
+                            st.error("Failed to save manual match")
+                    else:
+                        st.error("Please select both a product and a slide")
+
+                st.divider()
+
+                # Subsection B: Display saved manual matches
+                st.markdown("#### Saved Manual Matches")
+
+                manual_matches = get_all_manual_matches("product")
+
+                if manual_matches:
+                    # Build table data
+                    table_data = []
+                    for normalized_name, match_data in manual_matches.items():
+                        table_data.append({
+                            "Product": match_data.get('original_name', normalized_name),
+                            "Slide": f"{match_data['slide_title']} (Slide {match_data['slide_index']})",
+                            "Created": match_data['created_date']
+                        })
+
+                    # Display as dataframe
+                    import pandas as pd
+                    df_manual = pd.DataFrame(table_data)
+                    st.dataframe(df_manual, use_container_width=True)
+
+                    # Delete buttons
+                    st.caption("Remove manual matches:")
+                    for idx, row in df_manual.iterrows():
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.text(row['Product'])
+                        with col2:
+                            if st.button("Delete", key=f"delete_manual_match_{idx}", use_container_width=True):
+                                success = delete_manual_match(row['Product'], match_category="product")
+                                if success:
+                                    st.success(f"Deleted: {row['Product']}")
+                                    st.rerun()
+                                else:
+                                    st.error(f"Failed to delete: {row['Product']}")
+                else:
+                    st.info("No manual matches saved yet. Create one above to override automatic matching.")
+
+        st.divider()
+
+        # Button to trigger matching
+        if st.button("Review Matches & Generate PowerPoint", type="primary", use_container_width=True, key="trigger_pptx_matching"):
+            st.session_state.show_pptx_matching = True
+            st.session_state.generated_pptx = None  # Clear any previous generation
+            st.rerun()
+
+        # Show matching UI if triggered
+        if st.session_state.get('show_pptx_matching', False):
+            try:
+                # Load PowerPoint product names
+                from pathlib import Path
+                from pptx import Presentation
+
+                pptx_path = Path("templates/November All Slides.pptx")
+
+                if not pptx_path.exists():
+                    st.error("PowerPoint template not found at templates/November All Slides.pptx")
+                    st.session_state.show_pptx_matching = False
+                else:
+                    # Extract product names from PowerPoint
+                    with st.spinner("Loading PowerPoint slides..."):
+                        prs = Presentation(str(pptx_path))
+
+                        pptx_product_names = []
+                        slide_list = list(prs.slides)
+
+                        for slide_idx, slide in enumerate(slide_list):
+                            if len(slide.shapes) >= 1:
+                                first_shape = slide.shapes[0]
+                                if hasattr(first_shape, "text") and first_shape.text.strip():
+                                    product_name = first_shape.text.strip()
+                                    if product_name not in pptx_product_names:
+                                        pptx_product_names.append(product_name)
+
+                    st.success(f"Loaded {len(pptx_product_names)} product slides from PowerPoint")
+
+                    # Get proposal product names
+                    gs_product_names = [item['product_data']['Product/Service'] for item in st.session_state.proposal_products]
+
+                    # Create matcher and run matching
+                    with st.spinner("Matching products to slides..."):
+                        matcher = SlideMatcher(pptx_product_names)
+                        match_results = matcher.batch_match(gs_product_names)
+
+                    # Show match review UI
+                    confirmed_matches = show_match_review_ui(match_results, pptx_product_names)
+
+                    if confirmed_matches:
+                        st.session_state.show_pptx_matching = False
+                        st.rerun()
+
+            except Exception as e:
+                st.error(f"Error loading PowerPoint: {str(e)}")
+                st.session_state.show_pptx_matching = False
+
+    # ============================================================
+    # SECTION 6: ORDER DETAILS (moved after PowerPoint)
     # ============================================================
     st.divider()
-    st.subheader("5. Pricing for Cards & Kitting")
-
-    st.session_state.proposal_kitting_pricing = st.text_area(
-        "Edit kitting pricing if needed",
-        value=st.session_state.proposal_kitting_pricing,
-        height=200,
-        key="proposal_kitting_pricing_input"
-    )
-
-    # Add copy button for kitting pricing
-    if st.button("Copy Pricing for Cards & Kitting", key="copy_kitting_pricing", use_container_width=True):
-        st.code(st.session_state.proposal_kitting_pricing, language=None)
-        st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
-
-    # ============================================================
-    # SECTION 6: TERMS & CONDITIONS
-    # ============================================================
-    st.divider()
-    st.subheader("6. Terms & Conditions")
-
-    st.session_state.proposal_terms = st.text_area(
-        "Edit terms & conditions if needed",
-        value=st.session_state.proposal_terms,
-        height=200,
-        key="proposal_terms_input"
-    )
-
-    # Add copy button for terms & conditions
-    if st.button("Copy Terms & Conditions", key="copy_terms", use_container_width=True):
-        st.code(st.session_state.proposal_terms, language=None)
-        st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
-
-    # ============================================================
-    # SECTION 7: DROPSHIPPING NOTES
-    # ============================================================
-    st.divider()
-    st.subheader("7. Notes on Dropshipping")
-
-    st.session_state.dropshipping_notes = st.text_area(
-        "Edit dropshipping instructions if needed",
-        value=st.session_state.dropshipping_notes,
-        height=150,
-        key="dropshipping_notes_input",
-        help="These notes will appear in the Client Order Form and final Invoice"
-    )
-
-    # Add copy button for dropshipping notes
-    if st.button("Copy Dropshipping Notes", key="copy_dropship", use_container_width=True):
-        st.code(st.session_state.dropshipping_notes, language=None)
-        st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
-
-    # ============================================================
-    # SECTION 8: ORDER DETAILS
-    # ============================================================
-    st.divider()
-    st.subheader("8. Order Details")
+    st.subheader("6. Order Details")
     st.caption("Add client information to pre-fill the order form")
 
     # Initialize order details in session state if not exists
@@ -1462,10 +1819,10 @@ with tab1:
         st.session_state.show_info_success = False
 
     # ============================================================
-    # SECTION 9: CLIENT ORDER FORM
+    # SECTION 7: CLIENT ORDER FORM (moved after Order Details)
     # ============================================================
     st.divider()
-    st.subheader("9. Client Order Form")
+    st.subheader("7. Client Order Form")
 
     st.markdown("""
     Download the HTML form below and paste it into your email to send to clients.
@@ -1728,69 +2085,6 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
         )
 
     st.info("Tip: Download the HTML form, open it in your browser, then copy the entire page and paste it into your email. It will preserve all formatting!")
-
-    # ============================================================
-    # SECTION 10: POWERPOINT PROPOSAL GENERATION (PHASE 1, DAY 2)
-    # ============================================================
-    if len(st.session_state.proposal_products) > 0:
-        st.divider()
-        st.subheader("10. Generate PowerPoint Proposal (BETA)")
-        st.caption("Automatically create a customized PowerPoint presentation for your client")
-
-        # Button to trigger matching
-        if st.button("Review Matches & Generate PowerPoint", type="primary", use_container_width=True, key="trigger_pptx_matching"):
-            st.session_state.show_pptx_matching = True
-            st.session_state.generated_pptx = None  # Clear any previous generation
-            st.rerun()
-
-        # Show matching UI if triggered
-        if st.session_state.get('show_pptx_matching', False):
-            try:
-                # Load PowerPoint product names
-                from pathlib import Path
-                from pptx import Presentation
-
-                pptx_path = Path("templates/November All Slides.pptx")
-
-                if not pptx_path.exists():
-                    st.error("PowerPoint template not found at templates/November All Slides.pptx")
-                    st.session_state.show_pptx_matching = False
-                else:
-                    # Extract product names from PowerPoint
-                    with st.spinner("Loading PowerPoint slides..."):
-                        prs = Presentation(str(pptx_path))
-
-                        pptx_product_names = []
-                        slide_list = list(prs.slides)
-
-                        for slide_idx, slide in enumerate(slide_list):
-                            if len(slide.shapes) >= 1:
-                                first_shape = slide.shapes[0]
-                                if hasattr(first_shape, "text") and first_shape.text.strip():
-                                    product_name = first_shape.text.strip()
-                                    if product_name not in pptx_product_names:
-                                        pptx_product_names.append(product_name)
-
-                    st.success(f"Loaded {len(pptx_product_names)} product slides from PowerPoint")
-
-                    # Get proposal product names
-                    gs_product_names = [item['product_data']['Product/Service'] for item in st.session_state.proposal_products]
-
-                    # Create matcher and run matching
-                    with st.spinner("Matching products to slides..."):
-                        matcher = SlideMatcher(pptx_product_names)
-                        match_results = matcher.batch_match(gs_product_names)
-
-                    # Show match review UI
-                    confirmed_matches = show_match_review_ui(match_results, pptx_product_names)
-
-                    if confirmed_matches:
-                        st.session_state.show_pptx_matching = False
-                        st.rerun()
-
-            except Exception as e:
-                st.error(f"Error loading PowerPoint: {str(e)}")
-                st.session_state.show_pptx_matching = False
 
     # ============================================================
     # NEXT STEPS GUIDANCE

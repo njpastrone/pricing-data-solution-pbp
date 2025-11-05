@@ -15,6 +15,12 @@ Dependencies:
 from thefuzz import fuzz, process
 from typing import Optional, Dict, List, Tuple
 import re
+from .match_manager import (
+    load_manual_matches,
+    get_manual_match,
+    normalize_product_name as normalize_name_from_manager
+)
+from pptx import Presentation
 
 
 def find_best_match_multi_scorer(
@@ -213,22 +219,28 @@ class SlideMatchResult:
         match_type: 'exact', 'fuzzy', or 'none'
         confidence: Confidence score (0-100)
         alternatives: List of alternative matches with scores [(name, score), ...]
+        match_source: 'manual' or 'automatic' (whether match came from manual override)
+        match_method: Description of matching method used (e.g., "Manual override", "Token sort ratio (85%)")
     """
 
     def __init__(self, gs_product_name: str, pptx_product_name: Optional[str],
-                 match_type: str, confidence: int, alternatives: List[Tuple[str, int]] = None):
+                 match_type: str, confidence: int, alternatives: List[Tuple[str, int]] = None,
+                 match_source: str = 'automatic', match_method: str = ''):
         self.gs_product_name = gs_product_name
         self.pptx_product_name = pptx_product_name
         self.match_type = match_type
         self.confidence = confidence
         self.alternatives = alternatives or []
+        self.match_source = match_source
+        self.match_method = match_method
 
     def is_usable(self, min_confidence: int = 70) -> bool:
         """Check if match is good enough to use automatically."""
         return self.match_type != 'none' and self.confidence >= min_confidence
 
     def __repr__(self):
-        return f"SlideMatchResult({self.match_type}, {self.confidence}%, {self.gs_product_name} → {self.pptx_product_name})"
+        source_indicator = "🎯" if self.match_source == 'manual' else "🤖"
+        return f"SlideMatchResult({source_indicator} {self.match_type}, {self.confidence}%, {self.gs_product_name} → {self.pptx_product_name})"
 
 
 class SlideMatcher:
@@ -265,18 +277,33 @@ class SlideMatcher:
         Returns:
             SlideMatchResult with match information
 
-        Matching Logic (IMPROVED):
-            1. Normalize product name (strip variants)
-            2. Check manual product mappings
-            3. Try exact match on normalized name
-            4. Multi-scorer fuzzy matching (3 algorithms)
-            5. Apply keyword category boosting (+15%)
-            6. Return best match with confidence score
+        Matching Logic (IMPROVED with Manual Match Priority):
+            1. Check manual matches FIRST (100% confidence, takes precedence)
+            2. Normalize product name (strip variants)
+            3. Check manual product mappings
+            4. Try exact match on normalized name
+            5. Multi-scorer fuzzy matching (3 algorithms)
+            6. Apply keyword category boosting (+15%)
+            7. Return best match with confidence score
         """
-        # Step 1: Normalize product name
+        # Step 1: Check manual matches FIRST (highest priority)
+        manual_match_data = get_manual_match(gs_product_name, match_category="product")
+        if manual_match_data:
+            # Manual match found - return with 100% confidence
+            return SlideMatchResult(
+                gs_product_name=gs_product_name,
+                pptx_product_name=manual_match_data['slide_title'],
+                match_type='exact',
+                confidence=100,
+                alternatives=[],
+                match_source='manual',
+                match_method='Manual override'
+            )
+
+        # Step 2: Normalize product name
         normalized_gs_name = normalize_product_name(gs_product_name)
 
-        # Step 2: Check manual product mappings first (100% confidence)
+        # Step 3: Check manual product mappings (legacy hardcoded mappings)
         if normalized_gs_name in MANUAL_PRODUCT_MAPPINGS:
             manual_match = MANUAL_PRODUCT_MAPPINGS[normalized_gs_name]
             return SlideMatchResult(
@@ -284,10 +311,12 @@ class SlideMatcher:
                 pptx_product_name=manual_match,
                 match_type='exact',
                 confidence=100,
-                alternatives=[]
+                alternatives=[],
+                match_source='automatic',
+                match_method='Hardcoded mapping'
             )
 
-        # Step 3: Try exact match on normalized name (case-insensitive)
+        # Step 4: Try exact match on normalized name (case-insensitive)
         if normalized_gs_name in self.pptx_upper_map:
             exact_match = self.pptx_upper_map[normalized_gs_name]
             return SlideMatchResult(
@@ -295,10 +324,12 @@ class SlideMatcher:
                 pptx_product_name=exact_match,
                 match_type='exact',
                 confidence=100,
-                alternatives=[]
+                alternatives=[],
+                match_source='automatic',
+                match_method='Exact match'
             )
 
-        # Step 4: Multi-scorer fuzzy matching
+        # Step 5: Multi-scorer fuzzy matching
         # Use normalized name for better matching
         best_match_name, best_match_score, method_used, alternatives = find_best_match_multi_scorer(
             normalized_gs_name,
@@ -312,22 +343,31 @@ class SlideMatcher:
                 pptx_product_name=None,
                 match_type='none',
                 confidence=0,
-                alternatives=[]
+                alternatives=[],
+                match_source='automatic',
+                match_method='No match found'
             )
 
-        # Step 5: Apply keyword category boosting
+        # Step 6: Apply keyword category boosting
         boosted_score = boost_score_if_same_category(
             normalized_gs_name,
             best_match_name,
             best_match_score
         )
 
+        # Format method description
+        method_description = f"{method_used.replace('_', ' ').title()} ({boosted_score}%)"
+        if boosted_score > best_match_score:
+            method_description += f" [boosted from {best_match_score}%]"
+
         return SlideMatchResult(
             gs_product_name=gs_product_name,
             pptx_product_name=best_match_name,
             match_type='fuzzy',
             confidence=boosted_score,
-            alternatives=alternatives
+            alternatives=alternatives,
+            match_source='automatic',
+            match_method=method_description
         )
 
     def batch_match(self, gs_product_names: List[str]) -> List[SlideMatchResult]:
@@ -369,6 +409,39 @@ class SlideMatcher:
         }
 
 
+# ============================================================
+# PARTNER IMPACT SLIDE REFERENCE TABLE
+# Source: templates/Impact Slide Reference Guide Nov 5 2025.xlsx
+# Extracted: 2025-11-05
+# ============================================================
+PARTNER_IMPACT_SLIDES = {
+    "GOEX": {"slide_title": "Apparel – Your Impact", "slide_index": 68},
+    "Gronn": {"slide_title": "Upcycled Glasses – Your Impact", "slide_index": 74},
+    "Homeless Garden Project": {"slide_title": "Spa & Food Gifts – Your Impact", "slide_index": 84},
+    "Hon's Honey": {"slide_title": "Honey Products – Your Impact", "slide_index": 99},
+    "Itza Wood": {"slide_title": "Wood Gifts – Your Impact", "slide_index": 129},
+    "Jaggery": {"slide_title": "Good Felt, ReDenim, and Upcycled Bags – Your Impact", "slide_index": 161},
+    "Work + Shelter": {"slide_title": "Sewn Goods – Your Impact", "slide_index": 295},
+}
+
+
+def get_impact_slide_for_partner(partner_name: str) -> Optional[Dict]:
+    """
+    Get impact slide information for a partner from reference table.
+
+    Args:
+        partner_name: Partner name (e.g., "Jaggery", "GOEX")
+
+    Returns:
+        Dict with slide_title and slide_index, or None if partner not found
+
+    Example:
+        >>> get_impact_slide_for_partner("Jaggery")
+        {"slide_title": "Good Felt, ReDenim, and Upcycled Bags – Your Impact", "slide_index": 161}
+    """
+    return PARTNER_IMPACT_SLIDES.get(partner_name)
+
+
 # Confidence threshold constants
 CONFIDENCE_EXCELLENT = 90  # Green: Auto-use with high confidence
 CONFIDENCE_GOOD = 70       # Yellow: Suggest, ask for confirmation
@@ -398,3 +471,345 @@ def format_match_for_display(result: SlideMatchResult) -> str:
         return f"{icon} {quality} match ({result.confidence}%): {result.pptx_product_name}"
     else:
         return f"✗ No good match found (best guess: {result.pptx_product_name}, {result.confidence}%)"
+
+
+# ============================================================
+# IMPACT SLIDE MATCHING (PHASE 2.5, DAY 3)
+# ============================================================
+
+def extract_partners_and_categories(proposal_products: List[Dict]) -> List[Dict]:
+    """
+    Extract unique partner-category combinations from proposal products.
+
+    Args:
+        proposal_products: List of proposal products with product_data
+
+    Returns:
+        List of dicts: [{"partner": "Partner X", "product_category": "Hand Stitched Bags"}]
+
+    Example:
+        >>> products = [
+        ...     {"product_data": {"Partner": "Partner X", "Product Name": "Jaggery (Noir)"}},
+        ...     {"product_data": {"Partner": "Partner X", "Product Name": "Jaggery - Large"}},
+        ...     {"product_data": {"Partner": "Partner Y", "Product Name": "Candle Holders"}}
+        ... ]
+        >>> extract_partners_and_categories(products)
+        [
+            {"partner": "Partner X", "product_category": "jaggery"},
+            {"partner": "Partner Y", "product_category": "candle holders"}
+        ]
+    """
+    unique_combos = set()
+    results = []
+
+    for product in proposal_products:
+        partner = product['product_data']['Partner']
+        product_name = product['product_data']['Product/Service']
+
+        # Normalize product name (strip variants)
+        normalized_category = normalize_product_name(product_name)
+
+        combo_key = (partner, normalized_category)
+        if combo_key not in unique_combos:
+            unique_combos.add(combo_key)
+            results.append({
+                "partner": partner,
+                "product_category": normalized_category,
+                "original_product_name": product_name
+            })
+
+    return results
+
+
+def match_impact_slides(
+    partners_and_categories: List[Dict],
+    template_path: str,
+    manual_matches: Dict
+) -> List[Dict]:
+    """
+    Match impact slides for each partner in the proposal.
+
+    Matching Logic:
+    1. Check manual matches first (partner_impact_matches section)
+    2. If no manual match, search for slides matching pattern: "{category} - Your Impact"
+    3. Use fuzzy matching with 75% confidence threshold
+    4. Return list of matched impact slides
+
+    Args:
+        partners_and_categories: List from extract_partners_and_categories()
+            [{"partner": "Partner X", "product_category": "hand stitched bags"}]
+        template_path: Path to PowerPoint template
+        manual_matches: Dict from load_manual_matches()
+
+    Returns:
+        List of matched impact slides:
+        [
+            {
+                "partner": "Partner X",
+                "product_category": "hand stitched bags",
+                "slide_index": 156,
+                "slide_title": "Hand Stitched Bags - Your Impact",
+                "confidence": 0.92,
+                "match_type": "automatic",  # or "manual"
+                "match_method": "Token sort ratio (92%)"  # or "Manual override"
+            }
+        ]
+
+    Example:
+        >>> partners = [{"partner": "Partner X", "product_category": "hand stitched bags"}]
+        >>> matches = match_impact_slides(partners, "template.pptx", {})
+        >>> matches[0]['slide_title']
+        'Hand Stitched Bags - Your Impact'
+    """
+    results = []
+
+    # Load all slides from template
+    try:
+        prs = Presentation(template_path)
+        all_slides = [(i, slide) for i, slide in enumerate(prs.slides)]
+    except Exception as e:
+        print(f"Error loading PowerPoint template: {e}")
+        return results
+
+    for entry in partners_and_categories:
+        partner = entry['partner']
+        category = entry['product_category']
+
+        # Check manual matches first
+        # Note: match_manager normalizes keys to lowercase, so we need to match that
+        from .match_manager import normalize_product_name as normalize_key
+        manual_key = normalize_key(f"{partner}_{category}")
+        manual_match = manual_matches.get('partner_impact_matches', {}).get(manual_key)
+
+        if manual_match:
+            results.append({
+                "partner": partner,
+                "product_category": category,
+                "slide_index": manual_match['slide_index'],
+                "slide_title": manual_match['slide_title'],
+                "confidence": 1.0,
+                "match_type": "manual",
+                "match_method": "Manual override"
+            })
+            continue
+
+        # Run fuzzy matching for impact slides
+        # Search pattern: "{category} - Your Impact" or "{category} - your impact"
+        search_pattern = f"{category} - Your Impact"
+        best_match = None
+        best_score = 0
+
+        for slide_idx, slide in all_slides:
+            if not slide.shapes.title:
+                continue
+
+            slide_title = slide.shapes.title.text.strip()
+
+            # Try multiple fuzzy matching methods
+            scores = [
+                fuzz.token_sort_ratio(search_pattern.lower(), slide_title.lower()),
+                fuzz.token_set_ratio(search_pattern.lower(), slide_title.lower()),
+                fuzz.partial_ratio(search_pattern.lower(), slide_title.lower())
+            ]
+
+            max_score = max(scores) / 100.0
+
+            if max_score > best_score:
+                best_score = max_score
+                best_match = {
+                    "partner": partner,
+                    "product_category": category,
+                    "slide_index": slide_idx,
+                    "slide_title": slide_title,
+                    "confidence": best_score,
+                    "match_type": "automatic",
+                    "match_method": f"Token fuzzy match ({int(best_score * 100)}%)"
+                }
+
+        # Only add if confidence is above threshold (75%)
+        if best_match and best_score >= 0.75:
+            results.append(best_match)
+
+    return results
+
+
+def extract_unique_partners(proposal_products: List[Dict]) -> List[str]:
+    """
+    Extract unique partners from proposal products.
+
+    Args:
+        proposal_products: List of proposal products with product_data
+
+    Returns:
+        List of unique partner names (sorted alphabetically)
+
+    Example:
+        >>> products = [
+        ...     {"product_data": {"Partner": "Partner X"}},
+        ...     {"product_data": {"Partner": "Partner X"}},
+        ...     {"product_data": {"Partner": "Partner Y"}}
+        ... ]
+        >>> extract_unique_partners(products)
+        ['Partner X', 'Partner Y']
+    """
+    partners = set()
+    for product in proposal_products:
+        partner = product['product_data'].get('Partner', '')
+        if partner:
+            partners.add(partner)
+
+    return sorted(list(partners))
+
+
+def find_all_impact_slides(template_path: str) -> List[Dict]:
+    """
+    Find all slides in the template with text matching "* - Your Impact".
+
+    Searches ALL text in slides (including text boxes), not just title placeholder,
+    since impact slides may have titles in text boxes rather than title placeholders.
+
+    Args:
+        template_path: Path to PowerPoint template
+
+    Returns:
+        List of impact slide info:
+        [
+            {
+                "slide_index": 156,
+                "slide_title": "Hand Stitched Bags – Your Impact"
+            },
+            ...
+        ]
+
+    Example:
+        >>> slides = find_all_impact_slides("template.pptx")
+        >>> slides[0]['slide_title']
+        'Hand Stitched Bags – Your Impact'
+    """
+    impact_slides = []
+
+    try:
+        prs = Presentation(template_path)
+
+        for slide_idx, slide in enumerate(prs.slides):
+            # Search ALL text in slide (not just title placeholder)
+            for shape in slide.shapes:
+                if hasattr(shape, 'text') and shape.text:
+                    text = shape.text.strip()
+
+                    # Check if text contains "Your Impact" (case-insensitive)
+                    # Handles both "- Your Impact" and "— Your Impact" (em dash)
+                    if "your impact" in text.lower():
+                        impact_slides.append({
+                            "slide_index": slide_idx,
+                            "slide_title": text
+                        })
+                        break  # Only add each slide once
+
+    except Exception as e:
+        print(f"Error loading PowerPoint template: {e}")
+
+    # Sort alphabetically by title
+    impact_slides.sort(key=lambda x: x['slide_title'])
+
+    return impact_slides
+
+
+def match_impact_slides_by_partner(
+    partners: List[str],
+    template_path: str,
+    manual_matches: Dict
+) -> Dict[str, Dict]:
+    """
+    Match impact slides for each partner using fuzzy matching and manual overrides.
+
+    Returns suggested matches but does NOT auto-confirm. User must manually select.
+
+    Args:
+        partners: List of unique partner names
+        template_path: Path to PowerPoint template
+        manual_matches: Dict from load_manual_matches() with 'partner_impact_matches' section
+
+    Returns:
+        Dict mapping partner to suggested match:
+        {
+            "Partner X": {
+                "suggested_slide_index": 156,
+                "suggested_slide_title": "Hand Stitched Bags - Your Impact",
+                "confidence": 0.85,
+                "match_source": "manual" or "fuzzy" or "none"
+            }
+        }
+
+    Example:
+        >>> partners = ["Partner X", "Partner Y"]
+        >>> matches = match_impact_slides_by_partner(partners, "template.pptx", {})
+        >>> matches["Partner X"]["suggested_slide_title"]
+        'Hand Stitched Bags - Your Impact'
+    """
+    results = {}
+
+    # Get all impact slides
+    all_impact_slides = find_all_impact_slides(template_path)
+
+    if not all_impact_slides:
+        return results
+
+    for partner in partners:
+        # Check manual matches first
+        from .match_manager import normalize_product_name as normalize_key
+        manual_key = normalize_key(partner)
+        manual_match = manual_matches.get('partner_impact_matches', {}).get(manual_key)
+
+        if manual_match:
+            results[partner] = {
+                "suggested_slide_index": manual_match['slide_index'],
+                "suggested_slide_title": manual_match['slide_title'],
+                "confidence": 1.0,
+                "match_source": "manual"
+            }
+            continue
+
+        # Run fuzzy matching against all impact slide titles
+        best_match = None
+        best_score = 0
+
+        for impact_slide in all_impact_slides:
+            slide_title = impact_slide['slide_title']
+
+            # Extract the category part (everything before "Your Impact")
+            # Handle both regular dash and em dash
+            category_part = slide_title.lower()
+            category_part = category_part.replace(" - your impact", "").replace(" — your impact", "").replace("your impact", "").strip()
+
+            # Try multiple fuzzy matching methods between partner and category
+            scores = [
+                fuzz.token_sort_ratio(partner.lower(), category_part),
+                fuzz.token_set_ratio(partner.lower(), category_part),
+                fuzz.partial_ratio(partner.lower(), category_part)
+            ]
+
+            max_score = max(scores) / 100.0
+
+            if max_score > best_score:
+                best_score = max_score
+                best_match = {
+                    "suggested_slide_index": impact_slide['slide_index'],
+                    "suggested_slide_title": slide_title,
+                    "confidence": best_score,
+                    "match_source": "fuzzy"
+                }
+
+        # Add best match even if confidence is low (user will manually select)
+        if best_match:
+            results[partner] = best_match
+        else:
+            # No match found - user must select manually from dropdown
+            results[partner] = {
+                "suggested_slide_index": None,
+                "suggested_slide_title": None,
+                "confidence": 0.0,
+                "match_source": "none"
+            }
+
+    return results

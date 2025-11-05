@@ -207,6 +207,65 @@ def clone_slide(prs: Presentation, slide_index: int) -> object:
     return new_slide
 
 
+def copy_slide_with_images(source_prs: Presentation, target_prs: Presentation, slide_index: int) -> object:
+    """
+    Copy a slide from source to target presentation, preserving image relationships.
+    Uses blank layout to avoid layout conflicts.
+
+    Args:
+        source_prs: Source presentation to copy from
+        target_prs: Target presentation to copy to
+        slide_index: Index of slide to copy from source
+
+    Returns:
+        New slide object in target presentation
+    """
+    source_slide = source_prs.slides[slide_index]
+
+    # Use blank layout to avoid any layout conflicts
+    blank_layout = target_prs.slide_layouts[6]
+    new_slide = target_prs.slides.add_slide(blank_layout)
+
+    # Remove default shapes
+    for shape in list(new_slide.shapes):
+        sp = shape.element
+        sp.getparent().remove(sp)
+
+    # Copy shapes from source slide
+    for shape in source_slide.shapes:
+        el = shape.element
+        newel = copy.deepcopy(el)
+
+        # Handle image relationships (blips)
+        blips = newel.xpath('.//a:blip')
+
+        for blip in blips:
+            embed_attr = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed'
+            old_rId = blip.get(embed_attr)
+
+            if old_rId:
+                try:
+                    # Get the image part from source slide
+                    source_image_part = source_slide.part.related_part(old_rId)
+
+                    # Add image to target presentation package
+                    image_file = io.BytesIO(source_image_part.blob)
+                    image_part = target_prs.part.package._image_parts.get_or_add_image_part(image_file)
+
+                    # Create relationship from new slide to image
+                    new_rId = new_slide.part.relate_to(image_part, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image')
+
+                    # Update the blip to use new relationship ID
+                    blip.set(embed_attr, new_rId)
+                except:
+                    pass  # Skip failed images
+
+        # Add the shape to new slide
+        new_slide.shapes._spTree.insert_element_before(newel, 'p:extLst')
+
+    return new_slide
+
+
 def update_pricing_table(slide: object, proposal_item: Dict) -> bool:
     """
     Update pricing table in slide with proposal data.
@@ -420,6 +479,134 @@ def create_proposal_presentation(
     return prs
 
 
+def create_proposal_presentation_with_impact(
+    template_path: str,
+    confirmed_matches: Dict[str, str],
+    proposal_products: List[Dict],
+    impact_slides_by_partner: Dict[str, Dict],
+    get_unit_price_func,
+    marketing_rounding: bool = False,
+    discount_percent: float = 0.0
+) -> Presentation:
+    """
+    Create presentation with product AND impact slides in proper order.
+
+    Assembly Order:
+    1. Product slides (grouped by partner)
+    2. Impact slides (after each partner's products)
+    3. Outro slides (placeholder for future)
+
+    Args:
+        template_path: Path to PowerPoint template
+        confirmed_matches: Dict of {gs_product_name: pptx_product_name}
+        proposal_products: List of proposal items
+        impact_slides_by_partner: Dict of {partner: {"slide_index": X, "slide_title": Y}}
+        get_unit_price_func: Function to calculate unit prices
+        marketing_rounding: Whether to apply marketing rounding
+        discount_percent: Discount percentage to apply
+
+    Returns:
+        New Presentation with selected and ordered slides
+    """
+    # Load template
+    prs = Presentation(template_path)
+
+    # Build slide selection strategy
+    # Group products by partner
+    products_by_partner = {}
+
+    for gs_name, pptx_name in confirmed_matches.items():
+        # Find proposal item
+        proposal_item = next(
+            (item for item in proposal_products
+             if item['product_data']['Product/Service'] == gs_name),
+            None
+        )
+
+        if proposal_item:
+            partner = proposal_item['product_data']['Partner']
+            if partner not in products_by_partner:
+                products_by_partner[partner] = []
+
+            # Find slide index
+            slide_idx = find_slide_by_product_name(prs, pptx_name)
+            if slide_idx is not None:
+                products_by_partner[partner].append({
+                    'slide_idx': slide_idx,
+                    'product_name': pptx_name,
+                    'proposal_item': proposal_item,
+                    'gs_name': gs_name
+                })
+
+    # Build ordered list of slides to keep
+    slides_to_keep_ordered = []
+
+    for partner in sorted(products_by_partner.keys()):
+        # Add all product slides for this partner
+        for product_entry in products_by_partner[partner]:
+            slides_to_keep_ordered.append({
+                'type': 'product',
+                'index': product_entry['slide_idx'],
+                'data': product_entry
+            })
+
+        # Add impact slide for this partner (if selected)
+        if partner in impact_slides_by_partner:
+            impact_selection = impact_slides_by_partner[partner]
+            slides_to_keep_ordered.append({
+                'type': 'impact',
+                'index': impact_selection['slide_index'],
+                'data': {
+                    'partner': partner,
+                    'slide_index': impact_selection['slide_index'],
+                    'slide_title': impact_selection['slide_title']
+                }
+            })
+
+    # Extract just the slide indices we need (in order)
+    slide_indices_to_keep = set(entry['index'] for entry in slides_to_keep_ordered)
+
+    # Remove slides we don't need (work backwards)
+    slide_list = list(prs.slides)
+    for idx in range(len(slide_list) - 1, -1, -1):
+        if idx not in slide_indices_to_keep:
+            rId = prs.slides._sldIdLst[idx].rId
+            prs.part.drop_rel(rId)
+            del prs.slides._sldIdLst[idx]
+
+    # Update pricing tables in product slides
+    for slide in prs.slides:
+        if len(slide.shapes) >= 1:
+            first_shape = slide.shapes[0]
+            if hasattr(first_shape, "text") and first_shape.text.strip():
+                product_name = first_shape.text.strip()
+
+                # Find if this is a product slide that needs updating
+                for gs_name, pptx_name in confirmed_matches.items():
+                    if pptx_name == product_name:
+                        proposal_item = next(
+                            (item for item in proposal_products
+                             if item['product_data']['Product/Service'] == gs_name),
+                            None
+                        )
+
+                        if proposal_item:
+                            pricing_data = calculate_proposal_pricing(
+                                proposal_item,
+                                get_unit_price_func,
+                                marketing_rounding,
+                                discount_percent
+                            )
+
+                            if pricing_data:
+                                update_pricing_table(slide, pricing_data)
+                        break
+
+    # Note: Outro slides now handled by create_complete_proposal_presentation()
+
+    return prs
+
+
 def download_presentation(prs: Presentation, client_name: str) -> io.BytesIO:
     """
     Convert presentation to bytes and return for download.
@@ -435,3 +622,186 @@ def download_presentation(prs: Presentation, client_name: str) -> io.BytesIO:
     prs.save(output)
     output.seek(0)
     return output
+
+
+# ============================================================
+# PHASE 2.5: COMPLETE PROPOSAL GENERATION (INTRO + PRODUCTS + IMPACT + OUTRO)
+# ============================================================
+
+def extract_slides_from_template(template_path: str, slide_indices: List[int]) -> List:
+    """
+    Extract specific slides from a template by their indices.
+
+    Args:
+        template_path: Path to PowerPoint template
+        slide_indices: List of slide indices to extract (0-based)
+
+    Returns:
+        List of slide objects (cloned)
+
+    Example:
+        >>> intro_slides = extract_slides_from_template("intro_outro.pptx", [0, 1, 2, 3, 4, 5, 6, 7])
+    """
+    prs = Presentation(template_path)
+    slides = []
+
+    for idx in slide_indices:
+        if 0 <= idx < len(prs.slides):
+            slides.append(prs.slides[idx])
+
+    return slides
+
+
+def create_complete_proposal_presentation(
+    november_template_path: str,
+    intro_outro_template_path: str,
+    confirmed_matches: Dict[str, str],
+    proposal_products: List[Dict],
+    get_unit_price_func,
+    marketing_rounding: bool = False,
+    discount_percent: float = 0.0,
+    impact_slide_overrides: Optional[Dict[str, Dict]] = None
+) -> Presentation:
+    """
+    Create complete presentation with intro, products, impact, and outro slides.
+
+    Slide Assembly Order:
+    1. Intro slides (1-8) from Intro_Outro_Slides_PbP_Proposals.pptx
+    2. Product slides (customized) from November All Slides.pptx
+    3. Impact slides (one per partner, auto-selected from reference table) from November All Slides.pptx
+    4. Outro slides (9-12) from Intro_Outro_Slides_PbP_Proposals.pptx
+
+    Args:
+        november_template_path: Path to November All Slides.pptx
+        intro_outro_template_path: Path to Intro_Outro_Slides_PbP_Proposals.pptx
+        confirmed_matches: Dict of {gs_product_name: pptx_product_name}
+        proposal_products: List of proposal items
+        get_unit_price_func: Function to calculate unit prices
+        marketing_rounding: Whether to apply marketing rounding
+        discount_percent: Discount percentage to apply
+        impact_slide_overrides: Optional dict of {partner: {"slide_index": X, "slide_title": Y}}
+                                If provided, overrides reference table for that partner
+
+    Returns:
+        Complete Presentation with all slides assembled
+
+    Example:
+        >>> prs = create_complete_proposal_presentation(
+        ...     "templates/November All Slides.pptx",
+        ...     "templates/Intro_Outro_Slides_PbP_Proposals.pptx",
+        ...     {"Product A": "PRODUCT A"},
+        ...     proposal_products,
+        ...     get_unit_price_func
+        ... )
+    """
+    # Import reference table
+    from src.slide_matcher import PARTNER_IMPACT_SLIDES, extract_unique_partners
+
+    # Load November template (we'll modify this)
+    prs_november = Presentation(november_template_path)
+
+    # Build list of slides to keep from November template
+    # Format: [(slide_index, type, data), ...]
+    slides_to_keep = []
+
+    # Step 1: Find product slides
+    for gs_name, pptx_name in confirmed_matches.items():
+        slide_idx = find_slide_by_product_name(prs_november, pptx_name)
+
+        if slide_idx is not None:
+            # Find matching proposal item
+            proposal_item = next(
+                (item for item in proposal_products
+                 if item['product_data']['Product/Service'] == gs_name),
+                None
+            )
+
+            if proposal_item:
+                slides_to_keep.append({
+                    'index': slide_idx,
+                    'type': 'product',
+                    'data': {
+                        'gs_name': gs_name,
+                        'pptx_name': pptx_name,
+                        'proposal_item': proposal_item
+                    }
+                })
+
+    # Step 2: Find impact slides (one per partner)
+    unique_partners = extract_unique_partners(proposal_products)
+
+    for partner in unique_partners:
+        # Check for override first
+        if impact_slide_overrides and partner in impact_slide_overrides:
+            impact_info = impact_slide_overrides[partner]
+        else:
+            # Use reference table
+            impact_info = PARTNER_IMPACT_SLIDES.get(partner)
+
+        if impact_info and impact_info.get('slide_index') is not None:
+            slides_to_keep.append({
+                'index': impact_info['slide_index'],
+                'type': 'impact',
+                'data': {
+                    'partner': partner,
+                    'slide_title': impact_info['slide_title']
+                }
+            })
+
+    # Step 3: Remove slides we don't need from November template (work backwards)
+    slide_indices_to_keep = set(entry['index'] for entry in slides_to_keep)
+    slide_list = list(prs_november.slides)
+
+    for idx in range(len(slide_list) - 1, -1, -1):
+        if idx not in slide_indices_to_keep:
+            rId = prs_november.slides._sldIdLst[idx].rId
+            prs_november.part.drop_rel(rId)
+            del prs_november.slides._sldIdLst[idx]
+
+    # Step 4: Update pricing tables in product slides
+    for slide in prs_november.slides:
+        if len(slide.shapes) >= 1:
+            first_shape = slide.shapes[0]
+            if hasattr(first_shape, "text") and first_shape.text.strip():
+                product_name = first_shape.text.strip()
+
+                # Find if this is a product slide
+                for gs_name, pptx_name in confirmed_matches.items():
+                    if pptx_name == product_name:
+                        proposal_item = next(
+                            (item for item in proposal_products
+                             if item['product_data']['Product/Service'] == gs_name),
+                            None
+                        )
+
+                        if proposal_item:
+                            pricing_data = calculate_proposal_pricing(
+                                proposal_item,
+                                get_unit_price_func,
+                                marketing_rounding,
+                                discount_percent
+                            )
+
+                            if pricing_data:
+                                update_pricing_table(slide, pricing_data)
+                        break
+
+    # Step 5: Add intro/outro slides to END in their original order
+    # This keeps intro slides together, making it obvious they need to be moved to beginning
+    prs_intro_outro = Presentation(intro_outro_template_path)
+
+    # Add intro slides first (slides 1-8, indices 0-7)
+    intro_slide_count = min(8, len(prs_intro_outro.slides))
+    for idx in range(intro_slide_count):
+        copy_slide_with_images(prs_intro_outro, prs_november, idx)
+
+    # Add outro slides after intro (slides 9-12, indices 8-11)
+    outro_start_idx = 8
+    outro_end_idx = min(12, len(prs_intro_outro.slides))
+    for idx in range(outro_start_idx, outro_end_idx):
+        copy_slide_with_images(prs_intro_outro, prs_november, idx)
+
+    # Final structure: Products → Impacts → Intro (at end) → Outro (at end)
+    # User moves intro slides from end to beginning, leaves outro at end
+
+    return prs_november
