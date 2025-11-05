@@ -20,13 +20,19 @@
 
 ## Important References
 
-**ALWAYS refer to [docs/RESTRUCTURE_CONTEXT.md](docs/RESTRUCTURE_CONTEXT.md) for the current data structure from master_pricing_template_10_14.**
+**Documentation is organized by topic. See [docs/README.md](docs/README.md) for complete index.**
 
-**ALWAYS refer to [docs/PLANNING.md](docs/PLANNING.md) for project requirements, architecture decisions, and implementation plans before starting any work.**
+**Core references (use before starting any work):**
 
-**ALWAYS refer to [docs/METHODOLOGY_LOGIC.md](docs/METHODOLOGY_LOGIC.md) for pricing calculations, business rules, and partner-specific methodologies.**
+- **[docs/planning/PLANNING.md](docs/planning/PLANNING.md)** - Project requirements, architecture decisions, and implementation plans
+- **[docs/planning/METHODOLOGY_LOGIC.md](docs/planning/METHODOLOGY_LOGIC.md)** - Pricing calculations, business rules, and partner-specific methodologies
+- **[docs/planning/RESTRUCTURE_CONTEXT.md](docs/planning/RESTRUCTURE_CONTEXT.md)** - Current data structure from master_pricing_template_10_14
+- **[docs/planning/INVOICE_AND_PROPOSAL_SPEC.md](docs/planning/INVOICE_AND_PROPOSAL_SPEC.md)** - Invoice format specifications and required information
 
-**ALWAYS refer to [docs/INVOICE_REQUIREMENTS.md](docs/INVOICE_REQUIREMENTS.md) for invoice format specifications and required information.**
+**PowerPoint automation (latest feature):**
+
+- **[docs/powerpoint/PHASE_2_COMPLETION_SUMMARY.md](docs/powerpoint/PHASE_2_COMPLETION_SUMMARY.md)** - Phase 2 complete summary (production-ready)
+- **[docs/powerpoint/PHASE_1_COMPLETION_SUMMARY.md](docs/powerpoint/PHASE_1_COMPLETION_SUMMARY.md)** - Phase 1 technical deep dive
 
 ---
 
@@ -165,31 +171,33 @@ pricing-data-solution-pbp/
 ├── .streamlit/
 │   └── secrets.toml           # Google credentials (SECRET - never commit)
 │
-├── docs/                       # Documentation
-│   ├── PLANNING.md            # Project requirements & goals
-│   ├── DATA_STRUCTURE.md      # jaggery_demo data structure
-│   ├── METHODOLOGY_LOGIC.md   # Pricing calculations & business rules
-│   ├── INVOICE_REQUIREMENTS.md # Invoice/PO format specification
-│   ├── UI_RESTRUCTURE_PLAN.md # Original UI restructure plan
-│   ├── UI_RESTRUCTURE_PROGRESS.md # Implementation progress (COMPLETE)
-│   ├── UI_POLISH_PLAN.md      # Phase 5 implementation plan (COMPLETE)
+├── docs/                       # Documentation (organized by topic)
+│   ├── README.md              # Documentation index
 │   ├── CLIENT_QUESTIONS.md    # Unanswered client questions
-│   ├── MIGRATION_SUMMARY.md   # Migration history
-│   ├── PPTX_AUTOMATION_IMPLEMENTATION_ROADMAP.md # Phase 1-3 roadmap
-│   ├── PHASE_1_IMPLEMENTATION_GUIDE.md # Day-by-day Phase 1 guide
-│   ├── PHASE_1_DAY_1_RESULTS.md # Day 1 matching improvements results
-│   ├── PHASE_1_DAY_2_RESULTS.md # Day 2 user confirmation UI results
-│   ├── PHASE_1_INTEGRATION_TEST_PLAN.md # Complete workflow test plan
-│   ├── FUZZY_MATCHING_SYSTEM_DESIGN.md # Fuzzy matching design doc
-│   └── FUZZY_MATCH_CONFIRMATION_UX.md # User confirmation UX design
+│   ├── planning/              # Core project documentation
+│   │   ├── PLANNING.md        # Project requirements & goals
+│   │   ├── METHODOLOGY_LOGIC.md # Pricing calculations & business rules
+│   │   ├── RESTRUCTURE_CONTEXT.md # Data structure reference
+│   │   └── INVOICE_AND_PROPOSAL_SPEC.md # Invoice/PO format
+│   ├── powerpoint/            # PowerPoint automation (Phase 1 & 2)
+│   │   ├── PHASE_2_COMPLETION_SUMMARY.md # Phase 2 final summary
+│   │   ├── PHASE_1_COMPLETION_SUMMARY.md # Phase 1 technical deep dive
+│   │   ├── PPTX_AUTOMATION_IMPLEMENTATION_ROADMAP.md # Full roadmap
+│   │   └── [13 other PowerPoint docs]
+│   ├── tab2-improvements/     # Historical Tab 2 redesign docs
+│   │   └── [9 UI redesign documents]
+│   └── archive/               # Deprecated/historical docs
+│       └── [5 archived documents]
 │
 ├── src/                        # Modular code (extracted from app.py)
 │   ├── data_loader.py         # Google Sheets data loading
 │   ├── helpers.py             # Utility functions, conversions, validation
 │   ├── pricing_engine.py      # Pricing calculations and quote generation
-│   └── slide_matcher.py       # PowerPoint slide matching (Phase 1)
+│   ├── slide_matcher.py       # PowerPoint slide matching (Phase 1)
+│   └── pptx_generator.py      # PowerPoint generation (Phase 2)
 │
-├── templates/                  # Reference templates
+├── templates/                  # Templates and reference files
+│   ├── November All Slides.pptx # PowerPoint template (339 slides, 43MB)
 │   ├── TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED.md
 │   └── TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED.pdf
 │
