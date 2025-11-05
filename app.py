@@ -179,9 +179,10 @@ if 'using_proposal_data' not in st.session_state:
 st.title("Peace by Piece Order Management System")
 st.markdown("**Welcome to the PBP Order Management System** — Manage the complete order lifecycle:")
 st.markdown("")
-st.markdown("**→ Tab 1: Proposals** - Browse products, create proposals for prospective clients")
-st.markdown("**→ Tab 2: Order & Client Info** - Build orders, collect client details")
-st.markdown("**→ Tab 3: Execution & Accounting** - Generate invoices and purchase orders")
+st.markdown("**→ Tab 1: Proposal Generator** - Browse products, create proposals for prospective clients")
+st.markdown("**→ Tab 2: Client Order Form Generator** - Create professional order forms to send to clients")
+st.markdown("**→ Tab 3: Order & Client Info** - Build orders, collect client details")
+st.markdown("**→ Tab 4: Execution & Accounting** - Generate invoices and purchase orders")
 st.divider()
 
 # ============================================================
@@ -204,13 +205,18 @@ with st.sidebar:
     tab1_color = "green" if has_proposals else "gray"
     st.markdown(f":{tab1_color}[{tab1_status}] **Tab 1:** Proposals ({len(st.session_state.proposal_products)} products)")
 
-    # Tab 2: Order & Client Info
-    tab2_complete = has_order and has_client_info and order_confirmed
-    tab2_status = "[X]" if tab2_complete else "[ ]"
-    tab2_color = "green" if tab2_complete else "gray"
+    # Tab 2: Order Forms (always available)
+    tab2_status = "[X]"
+    tab2_color = "green"
+    st.markdown(f":{tab2_color}[{tab2_status}] **Tab 2:** Client Order Forms (always available)")
+
+    # Tab 3: Order & Client Info
+    tab3_complete = has_order and has_client_info and order_confirmed
+    tab3_status = "[X]" if tab3_complete else "[ ]"
+    tab3_color = "green" if tab3_complete else "gray"
 
     # Debug info to show what's missing
-    if not tab2_complete:
+    if not tab3_complete:
         missing = []
         if not has_order:
             missing.append("no order")
@@ -222,16 +228,16 @@ with st.sidebar:
     else:
         debug_text = ""
 
-    st.markdown(f":{tab2_color}[{tab2_status}] **Tab 2:** Order & Client ({len(st.session_state.order_items)} products){debug_text}")
+    st.markdown(f":{tab3_color}[{tab3_status}] **Tab 3:** Order & Client ({len(st.session_state.order_items)} products){debug_text}")
 
-    # Tab 3: Invoice/PO ready indicator
-    tab3_ready = has_order and has_client_info
-    tab3_status = "[X]" if tab3_ready else "[ ]"
-    tab3_color = "green" if tab3_ready else "gray"
-    tab3_label = "Ready" if tab3_ready else "Not ready"
-    st.markdown(f":{tab3_color}[{tab3_status}] **Tab 3:** Invoice/PO ({tab3_label})")
+    # Tab 4: Invoice/PO ready indicator
+    tab4_ready = has_order and has_client_info
+    tab4_status = "[X]" if tab4_ready else "[ ]"
+    tab4_color = "green" if tab4_ready else "gray"
+    tab4_label = "Ready" if tab4_ready else "Not ready"
+    st.markdown(f":{tab4_color}[{tab4_status}] **Tab 4:** Invoice/PO ({tab4_label})")
 
-    st.caption("Complete Tab 2 to generate Invoice/PO in Tab 3")
+    st.caption("Complete Tab 3 to generate Invoice/PO in Tab 4")
 
     st.markdown("---")
 
@@ -286,34 +292,41 @@ with st.sidebar:
     # Section 3: Instructions
     with st.expander("How to Use This App", expanded=False):
         st.markdown("""
-        **3-Tab Workflow:**
+        **4-Tab Workflow:**
 
-        **Tab 1: Proposals** (for prospective clients)
+        **Tab 1: Proposal Generator** (for prospective clients)
         - Browse product catalog with filters
         - Add products to proposal
         - Configure quantity, markup, MSRP comparison
         - Generate MOQ-based proposal tables
-        - Download client order form
+        - Generate PowerPoint presentations
 
-        **Tab 2: Order & Client Info** (main workflow)
-        1. Enter client information (company, contact, payment)
-        2. Select partner and product from dropdowns
-        3. Set quantity, markup, and customization options
-        4. Add to order (repeat for multiple products)
-        5. Configure shipping, discounts, custom items
-        6. Add order notes (partner notes, accounting notes)
-        7. Review order summary
+        **Tab 2: Client Order Form Generator**
+        - Create professional HTML order forms
+        - Pre-fill client information
+        - Send to clients for completion
 
-        **Tab 3: Execution & Accounting** (final step)
+        **Tab 3: Order & Client Info** (main workflow)
+        1. Import completed client forms or proposal products
+        2. Enter client information (company, contact, payment)
+        3. Select partner and product from dropdowns
+        4. Set quantity, markup, and customization options
+        5. Add to order (repeat for multiple products)
+        6. Configure shipping, discounts, custom items
+        7. Add order notes (partner notes, accounting notes)
+        8. Review order summary
+
+        **Tab 4: Execution & Accounting** (final step)
         - View order summary and validation warnings
         - Generate invoice and purchase order
         - Download CSV for bookkeeping
         - Export to accounting (coming soon)
 
         **Tips:**
-        - Start with Tab 2 for actual orders
-        - Use Tab 1 for quick quotes/proposals
-        - Tab 3 requires completed order in Tab 2
+        - Start with Tab 1 for proposals to prospective clients
+        - Use Tab 2 to generate client order forms
+        - Use Tab 3 for building and managing actual orders
+        - Tab 4 requires completed order in Tab 3
         """)
 
     st.markdown("---")
@@ -461,7 +474,7 @@ def show_match_review_ui(match_results, pptx_product_names):
         Dict of confirmed matches {gs_product_name: pptx_product_name} or None if cancelled
     """
     st.markdown("---")
-    st.subheader("10. Review Matches & Generate PowerPoint")
+    st.subheader("Step 1. Review Product Matches")
 
     # Separate matches by type
     exact_matches = [r for r in match_results if r.match_type == 'exact']
@@ -509,9 +522,9 @@ def show_match_review_ui(match_results, pptx_product_names):
 
             # Add match source badge
             if result.match_source == 'manual':
-                match_badge = "🎯 Manual"
+                match_badge = "Manual"
             else:
-                match_badge = f"🤖 Auto ({result.confidence}%)"
+                match_badge = f"Auto ({result.confidence}%)"
 
             st.markdown(f"**Suggested match:** {result.pptx_product_name} (:{confidence_color}[{match_badge}])")
             if hasattr(result, 'match_method') and result.match_method:
@@ -864,6 +877,9 @@ def show_match_review_ui(match_results, pptx_product_names):
             # Show instructions for reordering intro slides
             st.info("**Final step:** In PowerPoint, move the 8 intro slides (they're grouped together after products) to the beginning. Select slides → Drag to top (~5 seconds).")
 
+            # Warning about PowerPoint repair message
+            st.warning("**Note:** PowerPoint may show a 'repair presentation' warning when opening the file. This is normal - click 'Repair' to proceed. The content will display correctly.")
+
             st.download_button(
                 label="Download PowerPoint Presentation",
                 data=st.session_state.generated_pptx,
@@ -915,24 +931,26 @@ except Exception as e:
 # ============================================================
 # TAB STRUCTURE
 # ============================================================
-tab1, tab2, tab3 = st.tabs([
-    "Proposals",
+tab1, tab2, tab3, tab4 = st.tabs([
+    "Proposal Generator",
+    "Client Order Form Generator",
     "Order & Client Info",
     "Execution & Accounting"
 ])
 
 # ============================================================
-# TAB 1: PROPOSALS
+# TAB 1: PROPOSAL GENERATOR
 # ============================================================
 with tab1:
-    st.header("Proposals - Product Catalog & Proposal Generation")
-    st.caption("Browse products, configure proposals, and generate client quotes")
+    st.header("Proposal Generator - Product Catalog & Pricing")
+    st.caption("Browse products, configure proposals, and generate client quotes (tables & PowerPoint)")
     st.divider()
 
     # ============================================================
-    # SECTION 1: FILTERS
+    # SECTION 1: BROWSE & FILTER PRODUCTS (Combined Sections 1+2)
     # ============================================================
-    st.subheader("1. Filter Products")
+    st.subheader("1. Browse & Filter Products")
+    st.caption(f"{len(df_template)} total products available")
 
     col1, col2, col3 = st.columns(3)
 
@@ -992,96 +1010,91 @@ with tab1:
                 price_filtered_indices.append(idx)
         filtered_df = filtered_df.loc[price_filtered_indices]
 
-    st.info(f"Showing {len(filtered_df)} products matching filters")
-
     st.divider()
+    st.caption(f"**Filtered Results:** {len(filtered_df)} products match your filters")
 
-    # ============================================================
-    # SECTION 2: PRODUCT CATALOG
-    # ============================================================
-    st.subheader("2. Product Catalog")
+    # Display success message if a product was just added
+    if 'show_success_message' in st.session_state and st.session_state.show_success_message:
+        st.success(f"Added **{st.session_state.success_product_name}** to proposal!")
+        st.session_state.show_success_message = False
 
     if len(filtered_df) == 0:
         st.warning("No products match your filters. Try adjusting the filter criteria above.")
     else:
-        # Display success message if a product was just added
-        if 'show_success_message' in st.session_state and st.session_state.show_success_message:
-            st.success(f"Added **{st.session_state.success_product_name}** to proposal!")
-            st.session_state.show_success_message = False
+        # Default to expanded if no products in proposal yet, collapsed if products already added
+        default_expanded = len(st.session_state.proposal_products) == 0
 
-        # Table-style header
-        header_col1, header_col2, header_col3, header_col4 = st.columns([3, 1.5, 1, 1.5])
-        with header_col1:
-            st.markdown("**Product Name**")
-        with header_col2:
-            st.markdown("**Partner**")
-        with header_col3:
-            st.markdown("**Price/Unit**")
-        with header_col4:
-            st.markdown("**Actions**")
+        with st.expander(f"Browse Products ({len(filtered_df)} available)", expanded=default_expanded):
+            # Table-style header
+            header_col1, header_col2, header_col3, header_col4 = st.columns([3, 1.5, 1, 1.5])
+            with header_col1:
+                st.markdown("**Product Name**")
+            with header_col2:
+                st.markdown("**Partner**")
+            with header_col3:
+                st.markdown("**Price/Unit**")
+            with header_col4:
+                st.markdown("**Actions**")
 
-        st.divider()
+            st.divider()
 
-        # Display filtered products in a compact table-style format
-        for idx, row in filtered_df.iterrows():
-            product_data = row
+            # Display filtered products in a compact table-style format
+            for idx, row in filtered_df.iterrows():
+                product_data = row
 
-            # Calculate price for display
-            preliminary_price, _, _ = get_unit_price_new_system(product_data, 100)
-            estimated_moq = calculate_moq(preliminary_price * 2) if preliminary_price else None
-            moq_price, _, _ = get_unit_price_new_system(product_data, estimated_moq) if estimated_moq else (None, None, None)
+                # Calculate price for display
+                preliminary_price, _, _ = get_unit_price_new_system(product_data, 100)
+                estimated_moq = calculate_moq(preliminary_price * 2) if preliminary_price else None
+                moq_price, _, _ = get_unit_price_new_system(product_data, estimated_moq) if estimated_moq else (None, None, None)
 
-            # Compact row with all essential info
-            col1, col2, col3, col4 = st.columns([3, 1.5, 1, 1.5])
+                # Compact row with all essential info
+                col1, col2, col3, col4 = st.columns([3, 1.5, 1, 1.5])
 
-            with col1:
-                st.markdown(f"**{product_data['Product/Service']}**")
+                with col1:
+                    st.markdown(f"**{product_data['Product/Service']}**")
 
-            with col2:
-                st.markdown(f"{product_data['Partner']}")
+                with col2:
+                    st.markdown(f"{product_data['Partner']}")
 
-            with col3:
-                if moq_price:
-                    st.markdown(f"${moq_price:.2f}")
-                else:
-                    st.markdown("—")
+                with col3:
+                    if moq_price:
+                        st.markdown(f"${moq_price:.2f}")
+                    else:
+                        st.markdown("—")
 
-            with col4:
-                # Add button - adds product to proposal with 100% markup default
-                if st.button("Add to Proposal", key=f"add_{idx}", use_container_width=True, type="primary"):
-                    proposal_item = {
-                        'product_data': product_data.to_dict(),
-                        'markup_percent': 100.0
-                    }
-                    st.session_state.proposal_products.append(proposal_item)
+                with col4:
+                    # Add button - adds product to proposal with 100% markup default
+                    if st.button("Add to Proposal", key=f"add_{idx}", use_container_width=True, type="primary"):
+                        proposal_item = {
+                            'product_data': product_data.to_dict(),
+                            'markup_percent': 100.0
+                        }
+                        st.session_state.proposal_products.append(proposal_item)
 
-                    # Set success message
-                    st.session_state.show_success_message = True
-                    st.session_state.success_product_name = product_data['Product/Service']
-                    st.rerun()
+                        # Set success message
+                        st.session_state.show_success_message = True
+                        st.session_state.success_product_name = product_data['Product/Service']
+                        st.rerun()
 
-            # Expandable details section
-            with st.expander(f"View details for {product_data['Product/Service']}", expanded=False):
-                st.caption(f"**Partner:** {product_data['Partner']} | **Country:** {product_data.get('Country of Origin', 'N/A')} | **Tiered Pricing:** {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
+            # Show additional details inline (no nested expander)
+            st.caption(f"Country: {product_data.get('Country of Origin', 'N/A')} | Tiered Pricing: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
 
-                # Show estimated price at MOQ
-                if moq_price and estimated_moq:
-                    st.caption(f"**Est. Price at MOQ ({estimated_moq} units):** ${moq_price:.2f}/unit")
+            # Show estimated price at MOQ
+            if moq_price and estimated_moq:
+                st.caption(f"Est. Price at MOQ ({estimated_moq} units): ${moq_price:.2f}/unit")
 
-                # Show description if available
-                desc = product_data.get("Marketing Description", "")
-                if desc and str(desc).strip() and str(desc).strip() != 'nan':
-                    st.write(desc)
-                else:
-                    st.caption("No description available")
+            # Show description if available
+            desc = product_data.get("Marketing Description", "")
+            if desc and str(desc).strip() and str(desc).strip() != 'nan':
+                st.caption(f"📝 {desc}")
 
             st.divider()
 
     # ============================================================
-    # SECTION 3: PROPOSAL PREVIEW & SETTINGS
+    # SECTION 2: PROPOSAL PREVIEW & SETTINGS
     # ============================================================
     st.divider()
-    st.subheader("3. Proposal Preview & Settings")
+    st.subheader("2. Proposal Preview & Settings")
 
     if len(st.session_state.proposal_products) == 0:
         st.info("No products added to proposal yet. Add products from the catalog above.")
@@ -1199,25 +1212,27 @@ with tab1:
             st.divider()
 
     # ============================================================
-    # SECTION 4: GENERATE PROPOSAL TABLES
+    # SECTION 3: GENERATE PROPOSAL TABLES
     # ============================================================
     st.divider()
-    st.subheader("4. Generate Proposal Tables")
+    st.subheader("3. Generate Proposal Tables")
 
     if len(st.session_state.proposal_products) == 0:
         st.caption("Add products to generate proposal tables")
     else:
-        st.markdown("Each product is presented in a separate table with MOQ pricing.")
-        st.markdown("")
+        # Default to expanded, but allow collapsing to save space
+        with st.expander(f"View Proposal Tables ({len(st.session_state.proposal_products)} products)", expanded=True):
+            st.markdown("Each product is presented in a separate table with MOQ pricing.")
+            st.markdown("")
 
-        # Generate a separate table for each product
-        for idx, item in enumerate(st.session_state.proposal_products, 1):
-            st.markdown(f"### Product {idx}: {item['product_data']['Product/Service']}")
+            # Generate a separate table for each product
+            for idx, item in enumerate(st.session_state.proposal_products, 1):
+                st.markdown(f"### Product {idx}: {item['product_data']['Product/Service']}")
 
-            product_row = item['product_data']
+                product_row = item['product_data']
 
-            # Calculate MOQ using a standard preliminary quantity (100 units)
-            preliminary_base_price, _, _ = get_unit_price_new_system(product_row, 100)
+                # Calculate MOQ using a standard preliminary quantity (100 units)
+                preliminary_base_price, _, _ = get_unit_price_new_system(product_row, 100)
 
             if preliminary_base_price is not None:
                 # Estimate total per-unit price with markup (no customization in MOQ calc)
@@ -1566,12 +1581,11 @@ with tab1:
             st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
 
     # ============================================================
-    # SECTION 5: POWERPOINT PROPOSAL GENERATION (PHASE 2.5 COMPLETE)
-    # Note: Logical Section 5 (Legacy Sections 5-7 hidden above)
+    # SECTION 4: POWERPOINT PROPOSAL GENERATION (PHASE 2.5 COMPLETE)
     # ============================================================
     if len(st.session_state.proposal_products) > 0:
         st.divider()
-        st.subheader("5. Generate PowerPoint Proposal (BETA)")
+        st.subheader("4. Generate PowerPoint Proposal (BETA)")
         st.caption("Automatically create a customized PowerPoint presentation for your client")
 
         # ============================================================
@@ -1588,7 +1602,7 @@ with tab1:
             )
 
             # Check if pricing data is loaded
-            if 'pricing_data' not in st.session_state or not st.session_state.pricing_data:
+            if 'df_template' not in st.session_state or st.session_state.df_template is None:
                 st.warning("Pricing data not loaded yet. Please wait for data to load.")
             else:
                 # Subsection A: Create new manual match
@@ -1598,7 +1612,7 @@ with tab1:
 
                 with col1:
                     # Dropdown of all products from catalog
-                    all_product_names = sorted([row['Product Name'] for row in st.session_state.pricing_data])
+                    all_product_names = sorted(st.session_state.df_template['Product/Service'].tolist())
                     selected_product = st.selectbox(
                         "Select Product",
                         all_product_names,
@@ -1764,10 +1778,53 @@ with tab1:
                 st.session_state.show_pptx_matching = False
 
     # ============================================================
-    # SECTION 6: ORDER DETAILS (moved after PowerPoint)
+    # NEXT STEPS GUIDANCE
     # ============================================================
     st.divider()
-    st.subheader("6. Order Details")
+
+    if len(st.session_state.proposal_products) > 0:
+        st.success(f"""
+        **What's Next?**
+
+        1. Download and send the proposal to your client
+        2. Move to **Tab 2: Client Order Form Generator** to create a client order form
+        3. Your {len(st.session_state.proposal_products)} proposal product(s) will be available for import in Tab 2
+        """)
+    else:
+        st.info("""
+        **What's Next?**
+
+        After adding products to your proposal, you can:
+        - Download proposal tables and PowerPoint presentations
+        - Send to your client for review
+        - Move to **Tab 2** to generate a client order form
+        """)
+
+    # Navigation button at bottom of Tab 1
+    st.divider()
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("Continue to Tab 2: Client Order Form", type="primary", use_container_width=True, key="tab1_to_tab2"):
+            st.session_state.show_tab2_prompt = True
+            st.rerun()
+
+    # Show navigation prompt if button was clicked
+    if st.session_state.get('show_tab2_prompt', False):
+        st.info("👆 Click on the **'Client Order Form Generator'** tab above to continue.")
+        st.session_state.show_tab2_prompt = False
+
+# ============================================================
+# TAB 2: CLIENT ORDER FORM GENERATOR (NEW)
+# ============================================================
+with tab2:
+    st.header("Client Order Form Generator")
+    st.caption("Create professional HTML order forms to send to clients")
+    st.divider()
+
+    # ============================================================
+    # SECTION 1: ORDER DETAILS
+    # ============================================================
+    st.subheader("1. Order Details")
     st.caption("Add client information to pre-fill the order form")
 
     # Initialize order details in session state if not exists
@@ -1808,21 +1865,22 @@ with tab1:
             key="order_detail_contact_email"
         )
 
-    # Button to apply info to order form
-    if st.button("Add Info to Order Form", type="primary", use_container_width=True):
-        st.session_state.show_info_success = True
+    # Button to confirm info is ready (visual feedback)
+    st.divider()
+    if st.button("Update Order Form with This Info", type="primary", use_container_width=True, key="update_order_form"):
+        st.session_state.show_order_form_updated = True
         st.rerun()
 
     # Show success message if flag is set
-    if st.session_state.get('show_info_success', False):
-        st.success("Information successfully added to order form!")
-        st.session_state.show_info_success = False
+    if st.session_state.get('show_order_form_updated', False):
+        st.success("Order form updated! The information you entered will appear in the form below.")
+        st.session_state.show_order_form_updated = False
 
     # ============================================================
-    # SECTION 7: CLIENT ORDER FORM (moved after Order Details)
+    # SECTION 2: CLIENT ORDER FORM
     # ============================================================
     st.divider()
-    st.subheader("7. Client Order Form")
+    st.subheader("2. Client Order Form")
 
     st.markdown("""
     Download the HTML form below and paste it into your email to send to clients.
@@ -2091,41 +2149,31 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
     # ============================================================
     st.divider()
 
-    if len(st.session_state.proposal_products) > 0:
-        st.success(f"""
-        **What's Next?**
+    st.info("""
+    **What's Next?**
 
-        1. Download and send the proposal to your client
-        2. Once your client confirms interest, move to **Tab 2: Order & Client Info** to finalize the order
-        3. Your {len(st.session_state.proposal_products)} proposal product(s) will be available for quick import in Tab 2
-        """)
-    else:
-        st.info("""
-        **What's Next?**
+    1. Download and send the client order form to your client
+    2. When your client returns the completed form, move to **Tab 3: Order & Client Info** to process the order
+    3. You can import the completed HTML form directly in Tab 3
+    """)
 
-        After adding products to your proposal, you can:
-        - Download proposal tables and client order forms
-        - Send to your client for review
-        - Move to **Tab 2: Order & Client Info** when client confirms
-        """)
-
-    # Navigation button at bottom of Tab 1
+    # Navigation button at bottom of Tab 2
     st.divider()
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
-        if st.button("Continue to Tab 2: Order & Client Info", type="primary", use_container_width=True, key="tab1_to_tab2"):
-            st.session_state.show_tab2_prompt = True
+        if st.button("Continue to Tab 3: Order & Client Info", type="primary", use_container_width=True, key="tab2_to_tab3"):
+            st.session_state.show_tab3_prompt = True
             st.rerun()
 
     # Show navigation prompt if button was clicked
-    if st.session_state.get('show_tab2_prompt', False):
+    if st.session_state.get('show_tab3_prompt', False):
         st.info("👆 Click on the **'Order & Client Info'** tab above to continue.")
-        st.session_state.show_tab2_prompt = False
+        st.session_state.show_tab3_prompt = False
 
 # ============================================================
-# TAB 2: ORDER & CLIENT INFO (ALL CURRENT FUNCTIONALITY)
+# TAB 3: ORDER & CLIENT INFO
 # ============================================================
-with tab2:
+with tab3:
     st.header("Order & Client Info - Input Order & Client Details")
     st.divider()
 
@@ -3447,7 +3495,7 @@ Rates default to current estimates but can be adjusted as needed.
             st.rerun()
     else:
         st.success("Order complete! Your order summary is ready.")
-        st.info("Go to **Tab 3: Execution & Accounting** to generate Invoice & Purchase Order for this order.")
+        st.info("Go to **Tab 4: Execution & Accounting** to generate Invoice & Purchase Order for this order.")
 
         # Optional: Add button to go back and edit
         if st.button("Edit Order", type="secondary"):
@@ -3458,28 +3506,28 @@ Rates default to current estimates but can be adjusted as needed.
     st.divider()
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
-        if st.button("Continue to Tab 3: Execution & Accounting", type="primary", use_container_width=True, key="tab2_to_tab3"):
-            st.session_state.show_tab3_prompt = True
+        if st.button("Continue to Tab 4: Execution & Accounting", type="primary", use_container_width=True, key="tab3_to_tab4"):
+            st.session_state.show_tab4_prompt = True
             st.rerun()
 
     # Show navigation prompt if button was clicked
-    if st.session_state.get('show_tab3_prompt', False):
+    if st.session_state.get('show_tab4_prompt', False):
         st.info("👆 Click on the **'Execution & Accounting'** tab above to continue.")
-        st.session_state.show_tab3_prompt = False
+        st.session_state.show_tab4_prompt = False
 
 # ============================================================
-# TAB 3: EXECUTION & ACCOUNTING
+# TAB 4: EXECUTION & ACCOUNTING
 # ============================================================
-with tab3:
+with tab4:
     st.header("Execution & Accounting - Invoice & Purchase Order Management")
     st.caption("Generate invoices and purchase orders for confirmed orders")
     st.divider()
 
-    # Check if order exists in Tab 2
+    # Check if order exists in Tab 3
     if len(st.session_state.order_items) == 0:
-        st.info("No order found. Please build an order in Tab 2 first.")
+        st.info("No order found. Please build an order in Tab 3 first.")
         st.markdown("### To create an invoice/PO:")
-        st.markdown("1. Go to **Tab 2: Order & Client Info**")
+        st.markdown("1. Go to **Tab 3: Order & Client Info**")
         st.markdown("2. Complete Sections 1-8 (client info, products, settings, summary)")
         st.markdown("3. Return to this tab to generate Invoice/PO")
     else:

@@ -69,10 +69,11 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 
 ## Architecture
 
-- **Frontend:** Streamlit (Python-based web app) with 3-tab structure
-  - **Tab 1: Proposals** - Product catalog, filtering, proposal generation
-  - **Tab 2: Order & Client Info** - Order management, client data collection
-  - **Tab 3: Execution & Accounting** - Invoice/PO generation, bookkeeping
+- **Frontend:** Streamlit (Python-based web app) with 4-tab structure
+  - **Tab 1: Proposal Generator** - Product catalog, filtering, proposal generation (tables & PowerPoint)
+  - **Tab 2: Client Order Form Generator** - Create professional HTML order forms to send to clients
+  - **Tab 3: Order & Client Info** - Order management, client data collection
+  - **Tab 4: Execution & Accounting** - Invoice/PO generation, bookkeeping
 - **Data Source:** Google Sheets (master_pricing_template_10_14) with 3 sheets:
   - **Template**: Partner-product pricing data
   - **Metadata**: Deliverable field definitions
@@ -84,28 +85,41 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 - **Authentication:** Google Cloud service account
 - **Pricing Model:** Flexible tiered or flat-rate pricing per product
 - **Workflow:**
-  1. **Tab 1 (Proposals):** Browse products → Configure proposal → Download CSV/HTML client order form
-  2. **Tab 2 (Orders):** Add products (import OR manual) → Edit each product inline (quantity, markup, customization) → Configure order settings → Collect client info
-  3. **Tab 3 (Execution):** Review/edit order → Generate invoice & PO → Download for bookkeeping
+  1. **Tab 1 (Proposal Generator):** Browse & filter products → Configure proposal → Generate tables & PowerPoint
+  2. **Tab 2 (Client Order Form Generator):** Enter client info → Generate HTML order form → Send to client
+  3. **Tab 3 (Order & Client Info):** Import completed form or add products manually → Configure order → Collect client details
+  4. **Tab 4 (Execution & Accounting):** Review/edit order → Generate invoice & PO → Download for bookkeeping
 
 ## Current Features
 
-### Tab 1: Proposals (for prospective clients)
-- **Product Filtering:** Price range, partner, country of origin
-- **Product Catalog:** Browse all products with detailed specifications
-- **Proposal Configuration:** Quantity, markup %, customization options, MSRP comparison
-- **MOQ-Based Pricing Tables:** Automatic minimum order quantity calculations
-- **Copy Buttons:** Easy copy for Kitting Pricing & Terms sections
-- **CSV Downloads:** Export proposal tables and client order forms
-- **HTML Client Order Form:** Professional, email-ready order form with:
+### Tab 1: Proposal Generator (for prospective clients)
+- **Browse & Filter Products (Section 1):**
+  - Collapsible product catalog (auto-collapses after adding products)
+  - Filter by price range, partner, country of origin
+  - View product details inline (country, tiered pricing, MOQ estimates, descriptions)
+- **Proposal Configuration (Section 2):** Quantity, markup %, customization options, MSRP comparison
+- **Proposal Tables (Section 3):**
+  - Collapsible MOQ-based pricing tables
+  - Automatic minimum order quantity calculations
+  - CSV downloads for proposal tables
+- **PowerPoint Generation (Section 4):**
+  - Automated slide matching and selection
+  - Dynamic pricing table updates
+  - Impact slides per partner
+  - Intro/outro slides included
+  - Manual match override (advanced)
+
+### Tab 2: Client Order Form Generator
+- **Order Details (Section 1):** Pre-fill client information (type, company, contact, email)
+- **Client Order Form (Section 2):** Professional, email-ready HTML order form with:
   - Styled table format (light/dark mode compatible)
   - Clear instructional prompts for clients
   - Pre-filled product names and quantities
   - Multiple choice delete-to-select format
   - Download as HTML, TXT, or CSV
-- **Terms & Conditions:** Customizable terms loaded from config file
+  - "Update Order Form with This Info" button for confirmation
 
-### Tab 2: Order & Client Info (main workflow)
+### Tab 3: Order & Client Info (main workflow)
 - **Simplified Product Addition:** One-click add from dropdown (defaults: qty=1, markup=100%)
 - **Proposal-to-Order Import:** Import all or individual products from Tab 1 (preserves quantity & markup only)
 - **HTML Order Form Import:** Upload completed client order forms (HTML format)
@@ -139,7 +153,7 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - Total quote
 - **Section Flow:** 1. Add Products → 2. Configure Each Product → 3. Order Settings → 4. Notes → 5. Summary
 
-### Tab 3: Execution & Accounting
+### Tab 4: Execution & Accounting
 - **Editable Order Information:** Review and complete any missing client/order information with inline editing
 - **Order Validation:** Completeness check with warnings for missing fields
 - **Comprehensive Order Settings:** Full editing access to all Tab 2 settings (shipping, tariffs, discounts, custom line items, notes)
@@ -227,11 +241,33 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 5.0 - PowerPoint Proposal Automation (COMPLETE)
+**Version:** 6.0 - UI Reorganization & Tab Structure Improvements
 
-**Last Updated:** 2025-11-04
+**Last Updated:** 2025-11-05
 
-**Recent Improvements (2025-11-04):**
+**Recent Improvements (2025-11-05):**
+- ✅ **4-Tab Structure Reorganization:**
+  - Split Tab 1 into two focused tabs: "Proposal Generator" and "Client Order Form Generator"
+  - Moved Order Details and Client Order Form sections from Tab 1 to new Tab 2
+  - Old Tab 2 became Tab 3 (Order & Client Info)
+  - Old Tab 3 became Tab 4 (Execution & Accounting)
+  - Clean separation of concerns: proposals → client forms → orders → execution
+- ✅ **UI Improvements:**
+  - Combined "Filter Products" and "Product Catalog" into single "Browse & Filter Products" section
+  - Added collapsible expanders for Product Catalog (auto-collapses after adding products)
+  - Added collapsible expander for Proposal Tables section
+  - Product details now show inline instead of nested expanders
+  - Improved filter result messaging
+- ✅ **Bug Fixes:**
+  - Fixed Manual Match Override section to use correct session state variable (`df_template`)
+  - Restored "Update Order Form with This Info" button in Tab 2
+  - Fixed PowerPoint repair warning with user notice
+- ✅ **Navigation Updates:**
+  - Updated all tab references and navigation buttons throughout app
+  - Updated sidebar progress tracker for 4-tab structure
+  - Updated "How to Use" instructions
+
+**Previous Improvements (2025-11-04):**
 - ✅ **PowerPoint Proposal Automation - Phase 1 & 2 COMPLETE:**
   - **Phase 1 - Matching System:**
     - Intelligent product name matching with 78.9% accuracy (15 of 19 products)
