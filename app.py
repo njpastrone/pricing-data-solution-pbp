@@ -5,6 +5,7 @@ Version: 6.1 (Tab 3 Workflow Clarity + Filter Improvements)
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
@@ -45,6 +46,31 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="auto"
 )
+
+# Prevent automatic page scrolling on widget interaction
+st.markdown("""
+<style>
+    * {
+       overflow-anchor: none !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Restore scroll position after rerun (from sessionStorage)
+components.html("""
+    <script>
+        // Check if we have a saved scroll position
+        const savedScrollPos = window.parent.sessionStorage.getItem('streamlit_scroll_position');
+        if (savedScrollPos !== null) {
+            // Small delay to ensure DOM is ready
+            setTimeout(() => {
+                window.parent.document.querySelector('section.main').scrollTop = parseInt(savedScrollPos);
+                // Clear the saved position after restoring
+                window.parent.sessionStorage.removeItem('streamlit_scroll_position');
+            }, 100);
+        }
+    </script>
+""", height=0)
 
 # ============================================================
 # SESSION STATE INITIALIZATION
@@ -513,6 +539,56 @@ def show_match_review_ui(match_results, pptx_product_names):
     if fuzzy_matches:
         st.markdown("### Fuzzy Matches - Confirm Each Match")
         st.caption("Review each suggested match below. Click 'Yes' to confirm, or 'Show Alternatives' to see other options.")
+
+        # Add JavaScript to capture scroll position for fuzzy match buttons
+        components.html("""
+            <script>
+                // Use a MutationObserver to watch for dynamically added buttons
+                const observer = new MutationObserver(function(mutations) {
+                    const buttons = window.parent.document.querySelectorAll('button');
+                    buttons.forEach(button => {
+                        const btnText = button.textContent;
+                        // Only attach if not already attached
+                        if (!button.dataset.scrollCaptureAttached &&
+                            (btnText.includes('Yes, use this slide') ||
+                             btnText.includes('Show alternatives') ||
+                             btnText.includes('Skip this product') ||
+                             btnText.includes('Use this'))) {
+                            button.addEventListener('click', function() {
+                                const scrollPos = window.parent.document.querySelector('section.main').scrollTop;
+                                window.parent.sessionStorage.setItem('streamlit_scroll_position', scrollPos);
+                            });
+                            button.dataset.scrollCaptureAttached = 'true';
+                        }
+                    });
+                });
+
+                // Start observing
+                observer.observe(window.parent.document.body, {
+                    childList: true,
+                    subtree: true
+                });
+
+                // Also run once immediately for existing buttons
+                setTimeout(function() {
+                    const buttons = window.parent.document.querySelectorAll('button');
+                    buttons.forEach(button => {
+                        const btnText = button.textContent;
+                        if (!button.dataset.scrollCaptureAttached &&
+                            (btnText.includes('Yes, use this slide') ||
+                             btnText.includes('Show alternatives') ||
+                             btnText.includes('Skip this product') ||
+                             btnText.includes('Use this'))) {
+                            button.addEventListener('click', function() {
+                                const scrollPos = window.parent.document.querySelector('section.main').scrollTop;
+                                window.parent.sessionStorage.setItem('streamlit_scroll_position', scrollPos);
+                            });
+                            button.dataset.scrollCaptureAttached = 'true';
+                        }
+                    });
+                }, 100);
+            </script>
+        """, height=0)
 
         for idx, result in enumerate(fuzzy_matches):
             st.markdown(f"#### {idx + 1}. {result.gs_product_name}")
@@ -1023,10 +1099,30 @@ with tab1:
     if len(filtered_df) == 0:
         st.warning("No products match your filters. Try adjusting the filter criteria above.")
     else:
-        # Default to expanded if no products in proposal yet, collapsed if products already added
-        default_expanded = len(st.session_state.proposal_products) == 0
+        # Keep catalog expanded if user just added a product, otherwise collapse after first product added
+        if 'keep_catalog_expanded' in st.session_state and st.session_state.keep_catalog_expanded:
+            default_expanded = True
+            st.session_state.keep_catalog_expanded = False  # Reset for next time
+        else:
+            default_expanded = len(st.session_state.proposal_products) == 0
 
         with st.expander(f"Browse Products ({len(filtered_df)} available)", expanded=default_expanded):
+            # Add JavaScript to capture scroll position before button clicks
+            components.html("""
+                <script>
+                    // Store scroll position in sessionStorage before any button click
+                    const buttons = window.parent.document.querySelectorAll('button');
+                    buttons.forEach(button => {
+                        if (button.textContent.includes('Add to Proposal')) {
+                            button.addEventListener('click', function() {
+                                const scrollPos = window.parent.document.querySelector('section.main').scrollTop;
+                                window.parent.sessionStorage.setItem('streamlit_scroll_position', scrollPos);
+                            });
+                        }
+                    });
+                </script>
+            """, height=0)
+
             # Table-style header
             header_col1, header_col2, header_col3, header_col4, header_col5 = st.columns([3, 1.5, 1, 1.2, 1.5])
             with header_col1:
@@ -1087,10 +1183,21 @@ with tab1:
                         # Set success message
                         st.session_state.show_success_message = True
                         st.session_state.success_product_name = product_data['Product/Service']
+
+                        # Keep catalog expanded after adding product
+                        st.session_state.keep_catalog_expanded = True
                         st.rerun()
 
                 # Show additional details inline (no nested expander)
                 st.caption(f"Country: {product_data.get('Country of Origin', 'N/A')} | Tiered Pricing: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
+
+                # Show MSRP if available
+                msrp_raw = product_data.get('MSRP', '')
+                if msrp_raw and str(msrp_raw).strip() and str(msrp_raw).strip() not in ['nan', '', '0', '0.0']:
+                    from src.helpers import clean_price
+                    msrp_value = clean_price(msrp_raw)
+                    if msrp_value and msrp_value > 0:
+                        st.caption(f"💰 Manufacturer's Suggested Retail Price (MSRP): ${msrp_value:.2f}/unit")
 
                 # Show estimated prices at MOQ
                 if moq_cost and estimated_moq:
@@ -1247,134 +1354,134 @@ with tab1:
                 # Calculate MOQ using a standard preliminary quantity (100 units)
                 preliminary_base_price, _, _ = get_unit_price_new_system(product_row, 100)
 
-            if preliminary_base_price is not None:
-                # Estimate total per-unit price with markup (no customization in MOQ calc)
-                temp_markup_multiplier = 1 + (item['markup_percent'] / 100)
-                estimated_unit_price = preliminary_base_price * temp_markup_multiplier
+                if preliminary_base_price is not None:
+                    # Estimate total per-unit price with markup (no customization in MOQ calc)
+                    temp_markup_multiplier = 1 + (item['markup_percent'] / 100)
+                    estimated_unit_price = preliminary_base_price * temp_markup_multiplier
 
-                # Calculate MOQ
-                moq = calculate_moq(estimated_unit_price)
-                if moq is None:
-                    moq = 5
+                    # Calculate MOQ
+                    moq = calculate_moq(estimated_unit_price)
+                    if moq is None:
+                        moq = 5
 
-                # Get actual base price for MOQ quantity
-                moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
+                    # Get actual base price for MOQ quantity
+                    moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
 
-                if moq_base_price is not None:
-                    # Calculate product price WITHOUT customization (for main table)
-                    moq_product_cost = moq_base_price * moq
-                    moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
-                    moq_product_only_total = moq_product_cost + moq_markup_amount
-                    moq_product_price_per_unit = moq_product_only_total / moq
+                    if moq_base_price is not None:
+                        # Calculate product price WITHOUT customization (for main table)
+                        moq_product_cost = moq_base_price * moq
+                        moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
+                        moq_product_only_total = moq_product_cost + moq_markup_amount
+                        moq_product_price_per_unit = moq_product_only_total / moq
 
-                    # Apply marketing rounding if enabled
-                    if st.session_state.proposal_marketing_rounding:
-                        moq_product_price_per_unit = apply_marketing_rounding(moq_product_price_per_unit, True)
-
-                    # Calculate Client Price based on discount and budget
-                    client_price = moq_product_price_per_unit
-                    client_price_note = ""
-
-                    # Get client budget and discount settings
-                    client_budget = st.session_state.get('proposal_client_budget', 0.0)
-                    discount_percent = st.session_state.get('proposal_discount_percent', 0.0)
-
-                    # Check if client budget allows for higher quantity (better pricing)
-                    volume_pricing_applied = False
-                    volume_pricing_quantity = None
-                    if client_budget > 0:
-                        moq_total = moq * moq_product_price_per_unit
-                        if client_budget > moq_total:
-                            # Calculate what quantity the client could afford at MOQ price
-                            potential_quantity = int(client_budget / moq_product_price_per_unit)
-
-                            # Get price at that higher quantity
-                            budget_qty_base_price, _, _ = get_unit_price_new_system(product_row, potential_quantity)
-
-                            if budget_qty_base_price is not None:
-                                # Calculate price at higher quantity with markup
-                                budget_qty_product_cost = budget_qty_base_price * potential_quantity
-                                budget_qty_markup_amount = budget_qty_product_cost * (item['markup_percent'] / 100)
-                                budget_qty_product_only_total = budget_qty_product_cost + budget_qty_markup_amount
-                                budget_qty_price_per_unit = budget_qty_product_only_total / potential_quantity
-
-                                # Apply marketing rounding if enabled
-                                if st.session_state.proposal_marketing_rounding:
-                                    budget_qty_price_per_unit = apply_marketing_rounding(budget_qty_price_per_unit, True)
-
-                                # Use the better price if different from MOQ price
-                                if budget_qty_price_per_unit < moq_product_price_per_unit:
-                                    client_price = budget_qty_price_per_unit
-                                    volume_pricing_applied = True
-                                    volume_pricing_quantity = potential_quantity
-
-                    # Apply discount to client price
-                    discount_applied = False
-                    if discount_percent > 0:
-                        client_price = client_price * (1 - discount_percent / 100)
-                        discount_applied = True
-
-                        # Apply marketing rounding again after discount if enabled
+                        # Apply marketing rounding if enabled
                         if st.session_state.proposal_marketing_rounding:
-                            client_price = apply_marketing_rounding(client_price, True)
+                            moq_product_price_per_unit = apply_marketing_rounding(moq_product_price_per_unit, True)
 
-                    # Build price note for column header
-                    client_price_header = "Client Price"
-                    if discount_applied or volume_pricing_applied:
-                        notes = []
-                        if volume_pricing_applied:
-                            notes.append(f"Price ea @ Qty {volume_pricing_quantity}")
-                        if discount_applied:
-                            discount_type = st.session_state.get('proposal_discount_type')
-                            if discount_type == 'NGO':
-                                notes.append("5% NGO discount")
-                            else:
-                                notes.append(f"{discount_percent:.1f}% discount")
-                        client_price_header = f"Client Price ({', '.join(notes)})"
+                        # Calculate Client Price based on discount and budget
+                        client_price = moq_product_price_per_unit
+                        client_price_note = ""
 
-                    # Build proposal table
-                    col_moq = "MOQ"
-                    col_price = f"Price Ea (@ Qty {moq})"
-                    col_client_price = client_price_header
-                    col_delivery = "Delivery"
+                        # Get client budget and discount settings
+                        client_budget = st.session_state.get('proposal_client_budget', 0.0)
+                        discount_percent = st.session_state.get('proposal_discount_percent', 0.0)
 
-                    proposal_table = pd.DataFrame([{
-                        col_moq: moq,
-                        col_price: f"${moq_product_price_per_unit:.2f}",
-                        col_client_price: f"${client_price:.2f}",
-                        col_delivery: ""
-                    }])
+                        # Check if client budget allows for higher quantity (better pricing)
+                        volume_pricing_applied = False
+                        volume_pricing_quantity = None
+                        if client_budget > 0:
+                            moq_total = moq * moq_product_price_per_unit
+                            if client_budget > moq_total:
+                                # Calculate what quantity the client could afford at MOQ price
+                                potential_quantity = int(client_budget / moq_product_price_per_unit)
 
-                    st.table(proposal_table)
+                                # Get price at that higher quantity
+                                budget_qty_base_price, _, _ = get_unit_price_new_system(product_row, potential_quantity)
 
-                    # Show MOQ calculation note
-                    moq_total_value = moq * moq_product_price_per_unit
-                    st.caption(f"MOQ calculated based on \\$1,000 minimum order value (MOQ {moq} units = \\${moq_total_value:.2f})")
+                                if budget_qty_base_price is not None:
+                                    # Calculate price at higher quantity with markup
+                                    budget_qty_product_cost = budget_qty_base_price * potential_quantity
+                                    budget_qty_markup_amount = budget_qty_product_cost * (item['markup_percent'] / 100)
+                                    budget_qty_product_only_total = budget_qty_product_cost + budget_qty_markup_amount
+                                    budget_qty_price_per_unit = budget_qty_product_only_total / potential_quantity
 
-                    # ALWAYS show customization costs from product data
-                    # Get customization costs from the product data
-                    setup_fee = clean_price(product_row.get('Customization Setup Fee', '')) or 0.0
-                    per_unit_cost = clean_price(product_row.get('Customization Cost per Unit', '')) or 0.0
+                                    # Apply marketing rounding if enabled
+                                    if st.session_state.proposal_marketing_rounding:
+                                        budget_qty_price_per_unit = apply_marketing_rounding(budget_qty_price_per_unit, True)
 
-                    # Display customization costs at the bottom
-                    if setup_fee > 0 or per_unit_cost > 0:
-                        st.caption(f"**Customization available:** Artwork set-up: \\${setup_fee:.2f} / Branding per piece: \\${per_unit_cost:.2f}")
+                                    # Use the better price if different from MOQ price
+                                    if budget_qty_price_per_unit < moq_product_price_per_unit:
+                                        client_price = budget_qty_price_per_unit
+                                        volume_pricing_applied = True
+                                        volume_pricing_quantity = potential_quantity
+
+                        # Apply discount to client price
+                        discount_applied = False
+                        if discount_percent > 0:
+                            client_price = client_price * (1 - discount_percent / 100)
+                            discount_applied = True
+
+                            # Apply marketing rounding again after discount if enabled
+                            if st.session_state.proposal_marketing_rounding:
+                                client_price = apply_marketing_rounding(client_price, True)
+
+                        # Build price note for column header
+                        client_price_header = "Client Price"
+                        if discount_applied or volume_pricing_applied:
+                            notes = []
+                            if volume_pricing_applied:
+                                notes.append(f"Price ea @ Qty {volume_pricing_quantity}")
+                            if discount_applied:
+                                discount_type = st.session_state.get('proposal_discount_type')
+                                if discount_type == 'NGO':
+                                    notes.append("5% NGO discount")
+                                else:
+                                    notes.append(f"{discount_percent:.1f}% discount")
+                            client_price_header = f"Client Price ({', '.join(notes)})"
+
+                        # Build proposal table
+                        col_moq = "MOQ"
+                        col_price = f"Price Ea (@ Qty {moq})"
+                        col_client_price = client_price_header
+                        col_delivery = "Delivery"
+
+                        proposal_table = pd.DataFrame([{
+                            col_moq: moq,
+                            col_price: f"${moq_product_price_per_unit:.2f}",
+                            col_client_price: f"${client_price:.2f}",
+                            col_delivery: ""
+                        }])
+
+                        st.table(proposal_table)
+
+                        # Show MOQ calculation note
+                        moq_total_value = moq * moq_product_price_per_unit
+                        st.caption(f"MOQ calculated based on \\$1,000 minimum order value (MOQ {moq} units = \\${moq_total_value:.2f})")
+
+                        # ALWAYS show customization costs from product data
+                        # Get customization costs from the product data
+                        setup_fee = clean_price(product_row.get('Customization Setup Fee', '')) or 0.0
+                        per_unit_cost = clean_price(product_row.get('Customization Cost per Unit', '')) or 0.0
+
+                        # Display customization costs at the bottom
+                        if setup_fee > 0 or per_unit_cost > 0:
+                            st.caption(f"**Customization available:** Artwork set-up: \\${setup_fee:.2f} / Branding per piece: \\${per_unit_cost:.2f}")
+                        else:
+                            st.caption("**Customization available:** Contact for pricing")
+
+                        # Add download button for this product's proposal table
+                        proposal_csv = proposal_table.to_csv(index=False)
+                        st.download_button(
+                            label=f"Download Product {idx} Proposal (CSV)",
+                            data=proposal_csv,
+                            file_name=f"proposal_product_{idx}_{item['product_data']['Product/Service'].replace(' ', '_')}.csv",
+                            mime="text/csv",
+                            key=f"download_proposal_{idx}"
+                        )
                     else:
-                        st.caption("**Customization available:** Contact for pricing")
-
-                    # Add download button for this product's proposal table
-                    proposal_csv = proposal_table.to_csv(index=False)
-                    st.download_button(
-                        label=f"Download Product {idx} Proposal (CSV)",
-                        data=proposal_csv,
-                        file_name=f"proposal_product_{idx}_{item['product_data']['Product/Service'].replace(' ', '_')}.csv",
-                        mime="text/csv",
-                        key=f"download_proposal_{idx}"
-                    )
+                        st.warning(f"Unable to calculate MOQ pricing for {item['product_data']['Product/Service']}")
                 else:
-                    st.warning(f"Unable to calculate MOQ pricing for {item['product_data']['Product/Service']}")
-            else:
-                st.warning(f"Product data not available for {item['product_data']['Product/Service']}")
+                    st.warning(f"Product data not available for {item['product_data']['Product/Service']}")
 
             st.markdown("")
 
@@ -1600,6 +1707,33 @@ with tab1:
         st.divider()
         st.subheader("4. Generate PowerPoint Proposal (BETA)")
         st.caption("Automatically create a customized PowerPoint presentation for your client")
+
+        # Add JavaScript to capture scroll position before PowerPoint section button clicks
+        components.html("""
+            <script>
+                const buttons = window.parent.document.querySelectorAll('button');
+                buttons.forEach(button => {
+                    const btnText = button.textContent;
+                    if (btnText.includes('Save Manual Match') ||
+                        btnText.includes('Delete') ||
+                        btnText.includes('Review Matches & Generate PowerPoint') ||
+                        btnText.includes('Yes, use this slide') ||
+                        btnText.includes('Show alternatives') ||
+                        btnText.includes('Skip this product') ||
+                        btnText.includes('Use this') ||
+                        btnText.includes('Override') ||
+                        btnText.includes('Apply') ||
+                        btnText.includes('Cancel') ||
+                        btnText.includes('Reset Confirmations') ||
+                        btnText.includes('Close')) {
+                        button.addEventListener('click', function() {
+                            const scrollPos = window.parent.document.querySelector('section.main').scrollTop;
+                            window.parent.sessionStorage.setItem('streamlit_scroll_position', scrollPos);
+                        });
+                    }
+                });
+            </script>
+        """, height=0)
 
         # ============================================================
         # MANUAL MATCH OVERRIDE UI
