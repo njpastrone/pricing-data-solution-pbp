@@ -1531,8 +1531,8 @@ with tab1:
     if len(st.session_state.proposal_products) == 0:
         st.caption("Add products to generate proposal tables")
     else:
-        # Default to expanded, but allow collapsing to save space
-        with st.expander(f"View Proposal Tables ({len(st.session_state.proposal_products)} products)", expanded=True):
+        # Default to collapsed to save space, user can expand to view
+        with st.expander(f"View Proposal Tables ({len(st.session_state.proposal_products)} products)", expanded=False):
             st.markdown("Each product is presented in a separate table with MOQ pricing.")
             st.markdown("")
 
