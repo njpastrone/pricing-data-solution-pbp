@@ -1,7 +1,7 @@
 """
 Peace by Piece International - Order Management System
 4-tab workflow: Proposals → Client Order Forms → Order & Client Info → Execution & Accounting
-Version: 6.4 (Set Prices to MSRP)
+Version: 6.5 (MSRP Pricing as Default Checkbox)
 """
 
 import streamlit as st
@@ -37,6 +37,39 @@ from src.pricing_engine import (
     calculate_order_total
 )
 from src.slide_matcher import SlideMatcher
+
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+def calculate_msrp_markup(product_data):
+    """
+    Calculate markup percentage required to match MSRP price.
+    Returns the markup if MSRP is available and valid, otherwise returns 100.0 (default).
+
+    Args:
+        product_data (dict): Product data dictionary containing MSRP and pricing info
+
+    Returns:
+        float: Markup percentage (0 if MSRP is below cost, calculated value if valid, 100.0 if no MSRP)
+    """
+    # Get MSRP
+    msrp = clean_price(product_data.get('MSRP', ''))
+
+    if msrp and msrp > 0:
+        # Get base cost at quantity 100 as reference
+        base_cost, _, _ = get_unit_price_new_system(product_data, 100)
+
+        if base_cost and base_cost > 0:
+            # Calculate required markup % to reach MSRP
+            # Formula: MSRP = cost * (1 + markup/100)
+            # Therefore: markup = ((MSRP / cost) - 1) * 100
+            required_markup = ((msrp / base_cost) - 1) * 100
+
+            # Don't allow negative markup (selling below cost)
+            return max(0.0, required_markup)
+
+    # No valid MSRP or cost, return default 100% markup
+    return 100.0
 
 # ============================================================
 # PAGE CONFIGURATION
@@ -150,6 +183,9 @@ if 'proposal_products' not in st.session_state:
 
 if 'proposal_marketing_rounding' not in st.session_state:
     st.session_state.proposal_marketing_rounding = False
+
+if 'proposal_use_msrp' not in st.session_state:
+    st.session_state.proposal_use_msrp = True  # Default to checked (use MSRP)
 
 if 'configuring_product' not in st.session_state:
     st.session_state.configuring_product = None
@@ -1220,11 +1256,17 @@ with tab1:
                 with col2:
                     if new_count > 0:
                         if st.button(f"Add {new_count} Products", type="primary", use_container_width=True, key="bulk_add_button"):
-                            # Add all new products to proposal
+                            # Add all new products to proposal with MSRP or 100% markup
                             for product_row in new_products:
+                                # Determine markup: use MSRP if enabled, otherwise 100%
+                                if st.session_state.proposal_use_msrp:
+                                    markup = calculate_msrp_markup(product_row.to_dict())
+                                else:
+                                    markup = 100.0
+
                                 proposal_item = {
                                     'product_data': product_row.to_dict(),
-                                    'markup_percent': 100.0
+                                    'markup_percent': markup
                                 }
                                 st.session_state.proposal_products.append(proposal_item)
 
@@ -1315,11 +1357,17 @@ with tab1:
                         st.markdown("—")
 
                 with col5:
-                    # Add button - adds product to proposal with 100% markup default
+                    # Add button - adds product to proposal with MSRP or 100% markup
                     if st.button("Add to Proposal", key=f"add_{idx}", use_container_width=True, type="primary"):
+                        # Determine markup: use MSRP if enabled, otherwise 100%
+                        if st.session_state.proposal_use_msrp:
+                            markup = calculate_msrp_markup(product_data.to_dict())
+                        else:
+                            markup = 100.0
+
                         proposal_item = {
                             'product_data': product_data.to_dict(),
-                            'markup_percent': 100.0
+                            'markup_percent': markup
                         }
                         st.session_state.proposal_products.append(proposal_item)
 
@@ -1410,60 +1458,20 @@ with tab1:
                 st.session_state.proposal_discount_percent = 0.0
 
         with col3:
+            # Use MSRP pricing checkbox (defaults to checked)
+            st.session_state.proposal_use_msrp = st.checkbox(
+                "Use MSRP pricing when available",
+                value=st.session_state.proposal_use_msrp,
+                key="proposal_use_msrp_checkbox",
+                help="When enabled, products with MSRP will have markup automatically calculated to match MSRP. Products without MSRP will use 100% markup."
+            )
+
             # Marketing rounding
             st.session_state.proposal_marketing_rounding = st.checkbox(
                 "Apply marketing rounding (e.g., $60 → $59)",
                 value=st.session_state.proposal_marketing_rounding,
                 key="proposal_marketing_rounding_checkbox"
             )
-
-            st.markdown("")  # Add spacing
-
-            # Set prices to MSRP button
-            if st.button("Set All Prices to MSRP", type="primary", use_container_width=True, help="Automatically calculate markup % to match MSRP for products that have it"):
-                updated_count = 0
-                no_msrp_count = 0
-                below_cost_count = 0
-
-                for item in st.session_state.proposal_products:
-                    product_data = item['product_data']
-
-                    # Get MSRP
-                    msrp = clean_price(product_data.get('MSRP', ''))
-
-                    if msrp and msrp > 0:
-                        # Get base cost at quantity 100 as reference
-                        base_cost, _, _ = get_unit_price_new_system(product_data, 100)
-
-                        if base_cost and base_cost > 0:
-                            # Calculate required markup % to reach MSRP
-                            # Formula: MSRP = cost * (1 + markup/100)
-                            # Therefore: markup = ((MSRP / cost) - 1) * 100
-                            required_markup = ((msrp / base_cost) - 1) * 100
-
-                            # Don't allow negative markup (selling below cost)
-                            if required_markup < 0:
-                                item['markup_percent'] = 0.0
-                                below_cost_count += 1
-                            else:
-                                item['markup_percent'] = required_markup
-                                updated_count += 1
-                        else:
-                            # Can't calculate cost, skip
-                            no_msrp_count += 1
-                    else:
-                        # No MSRP available, skip
-                        no_msrp_count += 1
-
-                # Show feedback
-                if updated_count > 0:
-                    st.success(f"Updated {updated_count} product(s) to MSRP pricing")
-                if below_cost_count > 0:
-                    st.warning(f"{below_cost_count} product(s) have MSRP below cost (set to 0% markup / break-even)")
-                if no_msrp_count > 0:
-                    st.info(f"{no_msrp_count} product(s) have no MSRP (kept current markup)")
-
-                st.rerun()
 
         st.divider()
 

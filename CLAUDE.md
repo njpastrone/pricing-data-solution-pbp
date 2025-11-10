@@ -111,12 +111,14 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
     - Preview count before adding (shows new vs duplicate products)
     - Respects all active filters (price, partner, country)
 - **Proposal Configuration (Section 2):**
-  - Editable markup % per product (defaults to 100%)
-  - **Set All Prices to MSRP:** One-click button to match all product prices to MSRP
-    - Automatically calculates markup % needed to reach MSRP
-    - Products without MSRP keep 100% default markup
+  - **Use MSRP Pricing (Checkbox - Default: ON):** Automatically calculates markup to match MSRP
+    - When enabled: Products added with MSRP will have markup auto-calculated to match MSRP
+    - When disabled: All products use 100% markup (standard 2x pricing)
+    - Applies to both individual and bulk product adds
+    - Products without MSRP always use 100% markup
     - Handles edge cases: MSRP below cost set to 0% (break-even)
-    - Still manually editable after MSRP is set
+    - Markup still manually editable after products are added
+  - Editable markup % per product in table
   - Client discount options (NGO 5% preset or custom)
   - Marketing rounding (charm pricing: $60 → $59)
   - Customization options and MSRP comparison display
@@ -269,23 +271,27 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.4 - Set Prices to MSRP
+**Version:** 6.5 - MSRP Pricing as Default Checkbox
 
 **Last Updated:** 2025-11-10
 
-**Recent Improvements (2025-11-10 - v6.4):**
-- ✅ **Set All Prices to MSRP (New Feature):**
-  - Added "Set All Prices to MSRP" button in Tab 1 Section 2 (Proposal Configuration)
-  - One-click automatic markup calculation to match manufacturer suggested retail prices
+**Recent Improvements (2025-11-10 - v6.5):**
+- ✅ **MSRP Pricing Checkbox (Improved UX):**
+  - Converted "Set All Prices to MSRP" button → "Use MSRP pricing when available" checkbox
+  - **Defaults to CHECKED** - MSRP pricing applied automatically when products are added
+  - Applies to both individual "Add to Proposal" and "Bulk Add" actions
+  - Works at add-time (not retroactive) - more intuitive user experience
   - Smart calculation: markup % = ((MSRP / cost) - 1) × 100
-  - Uses base cost at quantity=100 as reference for tiered pricing products
-  - Edge case handling:
-    - No MSRP: Keeps current markup (100% default)
-    - MSRP below cost: Sets to 0% markup (break-even, won't sell below cost)
-    - Invalid cost: Skips product (no change)
-  - User feedback: Shows count of updated/skipped/below-cost products
-  - Markup still manually editable after MSRP is set
-  - Markup % automatically flows to proposal tables and order fulfillment
+  - Products without MSRP automatically use 100% markup
+  - Edge case: MSRP below cost → 0% markup (break-even)
+  - Markup still manually editable in product table after adding
+  - Helper function: `calculate_msrp_markup()` for consistent calculation
+- ✅ **Enhanced Products in Proposal Table:**
+  - Added "PBP Cost" column showing base cost at quantity 100
+  - Added "Client Price" column showing final price (cost + markup)
+  - New layout: Product | PBP Cost | Markup % | Client Price | MSRP | Remove
+  - Real-time client price updates when markup % is changed
+  - Better visibility into pricing structure and profit margins
 
 **Recent Improvements (2025-11-10 - v6.3):**
 - ✅ **Bulk Add Products from Partner(s) (New Feature):**
