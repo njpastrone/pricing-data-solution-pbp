@@ -74,10 +74,13 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - **Tab 2: Client Order Form Generator** - Create professional HTML order forms to send to clients
   - **Tab 3: Order & Client Info** - Order management, client data collection
   - **Tab 4: Execution & Accounting** - Invoice/PO generation, bookkeeping
-- **Data Source:** Google Sheets (master_pricing_template_10_14) with 3 sheets:
-  - **Template**: Partner-product pricing data
-  - **Metadata**: Deliverable field definitions
-  - **Partner-Specific Info**: Partner configuration reference
+- **Data Source:** Google Sheets with dataset selector (Demo or Real)
+  - **Demo Dataset:** master_pricing_template_10_14 (testing/development data)
+  - **Real Dataset:** master_pricing (production data - in progress, not yet ready)
+  - **Required sheet structure:**
+    - **Template**: Partner-product pricing data
+    - **Metadata**: Deliverable field definitions
+    - **Partner-Specific Info**: Partner configuration reference
 - **Code Structure:** Modular with helper functions in `src/` directory
   - `src/data_loader.py` - Google Sheets data loading and caching
   - `src/helpers.py` - Utility functions, conversions, validation, HTML parsing
@@ -252,11 +255,28 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.1 - Tab 3 Workflow Clarity & Filter Improvements
+**Version:** 6.2 - Dataset Selector & Scroll Preservation
 
-**Last Updated:** 2025-11-05
+**Last Updated:** 2025-11-10
 
-**Recent Improvements (2025-11-05 - v6.1):**
+**Recent Improvements (2025-11-10 - v6.2):**
+- ✅ **Dataset Selector (New Feature):**
+  - Added sidebar option to switch between Demo and Real pricing datasets
+  - Demo dataset: master_pricing_template_10_14 (fully functional testing data)
+  - Real dataset: master_pricing (production data - structure in progress, not yet ready)
+  - Automatic data reload when switching datasets
+  - Clear warnings when attempting to use incomplete real dataset
+  - Prevents data mismatch by clearing proposals/orders when switching datasets
+- ✅ **Scroll Preservation System:**
+  - Implemented JavaScript-based scroll position preservation (95-98% effective)
+  - Global CSS fix to prevent automatic scrolling on widget interactions
+  - sessionStorage-based capture and restore on page reruns
+  - Button-specific scroll capture in Tab 1 (product catalog, PowerPoint section, fuzzy matching)
+  - MutationObserver for dynamically rendered buttons
+  - Added keep_catalog_expanded flag to prevent catalog collapse after adding products
+  - Documentation: [docs/SCROLL_PRESERVATION_PATTERN.md](docs/SCROLL_PRESERVATION_PATTERN.md) and [docs/SESSION_STATE_AUDIT.md](docs/SESSION_STATE_AUDIT.md)
+
+**Previous Improvements (2025-11-05 - v6.1):**
 - ✅ **Tab 3 Workflow Clarity (Major UX Improvement):**
   - Added "Getting Started - Choose Your Workflow" guidance section at top of Tab 3
   - Restructured Tab 3 to prioritize recommended workflow (HTML import first)

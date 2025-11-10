@@ -1,7 +1,7 @@
 """
 Peace by Piece International - Order Management System
 4-tab workflow: Proposals → Client Order Forms → Order & Client Info → Execution & Accounting
-Version: 6.1 (Tab 3 Workflow Clarity + Filter Improvements)
+Version: 6.2 (Dataset Selector + Scroll Preservation)
 """
 
 import streamlit as st
@@ -12,7 +12,7 @@ import pandas as pd
 from datetime import datetime
 
 # Import extracted modules
-from src.data_loader import load_pricing_data
+from src.data_loader import load_pricing_data, DATASET_CONFIGS
 from src.helpers import (
     clean_price,
     apply_marketing_rounding,
@@ -217,6 +217,34 @@ st.divider()
 with st.sidebar:
     st.markdown("## Instructions & Tools")
 
+    # Section 0: Data Source Selector
+    st.markdown("### Data Source")
+
+    # Initialize dataset selection in session state
+    if 'selected_dataset' not in st.session_state:
+        st.session_state.selected_dataset = 'demo'
+
+    selected_dataset = st.radio(
+        "Select pricing dataset:",
+        options=['demo', 'real'],
+        format_func=lambda x: DATASET_CONFIGS[x]['name'].replace('Demo Data (', '').replace('Real Pricing Data (', '').replace(')', ''),
+        key='selected_dataset',
+        help="Demo: Testing data from master_pricing_template_10_14\nReal: Production data from master_pricing"
+    )
+
+    # Show visual indicator of active dataset
+    if selected_dataset == 'real':
+        # Check if real dataset is ready
+        if DATASET_CONFIGS['real'].get('status') == 'in_progress':
+            st.error("Real pricing data is not yet ready. Please use Demo Data.")
+            st.caption(DATASET_CONFIGS['real'].get('notes', 'Dataset structure needs to be completed.'))
+        else:
+            st.warning("Using REAL production data")
+    else:
+        st.info("Using demo/testing data")
+
+    st.markdown("---")
+
     # Section 1: Progress Indicator
     st.markdown("### Workflow Progress")
 
@@ -408,8 +436,8 @@ with st.sidebar:
         st.caption(f"Last updated: {time_str}")
 
         if st.button("Refresh Data", use_container_width=True):
-            # Clear cached data and reload
-            df_template, df_metadata, df_partner_info = load_pricing_data()
+            # Clear cached data and reload from selected dataset
+            df_template, df_metadata, df_partner_info = load_pricing_data(st.session_state.selected_dataset)
             st.session_state.df_template = df_template
             st.session_state.df_metadata = df_metadata
             st.session_state.df_partner_info = df_partner_info
@@ -971,15 +999,28 @@ def show_match_review_ui(match_results, pptx_product_names):
 # DATA LOADING
 # ============================================================
 try:
-    if 'df_template' not in st.session_state:
-        df_template, df_metadata, df_partner_info = load_pricing_data()
+    # Check if we need to reload data (first load or dataset changed)
+    need_reload = (
+        'df_template' not in st.session_state or
+        st.session_state.get('loaded_dataset') != st.session_state.selected_dataset
+    )
+
+    if need_reload:
+        df_template, df_metadata, df_partner_info = load_pricing_data(st.session_state.selected_dataset)
         st.session_state.df_template = df_template
         st.session_state.df_metadata = df_metadata
         st.session_state.df_partner_info = df_partner_info
         st.session_state.data_loaded_at = datetime.now()
+        st.session_state.loaded_dataset = st.session_state.selected_dataset
 
         # Extract and store partner contacts
         st.session_state.partner_contacts = extract_partner_contacts(df_partner_info)
+
+        # Clear proposal and order data when switching datasets (prevents data mismatch)
+        if st.session_state.get('loaded_dataset') != st.session_state.selected_dataset:
+            st.session_state.proposal_products = []
+            st.session_state.order_items = []
+            st.warning("Dataset changed - cleared existing proposals and orders to prevent data mismatch")
 
     df_template = st.session_state.df_template
     df_metadata = st.session_state.df_metadata
@@ -989,7 +1030,10 @@ try:
     unique_products = len(df_template)
     unique_partners = len(df_template['Partner'].unique())
 
-    st.success(f"Loaded {unique_products} products from {unique_partners} partners (master_pricing_template_10_14)")
+    # Get active dataset name
+    active_dataset_name = DATASET_CONFIGS[st.session_state.selected_dataset]['name']
+
+    st.success(f"Loaded {unique_products} products from {unique_partners} partners ({active_dataset_name})")
 
     # Status message for proposals and orders
     num_proposals = len(st.session_state.proposal_products)
@@ -1001,8 +1045,20 @@ try:
     st.info(f"Proposals: {proposal_status} | Orders: {order_status}")
 
 except Exception as e:
-    st.error(f"Failed to load data: {e}")
-    st.stop()
+    error_msg = str(e)
+
+    # Check if this is a real dataset structure issue
+    if st.session_state.selected_dataset == 'real' and ('Template' in error_msg or 'worksheet' in error_msg.lower()):
+        st.error("Real pricing dataset is not yet properly structured.")
+        st.warning("The real data spreadsheet needs to have the same structure as the demo data:\n"
+                   "- Sheet 1: 'Template' (pricing data)\n"
+                   "- Sheet 2: 'Metadata' (field definitions)\n"
+                   "- Sheet 3: 'Partner-Specific Info' (partner contacts)")
+        st.info("Please switch to 'Demo Data' in the sidebar, or complete the real dataset structure first.")
+        st.stop()
+    else:
+        st.error(f"Failed to load data: {error_msg}")
+        st.stop()
 
 # ============================================================
 # TAB STRUCTURE

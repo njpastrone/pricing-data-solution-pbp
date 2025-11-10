@@ -3,7 +3,7 @@ Data Loader Module for PBP Pricing App
 
 This module handles all Google Sheets integration:
 - Connection to Google Sheets API
-- Loading pricing data from master_pricing_template_10_14
+- Loading pricing data from multiple datasets (demo or real)
 - Data caching with TTL
 - Data frame processing and cleanup
 
@@ -17,6 +17,25 @@ import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
+
+
+# Dataset configurations for demo and real pricing data
+DATASET_CONFIGS = {
+    'demo': {
+        'name': 'Demo Data (master_pricing_template_10_14)',
+        'url': 'https://docs.google.com/spreadsheets/d/1TSw50v7ydNSDdREkKRaM00LCg3-vj-ZcVNoYL9u8Lxs',
+        'description': 'Testing template with sample data',
+        'spreadsheet_id': '1TSw50v7ydNSDdREkKRaM00LCg3-vj-ZcVNoYL9u8Lxs'
+    },
+    'real': {
+        'name': 'Real Pricing Data (master_pricing)',
+        'url': 'https://docs.google.com/spreadsheets/d/1XjdC8l9_mjvNElkY2_Bu6_IXoarfIuVyIjMH5Hfm5Ms',
+        'description': 'Production pricing data - currently being updated',
+        'spreadsheet_id': '1XjdC8l9_mjvNElkY2_Bu6_IXoarfIuVyIjMH5Hfm5Ms',
+        'status': 'in_progress',  # Not yet ready - missing Template, Metadata, Partner-Specific Info sheets
+        'notes': 'Real data structure is different from demo. Currently only has Sheet1. Needs restructuring to match demo format.'
+    }
+}
 
 
 @st.cache_resource
@@ -45,11 +64,16 @@ def connect_to_sheets():
 
 
 @st.cache_data(ttl=300, show_spinner="Loading pricing data from Google Sheets...")  # Cache data for 5 minutes
-def load_pricing_data():
+def load_pricing_data(dataset='demo'):
     """
-    Load pricing data from master_pricing_template_10_14 Google Sheet.
+    Load pricing data from selected Google Sheet dataset (demo or real).
     Loads three sheets: Template, Metadata, Partner-Specific Info
     Returns three DataFrames.
+
+    Args:
+        dataset (str): Dataset to load ('demo' or 'real'). Defaults to 'demo'.
+            - 'demo': master_pricing_template_10_14 (testing data)
+            - 'real': master_pricing (production data)
 
     Returns:
         tuple: (df_template, df_metadata, df_partner_info)
@@ -59,6 +83,7 @@ def load_pricing_data():
 
     Raises:
         Exception: If spreadsheet not found or sheets cannot be loaded
+        KeyError: If invalid dataset name provided
 
     Data Structure:
         Template Sheet:
@@ -78,16 +103,26 @@ def load_pricing_data():
             - Filters out rows with empty Partner column
 
     Example:
-        >>> df_template, df_metadata, df_partner_info = load_pricing_data()
+        >>> # Load demo data
+        >>> df_template, df_metadata, df_partner_info = load_pricing_data('demo')
         >>> print(len(df_template))
         42  # 42 products loaded
+
+        >>> # Load real production data
+        >>> df_template, df_metadata, df_partner_info = load_pricing_data('real')
         >>> print(df_template['Partner'].unique())
         ['Partner X', 'Partner Y']
     """
     gc = connect_to_sheets()
 
+    # Get configuration for selected dataset
+    if dataset not in DATASET_CONFIGS:
+        raise KeyError(f"Invalid dataset '{dataset}'. Must be 'demo' or 'real'.")
+
+    config = DATASET_CONFIGS[dataset]
+    spreadsheet_url = config['url']
+
     # Open by URL (more reliable than by name)
-    spreadsheet_url = "https://docs.google.com/spreadsheets/d/1TSw50v7ydNSDdREkKRaM00LCg3-vj-ZcVNoYL9u8Lxs"
     spreadsheet = gc.open_by_url(spreadsheet_url)
 
     # ========== LOAD TEMPLATE SHEET ==========
