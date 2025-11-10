@@ -1,7 +1,7 @@
 """
 Peace by Piece International - Order Management System
 4-tab workflow: Proposals → Client Order Forms → Order & Client Info → Execution & Accounting
-Version: 6.2 (Dataset Selector + Scroll Preservation)
+Version: 6.3 (Bulk Add Partners to Proposal)
 """
 
 import streamlit as st
@@ -1151,6 +1151,93 @@ with tab1:
     if 'show_success_message' in st.session_state and st.session_state.show_success_message:
         st.success(f"Added **{st.session_state.success_product_name}** to proposal!")
         st.session_state.show_success_message = False
+
+    # Bulk add success message
+    if 'show_bulk_success_message' in st.session_state and st.session_state.show_bulk_success_message:
+        st.success(f"{st.session_state.bulk_success_message}")
+        st.session_state.show_bulk_success_message = False
+
+    # ============================================================
+    # BULK ACTIONS SECTION
+    # ============================================================
+    if len(filtered_df) > 0:
+        with st.expander("Bulk Actions - Add All Products from Partner(s)", expanded=False):
+            st.caption("Quickly add all products from one or more partners to your proposal")
+
+            # Add JavaScript to capture scroll position for bulk add button
+            components.html("""
+                <script>
+                    // Store scroll position before bulk add button click
+                    const buttons = window.parent.document.querySelectorAll('button');
+                    buttons.forEach(button => {
+                        if (button.textContent.includes('Add') && button.textContent.includes('Products')) {
+                            button.addEventListener('click', function() {
+                                const scrollPos = window.parent.document.querySelector('section.main').scrollTop;
+                                window.parent.sessionStorage.setItem('streamlit_scroll_position', scrollPos);
+                            });
+                        }
+                    });
+                </script>
+            """, height=0)
+
+            # Get unique partners from filtered results
+            available_partners = sorted(filtered_df["Partner"].unique().tolist())
+
+            # Partner selection for bulk add
+            bulk_partners = st.multiselect(
+                "Select partner(s) to add all their products:",
+                options=available_partners,
+                key="bulk_add_partners",
+                help="All products from selected partners will be added (filtered products only)"
+            )
+
+            if bulk_partners:
+                # Count how many new products would be added
+                products_to_add = filtered_df[filtered_df["Partner"].isin(bulk_partners)]
+
+                # Get existing product names in proposal
+                existing_products = {item['product_data']['Product/Service'] for item in st.session_state.proposal_products}
+
+                # Filter out duplicates
+                new_products = []
+                for idx, row in products_to_add.iterrows():
+                    if row['Product/Service'] not in existing_products:
+                        new_products.append(row)
+
+                new_count = len(new_products)
+                duplicate_count = len(products_to_add) - new_count
+
+                # Show counts
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    if new_count > 0:
+                        st.info(f"Will add **{new_count} new product(s)** from {', '.join(bulk_partners)}")
+                        if duplicate_count > 0:
+                            st.caption(f"({duplicate_count} already in proposal, will be skipped)")
+                    else:
+                        st.warning(f"All {len(products_to_add)} product(s) from selected partners are already in your proposal")
+
+                with col2:
+                    if new_count > 0:
+                        if st.button(f"Add {new_count} Products", type="primary", use_container_width=True, key="bulk_add_button"):
+                            # Add all new products to proposal
+                            for product_row in new_products:
+                                proposal_item = {
+                                    'product_data': product_row.to_dict(),
+                                    'markup_percent': 100.0
+                                }
+                                st.session_state.proposal_products.append(proposal_item)
+
+                            # Set success message
+                            partner_names = ', '.join(bulk_partners)
+                            st.session_state.show_bulk_success_message = True
+                            st.session_state.bulk_success_message = f"Added **{new_count} products** from {partner_names} to proposal!"
+
+                            # Keep catalog expanded after bulk add
+                            st.session_state.keep_catalog_expanded = True
+                            st.rerun()
+            else:
+                st.caption("Select one or more partners above to see product count")
 
     if len(filtered_df) == 0:
         st.warning("No products match your filters. Try adjusting the filter criteria above.")

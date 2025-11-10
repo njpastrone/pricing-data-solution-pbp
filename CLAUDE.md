@@ -105,6 +105,11 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - Collapsible product catalog (auto-collapses after adding products)
   - Filter by price range, partner, country of origin
   - View product details inline (country, tiered pricing, MOQ estimates, descriptions)
+  - **Bulk Actions:** Add all products from one or more partners at once
+    - Select multiple partners and add all their products with one click
+    - Smart duplicate detection (skips products already in proposal)
+    - Preview count before adding (shows new vs duplicate products)
+    - Respects all active filters (price, partner, country)
 - **Proposal Configuration (Section 2):** Quantity, markup %, customization options, MSRP comparison
 - **Proposal Tables (Section 3):**
   - Collapsible MOQ-based pricing tables
@@ -255,9 +260,20 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.2 - Dataset Selector & Scroll Preservation
+**Version:** 6.3 - Bulk Add Partners to Proposal
 
 **Last Updated:** 2025-11-10
+
+**Recent Improvements (2025-11-10 - v6.3):**
+- ✅ **Bulk Add Products from Partner(s) (New Feature):**
+  - Added "Bulk Actions" section in Tab 1 for quickly adding all products from selected partners
+  - Multi-select partner dropdown to choose one or more partners
+  - Smart duplicate detection: automatically skips products already in proposal
+  - Preview count shows new vs duplicate products before adding
+  - Respects all active filters (client budget, partner, country filters)
+  - Success message shows count and partner names
+  - Scroll position preserved after bulk add
+  - Uses 100% markup default (same as individual product adds)
 
 **Recent Improvements (2025-11-10 - v6.2):**
 - ✅ **Dataset Selector (New Feature - Production Ready):**
