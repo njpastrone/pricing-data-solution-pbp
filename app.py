@@ -1,7 +1,7 @@
 """
 Peace by Piece International - Order Management System
 4-tab workflow: Proposals → Client Order Forms → Order & Client Info → Execution & Accounting
-Version: 6.5 (MSRP Pricing as Default Checkbox)
+Version: 6.7 (Saved Orders with Google Sheets Backend)
 """
 
 import streamlit as st
@@ -37,6 +37,18 @@ from src.pricing_engine import (
     calculate_order_total
 )
 from src.slide_matcher import SlideMatcher
+from src.proposal_manager import (
+    save_proposal,
+    load_all_proposals,
+    load_proposal_data,
+    delete_proposal
+)
+from src.order_manager import (
+    save_order,
+    load_all_orders,
+    load_order_data,
+    delete_order
+)
 
 # ============================================================
 # HELPER FUNCTIONS
@@ -186,6 +198,10 @@ if 'proposal_marketing_rounding' not in st.session_state:
 
 if 'proposal_use_msrp' not in st.session_state:
     st.session_state.proposal_use_msrp = True  # Default to checked (use MSRP)
+
+# Initialize order MSRP preference
+if 'order_use_msrp' not in st.session_state:
+    st.session_state.order_use_msrp = True  # Default to checked (use MSRP)
 
 if 'configuring_product' not in st.session_state:
     st.session_state.configuring_product = None
@@ -1407,6 +1423,161 @@ with tab1:
     st.divider()
     st.subheader("2. Proposal Preview & Settings")
 
+    # ============================================================
+    # SAVED PROPOSALS SECTION (Always visible)
+    # ============================================================
+    with st.expander("Saved Proposals", expanded=False):
+        st.caption("Save your current proposal or load a previously saved one")
+
+        # Load all saved proposals
+        saved_proposals = load_all_proposals()
+
+        # Two columns: Load/Delete on left, Save on right
+        load_col, save_col = st.columns(2)
+
+        with load_col:
+            st.markdown("**Load Proposal**")
+
+            if len(saved_proposals) == 0:
+                st.info("No saved proposals yet")
+            else:
+                # Create dropdown options
+                proposal_options = {
+                    f"{p['name']} ({p['created_date'][:10]})": p['proposal_id']
+                    for p in saved_proposals
+                }
+
+                selected_proposal_label = st.selectbox(
+                    "Select proposal to load:",
+                    options=list(proposal_options.keys()),
+                    key="load_proposal_select"
+                )
+
+                if selected_proposal_label:
+                    selected_proposal_id = proposal_options[selected_proposal_label]
+
+                    # Find full proposal data
+                    selected_proposal = next(p for p in saved_proposals if p['proposal_id'] == selected_proposal_id)
+
+                    # Show preview
+                    st.caption(f"**Created by:** {selected_proposal['created_by'] or 'Unknown'}")
+                    st.caption(f"**Dataset:** {selected_proposal['dataset']}")
+
+                    # Load and Delete buttons
+                    load_btn_col, delete_btn_col = st.columns(2)
+
+                    with load_btn_col:
+                        if st.button("Load", key="load_proposal_btn", type="primary", use_container_width=True):
+                            success, proposal_data, dataset = load_proposal_data(selected_proposal_id)
+
+                            if success:
+                                # Check if dataset matches
+                                if dataset != st.session_state.selected_dataset:
+                                    st.warning(f"⚠️ This proposal was created with {dataset} dataset, but you're currently using {st.session_state.selected_dataset} dataset. Loading anyway...")
+
+                                # Load proposal data into session state
+                                st.session_state.proposal_products = proposal_data.get('proposal_products', [])
+                                st.session_state.proposal_marketing_rounding = proposal_data.get('proposal_marketing_rounding', False)
+                                st.session_state.proposal_use_msrp = proposal_data.get('proposal_use_msrp', True)
+                                st.session_state.proposal_discount_type = proposal_data.get('proposal_discount_type', None)
+                                st.session_state.proposal_discount_percent = proposal_data.get('proposal_discount_percent', 0.0)
+                                st.session_state.proposal_client_budget = proposal_data.get('proposal_client_budget', 0.0)
+
+                                st.success(f"✅ Loaded proposal: {selected_proposal['name']}")
+                                st.rerun()
+                            else:
+                                st.error("Failed to load proposal data")
+
+                    with delete_btn_col:
+                        if st.button("Delete", key="delete_proposal_btn", use_container_width=True):
+                            # Confirmation dialog using session state
+                            if 'confirm_delete_proposal_id' not in st.session_state:
+                                st.session_state.confirm_delete_proposal_id = selected_proposal_id
+                                st.warning(f"⚠️ Are you sure you want to delete '{selected_proposal['name']}'?")
+
+                                confirm_col1, confirm_col2 = st.columns(2)
+                                with confirm_col1:
+                                    if st.button("Yes, Delete", key="confirm_delete_yes", type="primary"):
+                                        success, message = delete_proposal(st.session_state.confirm_delete_proposal_id)
+                                        if success:
+                                            st.success(message)
+                                            del st.session_state.confirm_delete_proposal_id
+                                            st.rerun()
+                                        else:
+                                            st.error(message)
+                                with confirm_col2:
+                                    if st.button("Cancel", key="confirm_delete_no"):
+                                        del st.session_state.confirm_delete_proposal_id
+                                        st.rerun()
+
+        with save_col:
+            st.markdown("**Save Current Proposal**")
+
+            # Check if there are products to save
+            has_products = len(st.session_state.proposal_products) > 0
+
+            if not has_products:
+                st.info("Add products to enable saving")
+
+            proposal_name = st.text_input(
+                "Proposal name:",
+                key="save_proposal_name",
+                placeholder="e.g., Client ABC Winter Campaign",
+                disabled=not has_products
+            )
+
+            created_by = st.text_input(
+                "Your name (optional):",
+                key="save_proposal_creator",
+                placeholder="e.g., John Smith",
+                disabled=not has_products
+            )
+
+            if st.button("Save Proposal", key="save_proposal_btn", type="primary", use_container_width=True, disabled=not has_products):
+                if not proposal_name or not proposal_name.strip():
+                    st.error("Please enter a proposal name")
+                else:
+                    # Prepare proposal data
+                    proposal_data = {
+                        'proposal_products': st.session_state.proposal_products,
+                        'proposal_marketing_rounding': st.session_state.proposal_marketing_rounding,
+                        'proposal_use_msrp': st.session_state.proposal_use_msrp,
+                        'proposal_discount_type': st.session_state.get('proposal_discount_type'),
+                        'proposal_discount_percent': st.session_state.get('proposal_discount_percent', 0.0),
+                        'proposal_client_budget': st.session_state.get('proposal_client_budget', 0.0)
+                    }
+
+                    success, message, result = save_proposal(
+                        name=proposal_name.strip(),
+                        created_by=created_by.strip() if created_by else "",
+                        proposal_data=proposal_data,
+                        dataset=st.session_state.selected_dataset
+                    )
+
+                    if success:
+                        st.success(message)
+                        st.rerun()  # Rerun to clear form
+                    else:
+                        # Check if it's a naming conflict
+                        if result:  # result contains suggested name
+                            st.error(message)
+                            # Offer to save with suggested name
+                            if st.button(f"Save as '{result}'", key="save_with_new_name"):
+                                success2, message2, _ = save_proposal(
+                                    name=result,
+                                    created_by=created_by.strip() if created_by else "",
+                                    proposal_data=proposal_data,
+                                    dataset=st.session_state.selected_dataset
+                                )
+                                if success2:
+                                    st.success(message2)
+                                    st.rerun()
+                        else:
+                            st.error(message)
+
+    st.divider()
+
+    # Product count and status
     if len(st.session_state.proposal_products) == 0:
         st.info("No products added to proposal yet. Add products from the catalog above.")
     else:
@@ -2581,6 +2752,174 @@ with tab3:
     st.divider()
 
     # ============================================================
+    # SAVED ORDERS SECTION (Always visible)
+    # ============================================================
+    with st.expander("Saved Orders", expanded=False):
+        st.caption("Save your current order or load a previously saved one")
+
+        # Load all saved orders
+        saved_orders = load_all_orders()
+
+        # Two columns: Load/Delete on left, Save on right
+        load_col, save_col = st.columns(2)
+
+        with load_col:
+            st.markdown("**Load Order**")
+
+            if len(saved_orders) == 0:
+                st.info("No saved orders yet")
+            else:
+                # Create dropdown options
+                order_options = {
+                    f"{o['name']} ({o['created_date'][:10]})": o['order_id']
+                    for o in saved_orders
+                }
+
+                selected_order_label = st.selectbox(
+                    "Select order to load:",
+                    options=list(order_options.keys()),
+                    key="load_order_select"
+                )
+
+                if selected_order_label:
+                    selected_order_id = order_options[selected_order_label]
+
+                    # Find full order data
+                    selected_order = next(o for o in saved_orders if o['order_id'] == selected_order_id)
+
+                    # Show preview
+                    st.caption(f"**Created by:** {selected_order['created_by'] or 'Unknown'}")
+                    st.caption(f"**Dataset:** {selected_order['dataset']}")
+
+                    # Load and Delete buttons
+                    load_btn_col, delete_btn_col = st.columns(2)
+
+                    with load_btn_col:
+                        if st.button("Load", key="load_order_btn", type="primary", use_container_width=True):
+                            success, order_data, dataset = load_order_data(selected_order_id)
+
+                            if success:
+                                # Check if dataset matches
+                                if dataset != st.session_state.selected_dataset:
+                                    st.warning(f"⚠️ This order was created with {dataset} dataset, but you're currently using {st.session_state.selected_dataset} dataset. Loading anyway...")
+
+                                # Load order data into session state
+                                st.session_state.order_items = order_data.get('order_items', [])
+                                st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
+                                st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
+                                st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
+                                st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
+                                st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
+                                st.session_state.order_discount_custom_value = order_data.get('order_discount_custom_value', 0.0)
+                                st.session_state.order_use_marketing_rounding = order_data.get('order_use_marketing_rounding', False)
+                                st.session_state.apply_cc_fee = order_data.get('apply_cc_fee', False)
+                                st.session_state.cc_fee_percent = order_data.get('cc_fee_percent', 3.0)
+                                st.session_state.client_info = order_data.get('client_info', st.session_state.client_info)
+                                st.session_state.order_notes = order_data.get('order_notes', {'notes_to_partner': '', 'accounting_notes': ''})
+                                st.session_state.order_confirmed = order_data.get('order_confirmed', False)
+
+                                st.success(f"✅ Loaded order: {selected_order['name']}")
+                                st.rerun()
+                            else:
+                                st.error("Failed to load order data")
+
+                    with delete_btn_col:
+                        if st.button("Delete", key="delete_order_btn", use_container_width=True):
+                            # Confirmation dialog using session state
+                            if 'confirm_delete_order_id' not in st.session_state:
+                                st.session_state.confirm_delete_order_id = selected_order_id
+                                st.warning(f"⚠️ Are you sure you want to delete '{selected_order['name']}'?")
+
+                                confirm_col1, confirm_col2 = st.columns(2)
+                                with confirm_col1:
+                                    if st.button("Yes, Delete", key="confirm_delete_order_yes", type="primary"):
+                                        success, message = delete_order(st.session_state.confirm_delete_order_id)
+                                        if success:
+                                            st.success(message)
+                                            del st.session_state.confirm_delete_order_id
+                                            st.rerun()
+                                        else:
+                                            st.error(message)
+                                with confirm_col2:
+                                    if st.button("Cancel", key="confirm_delete_order_no"):
+                                        del st.session_state.confirm_delete_order_id
+                                        st.rerun()
+
+        with save_col:
+            st.markdown("**Save Current Order**")
+
+            # Check if there are products to save
+            has_products = len(st.session_state.order_items) > 0
+
+            if not has_products:
+                st.info("Add products to enable saving")
+
+            order_name = st.text_input(
+                "Order name:",
+                key="save_order_name",
+                placeholder="e.g., Client ABC Q1 2025 Order",
+                disabled=not has_products
+            )
+
+            created_by = st.text_input(
+                "Your name (optional):",
+                key="save_order_creator",
+                placeholder="e.g., John Smith",
+                disabled=not has_products
+            )
+
+            if st.button("Save Order", key="save_order_btn", type="primary", use_container_width=True, disabled=not has_products):
+                if not order_name or not order_name.strip():
+                    st.error("Please enter an order name")
+                else:
+                    # Prepare order data
+                    order_data = {
+                        'order_items': st.session_state.order_items,
+                        'order_shipping': st.session_state.order_shipping,
+                        'partner_shipping': st.session_state.partner_shipping,
+                        'order_discount_type': st.session_state.order_discount_type,
+                        'order_discount_preset': st.session_state.order_discount_preset,
+                        'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
+                        'order_discount_custom_value': st.session_state.order_discount_custom_value,
+                        'order_use_marketing_rounding': st.session_state.order_use_marketing_rounding,
+                        'apply_cc_fee': st.session_state.apply_cc_fee,
+                        'cc_fee_percent': st.session_state.cc_fee_percent,
+                        'client_info': st.session_state.client_info,
+                        'order_notes': st.session_state.order_notes,
+                        'order_confirmed': st.session_state.order_confirmed
+                    }
+
+                    success, message, result = save_order(
+                        name=order_name.strip(),
+                        created_by=created_by.strip() if created_by else "",
+                        order_data=order_data,
+                        dataset=st.session_state.selected_dataset
+                    )
+
+                    if success:
+                        st.success(message)
+                        st.rerun()  # Rerun to clear form
+                    else:
+                        # Check if it's a naming conflict
+                        if result:  # result contains suggested name
+                            st.error(message)
+                            # Offer to save with suggested name
+                            if st.button(f"Save as '{result}'", key="save_order_with_new_name"):
+                                success2, message2, _ = save_order(
+                                    name=result,
+                                    created_by=created_by.strip() if created_by else "",
+                                    order_data=order_data,
+                                    dataset=st.session_state.selected_dataset
+                                )
+                                if success2:
+                                    st.success(message2)
+                                    st.rerun()
+                        else:
+                            st.error(message)
+
+    st.divider()
+
+    # ============================================================
     # OPTION A: HTML CLIENT ORDER FORM IMPORT (RECOMMENDED)
     # ============================================================
     st.header("Option A: Import Completed Client Order Form (RECOMMENDED)")
@@ -2764,7 +3103,7 @@ with tab3:
     st.caption("Add products to your order, then configure settings for each product below")
 
     # Create dropdowns for filtering
-    col1, col2 = st.columns([2, 1])
+    col1, col2, col3 = st.columns([2, 1, 1])
 
     with col1:
         col_partner, col_product = st.columns(2)
@@ -2781,6 +3120,15 @@ with tab3:
 
     with col2:
         st.write("")  # Spacing
+        st.session_state.order_use_msrp = st.checkbox(
+            "Use MSRP pricing",
+            value=st.session_state.order_use_msrp,
+            key="order_use_msrp_checkbox",
+            help="When enabled, products with MSRP will have markup auto-calculated to match MSRP. Products without MSRP will use 100% markup."
+        )
+
+    with col3:
+        st.write("")  # Spacing
         st.write("")  # Spacing
         if st.button("Add to Order", type="primary", use_container_width=True):
             # Get selected product details
@@ -2793,13 +3141,19 @@ with tab3:
             default_setup_fee = clean_price(product_data.get('Customization Setup Fee', '')) or 0.0
             default_per_unit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0
 
+            # Determine markup: use MSRP if enabled, otherwise 100%
+            if st.session_state.order_use_msrp:
+                markup = calculate_msrp_markup(product_data.to_dict())
+            else:
+                markup = 100.0
+
             # Add product with defaults
             new_item = {
                 'product_name': product_data.get('Product/Service', 'Unknown Product'),
                 'partner': product_data.get('Partner', 'Unknown Partner'),
                 'product_data': product_data.to_dict(),
                 'quantity': 1,
-                'markup_percent': 100.0,
+                'markup_percent': markup,
                 'include_customization': False,
                 'customization_setup_fee': float(default_setup_fee),
                 'customization_per_unit': float(default_per_unit),
@@ -2825,9 +3179,9 @@ with tab3:
                     'customization_setup_total': 0.0,
                     'customization_unit_total': 0.0,
                     'subtotal_before_markup': base_price * 1,
-                    'markup_amount': (base_price * 1) * (100.0 / 100),
-                    'product_total': (base_price * 1) + ((base_price * 1) * (100.0 / 100)),
-                    'total_per_unit': ((base_price * 1) + ((base_price * 1) * (100.0 / 100))) / 1,
+                    'markup_amount': (base_price * 1) * (markup / 100),
+                    'product_total': (base_price * 1) + ((base_price * 1) * (markup / 100)),
+                    'total_per_unit': ((base_price * 1) + ((base_price * 1) * (markup / 100))) / 1,
                     'tariff_rate_percent': 0.0,
                     'tariff_amount': 0.0
                 })

@@ -111,6 +111,14 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
     - Preview count before adding (shows new vs duplicate products)
     - Respects all active filters (price, partner, country)
 - **Proposal Configuration (Section 2):**
+  - **Saved Proposals:** Save and load proposals across sessions
+    - Name proposals for easy identification
+    - Optional creator name tracking
+    - Load previously saved proposals with all settings
+    - Delete unwanted proposals
+    - Dataset mismatch warnings when loading
+    - Duplicate name detection with versioning (v2, v3, etc.)
+    - Stored in Google Sheets (cloud-persistent)
   - **Use MSRP Pricing (Checkbox - Default: ON):** Automatically calculates markup to match MSRP
     - When enabled: Products added with MSRP will have markup auto-calculated to match MSRP
     - When disabled: All products use 100% markup (standard 2x pricing)
@@ -144,6 +152,14 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - "Update Order Form with This Info" button for confirmation
 
 ### Tab 3: Order & Client Info (main workflow)
+- **Saved Orders:** Save and load orders across sessions
+  - Name orders for easy identification
+  - Optional creator name tracking
+  - Load previously saved orders with all products, settings, and client info
+  - Delete unwanted orders
+  - Dataset mismatch warnings when loading
+  - Duplicate name detection with versioning (v2, v3, etc.)
+  - Stored in Google Sheets (cloud-persistent)
 - **Workflow Guidance:** Clear instructions showing 3 pathways into Tab 3 with recommended workflow
 - **Option A - HTML Order Form Import (RECOMMENDED):** Upload completed client order forms (HTML format)
   - Supports both our generated HTML and Google Docs exported HTML
@@ -155,7 +171,10 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 - **Option B - Proposal-to-Order Import:** Import all or individual products from Tab 1 (preserves quantity & markup only)
   - Only shows if proposal products exist
   - Alternative workflow when you have a proposal but no completed form
-- **Option C - Manual Product Selection:** One-click add from dropdown (defaults: qty=1, markup=100%)
+- **Option C - Manual Product Selection:** One-click add from dropdown with MSRP pricing
+  - **Use MSRP pricing checkbox (Default: ON):** Automatically calculates markup to match MSRP when adding products
+  - Products with MSRP have markup auto-calculated, products without MSRP use 100% markup
+  - Markup still manually editable after adding
   - Becomes "Option B" when no proposal exists
   - Fallback for starting fresh without proposal or form
 - **Inline Product Editing:** Always-visible settings for each product (no expand/collapse)
@@ -238,7 +257,9 @@ pricing-data-solution-pbp/
 │   ├── helpers.py             # Utility functions, conversions, validation
 │   ├── pricing_engine.py      # Pricing calculations and quote generation
 │   ├── slide_matcher.py       # PowerPoint slide matching (Phase 1)
-│   └── pptx_generator.py      # PowerPoint generation (Phase 2)
+│   ├── pptx_generator.py      # PowerPoint generation (Phase 2)
+│   ├── proposal_manager.py    # Save/load/delete proposals (v6.6)
+│   └── order_manager.py       # Save/load/delete orders (v6.7)
 │
 ├── templates/                  # Templates and reference files
 │   ├── November All Slides.pptx # PowerPoint template (339 slides, 43MB)
@@ -251,7 +272,9 @@ pricing-data-solution-pbp/
 │   ├── investigate_jaggery_demo.py  # Investigate tool (Streamlit)
 │   ├── test_improved_matching.py    # Test Phase 1 matching improvements
 │   ├── test_edge_cases.py     # Test Phase 1 edge cases
-│   └── test_integration.py    # Test Phase 1 complete workflow
+│   ├── test_integration.py    # Test Phase 1 complete workflow
+│   ├── test_saved_proposals.py # Test save/load/delete proposals (v6.6)
+│   └── test_saved_orders.py   # Test save/load/delete orders (v6.7)
 │
 ├── backups/                    # Backup files
 │   └── app_mvp_backup.py      # Original MVP
@@ -271,9 +294,48 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.5 - MSRP Pricing as Default Checkbox
+**Version:** 6.7 - Saved Orders with Google Sheets Backend + MSRP Pricing in Orders
 
 **Last Updated:** 2025-11-10
+
+**Recent Improvements (2025-11-10 - v6.7):**
+- ✅ **MSRP Pricing in Order Stage:**
+  - Added "Use MSRP pricing" checkbox in Tab 3 (Order & Client Info) manual product selection
+  - Defaults to checked - MSRP pricing applied automatically when adding products
+  - Same behavior as Tab 1 proposal stage
+  - Products with MSRP have markup auto-calculated to match MSRP
+  - Products without MSRP use 100% markup
+  - Markup still manually editable after adding
+- ✅ **Date Serialization Fix:**
+  - Fixed JSON serialization error when saving orders with date fields
+  - Added helper functions to convert dates to/from ISO strings
+  - Handles datetime.date and datetime.datetime objects recursively
+- ✅ **Saved Orders Feature (Cloud-Persistent):**
+  - Save orders with custom names across sessions
+  - Optional creator name/email tracking
+  - Load previously saved orders with all settings, products, and client info preserved
+  - Delete unwanted orders with confirmation dialog
+  - Duplicate name detection with automatic versioning (v2, v3, etc.)
+  - Dataset mismatch warnings when loading cross-dataset orders
+  - Google Sheets backend for cloud persistence and multi-user access
+  - New module: [src/order_manager.py](src/order_manager.py)
+  - Test script: [scripts/test_saved_orders.py](scripts/test_saved_orders.py)
+  - Stored in: data/master/saved_orders spreadsheet
+  - UI: Collapsible expander in Tab 3 (Order & Client Info), always visible at top
+
+**Recent Improvements (2025-11-10 - v6.6):**
+- ✅ **Saved Proposals Feature (Cloud-Persistent):**
+  - Save proposals with custom names across sessions
+  - Optional creator name/email tracking
+  - Load previously saved proposals with all settings preserved
+  - Delete unwanted proposals with confirmation dialog
+  - Duplicate name detection with automatic versioning (v2, v3, etc.)
+  - Dataset mismatch warnings when loading cross-dataset proposals
+  - Google Sheets backend for cloud persistence and multi-user access
+  - New module: [src/proposal_manager.py](src/proposal_manager.py)
+  - Test script: [scripts/test_saved_proposals.py](scripts/test_saved_proposals.py)
+  - Stored in: data/master/saved_proposals spreadsheet
+  - UI: Collapsible expander in Tab 1, Section 2 (Saved Proposals)
 
 **Recent Improvements (2025-11-10 - v6.5):**
 - ✅ **MSRP Pricing Checkbox (Improved UX):**
@@ -405,8 +467,8 @@ pricing-data-solution-pbp/
   - Ensures data consistency across all exports
 
 **Features Implemented:**
-- ✅ **3-Tab Workflow:** Proposals → Order & Client Info → Execution & Accounting
-- ✅ **Proposal System:** Product filtering, catalog browser, MOQ-based pricing tables
+- ✅ **4-Tab Workflow:** Proposals → Client Order Forms → Order & Client Info → Execution & Accounting
+- ✅ **Proposal System:** Product filtering, catalog browser, MOQ-based pricing tables, saved proposals
 - ✅ **HTML Client Order Form Generation:** Professional table format with clear instructions
 - ✅ **HTML Order Form Import:** Parse completed forms (both our HTML and Google Docs formats)
 - ✅ **PowerPoint Proposal Automation (Phase 1 & 2 - COMPLETE):** End-to-end automated PowerPoint generation

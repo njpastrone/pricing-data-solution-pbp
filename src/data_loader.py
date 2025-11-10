@@ -32,6 +32,18 @@ DATASET_CONFIGS = {
         'url': 'https://docs.google.com/spreadsheets/d/1XjdC8l9_mjvNElkY2_Bu6_IXoarfIuVyIjMH5Hfm5Ms',
         'description': 'Production pricing data - actively being updated with real partner information',
         'spreadsheet_id': '1XjdC8l9_mjvNElkY2_Bu6_IXoarfIuVyIjMH5Hfm5Ms'
+    },
+    'saved_proposals': {
+        'name': 'Saved Proposals',
+        'url': 'https://docs.google.com/spreadsheets/d/1njImhHbLM6WwmdwobgJ0UQLj-4GdOgPYnjP7nDCFTb4',
+        'description': 'Storage for user-saved proposals',
+        'spreadsheet_id': '1njImhHbLM6WwmdwobgJ0UQLj-4GdOgPYnjP7nDCFTb4'
+    },
+    'saved_orders': {
+        'name': 'Saved Orders',
+        'url': 'https://docs.google.com/spreadsheets/d/1pXqBAQOeSvQi1ob8GLc70UhQsM0gwmczYfVWFRPjbao',
+        'description': 'Storage for user-saved orders',
+        'spreadsheet_id': '1pXqBAQOeSvQi1ob8GLc70UhQsM0gwmczYfVWFRPjbao'
     }
 }
 
