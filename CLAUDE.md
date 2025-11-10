@@ -110,7 +110,16 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
     - Smart duplicate detection (skips products already in proposal)
     - Preview count before adding (shows new vs duplicate products)
     - Respects all active filters (price, partner, country)
-- **Proposal Configuration (Section 2):** Quantity, markup %, customization options, MSRP comparison
+- **Proposal Configuration (Section 2):**
+  - Editable markup % per product (defaults to 100%)
+  - **Set All Prices to MSRP:** One-click button to match all product prices to MSRP
+    - Automatically calculates markup % needed to reach MSRP
+    - Products without MSRP keep 100% default markup
+    - Handles edge cases: MSRP below cost set to 0% (break-even)
+    - Still manually editable after MSRP is set
+  - Client discount options (NGO 5% preset or custom)
+  - Marketing rounding (charm pricing: $60 → $59)
+  - Customization options and MSRP comparison display
 - **Proposal Tables (Section 3):**
   - Collapsible MOQ-based pricing tables
   - Automatic minimum order quantity calculations
@@ -260,9 +269,23 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.3 - Bulk Add Partners to Proposal
+**Version:** 6.4 - Set Prices to MSRP
 
 **Last Updated:** 2025-11-10
+
+**Recent Improvements (2025-11-10 - v6.4):**
+- ✅ **Set All Prices to MSRP (New Feature):**
+  - Added "Set All Prices to MSRP" button in Tab 1 Section 2 (Proposal Configuration)
+  - One-click automatic markup calculation to match manufacturer suggested retail prices
+  - Smart calculation: markup % = ((MSRP / cost) - 1) × 100
+  - Uses base cost at quantity=100 as reference for tiered pricing products
+  - Edge case handling:
+    - No MSRP: Keeps current markup (100% default)
+    - MSRP below cost: Sets to 0% markup (break-even, won't sell below cost)
+    - Invalid cost: Skips product (no change)
+  - User feedback: Shows count of updated/skipped/below-cost products
+  - Markup still manually editable after MSRP is set
+  - Markup % automatically flows to proposal tables and order fulfillment
 
 **Recent Improvements (2025-11-10 - v6.3):**
 - ✅ **Bulk Add Products from Partner(s) (New Feature):**

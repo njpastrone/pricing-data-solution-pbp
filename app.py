@@ -1,7 +1,7 @@
 """
 Peace by Piece International - Order Management System
 4-tab workflow: Proposals → Client Order Forms → Order & Client Info → Execution & Accounting
-Version: 6.3 (Bulk Add Partners to Proposal)
+Version: 6.4 (Set Prices to MSRP)
 """
 
 import streamlit as st
@@ -1416,6 +1416,54 @@ with tab1:
                 value=st.session_state.proposal_marketing_rounding,
                 key="proposal_marketing_rounding_checkbox"
             )
+
+            st.markdown("")  # Add spacing
+
+            # Set prices to MSRP button
+            if st.button("Set All Prices to MSRP", type="primary", use_container_width=True, help="Automatically calculate markup % to match MSRP for products that have it"):
+                updated_count = 0
+                no_msrp_count = 0
+                below_cost_count = 0
+
+                for item in st.session_state.proposal_products:
+                    product_data = item['product_data']
+
+                    # Get MSRP
+                    msrp = clean_price(product_data.get('MSRP', ''))
+
+                    if msrp and msrp > 0:
+                        # Get base cost at quantity 100 as reference
+                        base_cost, _, _ = get_unit_price_new_system(product_data, 100)
+
+                        if base_cost and base_cost > 0:
+                            # Calculate required markup % to reach MSRP
+                            # Formula: MSRP = cost * (1 + markup/100)
+                            # Therefore: markup = ((MSRP / cost) - 1) * 100
+                            required_markup = ((msrp / base_cost) - 1) * 100
+
+                            # Don't allow negative markup (selling below cost)
+                            if required_markup < 0:
+                                item['markup_percent'] = 0.0
+                                below_cost_count += 1
+                            else:
+                                item['markup_percent'] = required_markup
+                                updated_count += 1
+                        else:
+                            # Can't calculate cost, skip
+                            no_msrp_count += 1
+                    else:
+                        # No MSRP available, skip
+                        no_msrp_count += 1
+
+                # Show feedback
+                if updated_count > 0:
+                    st.success(f"Updated {updated_count} product(s) to MSRP pricing")
+                if below_cost_count > 0:
+                    st.warning(f"{below_cost_count} product(s) have MSRP below cost (set to 0% markup / break-even)")
+                if no_msrp_count > 0:
+                    st.info(f"{no_msrp_count} product(s) have no MSRP (kept current markup)")
+
+                st.rerun()
 
         st.divider()
 
