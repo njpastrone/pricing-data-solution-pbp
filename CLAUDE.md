@@ -75,12 +75,12 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - **Tab 3: Order & Client Info** - Order management, client data collection
   - **Tab 4: Execution & Accounting** - Invoice/PO generation, bookkeeping
 - **Data Source:** Google Sheets with dataset selector (Demo or Real)
-  - **Demo Dataset:** master_pricing_template_10_14 (testing/development data)
-  - **Real Dataset:** master_pricing (production data - in progress, not yet ready)
+  - **Demo Dataset:** master_pricing_template_10_14 (19 products, 4 partners - testing/development data)
+  - **Real Dataset:** master_pricing (133 products, 4 partners - production data READY)
   - **Required sheet structure:**
-    - **Template**: Partner-product pricing data
-    - **Metadata**: Deliverable field definitions
-    - **Partner-Specific Info**: Partner configuration reference
+    - **Data**: Partner-product pricing data (header at row 6)
+    - **Metadata**: Deliverable field definitions (header at row 2)
+    - **Partner-Specific Info**: Partner configuration reference (header at row 2)
 - **Code Structure:** Modular with helper functions in `src/` directory
   - `src/data_loader.py` - Google Sheets data loading and caching
   - `src/helpers.py` - Utility functions, conversions, validation, HTML parsing
@@ -260,13 +260,13 @@ pricing-data-solution-pbp/
 **Last Updated:** 2025-11-10
 
 **Recent Improvements (2025-11-10 - v6.2):**
-- ✅ **Dataset Selector (New Feature):**
+- ✅ **Dataset Selector (New Feature - Production Ready):**
   - Added sidebar option to switch between Demo and Real pricing datasets
-  - Demo dataset: master_pricing_template_10_14 (fully functional testing data)
-  - Real dataset: master_pricing (production data - structure in progress, not yet ready)
+  - Demo dataset: master_pricing_template_10_14 (19 products, 4 partners - testing data)
+  - Real dataset: master_pricing (133 products, 4 partners - production data READY)
   - Automatic data reload when switching datasets
-  - Clear warnings when attempting to use incomplete real dataset
   - Prevents data mismatch by clearing proposals/orders when switching datasets
+  - Sheet structure updated: 'Data' sheet (renamed from 'Template') for pricing data
 - ✅ **Scroll Preservation System:**
   - Implemented JavaScript-based scroll position preservation (95-98% effective)
   - Global CSS fix to prevent automatic scrolling on widget interactions

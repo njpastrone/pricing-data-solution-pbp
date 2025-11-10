@@ -8,7 +8,7 @@ This module handles all Google Sheets integration:
 - Data frame processing and cleanup
 
 The module loads data from 3 sheets:
-1. Template: Partner-product pricing data (header at row 6)
+1. Data: Partner-product pricing data (header at row 6)
 2. Metadata: Deliverable field definitions (header at row 2)
 3. Partner-Specific Info: Partner configuration (header at row 2)
 """
@@ -30,10 +30,8 @@ DATASET_CONFIGS = {
     'real': {
         'name': 'Real Pricing Data (master_pricing)',
         'url': 'https://docs.google.com/spreadsheets/d/1XjdC8l9_mjvNElkY2_Bu6_IXoarfIuVyIjMH5Hfm5Ms',
-        'description': 'Production pricing data - currently being updated',
-        'spreadsheet_id': '1XjdC8l9_mjvNElkY2_Bu6_IXoarfIuVyIjMH5Hfm5Ms',
-        'status': 'in_progress',  # Not yet ready - missing Template, Metadata, Partner-Specific Info sheets
-        'notes': 'Real data structure is different from demo. Currently only has Sheet1. Needs restructuring to match demo format.'
+        'description': 'Production pricing data - actively being updated with real partner information',
+        'spreadsheet_id': '1XjdC8l9_mjvNElkY2_Bu6_IXoarfIuVyIjMH5Hfm5Ms'
     }
 }
 
@@ -86,7 +84,7 @@ def load_pricing_data(dataset='demo'):
         KeyError: If invalid dataset name provided
 
     Data Structure:
-        Template Sheet:
+        Data Sheet:
             - Header at row 6 (index 5)
             - Data starts at row 7 (index 6)
             - First column may be empty (skipped)
@@ -125,9 +123,9 @@ def load_pricing_data(dataset='demo'):
     # Open by URL (more reliable than by name)
     spreadsheet = gc.open_by_url(spreadsheet_url)
 
-    # ========== LOAD TEMPLATE SHEET ==========
+    # ========== LOAD DATA SHEET ==========
     # Header at row 6 (index 5), data starts at row 7 (index 6)
-    template_sheet = spreadsheet.worksheet("Template")
+    template_sheet = spreadsheet.worksheet("Data")
     template_values = template_sheet.get_all_values()
 
     # Row 6 has headers, but first column is empty - skip it
@@ -154,34 +152,45 @@ def load_pricing_data(dataset='demo'):
     # Header at row 2 (index 1), data starts at row 3 (index 2)
     metadata_sheet = spreadsheet.worksheet("Metadata")
     metadata_values = metadata_sheet.get_all_values()
-    metadata_headers = [col.strip() if col else f"Unnamed_{i}" for i, col in enumerate(metadata_values[1])]  # Row 2 (index 1)
-    metadata_data = metadata_values[2:]
-    df_metadata = pd.DataFrame(metadata_data, columns=metadata_headers)
+
+    # Check if sheet has enough rows
+    if len(metadata_values) < 2:
+        # Create empty DataFrame with minimal structure if sheet is empty
+        df_metadata = pd.DataFrame()
+    else:
+        metadata_headers = [col.strip() if col else f"Unnamed_{i}" for i, col in enumerate(metadata_values[1])]  # Row 2 (index 1)
+        metadata_data = metadata_values[2:] if len(metadata_values) > 2 else []
+        df_metadata = pd.DataFrame(metadata_data, columns=metadata_headers)
 
     # ========== LOAD PARTNER-SPECIFIC INFO SHEET ==========
     # Header at row 2 (index 1), data starts at row 3 (index 2)
     partner_sheet = spreadsheet.worksheet("Partner-Specific Info")
     partner_values = partner_sheet.get_all_values()
 
-    # Row 2 has headers, may have empty first column - skip it
-    raw_partner_headers = partner_values[1]
-    raw_partner_data = partner_values[2:]
+    # Check if sheet has enough rows
+    if len(partner_values) < 2:
+        # Create empty DataFrame with minimal structure if sheet is empty
+        df_partner_info = pd.DataFrame()
+    else:
+        # Row 2 has headers, may have empty first column - skip it
+        raw_partner_headers = partner_values[1]
+        raw_partner_data = partner_values[2:] if len(partner_values) > 2 else []
 
-    # Find first non-empty column index for partner sheet
-    first_partner_col_idx = 0
-    for i, header in enumerate(raw_partner_headers):
-        if header.strip():
-            first_partner_col_idx = i
-            break
+        # Find first non-empty column index for partner sheet
+        first_partner_col_idx = 0
+        for i, header in enumerate(raw_partner_headers):
+            if header.strip():
+                first_partner_col_idx = i
+                break
 
-    # Extract headers and data starting from first non-empty column
-    partner_headers = [col.strip() if col else f"Unnamed_{i}" for i, col in enumerate(raw_partner_headers[first_partner_col_idx:])]
-    partner_data = [row[first_partner_col_idx:] for row in raw_partner_data]
+        # Extract headers and data starting from first non-empty column
+        partner_headers = [col.strip() if col else f"Unnamed_{i}" for i, col in enumerate(raw_partner_headers[first_partner_col_idx:])]
+        partner_data = [row[first_partner_col_idx:] for row in raw_partner_data]
 
-    df_partner_info = pd.DataFrame(partner_data, columns=partner_headers)
+        df_partner_info = pd.DataFrame(partner_data, columns=partner_headers)
 
-    # Remove empty rows from partner info (only if Partner column exists)
-    if 'Partner' in df_partner_info.columns:
-        df_partner_info = df_partner_info[df_partner_info['Partner'].str.strip() != '']
+        # Remove empty rows from partner info (only if Partner column exists)
+        if 'Partner' in df_partner_info.columns:
+            df_partner_info = df_partner_info[df_partner_info['Partner'].str.strip() != '']
 
     return df_template, df_metadata, df_partner_info

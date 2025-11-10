@@ -1048,10 +1048,10 @@ except Exception as e:
     error_msg = str(e)
 
     # Check if this is a real dataset structure issue
-    if st.session_state.selected_dataset == 'real' and ('Template' in error_msg or 'worksheet' in error_msg.lower()):
+    if st.session_state.selected_dataset == 'real' and ('Data' in error_msg or 'worksheet' in error_msg.lower()):
         st.error("Real pricing dataset is not yet properly structured.")
         st.warning("The real data spreadsheet needs to have the same structure as the demo data:\n"
-                   "- Sheet 1: 'Template' (pricing data)\n"
+                   "- Sheet 1: 'Data' (pricing data)\n"
                    "- Sheet 2: 'Metadata' (field definitions)\n"
                    "- Sheet 3: 'Partner-Specific Info' (partner contacts)")
         st.info("Please switch to 'Demo Data' in the sidebar, or complete the real dataset structure first.")
