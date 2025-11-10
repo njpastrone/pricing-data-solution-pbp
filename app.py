@@ -1467,18 +1467,22 @@ with tab1:
 
         st.divider()
 
-        # Product table with MSRP and editable markup
+        # Product table with pricing details and editable markup
         st.markdown("### Products in Proposal")
 
         # Table header
-        header_col1, header_col2, header_col3, header_col4 = st.columns([3, 1.5, 1.5, 1])
+        header_col1, header_col2, header_col3, header_col4, header_col5, header_col6 = st.columns([3, 1.2, 1.2, 1.2, 1.2, 0.8])
         with header_col1:
             st.markdown("**Product**")
         with header_col2:
-            st.markdown("**MSRP** (if available)")
+            st.markdown("**PBP Cost**")
         with header_col3:
             st.markdown("**Markup %**")
         with header_col4:
+            st.markdown("**Client Price**")
+        with header_col5:
+            st.markdown("**MSRP**")
+        with header_col6:
             st.markdown("**Remove**")
 
         st.divider()
@@ -1487,17 +1491,25 @@ with tab1:
         for idx, item in enumerate(st.session_state.proposal_products):
             product_data = item['product_data']
 
-            col1, col2, col3, col4 = st.columns([3, 1.5, 1.5, 1])
+            # Calculate PBP cost and client price at quantity 100 for display
+            base_cost, _, _ = get_unit_price_new_system(product_data, 100)
+
+            if base_cost:
+                # Calculate client price with markup
+                client_price = base_cost * (1 + item['markup_percent'] / 100)
+            else:
+                client_price = None
+
+            col1, col2, col3, col4, col5, col6 = st.columns([3, 1.2, 1.2, 1.2, 1.2, 0.8])
 
             with col1:
                 st.markdown(f"{product_data['Product/Service']}")
                 st.caption(f"Partner: {product_data['Partner']}")
 
             with col2:
-                # Show MSRP if available
-                msrp = clean_price(product_data.get('MSRP', ''))
-                if msrp and msrp > 0:
-                    st.markdown(f"${msrp:.2f}")
+                # Show PBP cost
+                if base_cost:
+                    st.markdown(f"${base_cost:.2f}")
                 else:
                     st.markdown("—")
 
@@ -1516,6 +1528,21 @@ with tab1:
                     st.session_state.proposal_products[idx]['markup_percent'] = new_markup
 
             with col4:
+                # Show client price (cost + markup)
+                if client_price:
+                    st.markdown(f"${client_price:.2f}")
+                else:
+                    st.markdown("—")
+
+            with col5:
+                # Show MSRP if available
+                msrp = clean_price(product_data.get('MSRP', ''))
+                if msrp and msrp > 0:
+                    st.markdown(f"${msrp:.2f}")
+                else:
+                    st.markdown("—")
+
+            with col6:
                 if st.button("✕", key=f"remove_{idx}", help=f"Remove {product_data['Product/Service']}", use_container_width=True):
                     st.session_state.proposal_products.pop(idx)
                     st.rerun()
