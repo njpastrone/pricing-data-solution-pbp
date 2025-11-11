@@ -740,6 +740,44 @@ def show_match_review_ui(match_results, pptx_product_names):
                                     }
                                     st.success(f"✓ Confirmed alternative: {alt_name}")
                                     st.rerun()
+
+                        # Add search feature
+                        st.markdown("---")
+                        st.markdown("**Can't find the right slide? Search all slides:**")
+
+                        search_query = st.text_input(
+                            "Search slide names",
+                            key=f"{match_key}_search",
+                            placeholder="e.g., 'short sleeve tee'"
+                        )
+
+                        if search_query:
+                            # Filter slides by search query (case-insensitive)
+                            matching_slides = [
+                                name for name in pptx_product_names
+                                if search_query.lower() in name.lower()
+                            ]
+
+                            if matching_slides:
+                                st.caption(f"Found {len(matching_slides)} matching slides:")
+                                # Show up to 10 results
+                                for search_idx, slide_name in enumerate(matching_slides[:10]):
+                                    col_s1, col_s2 = st.columns([3, 1])
+                                    with col_s1:
+                                        st.markdown(f"- {slide_name}")
+                                    with col_s2:
+                                        if st.button(f"Use this", key=f"{match_key}_search_{search_idx}", use_container_width=True):
+                                            st.session_state.match_confirmations[result.gs_product_name] = {
+                                                'confirmed': True,
+                                                'pptx_name': slide_name
+                                            }
+                                            st.success(f"✓ Confirmed: {slide_name}")
+                                            st.rerun()
+
+                                if len(matching_slides) > 10:
+                                    st.caption(f"...and {len(matching_slides) - 10} more. Refine your search to see more results.")
+                            else:
+                                st.info("No slides found matching your search. Try different keywords.")
                     else:
                         st.info("No alternatives available. Use the suggested match or skip this product.")
 

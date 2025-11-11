@@ -31,6 +31,7 @@
 
 **PowerPoint automation (latest feature):**
 
+- **[SLIDE_MATCHING_NOTES.md](SLIDE_MATCHING_NOTES.md)** - Partner-specific notes on product-to-slide matching (active work)
 - **[docs/powerpoint/PHASE_2_COMPLETION_SUMMARY.md](docs/powerpoint/PHASE_2_COMPLETION_SUMMARY.md)** - Phase 2 complete summary (production-ready)
 - **[docs/powerpoint/PHASE_1_COMPLETION_SUMMARY.md](docs/powerpoint/PHASE_1_COMPLETION_SUMMARY.md)** - Phase 1 technical deep dive
 
