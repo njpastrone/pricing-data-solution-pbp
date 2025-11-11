@@ -79,6 +79,8 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - **Real Dataset:** master_pricing (133 products, 4 partners - production data READY)
   - **Required sheet structure:**
     - **Data**: Partner-product pricing data (header at row 6)
+      - Key columns: Partner, Product/Service, Pricing Tiers (Y/N), PBP Cost (No Tiers), PBP Cost: Tier 1-6, MSRP, Units per Package
+      - **Units per Package** (new in v6.8): Normalizes package pricing to per-unit (default: 1, case-sensitive column name)
     - **Metadata**: Deliverable field definitions (header at row 2)
     - **Partner-Specific Info**: Partner configuration reference (header at row 2)
 - **Code Structure:** Modular with helper functions in `src/` directory
@@ -106,10 +108,12 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - Filter by price range, partner, country of origin
   - View product details inline (country, tiered pricing, MOQ estimates, descriptions)
   - **Bulk Actions:** Add all products from one or more partners at once
+    - **Quick Add All Products (Testing):** Add all filtered products with one click
     - Select multiple partners and add all their products with one click
     - Smart duplicate detection (skips products already in proposal)
     - Preview count before adding (shows new vs duplicate products)
     - Respects all active filters (price, partner, country)
+    - Useful for quickly testing with complete product catalog
 - **Proposal Configuration (Section 2):**
   - **Saved Proposals:** Save and load proposals across sessions
     - Name proposals for easy identification
@@ -274,7 +278,8 @@ pricing-data-solution-pbp/
 │   ├── test_edge_cases.py     # Test Phase 1 edge cases
 │   ├── test_integration.py    # Test Phase 1 complete workflow
 │   ├── test_saved_proposals.py # Test save/load/delete proposals (v6.6)
-│   └── test_saved_orders.py   # Test save/load/delete orders (v6.7)
+│   ├── test_saved_orders.py   # Test save/load/delete orders (v6.7)
+│   └── test_units_per_package.py # Test Units Per Package normalization (v6.8)
 │
 ├── backups/                    # Backup files
 │   └── app_mvp_backup.py      # Original MVP
@@ -294,9 +299,21 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.7 - Saved Orders with Google Sheets Backend + MSRP Pricing in Orders
+**Version:** 6.8 - Units Per Package Normalization for Multi-Unit Products
 
-**Last Updated:** 2025-11-10
+**Last Updated:** 2025-11-11
+
+**Recent Improvements (2025-11-11 - v6.8):**
+- ✅ **Units per Package Column (Multi-Unit Product Support):**
+  - Added support for "Units per Package" column in Google Sheets (case-sensitive: lowercase "per")
+  - Automatically normalizes package costs to per-unit costs for accurate pricing
+  - Fixes pricing issue for partners that sell in packages (e.g., Homeless Garden Project 6-packs)
+  - Example: Partner charges $48 for 6-pack, MSRP is $12/unit → Normalizes to $8/unit cost, 50% markup
+  - Default value: 1 (no change for most products)
+  - Handles string or numeric values from Google Sheets (auto-converts to float)
+  - Updated `get_unit_price_new_system()` in `src/pricing_engine.py` with string conversion
+  - MSRP markup calculations now work correctly for package products
+  - Edge cases handled: empty values, invalid values, missing column all default to 1
 
 **Recent Improvements (2025-11-10 - v6.7):**
 - ✅ **MSRP Pricing in Order Stage:**

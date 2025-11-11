@@ -47,6 +47,10 @@ def get_unit_price_new_system(row, quantity):
     Get correct unit price based on new tier logic from master_pricing_template_10_14.
     Handles both tiered and non-tiered pricing.
 
+    Automatically normalizes cost to per-unit basis using "Units Per Package" column.
+    For example, if partner charges $60 for a 6-pack and Units Per Package = 6,
+    this returns $10 per unit.
+
     Args:
         row: DataFrame row containing product data
         quantity: Order quantity
@@ -64,6 +68,16 @@ def get_unit_price_new_system(row, quantity):
         # Use flat rate
         flat_price = clean_price(row.get('PBP Cost (No Tiers)', ''))
         if flat_price is not None:
+            # Normalize to per-unit cost
+            units_per_package = row.get('Units per Package', 1)
+            # Convert to float if string (Google Sheets may return as string)
+            try:
+                units_per_package = float(units_per_package) if units_per_package else 1
+            except (ValueError, TypeError):
+                units_per_package = 1
+
+            if units_per_package > 0:
+                flat_price = flat_price / units_per_package
             return flat_price, "No Tiers", "PBP Cost (No Tiers)"
         else:
             return None, None, None
@@ -79,6 +93,17 @@ def get_unit_price_new_system(row, quantity):
     price = clean_price(row.get(tier_col, ''))
 
     if price is not None:
+        # Normalize to per-unit cost
+        units_per_package = row.get('Units per Package', 1)
+        # Convert to float if string (Google Sheets may return as string)
+        try:
+            units_per_package = float(units_per_package) if units_per_package else 1
+        except (ValueError, TypeError):
+            units_per_package = 1
+
+        if units_per_package > 0:
+            price = price / units_per_package
+
         # Get tier range for display
         tier_ranges = parse_tier_info(tier_info)
         if tier_num in tier_ranges:

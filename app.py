@@ -1232,6 +1232,52 @@ with tab1:
                 </script>
             """, height=0)
 
+            # "Add All Products" button at the top (for testing)
+            st.markdown("**Quick Add All Products (Testing)**")
+
+            # Count how many products would be added
+            existing_products = {item['product_data']['Product/Service'] for item in st.session_state.proposal_products}
+            new_products_all = [row for idx, row in filtered_df.iterrows() if row['Product/Service'] not in existing_products]
+            new_count_all = len(new_products_all)
+            duplicate_count_all = len(filtered_df) - new_count_all
+
+            col_info, col_button = st.columns([3, 1])
+            with col_info:
+                if new_count_all > 0:
+                    st.info(f"Will add **{new_count_all} new product(s)** from filtered results ({len(filtered_df)} total)")
+                    if duplicate_count_all > 0:
+                        st.caption(f"({duplicate_count_all} already in proposal, will be skipped)")
+                else:
+                    st.warning(f"All {len(filtered_df)} filtered product(s) are already in your proposal")
+
+            with col_button:
+                if new_count_all > 0:
+                    if st.button(f"Add All {new_count_all}", type="secondary", use_container_width=True, key="add_all_products_button"):
+                        # Add all new products to proposal with MSRP or 100% markup
+                        for product_row in new_products_all:
+                            # Determine markup: use MSRP if enabled, otherwise 100%
+                            if st.session_state.proposal_use_msrp:
+                                markup = calculate_msrp_markup(product_row.to_dict())
+                            else:
+                                markup = 100.0
+
+                            proposal_item = {
+                                'product_data': product_row.to_dict(),
+                                'markup_percent': markup
+                            }
+                            st.session_state.proposal_products.append(proposal_item)
+
+                        # Set success message
+                        st.session_state.show_bulk_success_message = True
+                        st.session_state.bulk_success_message = f"Added **all {new_count_all} filtered products** to proposal!"
+
+                        # Keep catalog expanded after bulk add
+                        st.session_state.keep_catalog_expanded = True
+                        st.rerun()
+
+            st.divider()
+            st.markdown("**Add by Partner**")
+
             # Get unique partners from filtered results
             available_partners = sorted(filtered_df["Partner"].unique().tolist())
 
