@@ -1,0 +1,45 @@
+# GitHub Action: Keep Streamlit App Awake
+# This workflow pings your Streamlit app every 10 minutes to prevent it from sleeping
+# on Streamlit Community Cloud's free tier.
+
+name: Keep Streamlit App Awake
+
+# When this workflow runs
+on:
+  schedule:
+    # Run every 10 minutes (cron format: minute hour day month day-of-week)
+    # Note: GitHub Actions has ~5-10 min delay, so actual frequency may vary slightly
+    - cron: '*/10 * * * *'
+
+  # Allow manual trigger from GitHub Actions tab (useful for testing)
+  workflow_dispatch:
+
+jobs:
+  ping:
+    # Use Ubuntu (lightweight, free-tier friendly)
+    runs-on: ubuntu-latest
+
+    steps:
+      # Ping the app with a simple curl request
+      # The ?ping=1 query parameter triggers your lightweight ping route
+      - name: Ping Streamlit App
+        run: |
+          # Try up to 3 times with 10 second timeout per attempt
+          # --retry 2 means 3 total attempts (initial + 2 retries)
+          # --retry-delay 5 waits 5 seconds between retries
+          # --max-time 10 gives each request 10 seconds to complete
+          # --silent suppresses progress bar
+          # --show-error shows errors if they occur
+          # || true ensures this step never fails the workflow
+          curl --retry 2 \
+               --retry-delay 5 \
+               --max-time 10 \
+               --silent \
+               --show-error \
+               "https://pricing-data-solution-pbp.streamlit.app/?ping=1" \
+               || true
+
+      # Optional: Log success message
+      # This helps confirm the ping happened when viewing workflow runs
+      - name: Log Success
+        run: echo "Ping completed at $(date)"

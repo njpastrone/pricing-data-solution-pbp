@@ -92,6 +92,15 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
+# ============================================================
+# KEEP-ALIVE PING ROUTE (for GitHub Actions)
+# ============================================================
+# Lightweight endpoint to keep Streamlit Cloud app awake
+# Responds instantly without loading data or UI
+if st.query_params.get("ping"):
+    st.write("pong")
+    st.stop()
+
 # Prevent automatic page scrolling on widget interaction
 st.markdown("""
 <style>
