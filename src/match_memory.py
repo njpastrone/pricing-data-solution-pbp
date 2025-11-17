@@ -187,6 +187,7 @@ def get_confirmed_match(product_name, dataset):
     try:
         # Use cached data to avoid API calls
         all_values = _load_all_matches_data()
+
         if not all_values or len(all_values) <= 1:
             return None
 
@@ -212,7 +213,7 @@ def get_confirmed_match(product_name, dataset):
         return None
 
     except Exception as e:
-        print(f"Error getting confirmed match: {str(e)}")
+        print(f"Error getting confirmed match for '{product_name}': {str(e)}")
         return None
 
 

@@ -302,9 +302,35 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.10 - Unified Match Review Table with Simplified Button Logic
+**Version:** 6.11 - PowerPoint UI Cleanup & Match Persistence Fix
 
 **Last Updated:** 2025-11-17
+
+**Recent Improvements (2025-11-17 - v6.11):**
+- ✅ **Critical Bug Fix - Match Persistence:**
+  - Fixed issue where confirmed matches were lost on rerun (dropping from 39 to 4)
+  - Root cause: Match results were recalculated on every button click, clearing cache
+  - Solution: Cache match_results in session state to persist across reruns
+  - Matches now stay consistent throughout confirmation workflow
+
+- ✅ **PowerPoint Section 4 UI Cleanup:**
+  - Removed BETA label - feature is production-ready
+  - Deleted Manual Match Override (133 lines of legacy code) - fully replaced by Match Review UI
+  - Simplified Step 2 Impact Slides:
+    - Clean summary message: "Impact slides found for: Partner X, Partner Y"
+    - Customization controls hidden in optional expander (collapsed by default)
+    - Removed messy inline Override/Apply/Cancel buttons
+    - Simple dropdowns with auto-apply (no buttons needed)
+
+- ✅ **Skip Product Feature:**
+  - Added "Skip this product" button in Match Review UI when clicking "Change"
+  - Available in both alternatives and search interfaces
+  - Allows excluding products from PowerPoint without deleting from proposal
+
+- ✅ **Code Cleanup:**
+  - Removed debug output (🔍 DEBUG messages) from console
+  - Kept minimal error logging for troubleshooting
+  - Fixed missing Path import in Impact Slides section
 
 **Recent Improvements (2025-11-17 - v6.10):**
 - ✅ **Unified Match Review Table:**
@@ -313,10 +339,9 @@ pricing-data-solution-pbp/
   - Clear status indicators: "Review" vs "Done"
   - Source column shows match origin: "Previously Confirmed", "Exact Match", "Auto-match", etc.
   - Simplified button logic:
-    - **"Ready to use" products** (31 in real dataset): Only "Change" button
-    - **"Need confirmation" products** (15 in real dataset): "Confirm" + "Change" buttons
+    - **"Ready to use" products**: Only "Change" button
+    - **"Need confirmation" products**: "Confirm" + "Change" buttons
   - All confirmations auto-save to Google Sheets for future sessions
-  - Fixed session state bug where stale confirmations overrode saved matches
   - Match summary shows clear breakdown: "X ready to use" vs "Y need your confirmation"
 
 **Recent Improvements (2025-11-17 - v6.9):**

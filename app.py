@@ -827,23 +827,32 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     btn_col1, btn_col2 = st.columns(2)
                     with btn_col1:
                         if st.button("Confirm", key=f"{match_key}_confirm", help="Confirm this match", use_container_width=True):
+                            # Set confirmation in session state FIRST
                             st.session_state.match_confirmations[result.gs_product_name] = {
                                 'confirmed': True,
                                 'pptx_name': result.pptx_product_name
                             }
 
-                            # Save confirmation to Google Sheets
-                            if pptx_name_to_index and result.pptx_product_name in pptx_name_to_index:
-                                slide_index = pptx_name_to_index[result.pptx_product_name]
-                                save_confirmed_match(
-                                    product_name=result.gs_product_name,
-                                    slide_index=slide_index,
-                                    slide_title=result.pptx_product_name,
-                                    dataset=current_dataset,
-                                    match_type='fuzzy_confirmed' if match_type == 'fuzzy' else 'poor_confirmed',
-                                    confidence=result.confidence
-                                )
+                            # Save confirmation to Google Sheets and wait for completion
+                            save_success = False
+                            try:
+                                if pptx_name_to_index and result.pptx_product_name in pptx_name_to_index:
+                                    slide_index = pptx_name_to_index[result.pptx_product_name]
+                                    save_success, save_message = save_confirmed_match(
+                                        product_name=result.gs_product_name,
+                                        slide_index=slide_index,
+                                        slide_title=result.pptx_product_name,
+                                        dataset=current_dataset,
+                                        match_type='fuzzy_confirmed' if match_type == 'fuzzy' else 'poor_confirmed',
+                                        confidence=result.confidence
+                                    )
+                                    if not save_success:
+                                        st.warning(f"Match confirmed locally but couldn't save to Google Sheets: {save_message}")
+                            except Exception as save_error:
+                                # Don't block on save error - confirmation is already in session state
+                                st.warning(f"Match confirmed locally but couldn't save to Google Sheets: {save_error}")
 
+                            # Only rerun after save completes (successful or not - session state is set either way)
                             st.rerun()
                     with btn_col2:
                         if st.button("Change", key=f"{match_key}_change", help="Choose a different match", use_container_width=True):
@@ -893,22 +902,27 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                             st.markdown(f"{alt_idx + 1}. {alt_name} ({alt_score}% confidence)")
                         with alt_col2:
                             if st.button(f"Use", key=f"{match_key}_alt_{alt_idx}", use_container_width=True):
+                                # Set confirmation in session state
                                 st.session_state.match_confirmations[result.gs_product_name] = {
                                     'confirmed': True,
                                     'pptx_name': alt_name
                                 }
 
                                 # Save alternative selection to Google Sheets
-                                if pptx_name_to_index and alt_name in pptx_name_to_index:
-                                    slide_index = pptx_name_to_index[alt_name]
-                                    save_confirmed_match(
-                                        product_name=result.gs_product_name,
-                                        slide_index=slide_index,
-                                        slide_title=alt_name,
-                                        dataset=current_dataset,
-                                        match_type='alternative_selected',
-                                        confidence=alt_score
-                                    )
+                                try:
+                                    if pptx_name_to_index and alt_name in pptx_name_to_index:
+                                        slide_index = pptx_name_to_index[alt_name]
+                                        save_confirmed_match(
+                                            product_name=result.gs_product_name,
+                                            slide_index=slide_index,
+                                            slide_title=alt_name,
+                                            dataset=current_dataset,
+                                            match_type='alternative_selected',
+                                            confidence=alt_score
+                                        )
+                                except Exception as save_error:
+                                    # Don't block on save error - confirmation is already in session state
+                                    st.warning(f"Match saved locally but couldn't save to Google Sheets: {save_error}")
 
                                 st.rerun()
 
@@ -934,22 +948,27 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                                 st.markdown(f"- {slide_name}")
                             with search_col2:
                                 if st.button(f"Use", key=f"{match_key}_search_{search_idx}", use_container_width=True):
+                                    # Set confirmation in session state
                                     st.session_state.match_confirmations[result.gs_product_name] = {
                                         'confirmed': True,
                                         'pptx_name': slide_name
                                     }
 
                                     # Save search selection to Google Sheets
-                                    if pptx_name_to_index and slide_name in pptx_name_to_index:
-                                        slide_index = pptx_name_to_index[slide_name]
-                                        save_confirmed_match(
-                                            product_name=result.gs_product_name,
-                                            slide_index=slide_index,
-                                            slide_title=slide_name,
-                                            dataset=current_dataset,
-                                            match_type='search_selected',
-                                            confidence=0
-                                        )
+                                    try:
+                                        if pptx_name_to_index and slide_name in pptx_name_to_index:
+                                            slide_index = pptx_name_to_index[slide_name]
+                                            save_confirmed_match(
+                                                product_name=result.gs_product_name,
+                                                slide_index=slide_index,
+                                                slide_title=slide_name,
+                                                dataset=current_dataset,
+                                                match_type='search_selected',
+                                                confidence=0
+                                            )
+                                    except Exception as save_error:
+                                        # Don't block on save error - confirmation is already in session state
+                                        st.warning(f"Match saved locally but couldn't save to Google Sheets: {save_error}")
 
                                     st.rerun()
 
@@ -957,6 +976,15 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                             st.caption(f"...and {len(matching_slides) - 10} more. Refine your search.")
                     else:
                         st.info("No slides found. Try different keywords.")
+
+                # Add Skip button
+                st.markdown("")
+                if st.button("Skip this product", key=f"{match_key}_skip_alt", use_container_width=True):
+                    st.session_state.match_confirmations[result.gs_product_name] = {
+                        'confirmed': False,
+                        'skipped': True
+                    }
+                    st.rerun()
 
                 st.markdown("")
 
@@ -985,22 +1013,27 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                                 st.markdown(f"- {slide_name}")
                             with search_col2:
                                 if st.button(f"Use", key=f"{match_key}_poor_search_{search_idx}", use_container_width=True):
+                                    # Set confirmation in session state
                                     st.session_state.match_confirmations[result.gs_product_name] = {
                                         'confirmed': True,
                                         'pptx_name': slide_name
                                     }
 
                                     # Save poor match search selection to Google Sheets
-                                    if pptx_name_to_index and slide_name in pptx_name_to_index:
-                                        slide_index = pptx_name_to_index[slide_name]
-                                        save_confirmed_match(
-                                            product_name=result.gs_product_name,
-                                            slide_index=slide_index,
-                                            slide_title=slide_name,
-                                            dataset=current_dataset,
-                                            match_type='manual_search',
-                                            confidence=0
-                                        )
+                                    try:
+                                        if pptx_name_to_index and slide_name in pptx_name_to_index:
+                                            slide_index = pptx_name_to_index[slide_name]
+                                            save_confirmed_match(
+                                                product_name=result.gs_product_name,
+                                                slide_index=slide_index,
+                                                slide_title=slide_name,
+                                                dataset=current_dataset,
+                                                match_type='manual_search',
+                                                confidence=0
+                                            )
+                                    except Exception as save_error:
+                                        # Don't block on save error - confirmation is already in session state
+                                        st.warning(f"Match saved locally but couldn't save to Google Sheets: {save_error}")
 
                                     st.rerun()
 
@@ -1008,6 +1041,15 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                             st.caption(f"...and {len(matching_slides) - 15} more. Refine your search.")
                     else:
                         st.info("No slides found. Try different keywords.")
+
+                # Add Skip button for poor matches
+                st.markdown("")
+                if st.button("Skip this product", key=f"{match_key}_skip_poor", use_container_width=True):
+                    st.session_state.match_confirmations[result.gs_product_name] = {
+                        'confirmed': False,
+                        'skipped': True
+                    }
+                    st.rerun()
 
                 st.markdown("")
 
@@ -1059,11 +1101,10 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
         st.success(f"Ready to generate PowerPoint with {len(confirmed_matches)} products!")
 
         # ============================================================
-        # IMPACT SLIDE SELECTION (SIMPLIFIED WITH AUTO-SELECTION)
+        # IMPACT SLIDE SELECTION (SIMPLIFIED)
         # ============================================================
         st.markdown("---")
-        st.subheader("Step 2: Impact Slides (Auto-Selected)")
-        st.caption("Impact slides are automatically selected based on partner. You can override if needed.")
+        st.subheader("Step 2: Impact Slides")
 
         # Import impact slide functions
         from src.slide_matcher import extract_unique_partners, PARTNER_IMPACT_SLIDES, find_all_impact_slides
@@ -1076,99 +1117,85 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
             if 'impact_slide_selections' not in st.session_state:
                 st.session_state.impact_slide_selections = {}
 
-            # Auto-select from reference table
-            st.markdown("**Impact slides for this proposal:**")
+            # Auto-select from reference table for all partners
+            partners_with_slides = []
+            partners_without_slides = []
 
             for partner in unique_partners:
-                # Get auto-selected slide from reference table
                 auto_selected = PARTNER_IMPACT_SLIDES.get(partner)
-
                 if auto_selected:
-                    # Check if user has overridden
+                    # Auto-select if not already set
                     current_selection = st.session_state.impact_slide_selections.get(partner)
-
                     if not current_selection or current_selection.get('slide_index') is None:
-                        # Use auto-selection
                         st.session_state.impact_slide_selections[partner] = auto_selected.copy()
-
-                    # Display current selection
-                    active_selection = st.session_state.impact_slide_selections[partner]
-
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        st.markdown(f"**{partner}:** {active_selection['slide_title']}")
-
-                    with col2:
-                        # Override button
-                        if st.button("Override", key=f"override_{partner}", use_container_width=True):
-                            st.session_state[f'show_override_{partner}'] = True
-                            st.rerun()
-
-                    # Show override UI if button was clicked
-                    if st.session_state.get(f'show_override_{partner}', False):
-                        pptx_path = Path("templates/November All Slides.pptx")
-                        all_impact_slides = find_all_impact_slides(str(pptx_path))
-
-                        dropdown_options = ["None - Skip impact slide"]
-                        dropdown_options.extend([f"{slide['slide_title']}" for slide in all_impact_slides])
-
-                        # Find current selection index
-                        try:
-                            default_index = dropdown_options.index(active_selection['slide_title'])
-                        except ValueError:
-                            default_index = 0
-
-                        selected_option = st.selectbox(
-                            f"Select impact slide for {partner}",
-                            options=dropdown_options,
-                            index=default_index,
-                            key=f"override_select_{partner}"
-                        )
-
-                        col_apply, col_cancel = st.columns(2)
-                        with col_apply:
-                            if st.button("Apply", key=f"apply_{partner}", use_container_width=True):
-                                if selected_option == "None - Skip impact slide":
-                                    st.session_state.impact_slide_selections[partner] = {
-                                        'slide_title': None,
-                                        'slide_index': None
-                                    }
-                                else:
-                                    selected_slide = next(
-                                        (slide for slide in all_impact_slides if slide['slide_title'] == selected_option),
-                                        None
-                                    )
-                                    if selected_slide:
-                                        st.session_state.impact_slide_selections[partner] = {
-                                            'slide_title': selected_slide['slide_title'],
-                                            'slide_index': selected_slide['slide_index']
-                                        }
-
-                                st.session_state[f'show_override_{partner}'] = False
-                                st.rerun()
-
-                        with col_cancel:
-                            if st.button("Cancel", key=f"cancel_{partner}", use_container_width=True):
-                                st.session_state[f'show_override_{partner}'] = False
-                                st.rerun()
-
+                    partners_with_slides.append(partner)
                 else:
-                    st.warning(f"**{partner}:** No impact slide found in reference table. Please add manually or skip.")
+                    partners_without_slides.append(partner)
                     st.session_state.impact_slide_selections[partner] = {
                         'slide_title': None,
                         'slide_index': None
                     }
 
-            # Summary
-            selected_count = sum(
-                1 for selection in st.session_state.impact_slide_selections.values()
-                if selection.get('slide_title') is not None
-            )
+            # Show simple summary message
+            if partners_with_slides:
+                partner_list = ", ".join(partners_with_slides)
+                st.success(f"Impact slides found for: {partner_list}")
 
-            if selected_count > 0:
-                st.success(f"{selected_count} impact slide(s) will be included")
-            else:
-                st.info("No impact slides selected")
+            if partners_without_slides:
+                partner_list = ", ".join(partners_without_slides)
+                st.warning(f"No impact slides found for: {partner_list}")
+
+            # Collapsible customization section
+            with st.expander("Customize Impact Slides (Optional)", expanded=False):
+                st.caption("Change or remove impact slides for specific partners")
+
+                from pathlib import Path
+
+                for partner in unique_partners:
+                    active_selection = st.session_state.impact_slide_selections.get(partner, {})
+
+                    st.markdown(f"**{partner}**")
+
+                    # Load all impact slide options
+                    pptx_path = Path("templates/November All Slides.pptx")
+                    all_impact_slides = find_all_impact_slides(str(pptx_path))
+
+                    dropdown_options = ["None - Skip impact slide"]
+                    dropdown_options.extend([f"{slide['slide_title']}" for slide in all_impact_slides])
+
+                    # Find current selection index
+                    current_title = active_selection.get('slide_title')
+                    try:
+                        default_index = dropdown_options.index(current_title) if current_title else 0
+                    except ValueError:
+                        default_index = 0
+
+                    selected_option = st.selectbox(
+                        f"Impact slide for {partner}",
+                        options=dropdown_options,
+                        index=default_index,
+                        key=f"impact_select_{partner}",
+                        label_visibility="collapsed"
+                    )
+
+                    # Update selection immediately on change
+                    if selected_option == "None - Skip impact slide":
+                        st.session_state.impact_slide_selections[partner] = {
+                            'slide_title': None,
+                            'slide_index': None
+                        }
+                    else:
+                        selected_slide = next(
+                            (slide for slide in all_impact_slides if slide['slide_title'] == selected_option),
+                            None
+                        )
+                        if selected_slide:
+                            st.session_state.impact_slide_selections[partner] = {
+                                'slide_title': selected_slide['slide_title'],
+                                'slide_index': selected_slide['slide_index']
+                            }
+
+                    st.markdown("")  # Spacing
 
         else:
             st.info("No products selected - add products to see impact slides")
@@ -2408,8 +2435,8 @@ with tab1:
     # ============================================================
     if len(st.session_state.proposal_products) > 0:
         st.divider()
-        st.subheader("4. Generate PowerPoint Proposal (BETA)")
-        st.caption("Automatically create a customized PowerPoint presentation for your client")
+        st.subheader("4. Generate PowerPoint Proposal")
+        st.caption("Automatically create a customized PowerPoint presentation with matched product slides")
 
         # Add JavaScript to capture scroll position before PowerPoint section button clicks
         components.html("""
@@ -2438,191 +2465,71 @@ with tab1:
             </script>
         """, height=0)
 
-        # ============================================================
-        # MANUAL MATCH OVERRIDE UI
-        # ============================================================
-        with st.expander("Manual Match Override (Advanced)", expanded=False):
-            st.caption("Override automatic slide matching for products that need specific slides")
-
-            # Import match manager functions
-            from src.match_manager import (
-                save_manual_match,
-                delete_manual_match,
-                get_all_manual_matches
-            )
-
-            # Check if pricing data is loaded
-            if 'df_template' not in st.session_state or st.session_state.df_template is None:
-                st.warning("Pricing data not loaded yet. Please wait for data to load.")
-            else:
-                # Subsection A: Create new manual match
-                st.markdown("#### Add Manual Match")
-
-                col1, col2 = st.columns([1, 1])
-
-                with col1:
-                    # Dropdown of all products from catalog
-                    all_product_names = sorted(st.session_state.df_template['Product/Service'].tolist())
-                    selected_product = st.selectbox(
-                        "Select Product",
-                        all_product_names,
-                        key="manual_match_product_selector"
-                    )
-
-                with col2:
-                    # Dropdown of all slides from template
-                    try:
-                        from pathlib import Path
-                        from pptx import Presentation
-
-                        pptx_path = Path("templates/November All Slides.pptx")
-
-                        if pptx_path.exists():
-                            # Load slides only once per session
-                            if 'all_slide_options' not in st.session_state:
-                                with st.spinner("Loading slides..."):
-                                    prs = Presentation(str(pptx_path))
-                                    all_slide_options = []
-                                    for i, slide in enumerate(prs.slides):
-                                        if slide.shapes.title and slide.shapes.title.text.strip():
-                                            slide_title = slide.shapes.title.text.strip()
-                                            all_slide_options.append((i, slide_title))
-                                        else:
-                                            all_slide_options.append((i, f"(Slide {i} - No Title)"))
-                                    st.session_state.all_slide_options = all_slide_options
-
-                            # Create dropdown options
-                            slide_display_options = [f"{title} (Slide {idx})" for idx, title in st.session_state.all_slide_options]
-
-                            selected_slide_display = st.selectbox(
-                                "Select Slide",
-                                slide_display_options,
-                                key="manual_match_slide_selector"
-                            )
-
-                            # Parse selected index and title
-                            selected_idx = slide_display_options.index(selected_slide_display)
-                            selected_slide_index, selected_slide_title = st.session_state.all_slide_options[selected_idx]
-
-                        else:
-                            st.error("PowerPoint template not found")
-                            selected_slide_index = None
-                            selected_slide_title = None
-
-                    except Exception as e:
-                        st.error(f"Error loading slides: {str(e)}")
-                        selected_slide_index = None
-                        selected_slide_title = None
-
-                # Save button
-                if st.button("Save Manual Match", use_container_width=True, key="save_manual_match_btn"):
-                    if selected_slide_index is not None and selected_slide_title:
-                        success = save_manual_match(
-                            selected_product,
-                            selected_slide_index,
-                            selected_slide_title,
-                            match_category="product"
-                        )
-                        if success:
-                            st.success(f"Saved: {selected_product} → {selected_slide_title}")
-                            st.rerun()
-                        else:
-                            st.error("Failed to save manual match")
-                    else:
-                        st.error("Please select both a product and a slide")
-
-                st.divider()
-
-                # Subsection B: Display saved manual matches
-                st.markdown("#### Saved Manual Matches")
-
-                manual_matches = get_all_manual_matches("product")
-
-                if manual_matches:
-                    # Build table data
-                    table_data = []
-                    for normalized_name, match_data in manual_matches.items():
-                        table_data.append({
-                            "Product": match_data.get('original_name', normalized_name),
-                            "Slide": f"{match_data['slide_title']} (Slide {match_data['slide_index']})",
-                            "Created": match_data['created_date']
-                        })
-
-                    # Display as dataframe
-                    import pandas as pd
-                    df_manual = pd.DataFrame(table_data)
-                    st.dataframe(df_manual, use_container_width=True)
-
-                    # Delete buttons
-                    st.caption("Remove manual matches:")
-                    for idx, row in df_manual.iterrows():
-                        col1, col2 = st.columns([3, 1])
-                        with col1:
-                            st.text(row['Product'])
-                        with col2:
-                            if st.button("Delete", key=f"delete_manual_match_{idx}", use_container_width=True):
-                                success = delete_manual_match(row['Product'], match_category="product")
-                                if success:
-                                    st.success(f"Deleted: {row['Product']}")
-                                    st.rerun()
-                                else:
-                                    st.error(f"Failed to delete: {row['Product']}")
-                else:
-                    st.info("No manual matches saved yet. Create one above to override automatic matching.")
-
-        st.divider()
-
         # Button to trigger matching
         if st.button("Review Matches & Generate PowerPoint", type="primary", use_container_width=True, key="trigger_pptx_matching"):
             st.session_state.show_pptx_matching = True
             st.session_state.generated_pptx = None  # Clear any previous generation
             st.session_state.match_confirmations = {}  # Clear stale confirmations from previous sessions
+            st.session_state.pptx_match_results = None  # Force recalculation of matches
             st.rerun()
 
         # Show matching UI if triggered
         if st.session_state.get('show_pptx_matching', False):
             try:
-                # Load PowerPoint product names
-                from pathlib import Path
-                from pptx import Presentation
+                # Only load PowerPoint and run matching if not already cached
+                if 'pptx_match_results' not in st.session_state or st.session_state.pptx_match_results is None:
+                    # Load PowerPoint product names
+                    from pathlib import Path
+                    from pptx import Presentation
 
-                pptx_path = Path("templates/November All Slides.pptx")
+                    pptx_path = Path("templates/November All Slides.pptx")
 
-                if not pptx_path.exists():
-                    st.error("PowerPoint template not found at templates/November All Slides.pptx")
-                    st.session_state.show_pptx_matching = False
-                else:
-                    # Extract product names from PowerPoint
-                    with st.spinner("Loading PowerPoint slides..."):
-                        prs = Presentation(str(pptx_path))
+                    if not pptx_path.exists():
+                        st.error("PowerPoint template not found at templates/November All Slides.pptx")
+                        st.session_state.show_pptx_matching = False
+                    else:
+                        # Extract product names from PowerPoint
+                        with st.spinner("Loading PowerPoint slides..."):
+                            prs = Presentation(str(pptx_path))
 
-                        pptx_product_names = []
-                        pptx_name_to_index = {}  # Map slide names to indices for saving confirmations
-                        slide_list = list(prs.slides)
+                            pptx_product_names = []
+                            pptx_name_to_index = {}  # Map slide names to indices for saving confirmations
+                            slide_list = list(prs.slides)
 
-                        for slide_idx, slide in enumerate(slide_list):
-                            if len(slide.shapes) >= 1:
-                                first_shape = slide.shapes[0]
-                                if hasattr(first_shape, "text") and first_shape.text.strip():
-                                    product_name = first_shape.text.strip()
-                                    if product_name not in pptx_product_names:
-                                        pptx_product_names.append(product_name)
-                                        pptx_name_to_index[product_name] = slide_idx
+                            for slide_idx, slide in enumerate(slide_list):
+                                if len(slide.shapes) >= 1:
+                                    first_shape = slide.shapes[0]
+                                    if hasattr(first_shape, "text") and first_shape.text.strip():
+                                        product_name = first_shape.text.strip()
+                                        if product_name not in pptx_product_names:
+                                            pptx_product_names.append(product_name)
+                                            pptx_name_to_index[product_name] = slide_idx
 
-                    st.success(f"Loaded {len(pptx_product_names)} product slides from PowerPoint")
+                        st.success(f"Loaded {len(pptx_product_names)} product slides from PowerPoint")
 
-                    # Get proposal product names
-                    gs_product_names = [item['product_data']['Product/Service'] for item in st.session_state.proposal_products]
+                        # Get proposal product names
+                        gs_product_names = [item['product_data']['Product/Service'] for item in st.session_state.proposal_products]
 
-                    # Create matcher and run matching (pass dataset for confirmed match lookup)
-                    with st.spinner("Matching products to slides..."):
-                        # Clear cache to ensure fresh confirmed matches are loaded
-                        from src.match_memory import _load_all_matches_data
-                        _load_all_matches_data.clear()
+                        # Create matcher and run matching (pass dataset for confirmed match lookup)
+                        with st.spinner("Matching products to slides..."):
+                            # Clear cache to ensure fresh confirmed matches are loaded
+                            from src.match_memory import _load_all_matches_data
+                            _load_all_matches_data.clear()
 
-                        matcher = SlideMatcher(pptx_product_names)
-                        current_dataset = st.session_state.get('selected_dataset', 'demo')
-                        match_results = matcher.batch_match(gs_product_names, dataset=current_dataset)
+                            matcher = SlideMatcher(pptx_product_names)
+                            current_dataset = st.session_state.get('selected_dataset', 'demo')
+                            match_results = matcher.batch_match(gs_product_names, dataset=current_dataset)
+
+                        # Cache results in session state
+                        st.session_state.pptx_match_results = match_results
+                        st.session_state.pptx_product_names = pptx_product_names
+                        st.session_state.pptx_name_to_index = pptx_name_to_index
+
+                # Use cached match results
+                if st.session_state.pptx_match_results is not None:
+                    match_results = st.session_state.pptx_match_results
+                    pptx_product_names = st.session_state.pptx_product_names
+                    pptx_name_to_index = st.session_state.pptx_name_to_index
 
                     # Show match review UI (pass name-to-index mapping for saving confirmations)
                     confirmed_matches = show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index)

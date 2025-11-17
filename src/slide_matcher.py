@@ -310,8 +310,8 @@ class SlideMatcher:
                     match_method=f"Previously confirmed ({confirmed_match['match_type']})"
                 )
         except Exception as e:
-            # If confirmed match lookup fails, continue with other methods
-            pass
+            # Log error if lookup fails
+            print(f"Error looking up confirmed match for '{gs_product_name}': {str(e)}")
 
         # Step 1: Check manual matches from JSON (legacy system)
         manual_match_data = get_manual_match(gs_product_name, match_category="product")
