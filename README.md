@@ -2,8 +2,8 @@
 
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
-**Current Status:** ✅ Production Ready - Complete 3-Tab Workflow
-**Version:** 4.0 - UI Restructure Complete with Proposal-to-Order Integration
+**Current Status:** ✅ Production Ready - Complete 4-Tab Workflow with PowerPoint Automation
+**Version:** 6.12 - HTML Form Template Customization
 
 ---
 
@@ -68,35 +68,48 @@ pricing-data-solution-pbp/
 
 ## 🎯 Features
 
-### 3-Tab Workflow
+### 4-Tab Workflow
 
-#### Tab 1: Proposals (for prospective clients)
+#### Tab 1: Proposal Generator (for prospective clients)
 - **Product Filtering:** Filter by price range, partner, country of origin
 - **Product Catalog:** Browse all products with detailed specifications
-- **Proposal Configuration:** Set quantity, markup %, customization options, MSRP comparison
+- **Bulk Actions:** Add all products from selected partners at once
+- **Proposal Configuration:** Set quantity, markup %, MSRP pricing (auto-calculated)
+- **Saved Proposals:** Save and load proposals across sessions (cloud-persistent)
 - **MOQ-Based Pricing Tables:** Automatic minimum order quantity calculations
-- **CSV Downloads:** Export proposal tables and client order forms
-- **Terms & Conditions:** Customizable terms loaded from config file
+- **PowerPoint Generation:** Automated slide matching and customized presentations
+- **CSV Downloads:** Export proposal tables
 
-#### Tab 2: Order & Client Info (main workflow)
-- **Proposal-to-Order Connection:** Import products directly from Tab 1 proposals
+#### Tab 2: Client Order Form Generator
+- **Order Details:** Pre-fill client information (type, company, contact, email)
+- **Form Template Customization:** Edit any template text with dropdown selector
+  - 8 customizable fields (instructions, dropshipping, placeholders, options)
+  - Real-time updates to generated form
+- **Professional HTML Forms:** Email-ready order forms with styled tables
+- **Multiple Formats:** Download as HTML, TXT, or CSV
+
+#### Tab 3: Order & Client Info (main workflow)
+- **Saved Orders:** Save and load orders across sessions (cloud-persistent)
+- **3 Entry Points:**
+  - Option A: Import completed HTML order forms (recommended)
+  - Option B: Import products from Tab 1 proposals
+  - Option C: Manual product selection with MSRP pricing
 - **Multi-Product Ordering:** Add multiple products with add-to-cart pattern
-- **Client Information Collection:** Company details, contacts, payment terms
 - **Per-Product Markup:** Configure individual markup percentages
 - **Tiered & Flat-Rate Pricing:** Flexible pricing models per product
 - **Customization Options:** Setup fees + per-unit costs for custom branding
-- **Order-Level Costs:** Shipping and tariff applied to entire order
-- **Discount Options:** NGO preset (5%) or custom discounts
-- **Marketing Rounding:** Optional charm pricing (e.g., $60 → $59)
-- **Custom Line Items:** Add unique services not in catalog
+- **Order-Level Settings:** Shipping, tariffs, discounts, custom line items
 - **Order Notes:** 5 categories (kitting, client requests, samples, artwork, general)
 
-#### Tab 3: Execution & Accounting
+#### Tab 4: Execution & Accounting
 - **Order Validation:** Completeness check with warnings
-- **Editable Order Summary:** Quick edits for shipping, discounts, credit card fees
-- **Invoice Generation:** Bookkeeper-standardized invoice format
-- **Purchase Order Generation:** Partner-specific PO with auto-extracted contacts
-- **CSV Export:** Download order data for accounting systems
+- **Editable Order Information:** Review and complete missing fields
+- **4-Table Invoice/PO Format:** Bookkeeper-standardized template
+  - Client/Company Information
+  - Partners + Point of Contacts
+  - Order Details
+  - Invoice and PO Item Details
+- **Dual Export Options:** CSV (bookkeeper) and HTML (client-facing)
 
 ### Formula
 
@@ -271,5 +284,5 @@ Peace by Piece International - Internal Tool
 
 ---
 
-**Last Updated:** 2025-10-28
-**Version:** 4.0 (Complete UI Restructure with Proposal-to-Order Integration)
+**Last Updated:** 2025-11-17
+**Version:** 6.12 (HTML Form Template Customization)
