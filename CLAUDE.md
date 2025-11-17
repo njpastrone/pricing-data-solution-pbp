@@ -148,10 +148,18 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 
 ### Tab 2: Client Order Form Generator
 - **Order Details (Section 1):** Pre-fill client information (type, company, contact, email)
+- **Form Template Customization (Optional):** Customize any template text in the order form
+  - Dropdown selector to choose which field to edit (8 customizable fields)
+  - Default selection: Dropshipping Instructions
+  - Customizable fields: form instructions, dropshipping instructions/placeholder, shipping/billing placeholders, customization placeholder, impact card options, payment options
+  - Changes apply to generated HTML form in real-time
+  - Positioned before "Update Order Form" button for better workflow
 - **Client Order Form (Section 2):** Professional, email-ready HTML order form with:
   - Styled table format (light/dark mode compatible)
   - Clear instructional prompts for clients
   - Pre-filled product names and quantities
+  - Pre-filled client information from Section 1
+  - Customizable template text throughout
   - Multiple choice delete-to-select format
   - Download as HTML, TXT, or CSV
   - "Update Order Form with This Info" button for confirmation
@@ -302,9 +310,21 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.11 - PowerPoint UI Cleanup & Match Persistence Fix
+**Version:** 6.12 - HTML Form Template Customization
 
 **Last Updated:** 2025-11-17
+
+**Recent Improvements (2025-11-17 - v6.12):**
+- ✅ **HTML Form Template Customization:**
+  - Added comprehensive form template editor in Tab 2
+  - Dropdown selector to choose which field to customize (8 options)
+  - Default: Dropshipping Instructions (most commonly edited)
+  - Customizable fields: form instructions, dropshipping instructions/placeholder, shipping/billing placeholders, customization placeholder, impact card options, payment options
+  - Positioned before "Update Order Form" button for better workflow
+  - All changes apply to generated HTML form in real-time
+  - Centralized storage in `st.session_state.form_customizations` dictionary
+  - Legacy compatibility maintained with `dropshipping_notes` for invoice generation
+  - Fixed bug where client info wasn't appearing in HTML form (f-string interpolation issue)
 
 **Recent Improvements (2025-11-17 - v6.11):**
 - ✅ **Critical Bug Fix - Match Persistence:**

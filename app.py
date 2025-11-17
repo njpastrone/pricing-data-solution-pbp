@@ -1,7 +1,7 @@
 """
 Peace by Piece International - Order Management System
 4-tab workflow: Proposals → Client Order Forms → Order & Client Info → Execution & Accounting
-Version: 6.7 (Saved Orders with Google Sheets Backend)
+Version: 6.12 (HTML Form Template Customization)
 """
 
 import streamlit as st
@@ -253,9 +253,35 @@ if 'proposal_terms' not in st.session_state:
 • No cancellations will be accepted after any custom order has been initiated
 • Gifts returned to Peace by Piece due to incorrect recipient information will incur a $20 fee plus any additional returned shipping charges from the carrier. If a new address is not provided within 30 days of the gift's return, the gift will be shipped back to the client for distribution"""
 
-# Initialize dropshipping notes
+# Initialize form customization fields
+if 'form_customizations' not in st.session_state:
+    st.session_state.form_customizations = {
+        'form_instructions': """1. Copy & paste the entire form into Docs, Word, or directly into your email reply (the format should copy along with the text)
+2. Click in the gray areas to type your answers
+3. For multiple choice questions, delete the options you DON'T want and keep the one you DO want
+4. When finished, select all (Ctrl+A or Cmd+A), copy, and paste into your email reply
+5. Fields marked with * are required""",
+        'dropshipping_instructions': "For drop shipping orders, please provide: destination addresses, quantities per location, and any special delivery instructions",
+        'dropshipping_placeholder': "[Input dropshipping info here]",
+        'shipping_address_placeholder': "[Type full shipping address here, or N/A if drop shipping]",
+        'billing_address_placeholder': '[Type billing address here, or "Same as shipping"]',
+        'customization_placeholder': "[Describe any customization, logo placement, colors, etc.]",
+        'impact_card_options': """Peace by Piece Impact Card
+Custom Impact Card
+Custom Message Card
+Send us your own card""",
+        'payment_options': """ACH
+Check
+Credit Card (3% processing fee applies)"""
+    }
+
+# Legacy compatibility - maintain sync between old and new dropshipping fields
 if 'dropshipping_notes' not in st.session_state:
-    st.session_state.dropshipping_notes = "Please enter the following information for dropshipping: x, y, z"
+    st.session_state.dropshipping_notes = st.session_state.form_customizations['dropshipping_instructions']
+else:
+    # If dropshipping_notes exists but differs from form_customizations, sync them
+    if st.session_state.dropshipping_notes != st.session_state.form_customizations['dropshipping_instructions']:
+        st.session_state.dropshipping_notes = st.session_state.form_customizations['dropshipping_instructions']
 
 if 'using_proposal_data' not in st.session_state:
     st.session_state.using_proposal_data = False
@@ -2411,24 +2437,6 @@ with tab1:
             st.code(st.session_state.proposal_terms, language=None)
             st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
 
-        # ============================================================
-        # LEGACY SECTION 7: DROPSHIPPING NOTES
-        # ============================================================
-        st.divider()
-        st.subheader("(Legacy) Notes on Dropshipping")
-
-        st.session_state.dropshipping_notes = st.text_area(
-            "Edit dropshipping instructions if needed",
-            value=st.session_state.dropshipping_notes,
-            height=150,
-            key="dropshipping_notes_input",
-            help="These notes will appear in the Client Order Form and final Invoice"
-        )
-
-        # Add copy button for dropshipping notes
-        if st.button("Copy Dropshipping Notes", key="copy_dropship", use_container_width=True):
-            st.code(st.session_state.dropshipping_notes, language=None)
-            st.info("Select the text above and copy it (Ctrl+C or Cmd+C)")
 
     # ============================================================
     # SECTION 4: POWERPOINT PROPOSAL GENERATION (PHASE 2.5 COMPLETE)
@@ -2630,6 +2638,54 @@ with tab2:
             key="order_detail_contact_email"
         )
 
+    # ============================================================
+    # FORM CUSTOMIZATION (OPTIONAL)
+    # ============================================================
+    st.divider()
+    with st.expander("Customize Form Template Text (Optional)", expanded=False):
+        st.caption("Edit any template text that appears in the client order form")
+
+        # Dropdown to select which field to customize
+        field_labels = {
+            'form_instructions': 'How to Fill Out This Form (Instructions at top)',
+            'dropshipping_instructions': 'Dropshipping Instructions',
+            'dropshipping_placeholder': 'Dropshipping Information Placeholder',
+            'shipping_address_placeholder': 'Shipping Address Placeholder',
+            'billing_address_placeholder': 'Billing Address Placeholder',
+            'customization_placeholder': 'Customization/Branding Placeholder',
+            'impact_card_options': 'Impact Card Options',
+            'payment_options': 'Payment Options'
+        }
+
+        selected_field = st.selectbox(
+            "Select field to customize",
+            options=list(field_labels.keys()),
+            format_func=lambda x: field_labels[x],
+            index=1,  # Default to dropshipping_instructions
+            key="customization_field_selector"
+        )
+
+        # Text area for editing the selected field
+        current_value = st.session_state.form_customizations.get(selected_field, '')
+
+        # Determine height based on field type
+        height = 150 if selected_field in ['form_instructions', 'impact_card_options', 'payment_options'] else 100
+
+        new_value = st.text_area(
+            f"Edit: {field_labels[selected_field]}",
+            value=current_value,
+            height=height,
+            key=f"customize_{selected_field}",
+            help=f"This text appears in the '{field_labels[selected_field]}' section of the order form"
+        )
+
+        # Update session state if value changed
+        if new_value != current_value:
+            st.session_state.form_customizations[selected_field] = new_value
+            # Update legacy dropshipping_notes for compatibility
+            if selected_field == 'dropshipping_instructions':
+                st.session_state.dropshipping_notes = new_value
+
     # Button to confirm info is ready (visual feedback)
     st.divider()
     if st.button("Update Order Form with This Info", type="primary", use_container_width=True, key="update_order_form"):
@@ -2684,12 +2740,16 @@ with tab2:
     <h2>PEACE BY PIECE CLIENT ORDER FORM</h2>
 
     <div class="instructions-box">
-        <p><strong>HOW TO FILL OUT THIS FORM:</strong></p>
-        <p>1. Copy & paste the entire form into Docs, Word, or directly into your email reply (the format should copy along with the text)</p>
-        <p>2. Click in the gray areas to type your answers</p>
-        <p>3. For multiple choice questions, delete the options you DON'T want and keep the one you DO want</p>
-        <p>4. When finished, select all (Ctrl+A or Cmd+A), copy, and paste into your email reply</p>
-        <p>5. Fields marked with <span class="required">*</span> are required</p>
+        <p><strong>HOW TO FILL OUT THIS FORM:</strong></p>"""
+
+    # Add customizable instructions (one paragraph per line)
+    instructions = st.session_state.form_customizations.get('form_instructions', '').strip()
+    for i, line in enumerate(instructions.split('\n'), 1):
+        if line.strip():
+            html_form += f"""
+        <p>{line.strip()}</p>"""
+
+    html_form += f"""
     </div>
 
     <table>
@@ -2724,19 +2784,19 @@ with tab2:
         </tr>
         <tr>
             <td>Shipping Address<span class="helper-text">(if single location)</span></td>
-            <td class="fill-in">[Type full shipping address here, or N/A if drop shipping]</td>
+            <td class="fill-in">""" + st.session_state.form_customizations.get('shipping_address_placeholder', '[Type full shipping address here, or N/A if drop shipping]') + """</td>
         </tr>
         <tr>
             <td style="font-weight: bold;">Dropshipping Instructions</td>
-            <td style="background-color: #f8f9fa !important; padding: 10px; color: #000000 !important;">""" + st.session_state.dropshipping_notes.replace('\n', '<br/>') + """</td>
+            <td style="background-color: #f8f9fa !important; padding: 10px; color: #000000 !important;">""" + st.session_state.form_customizations.get('dropshipping_instructions', '').replace('\n', '<br/>') + """</td>
         </tr>
         <tr>
             <td>Dropshipping Information</td>
-            <td class="fill-in">[Input dropshipping info here]</td>
+            <td class="fill-in">""" + st.session_state.form_customizations.get('dropshipping_placeholder', '[Input dropshipping info here]') + """</td>
         </tr>
         <tr>
             <td>Billing Address</td>
-            <td class="fill-in">[Type billing address here, or "Same as shipping"]</td>
+            <td class="fill-in">""" + st.session_state.form_customizations.get('billing_address_placeholder', '[Type billing address here, or "Same as shipping"]') + """</td>
         </tr>
         <tr>
             <td>Client In-Hands Date <span class="required">*</span></td>
@@ -2755,6 +2815,7 @@ with tab2:
         </tr>"""
 
     # Add product rows - either from proposal or blank rows
+    customization_placeholder = st.session_state.form_customizations.get('customization_placeholder', '[Describe any customization, logo placement, colors, etc.]')
     if len(st.session_state.proposal_products) > 0:
         for prop_item in st.session_state.proposal_products:
             product_name = prop_item.get('product_data', {}).get('Product/Service', 'Unknown Product')
@@ -2765,16 +2826,16 @@ with tab2:
         <tr>
             <td class="product-table">{product_name}</td>
             <td class="product-table">{quantity_display}</td>
-            <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Describe any customization, logo placement, colors, etc.]</td>
+            <td class="product-table" style="color: #7f8c8d; font-style: italic;">{customization_placeholder}</td>
         </tr>"""
     else:
         # Add 3 blank rows if no products in proposal
         for i in range(3):
-            html_form += """
+            html_form += f"""
         <tr>
             <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Product name]</td>
             <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Qty]</td>
-            <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Customization details]</td>
+            <td class="product-table" style="color: #7f8c8d; font-style: italic;">{customization_placeholder}</td>
         </tr>"""
 
     html_form += """
@@ -2786,11 +2847,16 @@ with tab2:
         </tr>
         <tr>
             <td>Impact Card Preference <span class="required">*</span></td>
-            <td class="fill-in">[Delete all except the ONE option you want]<br/><br/>
-                Peace by Piece Impact Card<br/>
-                Custom Impact Card<br/>
-                Custom Message Card<br/>
-                Send us your own card
+            <td class="fill-in">[Delete all except the ONE option you want]<br/><br/>"""
+
+    # Add customizable impact card options
+    impact_options = st.session_state.form_customizations.get('impact_card_options', '')
+    for line in impact_options.split('\n'):
+        if line.strip():
+            html_form += f"""
+                {line.strip()}<br/>"""
+
+    html_form += """
             </td>
         </tr>
     </table>
@@ -2801,10 +2867,16 @@ with tab2:
         </tr>
         <tr>
             <td>Payment Preference <span class="required">*</span></td>
-            <td class="fill-in">[Delete all except the ONE option you want]<br/><br/>
-                ACH<br/>
-                Check<br/>
-                Credit Card (3% processing fee applies)
+            <td class="fill-in">[Delete all except the ONE option you want]<br/><br/>"""
+
+    # Add customizable payment options
+    payment_options = st.session_state.form_customizations.get('payment_options', '')
+    for line in payment_options.split('\n'):
+        if line.strip():
+            html_form += f"""
+                {line.strip()}<br/>"""
+
+    html_form += """
             </td>
         </tr>
     </table>
