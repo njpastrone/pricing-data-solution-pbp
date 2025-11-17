@@ -44,6 +44,12 @@ DATASET_CONFIGS = {
         'url': 'https://docs.google.com/spreadsheets/d/1pXqBAQOeSvQi1ob8GLc70UhQsM0gwmczYfVWFRPjbao',
         'description': 'Storage for user-saved orders',
         'spreadsheet_id': '1pXqBAQOeSvQi1ob8GLc70UhQsM0gwmczYfVWFRPjbao'
+    },
+    'saved_matches': {
+        'name': 'Saved Matches',
+        'url': 'https://docs.google.com/spreadsheets/d/1cU5CW0ydE1BXDjy3TNkbm4TohZ9CA8jR6h4zQPY_9Io',
+        'description': 'Storage for confirmed product-to-slide matches',
+        'spreadsheet_id': '1cU5CW0ydE1BXDjy3TNkbm4TohZ9CA8jR6h4zQPY_9Io'
     }
 }
 

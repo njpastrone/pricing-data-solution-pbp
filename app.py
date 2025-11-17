@@ -577,17 +577,23 @@ with st.sidebar:
 # ============================================================
 # MATCH REVIEW UI FUNCTION (PHASE 1, DAY 2)
 # ============================================================
-def show_match_review_ui(match_results, pptx_product_names):
+def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=None):
     """
     Display match review UI for user confirmation of fuzzy matches.
 
     Args:
         match_results: List of SlideMatchResult objects from SlideMatcher
         pptx_product_names: List of all PowerPoint product names (for alternatives)
+        pptx_name_to_index: Dict mapping slide names to indices (for saving confirmations)
 
     Returns:
         Dict of confirmed matches {gs_product_name: pptx_product_name} or None if cancelled
     """
+    # Import match memory functions
+    from src.match_memory import save_confirmed_match
+
+    # Get current dataset for saving confirmations
+    current_dataset = st.session_state.get('selected_dataset', 'demo')
     st.markdown("---")
     st.subheader("Step 1. Review Product Matches")
 
@@ -597,13 +603,23 @@ def show_match_review_ui(match_results, pptx_product_names):
     poor_matches = [r for r in match_results if r.match_type == 'fuzzy' and r.confidence < 70]
     no_matches = [r for r in match_results if r.match_type == 'none']
 
+    # Count items by status for better summary
+    already_matched = len(exact_matches)  # Includes exact, previously confirmed, and manual overrides
+    needs_review = len(fuzzy_matches) + len(poor_matches) + len(no_matches)
+
+    total_products = already_matched + needs_review
+
     # Summary at top
     st.markdown(f"""
     **Match Summary:**
-    - {len(exact_matches)} exact matches (auto-confirmed)
-    - {len(fuzzy_matches)} fuzzy matches (need your confirmation)
-    - {len(poor_matches) + len(no_matches)} products with no good match (will be skipped)
+    - {already_matched} ready to use (already matched from exact or previous sessions)
+    - {needs_review} need your confirmation (auto-matches and no matches)
+
+    Total: {total_products} products
     """)
+
+    if needs_review > 0:
+        st.caption("Items are sorted by confidence (lowest first) to help you focus on matches that need the most attention.")
 
     if len(fuzzy_matches) == 0 and len(exact_matches) == 0:
         st.warning("No usable matches found. Cannot generate PowerPoint presentation.")
@@ -613,36 +629,64 @@ def show_match_review_ui(match_results, pptx_product_names):
     if 'match_confirmations' not in st.session_state:
         st.session_state.match_confirmations = {}
 
-    # SECTION 1: Exact Matches (collapsed, informational)
-    if exact_matches:
-        with st.expander(f"✓ Exact Matches ({len(exact_matches)}) - Auto-confirmed", expanded=False):
-            for result in exact_matches:
-                # Show match source indicator
-                if result.match_source == 'manual':
-                    match_badge = "🎯 Manual"
-                    st.markdown(f"- **{result.gs_product_name}** → {result.pptx_product_name} ({match_badge})")
-                else:
-                    st.markdown(f"- **{result.gs_product_name}** → {result.pptx_product_name}")
+    # ============================================================
+    # UNIFIED MATCH TABLE - All Products
+    # ============================================================
+    st.markdown("### Product → Slide Matches")
+    st.caption("Review and confirm matches. Items needing review are shown first.")
 
-    # SECTION 2: Fuzzy Matches (expanded, requires confirmation)
-    if fuzzy_matches:
-        st.markdown("### Fuzzy Matches - Confirm Each Match")
-        st.caption("Review each suggested match below. Click 'Yes' to confirm, or 'Show Alternatives' to see other options.")
+    # Combine all match types into single list
+    all_matches = []
 
-        # Add JavaScript to capture scroll position for fuzzy match buttons
+    # Add exact matches
+    for result in exact_matches:
+        all_matches.append({
+            'result': result,
+            'type': 'exact',
+            'needs_review': False
+        })
+
+    # Add fuzzy matches
+    for result in fuzzy_matches:
+        all_matches.append({
+            'result': result,
+            'type': 'fuzzy',
+            'needs_review': True
+        })
+
+    # Add poor/no matches
+    if poor_matches or no_matches:
+        all_poor = poor_matches + no_matches
+        for result in all_poor:
+            all_matches.append({
+                'result': result,
+                'type': 'poor',
+                'needs_review': True
+            })
+
+    # Sort by review status (needs review first), then by confidence (lowest confidence first within needs_review)
+    # This puts the most questionable matches at the top for user attention
+    all_matches.sort(key=lambda x: (
+        not x['needs_review'],  # Needs review first
+        x['result'].confidence if x['needs_review'] else 999,  # Within needs_review: lowest confidence first (ascending)
+        x['result'].gs_product_name  # Alphabetical as tiebreaker
+    ))
+
+    if all_matches:
+        # Add JavaScript to capture scroll position
         components.html("""
             <script>
-                // Use a MutationObserver to watch for dynamically added buttons
                 const observer = new MutationObserver(function(mutations) {
                     const buttons = window.parent.document.querySelectorAll('button');
                     buttons.forEach(button => {
                         const btnText = button.textContent;
-                        // Only attach if not already attached
                         if (!button.dataset.scrollCaptureAttached &&
-                            (btnText.includes('Yes, use this slide') ||
-                             btnText.includes('Show alternatives') ||
-                             btnText.includes('Skip this product') ||
-                             btnText.includes('Use this'))) {
+                            (btnText.includes('Confirm') ||
+                             btnText.includes('Alt') ||
+                             btnText.includes('Skip') ||
+                             btnText.includes('Change') ||
+                             btnText.includes('Search') ||
+                             btnText.includes('Use'))) {
                             button.addEventListener('click', function() {
                                 const scrollPos = window.parent.document.querySelector('section.main').scrollTop;
                                 window.parent.sessionStorage.setItem('streamlit_scroll_position', scrollPos);
@@ -651,23 +695,18 @@ def show_match_review_ui(match_results, pptx_product_names):
                         }
                     });
                 });
-
-                // Start observing
-                observer.observe(window.parent.document.body, {
-                    childList: true,
-                    subtree: true
-                });
-
-                // Also run once immediately for existing buttons
+                observer.observe(window.parent.document.body, { childList: true, subtree: true });
                 setTimeout(function() {
                     const buttons = window.parent.document.querySelectorAll('button');
                     buttons.forEach(button => {
                         const btnText = button.textContent;
                         if (!button.dataset.scrollCaptureAttached &&
-                            (btnText.includes('Yes, use this slide') ||
-                             btnText.includes('Show alternatives') ||
-                             btnText.includes('Skip this product') ||
-                             btnText.includes('Use this'))) {
+                            (btnText.includes('Confirm') ||
+                             btnText.includes('Alt') ||
+                             btnText.includes('Skip') ||
+                             btnText.includes('Change') ||
+                             btnText.includes('Search') ||
+                             btnText.includes('Use'))) {
                             button.addEventListener('click', function() {
                                 const scrollPos = window.parent.document.querySelector('section.main').scrollTop;
                                 window.parent.sessionStorage.setItem('streamlit_scroll_position', scrollPos);
@@ -679,138 +718,304 @@ def show_match_review_ui(match_results, pptx_product_names):
             </script>
         """, height=0)
 
-        for idx, result in enumerate(fuzzy_matches):
-            st.markdown(f"#### {idx + 1}. {result.gs_product_name}")
+        # Table header
+        hcol1, hcol2, hcol3, hcol4, hcol5, hcol6 = st.columns([2.2, 2.2, 1.8, 1.0, 1.0, 1.5])
+        with hcol1:
+            st.markdown("**Product**")
+        with hcol2:
+            st.markdown("**Matched Slide**")
+        with hcol3:
+            st.markdown("**Source**")
+        with hcol4:
+            st.markdown("**Conf%**")
+        with hcol5:
+            st.markdown("**Status**")
+        with hcol6:
+            st.markdown("**Actions**")
 
-            # Show suggested match with confidence and match source
-            confidence_color = "green" if result.confidence >= 90 else "orange"
+        st.divider()
 
-            # Add match source badge
-            if result.match_source == 'manual':
-                match_badge = "Manual"
-            else:
-                match_badge = f"Auto ({result.confidence}%)"
+        # Display each match in unified table
+        for idx, match_item in enumerate(all_matches):
+            result = match_item['result']
+            match_type = match_item['type']
 
-            st.markdown(f"**Suggested match:** {result.pptx_product_name} (:{confidence_color}[{match_badge}])")
-            if hasattr(result, 'match_method') and result.match_method:
-                st.caption(f"Match method: {result.match_method}")
+            # Create unique key
+            match_key = f"unified_match_{idx}"
 
-            # Create unique key for this match
-            match_key = f"match_{idx}"
+            # Check confirmation status
+            confirmation = st.session_state.match_confirmations.get(result.gs_product_name, {})
+            is_confirmed = confirmation.get('confirmed', False)
+            is_skipped = confirmation.get('skipped', False)
+            show_alternatives = confirmation.get('show_alternatives', False)
+            show_search = confirmation.get('show_search', False)
 
-            # Radio button for confirmation
-            col1, col2, col3 = st.columns([1, 1, 1])
+            # Determine source and if it needs review
+            if match_type == 'exact':
+                if result.match_source == 'confirmed':
+                    # Show which dataset this was confirmed in
+                    source = f"Previously Confirmed"
+                    needs_review = False
+                elif result.match_source == 'manual':
+                    source = "Manual Override"
+                    needs_review = False
+                else:
+                    source = "Exact Match"
+                    needs_review = False
+            elif match_type == 'fuzzy':
+                if is_confirmed:
+                    source = "Auto-match"
+                    needs_review = False
+                elif is_skipped:
+                    source = "Auto-match"
+                    needs_review = False
+                else:
+                    source = "Auto-match"
+                    needs_review = True
+            else:  # poor match
+                if is_confirmed:
+                    source = "Manual Search"
+                    needs_review = False
+                elif is_skipped:
+                    source = "No match found"
+                    needs_review = False
+                else:
+                    source = "No match found"
+                    needs_review = True
+
+            col1, col2, col3, col4, col5, col6 = st.columns([2.2, 2.2, 1.8, 1.0, 1.0, 1.5])
 
             with col1:
-                yes_btn = st.button(f"✓ Yes, use this slide", key=f"{match_key}_yes", use_container_width=True)
+                st.markdown(f"{result.gs_product_name}")
+
             with col2:
-                alt_btn = st.button(f"→ Show alternatives", key=f"{match_key}_alt", use_container_width=True)
+                if is_confirmed:
+                    st.markdown(f"{confirmation['pptx_name']}")
+                elif is_skipped:
+                    st.markdown("(Skipped)")
+                elif match_type == 'poor' or (match_type == 'fuzzy' and result.confidence < 70):
+                    st.markdown("(No match)")
+                else:
+                    st.markdown(f"{result.pptx_product_name}")
+
             with col3:
-                skip_btn = st.button(f"X Skip this product", key=f"{match_key}_skip", use_container_width=True)
+                st.markdown(source)
 
-            # Handle button clicks
-            if yes_btn:
-                st.session_state.match_confirmations[result.gs_product_name] = {
-                    'confirmed': True,
-                    'pptx_name': result.pptx_product_name
-                }
-                st.success(f"✓ Confirmed: {result.pptx_product_name}")
-                st.rerun()
+            with col4:
+                # Show confidence for fuzzy and poor matches
+                if match_type == 'fuzzy' or match_type == 'poor':
+                    if result.confidence >= 90:
+                        st.markdown(f":green[{result.confidence}%]")
+                    elif result.confidence >= 70:
+                        st.markdown(f":orange[{result.confidence}%]")
+                    elif result.confidence > 0:
+                        st.markdown(f":red[{result.confidence}%]")
+                    else:
+                        st.markdown("—")
+                else:
+                    st.markdown("—")
 
-            elif alt_btn:
-                st.session_state.match_confirmations[result.gs_product_name] = {
-                    'confirmed': False,
-                    'show_alternatives': True
-                }
-                st.rerun()
+            with col5:
+                if needs_review and not is_confirmed and not is_skipped:
+                    st.markdown("Review")
+                else:
+                    st.markdown("Done")
 
-            elif skip_btn:
-                st.session_state.match_confirmations[result.gs_product_name] = {
-                    'confirmed': False,
-                    'skipped': True
-                }
-                st.warning(f"Skipped: {result.gs_product_name}")
-                st.rerun()
+            with col6:
+                if needs_review and not is_confirmed and not is_skipped:
+                    # Items needing confirmation: Show "Confirm" and "Change" buttons
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        if st.button("Confirm", key=f"{match_key}_confirm", help="Confirm this match", use_container_width=True):
+                            st.session_state.match_confirmations[result.gs_product_name] = {
+                                'confirmed': True,
+                                'pptx_name': result.pptx_product_name
+                            }
 
-            # Show alternatives if requested
-            if st.session_state.match_confirmations.get(result.gs_product_name, {}).get('show_alternatives'):
-                with st.expander("Alternative Matches", expanded=True):
-                    if result.alternatives:
-                        st.caption("Select an alternative or go back to the suggested match:")
-                        for alt_idx, (alt_name, alt_score) in enumerate(result.alternatives[:3]):
-                            col_alt1, col_alt2 = st.columns([3, 1])
-                            with col_alt1:
-                                st.markdown(f"{alt_idx + 1}. {alt_name} ({alt_score}% confidence)")
-                            with col_alt2:
-                                if st.button(f"Use this", key=f"{match_key}_alt_{alt_idx}", use_container_width=True):
+                            # Save confirmation to Google Sheets
+                            if pptx_name_to_index and result.pptx_product_name in pptx_name_to_index:
+                                slide_index = pptx_name_to_index[result.pptx_product_name]
+                                save_confirmed_match(
+                                    product_name=result.gs_product_name,
+                                    slide_index=slide_index,
+                                    slide_title=result.pptx_product_name,
+                                    dataset=current_dataset,
+                                    match_type='fuzzy_confirmed' if match_type == 'fuzzy' else 'poor_confirmed',
+                                    confidence=result.confidence
+                                )
+
+                            st.rerun()
+                    with btn_col2:
+                        if st.button("Change", key=f"{match_key}_change", help="Choose a different match", use_container_width=True):
+                            if match_type == 'poor':
+                                # For poor matches, show search
+                                st.session_state.match_confirmations[result.gs_product_name] = {
+                                    'confirmed': False,
+                                    'show_search': True
+                                }
+                            else:
+                                # For fuzzy matches, show alternatives
+                                st.session_state.match_confirmations[result.gs_product_name] = {
+                                    'confirmed': False,
+                                    'show_alternatives': True
+                                }
+                            st.rerun()
+                else:
+                    # Items already ready to use: Only show "Change" button
+                    if st.button("Change", key=f"{match_key}_change", use_container_width=True):
+                        if match_type == 'poor':
+                            # For poor matches, show search
+                            st.session_state.match_confirmations[result.gs_product_name] = {
+                                'confirmed': False,
+                                'show_search': True
+                            }
+                        else:
+                            # For exact/fuzzy matches, show alternatives
+                            st.session_state.match_confirmations[result.gs_product_name] = {
+                                'confirmed': False,
+                                'skipped': False,
+                                'show_alternatives': True
+                            }
+                        st.rerun()
+
+            # Show alternatives inline if requested
+            if show_alternatives and match_type != 'poor':
+                st.markdown("")
+                st.markdown(f"**Alternatives for {result.gs_product_name}:**")
+
+                if result.alternatives:
+                    st.caption("Select an alternative or search below:")
+
+                    # Show top 3 alternatives
+                    for alt_idx, (alt_name, alt_score) in enumerate(result.alternatives[:3]):
+                        alt_col1, alt_col2 = st.columns([4, 1])
+                        with alt_col1:
+                            st.markdown(f"{alt_idx + 1}. {alt_name} ({alt_score}% confidence)")
+                        with alt_col2:
+                            if st.button(f"Use", key=f"{match_key}_alt_{alt_idx}", use_container_width=True):
+                                st.session_state.match_confirmations[result.gs_product_name] = {
+                                    'confirmed': True,
+                                    'pptx_name': alt_name
+                                }
+
+                                # Save alternative selection to Google Sheets
+                                if pptx_name_to_index and alt_name in pptx_name_to_index:
+                                    slide_index = pptx_name_to_index[alt_name]
+                                    save_confirmed_match(
+                                        product_name=result.gs_product_name,
+                                        slide_index=slide_index,
+                                        slide_title=alt_name,
+                                        dataset=current_dataset,
+                                        match_type='alternative_selected',
+                                        confidence=alt_score
+                                    )
+
+                                st.rerun()
+
+                # Add search feature
+                st.markdown("**Search for different slide:**")
+                search_query = st.text_input(
+                    "Search slide names",
+                    key=f"{match_key}_search_input",
+                    placeholder="e.g., 'short sleeve tee'"
+                )
+
+                if search_query:
+                    matching_slides = [
+                        name for name in pptx_product_names
+                        if search_query.lower() in name.lower()
+                    ]
+
+                    if matching_slides:
+                        st.caption(f"Found {len(matching_slides)} matching slides:")
+                        for search_idx, slide_name in enumerate(matching_slides[:10]):
+                            search_col1, search_col2 = st.columns([4, 1])
+                            with search_col1:
+                                st.markdown(f"- {slide_name}")
+                            with search_col2:
+                                if st.button(f"Use", key=f"{match_key}_search_{search_idx}", use_container_width=True):
                                     st.session_state.match_confirmations[result.gs_product_name] = {
                                         'confirmed': True,
-                                        'pptx_name': alt_name
+                                        'pptx_name': slide_name
                                     }
-                                    st.success(f"✓ Confirmed alternative: {alt_name}")
+
+                                    # Save search selection to Google Sheets
+                                    if pptx_name_to_index and slide_name in pptx_name_to_index:
+                                        slide_index = pptx_name_to_index[slide_name]
+                                        save_confirmed_match(
+                                            product_name=result.gs_product_name,
+                                            slide_index=slide_index,
+                                            slide_title=slide_name,
+                                            dataset=current_dataset,
+                                            match_type='search_selected',
+                                            confidence=0
+                                        )
+
                                     st.rerun()
 
-                        # Add search feature
-                        st.markdown("---")
-                        st.markdown("**Can't find the right slide? Search all slides:**")
-
-                        search_query = st.text_input(
-                            "Search slide names",
-                            key=f"{match_key}_search",
-                            placeholder="e.g., 'short sleeve tee'"
-                        )
-
-                        if search_query:
-                            # Filter slides by search query (case-insensitive)
-                            matching_slides = [
-                                name for name in pptx_product_names
-                                if search_query.lower() in name.lower()
-                            ]
-
-                            if matching_slides:
-                                st.caption(f"Found {len(matching_slides)} matching slides:")
-                                # Show up to 10 results
-                                for search_idx, slide_name in enumerate(matching_slides[:10]):
-                                    col_s1, col_s2 = st.columns([3, 1])
-                                    with col_s1:
-                                        st.markdown(f"- {slide_name}")
-                                    with col_s2:
-                                        if st.button(f"Use this", key=f"{match_key}_search_{search_idx}", use_container_width=True):
-                                            st.session_state.match_confirmations[result.gs_product_name] = {
-                                                'confirmed': True,
-                                                'pptx_name': slide_name
-                                            }
-                                            st.success(f"✓ Confirmed: {slide_name}")
-                                            st.rerun()
-
-                                if len(matching_slides) > 10:
-                                    st.caption(f"...and {len(matching_slides) - 10} more. Refine your search to see more results.")
-                            else:
-                                st.info("No slides found matching your search. Try different keywords.")
+                        if len(matching_slides) > 10:
+                            st.caption(f"...and {len(matching_slides) - 10} more. Refine your search.")
                     else:
-                        st.info("No alternatives available. Use the suggested match or skip this product.")
+                        st.info("No slides found. Try different keywords.")
 
-            # Show current confirmation status
-            confirmation = st.session_state.match_confirmations.get(result.gs_product_name, {})
-            if confirmation.get('confirmed'):
-                st.success(f"✓ Match confirmed: {confirmation['pptx_name']}")
-            elif confirmation.get('skipped'):
-                st.warning(f"Product will be skipped")
+                st.markdown("")
 
-            st.divider()
+            # Show search inline for poor matches
+            if show_search and match_type == 'poor':
+                st.markdown("")
+                st.markdown(f"**Search for slide for {result.gs_product_name}:**")
 
-    # SECTION 3: Poor/No Matches (collapsed, informational)
-    if poor_matches or no_matches:
-        all_poor = poor_matches + no_matches
-        with st.expander(f"X Products with No Good Match ({len(all_poor)}) - Will be skipped", expanded=False):
-            for result in all_poor:
-                if result.pptx_product_name:
-                    st.markdown(f"- **{result.gs_product_name}** (best guess: {result.pptx_product_name}, {result.confidence}% confidence)")
-                else:
-                    st.markdown(f"- **{result.gs_product_name}** (no match found)")
-            st.caption("These products likely don't have slides in the PowerPoint deck yet.")
+                search_query = st.text_input(
+                    "Enter slide name to search",
+                    key=f"{match_key}_poor_search_input",
+                    placeholder="e.g., 'honey', 'infused', 'sampler'"
+                )
 
-    # SECTION 4: Validation and Generate Button
+                if search_query:
+                    matching_slides = [
+                        name for name in pptx_product_names
+                        if search_query.lower() in name.lower()
+                    ]
+
+                    if matching_slides:
+                        st.caption(f"Found {len(matching_slides)} matching slides:")
+                        for search_idx, slide_name in enumerate(matching_slides[:15]):
+                            search_col1, search_col2 = st.columns([4, 1])
+                            with search_col1:
+                                st.markdown(f"- {slide_name}")
+                            with search_col2:
+                                if st.button(f"Use", key=f"{match_key}_poor_search_{search_idx}", use_container_width=True):
+                                    st.session_state.match_confirmations[result.gs_product_name] = {
+                                        'confirmed': True,
+                                        'pptx_name': slide_name
+                                    }
+
+                                    # Save poor match search selection to Google Sheets
+                                    if pptx_name_to_index and slide_name in pptx_name_to_index:
+                                        slide_index = pptx_name_to_index[slide_name]
+                                        save_confirmed_match(
+                                            product_name=result.gs_product_name,
+                                            slide_index=slide_index,
+                                            slide_title=slide_name,
+                                            dataset=current_dataset,
+                                            match_type='manual_search',
+                                            confidence=0
+                                        )
+
+                                    st.rerun()
+
+                        if len(matching_slides) > 15:
+                            st.caption(f"...and {len(matching_slides) - 15} more. Refine your search.")
+                    else:
+                        st.info("No slides found. Try different keywords.")
+
+                st.markdown("")
+
+        st.divider()
+
+    else:
+        st.info("No products to match.")
+
     st.markdown("---")
 
     # Check if all fuzzy matches are confirmed
@@ -824,7 +1029,7 @@ def show_match_review_ui(match_results, pptx_product_names):
             pending_confirmations.append(result.gs_product_name)
 
     if not all_confirmed:
-        st.warning(f"Please review {len(pending_confirmations)} pending fuzzy matches before generating PowerPoint.")
+        st.warning(f"Please review {len(pending_confirmations)} pending matches before generating PowerPoint.")
         with st.expander("Pending Confirmations"):
             for product in pending_confirmations:
                 st.markdown(f"- {product}")
@@ -842,8 +1047,16 @@ def show_match_review_ui(match_results, pptx_product_names):
             if confirmation.get('confirmed'):
                 confirmed_matches[result.gs_product_name] = confirmation['pptx_name']
 
+        # Add poor/no matches (manually selected)
+        if poor_matches or no_matches:
+            all_poor = poor_matches + no_matches
+            for result in all_poor:
+                confirmation = st.session_state.match_confirmations.get(result.gs_product_name, {})
+                if confirmation.get('confirmed'):
+                    confirmed_matches[result.gs_product_name] = confirmation['pptx_name']
+
         # Show summary
-        st.success(f"✓ Ready to generate PowerPoint with {len(confirmed_matches)} products!")
+        st.success(f"Ready to generate PowerPoint with {len(confirmed_matches)} products!")
 
         # ============================================================
         # IMPACT SLIDE SELECTION (SIMPLIFIED WITH AUTO-SELECTION)
@@ -953,7 +1166,7 @@ def show_match_review_ui(match_results, pptx_product_names):
             )
 
             if selected_count > 0:
-                st.success(f"✓ {selected_count} impact slide(s) will be included")
+                st.success(f"{selected_count} impact slide(s) will be included")
             else:
                 st.info("No impact slides selected")
 
@@ -1566,7 +1779,7 @@ with tab1:
                             if success:
                                 # Check if dataset matches
                                 if dataset != st.session_state.selected_dataset:
-                                    st.warning(f"⚠️ This proposal was created with {dataset} dataset, but you're currently using {st.session_state.selected_dataset} dataset. Loading anyway...")
+                                    st.warning(f"WARNING: This proposal was created with {dataset} dataset, but you're currently using {st.session_state.selected_dataset} dataset. Loading anyway...")
 
                                 # Load proposal data into session state
                                 st.session_state.proposal_products = proposal_data.get('proposal_products', [])
@@ -1586,7 +1799,7 @@ with tab1:
                             # Confirmation dialog using session state
                             if 'confirm_delete_proposal_id' not in st.session_state:
                                 st.session_state.confirm_delete_proposal_id = selected_proposal_id
-                                st.warning(f"⚠️ Are you sure you want to delete '{selected_proposal['name']}'?")
+                                st.warning(f"WARNING: Are you sure you want to delete '{selected_proposal['name']}'?")
 
                                 confirm_col1, confirm_col2 = st.columns(2)
                                 with confirm_col1:
@@ -2311,7 +2524,7 @@ with tab1:
                             match_category="product"
                         )
                         if success:
-                            st.success(f"✓ Saved: {selected_product} → {selected_slide_title}")
+                            st.success(f"Saved: {selected_product} → {selected_slide_title}")
                             st.rerun()
                         else:
                             st.error("Failed to save manual match")
@@ -2363,6 +2576,7 @@ with tab1:
         if st.button("Review Matches & Generate PowerPoint", type="primary", use_container_width=True, key="trigger_pptx_matching"):
             st.session_state.show_pptx_matching = True
             st.session_state.generated_pptx = None  # Clear any previous generation
+            st.session_state.match_confirmations = {}  # Clear stale confirmations from previous sessions
             st.rerun()
 
         # Show matching UI if triggered
@@ -2383,6 +2597,7 @@ with tab1:
                         prs = Presentation(str(pptx_path))
 
                         pptx_product_names = []
+                        pptx_name_to_index = {}  # Map slide names to indices for saving confirmations
                         slide_list = list(prs.slides)
 
                         for slide_idx, slide in enumerate(slide_list):
@@ -2392,19 +2607,25 @@ with tab1:
                                     product_name = first_shape.text.strip()
                                     if product_name not in pptx_product_names:
                                         pptx_product_names.append(product_name)
+                                        pptx_name_to_index[product_name] = slide_idx
 
                     st.success(f"Loaded {len(pptx_product_names)} product slides from PowerPoint")
 
                     # Get proposal product names
                     gs_product_names = [item['product_data']['Product/Service'] for item in st.session_state.proposal_products]
 
-                    # Create matcher and run matching
+                    # Create matcher and run matching (pass dataset for confirmed match lookup)
                     with st.spinner("Matching products to slides..."):
-                        matcher = SlideMatcher(pptx_product_names)
-                        match_results = matcher.batch_match(gs_product_names)
+                        # Clear cache to ensure fresh confirmed matches are loaded
+                        from src.match_memory import _load_all_matches_data
+                        _load_all_matches_data.clear()
 
-                    # Show match review UI
-                    confirmed_matches = show_match_review_ui(match_results, pptx_product_names)
+                        matcher = SlideMatcher(pptx_product_names)
+                        current_dataset = st.session_state.get('selected_dataset', 'demo')
+                        match_results = matcher.batch_match(gs_product_names, dataset=current_dataset)
+
+                    # Show match review UI (pass name-to-index mapping for saving confirmations)
+                    confirmed_matches = show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index)
 
                     if confirmed_matches:
                         st.session_state.show_pptx_matching = False
@@ -2894,7 +3115,7 @@ with tab3:
                             if success:
                                 # Check if dataset matches
                                 if dataset != st.session_state.selected_dataset:
-                                    st.warning(f"⚠️ This order was created with {dataset} dataset, but you're currently using {st.session_state.selected_dataset} dataset. Loading anyway...")
+                                    st.warning(f"WARNING: This order was created with {dataset} dataset, but you're currently using {st.session_state.selected_dataset} dataset. Loading anyway...")
 
                                 # Load order data into session state
                                 st.session_state.order_items = order_data.get('order_items', [])
@@ -2921,7 +3142,7 @@ with tab3:
                             # Confirmation dialog using session state
                             if 'confirm_delete_order_id' not in st.session_state:
                                 st.session_state.confirm_delete_order_id = selected_order_id
-                                st.warning(f"⚠️ Are you sure you want to delete '{selected_order['name']}'?")
+                                st.warning(f"WARNING: Are you sure you want to delete '{selected_order['name']}'?")
 
                                 confirm_col1, confirm_col2 = st.columns(2)
                                 with confirm_col1:

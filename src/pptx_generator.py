@@ -144,8 +144,13 @@ def update_cell_text_preserve_format(cell, new_text: str):
                 run.font.bold = original_font.bold
             if original_font.italic is not None:
                 run.font.italic = original_font.italic
-            if original_font.color.rgb:
-                run.font.color.rgb = original_font.color.rgb
+            # Handle color - some cells may not have color defined
+            try:
+                if original_font.color and hasattr(original_font.color, 'rgb') and original_font.color.rgb:
+                    run.font.color.rgb = original_font.color.rgb
+            except (AttributeError, ValueError):
+                # Skip color if not defined or not accessible
+                pass
     else:
         # Fallback if no paragraphs exist
         cell.text = new_text

@@ -263,6 +263,7 @@ pricing-data-solution-pbp/
 │   ├── pricing_engine.py      # Pricing calculations and quote generation
 │   ├── slide_matcher.py       # PowerPoint slide matching (Phase 1)
 │   ├── pptx_generator.py      # PowerPoint generation (Phase 2)
+│   ├── match_memory.py        # Confirmed match storage (v6.9)
 │   ├── proposal_manager.py    # Save/load/delete proposals (v6.6)
 │   └── order_manager.py       # Save/load/delete orders (v6.7)
 │
@@ -280,7 +281,8 @@ pricing-data-solution-pbp/
 │   ├── test_integration.py    # Test Phase 1 complete workflow
 │   ├── test_saved_proposals.py # Test save/load/delete proposals (v6.6)
 │   ├── test_saved_orders.py   # Test save/load/delete orders (v6.7)
-│   └── test_units_per_package.py # Test Units Per Package normalization (v6.8)
+│   ├── test_units_per_package.py # Test Units Per Package normalization (v6.8)
+│   └── test_match_memory.py   # Test confirmed match memory system (v6.9)
 │
 ├── backups/                    # Backup files
 │   └── app_mvp_backup.py      # Original MVP
@@ -300,9 +302,34 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.8 - Units Per Package Normalization for Multi-Unit Products
+**Version:** 6.10 - Unified Match Review Table with Simplified Button Logic
 
-**Last Updated:** 2025-11-11
+**Last Updated:** 2025-11-17
+
+**Recent Improvements (2025-11-17 - v6.10):**
+- ✅ **Unified Match Review Table:**
+  - Combined exact, fuzzy, and poor matches into single table (70-80% less scrolling)
+  - Smart sorting: "needs review" items first, sorted by confidence (lowest first)
+  - Clear status indicators: "Review" vs "Done"
+  - Source column shows match origin: "Previously Confirmed", "Exact Match", "Auto-match", etc.
+  - Simplified button logic:
+    - **"Ready to use" products** (31 in real dataset): Only "Change" button
+    - **"Need confirmation" products** (15 in real dataset): "Confirm" + "Change" buttons
+  - All confirmations auto-save to Google Sheets for future sessions
+  - Fixed session state bug where stale confirmations overrode saved matches
+  - Match summary shows clear breakdown: "X ready to use" vs "Y need your confirmation"
+
+**Recent Improvements (2025-11-17 - v6.9):**
+- ✅ **Match Memory System (Cloud-Persistent):**
+  - Confirmed product-to-slide matches are now automatically saved to Google Sheets
+  - When user confirms a fuzzy match, it's remembered for future sessions
+  - Next PowerPoint generation with same products automatically uses confirmed matches (no re-confirmation needed)
+  - Dataset-specific storage (demo matches ≠ real matches)
+  - New module: [src/match_memory.py](src/match_memory.py) with Google Sheets backend
+  - New spreadsheet: `saved_matches` (same location as saved_proposals/saved_orders)
+  - Management UI in Tab 1: View/delete confirmed matches by dataset
+  - Test script: [scripts/test_match_memory.py](scripts/test_match_memory.py)
+  - Matching priority order: (1) Confirmed matches → (2) Manual overrides → (3) Fuzzy matching
 
 **Recent Improvements (2025-11-11 - v6.8):**
 - ✅ **Units per Package Column (Multi-Unit Product Support):**

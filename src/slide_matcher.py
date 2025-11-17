@@ -239,7 +239,12 @@ class SlideMatchResult:
         return self.match_type != 'none' and self.confidence >= min_confidence
 
     def __repr__(self):
-        source_indicator = "🎯" if self.match_source == 'manual' else "🤖"
+        if self.match_source == 'confirmed':
+            source_indicator = "💾"  # Disk/save icon for confirmed matches
+        elif self.match_source == 'manual':
+            source_indicator = "🎯"  # Target for manual overrides
+        else:
+            source_indicator = "🤖"  # Robot for automatic matching
         return f"SlideMatchResult({source_indicator} {self.match_type}, {self.confidence}%, {self.gs_product_name} → {self.pptx_product_name})"
 
 
@@ -266,19 +271,21 @@ class SlideMatcher:
         # Create uppercase mapping for exact matching
         self.pptx_upper_map = {name.upper(): name for name in pptx_product_names}
 
-    def find_match(self, gs_product_name: str, num_alternatives: int = 3) -> SlideMatchResult:
+    def find_match(self, gs_product_name: str, num_alternatives: int = 3, dataset: str = 'demo') -> SlideMatchResult:
         """
         Find best matching PowerPoint slide for a Google Sheets product name.
 
         Args:
             gs_product_name: Product name from Google Sheets
             num_alternatives: Number of alternative matches to return
+            dataset: Current dataset ('demo' or 'real') for confirmed match lookup
 
         Returns:
             SlideMatchResult with match information
 
-        Matching Logic (IMPROVED with Manual Match Priority):
-            1. Check manual matches FIRST (100% confidence, takes precedence)
+        Matching Logic (IMPROVED with Confirmed Match Memory):
+            0. Check confirmed matches from Google Sheets FIRST (100% confidence, highest priority)
+            1. Check manual matches from JSON (100% confidence, takes precedence)
             2. Normalize product name (strip variants)
             3. Check manual product mappings
             4. Try exact match on normalized name
@@ -286,7 +293,27 @@ class SlideMatcher:
             6. Apply keyword category boosting (+15%)
             7. Return best match with confidence score
         """
-        # Step 1: Check manual matches FIRST (highest priority)
+        # Step 0: Check confirmed matches from Google Sheets FIRST (highest priority)
+        try:
+            from .match_memory import get_confirmed_match
+            confirmed_match = get_confirmed_match(gs_product_name, dataset)
+
+            if confirmed_match:
+                # Confirmed match found - return with 100% confidence
+                return SlideMatchResult(
+                    gs_product_name=gs_product_name,
+                    pptx_product_name=confirmed_match['slide_title'],
+                    match_type='exact',
+                    confidence=100,
+                    alternatives=[],
+                    match_source='confirmed',
+                    match_method=f"Previously confirmed ({confirmed_match['match_type']})"
+                )
+        except Exception as e:
+            # If confirmed match lookup fails, continue with other methods
+            pass
+
+        # Step 1: Check manual matches from JSON (legacy system)
         manual_match_data = get_manual_match(gs_product_name, match_category="product")
         if manual_match_data:
             # Manual match found - return with 100% confidence
@@ -370,17 +397,18 @@ class SlideMatcher:
             match_method=method_description
         )
 
-    def batch_match(self, gs_product_names: List[str]) -> List[SlideMatchResult]:
+    def batch_match(self, gs_product_names: List[str], dataset: str = 'demo') -> List[SlideMatchResult]:
         """
         Match multiple products at once.
 
         Args:
             gs_product_names: List of product names from Google Sheets
+            dataset: Current dataset ('demo' or 'real') for confirmed match lookup
 
         Returns:
             List of SlideMatchResult objects
         """
-        return [self.find_match(name) for name in gs_product_names]
+        return [self.find_match(name, dataset=dataset) for name in gs_product_names]
 
     def get_match_summary(self, results: List[SlideMatchResult], min_confidence: int = 70) -> Dict:
         """
