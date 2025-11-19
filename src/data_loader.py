@@ -79,11 +79,14 @@ def connect_to_sheets():
 
     # Try environment variables first (Render deployment)
     if os.getenv("GCP_PROJECT_ID"):
+        # Fix private key newlines (environment variables lose \n characters)
+        private_key = os.getenv("GCP_PRIVATE_KEY", "").replace("\\n", "\n")
+
         creds_info = {
             "type": os.getenv("GCP_TYPE"),
             "project_id": os.getenv("GCP_PROJECT_ID"),
             "private_key_id": os.getenv("GCP_PRIVATE_KEY_ID"),
-            "private_key": os.getenv("GCP_PRIVATE_KEY"),
+            "private_key": private_key,
             "client_email": os.getenv("GCP_CLIENT_EMAIL"),
             "client_id": os.getenv("GCP_CLIENT_ID"),
             "auth_uri": os.getenv("GCP_AUTH_URI"),
