@@ -310,9 +310,23 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.13 - Multi-Variant Product Consolidation in PowerPoint
+**Version:** 6.14 - Toast Notifications for User Actions
 
 **Last Updated:** 2025-11-19
+
+**Recent Improvements (2025-11-19 - v6.14):**
+- ✅ **Toast Notifications for Product Actions:**
+  - Replaced `st.success()` with `st.toast()` for all product addition messages
+  - Toast notifications appear in bottom-right corner of screen
+  - Visible regardless of scroll position (major UX improvement)
+  - Auto-dismiss after 4 seconds (non-intrusive)
+  - Applied to 5 locations:
+    - Individual product addition to proposal (Tab 1)
+    - Bulk product addition to proposal (Tab 1)
+    - Proposal-to-order import (Tab 3)
+    - Custom line items in Tab 3
+    - Custom line items in Tab 4
+  - Removed all emoji icons from toast notifications and UI elements for professional appearance
 
 **Recent Improvements (2025-11-19 - v6.13):**
 - ✅ **Multi-Variant Product Consolidation:**

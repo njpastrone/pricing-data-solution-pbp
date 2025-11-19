@@ -1174,9 +1174,9 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
 
                 # Expander title with pricing indicator
                 if has_consistent_pricing:
-                    expander_title = f"📊 {slide_name} ({len(products)} variants) - ✅ Consistent Pricing"
+                    expander_title = f"{slide_name} ({len(products)} variants) - Consistent Pricing"
                 else:
-                    expander_title = f"📊 {slide_name} ({len(products)} variants) - ⚠️ Variable Pricing"
+                    expander_title = f"{slide_name} ({len(products)} variants) - Variable Pricing"
 
                 with st.expander(expander_title, expanded=True):
                     st.markdown("**Products matched to this slide:**")
@@ -1644,12 +1644,12 @@ with tab1:
 
     # Display success message if a product was just added
     if 'show_success_message' in st.session_state and st.session_state.show_success_message:
-        st.success(f"Added **{st.session_state.success_product_name}** to proposal!")
+        st.toast(f"Added {st.session_state.success_product_name} to proposal!")
         st.session_state.show_success_message = False
 
     # Bulk add success message
     if 'show_bulk_success_message' in st.session_state and st.session_state.show_bulk_success_message:
-        st.success(f"{st.session_state.bulk_success_message}")
+        st.toast(st.session_state.bulk_success_message)
         st.session_state.show_bulk_success_message = False
 
     # ============================================================
@@ -1893,7 +1893,7 @@ with tab1:
                     from src.helpers import clean_price
                     msrp_value = clean_price(msrp_raw)
                     if msrp_value and msrp_value > 0:
-                        st.caption(f"💰 Manufacturer's Suggested Retail Price (MSRP): ${msrp_value:.2f}/unit")
+                        st.caption(f"Manufacturer's Suggested Retail Price (MSRP): ${msrp_value:.2f}/unit")
 
                 # Show estimated prices at MOQ
                 if moq_cost and estimated_moq:
@@ -1902,7 +1902,7 @@ with tab1:
                 # Show description if available
                 desc = product_data.get("Marketing Description", "")
                 if desc and str(desc).strip() and str(desc).strip() != 'nan':
-                    st.caption(f"📝 {desc}")
+                    st.caption(f"{desc}")
 
                 st.divider()
 
@@ -2713,7 +2713,7 @@ with tab1:
 
     # Show navigation prompt if button was clicked
     if st.session_state.get('show_tab2_prompt', False):
-        st.info("👆 Click on the **'Client Order Form Generator'** tab above to continue.")
+        st.info("Click on the **'Client Order Form Generator'** tab above to continue.")
         st.session_state.show_tab2_prompt = False
 
 # ============================================================
@@ -3134,7 +3134,7 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
 
     # Show navigation prompt if button was clicked
     if st.session_state.get('show_tab3_prompt', False):
-        st.info("👆 Click on the **'Order & Client Info'** tab above to continue.")
+        st.info("Click on the **'Order & Client Info'** tab above to continue.")
         st.session_state.show_tab3_prompt = False
 
 # ============================================================
@@ -3506,7 +3506,7 @@ with tab3:
                         )
                         st.session_state.order_items.append(order_item)
 
-                    st.success(f"Added {len(selected_proposal_indices)} product(s) to order!")
+                    st.toast(f"Added {len(selected_proposal_indices)} product(s) to order!")
                     st.rerun()
             else:
                 st.caption("Select at least one product above to add to order.")
@@ -4298,7 +4298,7 @@ Rates default to current estimates but can be adjusted as needed.
                         }
 
                         st.session_state.order_items.append(custom_item)
-                        st.success(f"Added custom item: {custom_name}")
+                        st.toast(f"Added custom item: {custom_name}")
                         st.rerun()
 
         with col_notes:
@@ -4702,7 +4702,7 @@ Rates default to current estimates but can be adjusted as needed.
 
     # Show navigation prompt if button was clicked
     if st.session_state.get('show_tab4_prompt', False):
-        st.info("👆 Click on the **'Execution & Accounting'** tab above to continue.")
+        st.info("Click on the **'Execution & Accounting'** tab above to continue.")
         st.session_state.show_tab4_prompt = False
 
 # ============================================================
@@ -5090,7 +5090,7 @@ with tab4:
                             }
 
                             st.session_state.order_items.append(custom_item)
-                            st.success(f"Added custom item: {custom_name}")
+                            st.toast(f"Added custom item: {custom_name}")
                             st.rerun()
 
             with col_notes:

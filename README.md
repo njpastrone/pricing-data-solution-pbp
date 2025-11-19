@@ -3,7 +3,7 @@
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
 **Current Status:** ✅ Production Ready - Complete 4-Tab Workflow with PowerPoint Automation
-**Version:** 6.13 - Multi-Variant Product Consolidation & Smart Pricing Detection
+**Version:** 6.14 - Toast Notifications for User Actions
 
 ---
 
@@ -291,9 +291,31 @@ Peace by Piece International - Internal Tool
 ---
 
 **Last Updated:** 2025-11-19
-**Version:** 6.13 (Multi-Variant Product Consolidation & Smart Pricing Detection)
+**Version:** 6.14 (Toast Notifications for User Actions)
 
-## 🆕 Recent Updates (v6.13 - 2025-11-19)
+## 🆕 Recent Updates (v6.14 - 2025-11-19)
+
+### Toast Notifications for Better User Feedback
+Improved user experience with toast notifications that appear in the bottom-right corner:
+
+**Key Improvements:**
+- Replaced static success messages with toast notifications for all product additions
+- Notifications visible regardless of scroll position (major UX win)
+- Auto-dismiss after 4 seconds (non-intrusive)
+- Professional appearance without emoji icons
+
+**Applied to:**
+- Adding individual products to proposal (Tab 1)
+- Bulk adding products to proposal (Tab 1)
+- Importing products from proposal to order (Tab 3)
+- Adding custom line items (Tab 3 & Tab 4)
+
+**Why This Matters:**
+Previously, success messages appeared at the top of sections and were invisible when users scrolled down in the product catalog. Now, users always see confirmation of their actions.
+
+---
+
+## Previous Updates (v6.13 - 2025-11-19)
 
 ### Multi-Variant Product Consolidation
 Intelligent handling of product variants (different sizes/flavors) that map to the same PowerPoint slide:
