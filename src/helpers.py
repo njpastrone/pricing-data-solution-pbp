@@ -456,10 +456,10 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
 
 def parse_client_order_form_html(html_content):
     """
-    Parse completed HTML client order form and extract client information.
+    Parse completed HTML client order form and extract client information and products.
 
-    Extracts data from fill-in fields in the HTML form that clients complete.
-    Does NOT extract order details (products) to avoid errors.
+    Extracts data from fill-in fields in the HTML form that clients complete,
+    including client details and product names from the Order Details table.
 
     Args:
         html_content: String containing the HTML form content
@@ -477,6 +477,7 @@ def parse_client_order_form_html(html_content):
             - client_in_hands_date: str (format: MM/DD/YYYY)
             - impact_card_preference: str
             - payment_preference: str
+            - products: list of str (product names from Order Details table)
             - parse_errors: list of strings (warnings about fields that couldn't be parsed)
 
     Example:
@@ -484,6 +485,8 @@ def parse_client_order_form_html(html_content):
         >>> data = parse_client_order_form_html(html)
         >>> data['company_name']
         'Acme Corp'
+        >>> data['products']
+        ['Jaggery - Organic', 'Reusable Shopping Bag']
     """
     import re
     from html.parser import HTMLParser
@@ -500,6 +503,7 @@ def parse_client_order_form_html(html_content):
         'client_in_hands_date': '',
         'impact_card_preference': '',
         'payment_preference': '',
+        'products': [],  # List of product names from Order Details table
         'parse_errors': []
     }
 
@@ -644,5 +648,48 @@ def parse_client_order_form_html(html_content):
     for field in required_fields:
         if not extracted_data[field]:
             extracted_data['parse_errors'].append(f"Required field '{field}' is empty or could not be parsed")
+
+    # ============================================================
+    # EXTRACT PRODUCTS FROM ORDER DETAILS TABLE
+    # ============================================================
+    # Find the ORDER DETAILS section and extract product names
+    # Table structure:
+    # <tr><td colspan="3">ORDER DETAILS</td></tr>
+    # <tr><th>Product Name</th><th>Quantity</th><th>Customization/Branding Details</th></tr>
+    # <tr><td>Product 1</td><td>100</td><td>...</td></tr>
+    # ...
+
+    in_order_details = False
+    for row_content in all_rows:
+        # Check if this is the ORDER DETAILS section header
+        if 'ORDER DETAILS' in row_content and 'colspan' in row_content:
+            in_order_details = True
+            continue
+
+        # Check if we've left the ORDER DETAILS section (hit another section header)
+        if in_order_details and 'colspan' in row_content and any(
+            section in row_content.upper() for section in ['IMPACT CARDS', 'PAYMENT', 'ADDITIONAL']
+        ):
+            in_order_details = False
+            break
+
+        # If we're in ORDER DETAILS section, extract product rows
+        if in_order_details:
+            # Extract all TD tags from this row
+            td_pattern = r'<td[^>]*>(.*?)</td>'
+            tds = re.findall(td_pattern, row_content, re.DOTALL | re.IGNORECASE)
+
+            # Skip header row (contains <th> tags)
+            if '<th' in row_content.lower():
+                continue
+
+            # Product rows should have 3 columns
+            if len(tds) >= 1:
+                # Extract product name from first column
+                product_name = clean_cell_content(tds[0])
+
+                # Skip empty rows or placeholder text
+                if product_name and not product_name.startswith('[') and product_name.lower() not in ['product name', '']:
+                    extracted_data['products'].append(product_name)
 
     return extracted_data

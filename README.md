@@ -3,7 +3,7 @@
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
 **Current Status:** ✅ Production Ready - Complete 4-Tab Workflow with PowerPoint Automation
-**Version:** 6.14 - Toast Notifications for User Actions
+**Version:** 6.15 - HTML Order Form Product Extraction
 
 ---
 
@@ -291,9 +291,37 @@ Peace by Piece International - Internal Tool
 ---
 
 **Last Updated:** 2025-11-19
-**Version:** 6.14 (Toast Notifications for User Actions)
+**Version:** 6.15 (HTML Order Form Product Extraction)
 
-## 🆕 Recent Updates (v6.14 - 2025-11-19)
+## 🆕 Recent Updates (v6.15 - 2025-11-19)
+
+### HTML Order Form Product Extraction
+Complete automation of client order form import with product parsing:
+
+**Key Features:**
+- Automatically extracts product names from Order Details table in HTML forms
+- Smart product matching: exact match first, then partial match
+- Checkbox selection UI (same as Option B for consistency)
+- Shows match type (Exact/Partial) and warns about unmatched products
+- Adds products with default settings (quantity 1, 100% markup) ready for editing
+
+**Benefits:**
+- One-click import of both client info AND products from completed forms
+- No more manual product entry after receiving client forms
+- Intelligent matching catches variations in product names
+- Clear visibility of which products matched and which didn't
+
+**Workflow:**
+1. Upload completed HTML order form (Tab 3, Option A)
+2. Review extracted client info and products
+3. Click "Import Client Information"
+4. Select which matched products to add
+5. Click "Add Selected Products to Order"
+6. Edit quantities, markup, customization in Section 2
+
+---
+
+## Previous Updates (v6.14 - 2025-11-19)
 
 ### Toast Notifications for Better User Feedback
 Improved user experience with toast notifications that appear in the bottom-right corner:

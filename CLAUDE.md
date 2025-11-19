@@ -176,8 +176,14 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 - **Workflow Guidance:** Clear instructions showing 3 pathways into Tab 3 with recommended workflow
 - **Option A - HTML Order Form Import (RECOMMENDED):** Upload completed client order forms (HTML format)
   - Supports both our generated HTML and Google Docs exported HTML
-  - Extracts 11 fields automatically: client type, company, contact info, shipping/billing addresses, drop shipping, in-hands date, impact cards, payment preference
-  - Preview extracted data before applying
+  - **Client Info Extraction:** Extracts 11 fields automatically (client type, company, contact info, shipping/billing addresses, drop shipping, in-hands date, impact cards, payment preference)
+  - **Product Extraction (NEW):** Parses product names from Order Details table
+    - Exact and partial matching against product catalog
+    - Checkbox selection UI (similar to Option B)
+    - Shows match type (Exact/Partial) and catalog name
+    - Warns about unmatched products
+    - Adds selected products with default settings (quantity 1, 100% markup)
+  - Preview extracted data (client info + products) before applying
   - Smart defaults: shipping address field shows unless drop shipping is explicitly "Yes"
   - Handles user input errors gracefully
   - Prominently placed at top (no longer hidden in Section 5)
@@ -310,9 +316,31 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.14 - Toast Notifications for User Actions
+**Version:** 6.15 - HTML Order Form Product Extraction
 
 **Last Updated:** 2025-11-19
+
+**Recent Improvements (2025-11-19 - v6.15):**
+- ✅ **HTML Order Form Product Extraction:**
+  - Enhanced `parse_client_order_form_html()` to extract product names from Order Details table
+  - Parses products from 3-column table (Product Name, Quantity, Customization)
+  - Filters out placeholder text and empty rows
+  - **Product Matching System:**
+    - Exact match first (case-insensitive)
+    - Fallback to partial match if no exact match found
+    - Shows match type and catalog name for transparency
+    - Warns about products not found in catalog
+  - **Selection UI:**
+    - Checkbox interface (similar to Option B)
+    - Products pre-selected by default
+    - Shows partner for each product
+    - "Add X Selected Product(s) to Order" button
+  - **Order Item Creation:**
+    - Default settings: quantity 1, 100% markup
+    - Full order item structure with pricing, tariff, customization fields
+    - Ready for user editing in Section 2
+  - Toast notification on successful import
+  - Updated function docstring with products list
 
 **Recent Improvements (2025-11-19 - v6.14):**
 - ✅ **Toast Notifications for Product Actions:**

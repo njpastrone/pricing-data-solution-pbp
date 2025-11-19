@@ -3391,6 +3391,14 @@ with tab3:
             df_preview = pd.DataFrame(list(preview_data.items()), columns=["Field", "Value"])
             st.dataframe(df_preview, use_container_width=True, hide_index=True)
 
+            # Show extracted products
+            if parsed_data['products']:
+                st.markdown(f"**Products Found:** {len(parsed_data['products'])} product(s)")
+                products_df = pd.DataFrame(parsed_data['products'], columns=["Product Name"])
+                st.dataframe(products_df, use_container_width=True, hide_index=True)
+            else:
+                st.caption("No products found in order form")
+
             # Import button
             st.divider()
             if st.button("Import Client Information", type="primary", use_container_width=True, key="import_client_data_btn_top"):
@@ -3432,6 +3440,149 @@ with tab3:
 
                 st.success("Client information imported successfully! Review and edit the fields below as needed.")
                 st.rerun()
+
+            # ============================================================
+            # PRODUCT SELECTION FROM ORDER FORM
+            # ============================================================
+            if parsed_data['products']:
+                st.divider()
+                with st.expander("Select Products from Order Form", expanded=True):
+                    st.markdown("Select products from the completed order form to add to this order.")
+                    st.caption("Products will be matched against the catalog and added with default settings (quantity 1, 100% markup).")
+
+                    # Match products against catalog
+                    matched_products = []
+                    unmatched_products = []
+
+                    for product_name in parsed_data['products']:
+                        # Try exact match first
+                        exact_match = st.session_state.df_template[
+                            st.session_state.df_template['Product/Service'].str.lower() == product_name.lower()
+                        ]
+
+                        if len(exact_match) > 0:
+                            # Exact match found
+                            product_row = exact_match.iloc[0].to_dict()
+                            matched_products.append({
+                                'name': product_name,
+                                'match_type': 'Exact',
+                                'product_data': product_row
+                            })
+                        else:
+                            # Try partial match
+                            partial_match = st.session_state.df_template[
+                                st.session_state.df_template['Product/Service'].str.contains(product_name, case=False, na=False)
+                            ]
+
+                            if len(partial_match) > 0:
+                                # Partial match found - use first match
+                                product_row = partial_match.iloc[0].to_dict()
+                                matched_products.append({
+                                    'name': product_name,
+                                    'match_type': 'Partial',
+                                    'catalog_name': product_row['Product/Service'],
+                                    'product_data': product_row
+                                })
+                            else:
+                                # No match found
+                                unmatched_products.append(product_name)
+
+                    # Show matched products with checkboxes
+                    if matched_products:
+                        st.markdown(f"**Matched Products ({len(matched_products)}):**")
+
+                        selected_product_indices = []
+
+                        for idx, match in enumerate(matched_products):
+                            col1, col2 = st.columns([4, 1])
+
+                            with col1:
+                                is_selected = st.checkbox(
+                                    f"{match['name']} ({match['match_type']} match)",
+                                    key=f"select_form_product_{idx}",
+                                    value=True  # Default to checked
+                                )
+
+                                # Show catalog name if different (partial match)
+                                if match['match_type'] == 'Partial':
+                                    st.caption(f"Catalog: {match['catalog_name']}")
+
+                                # Show partner
+                                st.caption(f"Partner: {match['product_data'].get('Partner', 'N/A')}")
+
+                            with col2:
+                                if is_selected:
+                                    selected_product_indices.append(idx)
+
+                        # Add selected button
+                        if len(selected_product_indices) > 0:
+                            if st.button(f"Add {len(selected_product_indices)} Selected Product(s) to Order", type="primary", use_container_width=True, key="add_form_products_btn"):
+                                # Add products to order
+                                for idx in selected_product_indices:
+                                    match = matched_products[idx]
+                                    product_data = match['product_data']
+
+                                    # Create order item with default settings (quantity 1, 100% markup)
+                                    # Get base price for quantity 1
+                                    base_price_per_unit, tier_info, tier_num = get_unit_price_new_system(product_data, 1)
+
+                                    # Calculate costs
+                                    product_cost_subtotal = base_price_per_unit * 1
+                                    markup_amount = product_cost_subtotal * 1.0  # 100% markup
+                                    product_total = product_cost_subtotal + markup_amount
+
+                                    # Parse tariff
+                                    tariff_rate_percent = parse_tariff_rate(product_data.get('Tariff Rate', ''))
+                                    tariff_base = product_cost_subtotal
+                                    tariff_amount = calculate_product_tariff(tariff_base, tariff_rate_percent)
+
+                                    # Build order item
+                                    order_item = {
+                                        'product_name': product_data.get('Product/Service', 'Unknown Product'),
+                                        'product_ref': product_data.get('Purchase Description', ''),
+                                        'partner': product_data.get('Partner', 'Unknown Partner'),
+                                        'product_data': product_data,
+                                        'product_data_row': product_data,
+                                        'is_custom': False,
+                                        'quantity': 1,
+                                        'base_price': base_price_per_unit,
+                                        'tier_range': tier_info if tier_info else '',
+                                        'tier_column': f'T{tier_num}' if tier_num else '',
+                                        'markup_percent': 100.0,
+                                        'markup_amount': markup_amount,
+                                        'include_customization': False,
+                                        'customization_description': product_data.get('Customization Info', ''),
+                                        'customization_setup_fee': float(clean_price(product_data.get('Customization Setup Fee', '')) or 0.0),
+                                        'customization_per_unit': float(clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0),
+                                        'customization_setup_total': 0.0,
+                                        'customization_unit_total': 0.0,
+                                        'apply_custom_minimum': False,
+                                        'customization_minimum_qty': 0,
+                                        'product_subtotal': product_cost_subtotal,
+                                        'subtotal_before_markup': product_cost_subtotal,
+                                        'product_total': product_total,
+                                        'total_per_unit': product_total,
+                                        'quoted_price_per_unit': (product_cost_subtotal + markup_amount),
+                                        'tariff_info': f"{product_data.get('Country', 'N/A')} - {tariff_rate_percent}%" if tariff_rate_percent > 0 else '',
+                                        'tariff_rate_percent': tariff_rate_percent,
+                                        'tariff_base': tariff_base,
+                                        'tariff_amount': tariff_amount
+                                    }
+
+                                    st.session_state.order_items.append(order_item)
+
+                                st.toast(f"Added {len(selected_product_indices)} product(s) from order form!")
+                                st.rerun()
+                        else:
+                            st.caption("Select at least one product above to add to order.")
+
+                    # Show unmatched products
+                    if unmatched_products:
+                        st.divider()
+                        st.warning(f"**Not Found in Catalog ({len(unmatched_products)}):**")
+                        for product_name in unmatched_products:
+                            st.caption(f"- {product_name}")
+                        st.caption("These products will not be added. You can add them manually using Option C below.")
 
     st.divider()
 
