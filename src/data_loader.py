@@ -77,12 +77,8 @@ def connect_to_sheets():
         "https://www.googleapis.com/auth/drive"
     ]
 
-    # Try Streamlit secrets first (local development)
-    if "gcp_service_account" in st.secrets:
-        creds_info = st.secrets["gcp_service_account"]
-        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-    # Fall back to environment variables (Render deployment)
-    elif os.getenv("GCP_PROJECT_ID"):
+    # Try environment variables first (Render deployment)
+    if os.getenv("GCP_PROJECT_ID"):
         creds_info = {
             "type": os.getenv("GCP_TYPE"),
             "project_id": os.getenv("GCP_PROJECT_ID"),
@@ -97,8 +93,13 @@ def connect_to_sheets():
             "universe_domain": os.getenv("GCP_UNIVERSE_DOMAIN")
         }
         creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+    # Fall back to Streamlit secrets (local development)
     else:
-        raise Exception("No Google Cloud credentials found. Please configure either st.secrets['gcp_service_account'] or GCP_* environment variables.")
+        try:
+            creds_info = st.secrets["gcp_service_account"]
+            creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+        except Exception as e:
+            raise Exception(f"No Google Cloud credentials found. Please configure either GCP_* environment variables or st.secrets['gcp_service_account']. Error: {e}")
 
     return gspread.authorize(creds)
 
