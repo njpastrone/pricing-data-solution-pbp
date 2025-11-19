@@ -310,9 +310,59 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.12 - HTML Form Template Customization
+**Version:** 6.13 - Multi-Variant Product Consolidation in PowerPoint
 
-**Last Updated:** 2025-11-17
+**Last Updated:** 2025-11-19
+
+**Recent Improvements (2025-11-19 - v6.13):**
+- ✅ **Multi-Variant Product Consolidation:**
+  - Automatic detection when multiple products match to same PowerPoint slide
+  - User confirmation UI with conditional options based on pricing consistency
+  - Multi-row pricing table population (fills all variant rows automatically)
+  - Smart variant identifier extraction (size, flavor, numeric units, parentheses, fallback to "Option N")
+  - Customization row detection and preservation
+  - Partner validation (warns if variants are from different partners)
+  - Handles table formats: 2×3, 2×4, 3×4, and multi-row
+  - Example: "Strawberry Jam - 4oz" and "Strawberry Jam - 8oz" both populate same slide
+  - New functions: `detect_variant_groups()`, `extract_variant_identifier()`, `check_pricing_consistency()`
+  - Updated `update_pricing_table()` to support variant_mode parameter
+  - Backward compatible: single-product slides work exactly as before
+
+- ✅ **Smart Pricing Consistency Detection:**
+  - Automatically detects if all variants have identical MOQ and price
+  - Shows pricing indicator in UI: "✅ Consistent Pricing" or "⚠️ Variable Pricing"
+  - Displays MOQ and price next to each product name for transparency
+  - **Conditional display options:**
+    - **Consistent pricing (4 options):**
+      1. "Display single row (all variants have same pricing)" [recommended]
+      2. "Display all variants (show each variant in separate row)"
+      3. "Create separate slides (duplicate slide for each variant)"
+      4. "Skip these products"
+    - **Variable pricing (3 options):**
+      1. "Display together (recommended - fills multiple table rows)" [default]
+      2. "Create separate slides (duplicate slide for each variant)"
+      3. "Skip these products"
+  - Prevents unnecessary multi-row tables when all variants have identical pricing
+
+- ✅ **Smart 4-Column Table Layout:**
+  - Added "Price @ Qty 100" calculation to `calculate_proposal_pricing()`
+  - Returns both `price_at_100` and `client_price_at_100` for proper table population
+  - **Simplified variant layout** when prices are identical:
+    - `Variant | MOQ | Price Ea @ MOQ | Delivery`
+    - Shows variant name, MOQ value, single price, and delivery time
+  - **Full variant layout** when prices differ (tiered pricing OR discount):
+    - `Variant | Price @ MOQ | Price @ Qty 100 | Delivery`
+    - Shows variant name, price at MOQ quantity, price at 100 units, and delivery time
+  - **Single product mode** maintains original format:
+    - `MOQ | Price @ MOQ | Price @ Qty 100 | Delivery`
+  - Automatic detection compares `client_price` vs `client_price_at_100` (epsilon 0.01)
+  - Debug output shows simplification decision and pricing consistency for troubleshooting
+
+- ✅ **Delivery Time Preservation:**
+  - Always reads delivery time from PowerPoint template (preserves original template value)
+  - Works correctly for all modes: multi-row variants, single-row variants, and single products
+  - Fallback to Google Sheets data only if template value is missing/empty
+  - Fixed bug where single-row variant tables showed hardcoded "6-8 weeks" instead of template value
 
 **Recent Improvements (2025-11-17 - v6.12):**
 - ✅ **HTML Form Template Customization:**

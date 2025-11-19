@@ -1,16 +1,18 @@
 """
 PowerPoint Proposal Generation Module
 Handles slide cloning, table updates, and presentation assembly for Phase 2.
+Includes support for multi-variant product consolidation (v6.13).
 """
 
 from pptx import Presentation
 from pptx.util import Inches, Pt
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import io
 import copy
 from datetime import datetime
 import pandas as pd
 import math
+import re
 
 
 def calculate_moq(estimated_unit_price):
@@ -84,10 +86,26 @@ def calculate_proposal_pricing(proposal_item: Dict, get_unit_price_func, marketi
     if marketing_rounding:
         moq_product_price_per_unit = apply_marketing_rounding(moq_product_price_per_unit, True)
 
-    # Calculate client price (with discount)
+    # Calculate client price at MOQ (with discount)
     client_price = moq_product_price_per_unit
     if discount_percent > 0:
         client_price = moq_product_price_per_unit * (1 - discount_percent / 100)
+
+    # Calculate price at quantity 100 (for comparison column)
+    # Note: preliminary_base_price already has the price at qty 100
+    price_at_100_cost = preliminary_base_price * 100
+    price_at_100_markup = price_at_100_cost * (markup_percent / 100)
+    price_at_100_total = price_at_100_cost + price_at_100_markup
+    price_at_100_per_unit = price_at_100_total / 100
+
+    # Apply marketing rounding if enabled
+    if marketing_rounding:
+        price_at_100_per_unit = apply_marketing_rounding(price_at_100_per_unit, True)
+
+    # Calculate client price at quantity 100 (with discount)
+    client_price_at_100 = price_at_100_per_unit
+    if discount_percent > 0:
+        client_price_at_100 = price_at_100_per_unit * (1 - discount_percent / 100)
 
     # Get customization costs from product data
     setup_fee = clean_price(product_row.get('Customization Setup Fee', '')) or 0.0
@@ -101,11 +119,175 @@ def calculate_proposal_pricing(proposal_item: Dict, get_unit_price_func, marketi
     return {
         'moq': moq,
         'moq_price_per_unit': moq_product_price_per_unit,
+        'price_at_100': price_at_100_per_unit,
         'client_price': client_price,
+        'client_price_at_100': client_price_at_100,
         'delivery_time': delivery_time,
         'customization_setup_fee': setup_fee,
-        'customization_per_unit': per_unit_cost
+        'customization_per_unit': per_unit_cost,
+        'product_data': proposal_item['product_data']  # Include original product data for variant detection
     }
+
+
+# ============================================================
+# VARIANT DETECTION AND GROUPING (v6.13)
+# ============================================================
+
+def detect_variant_groups(confirmed_matches: Dict[str, str]) -> Tuple[Dict[str, List[str]], Dict[str, str]]:
+    """
+    Detect when multiple Google Sheets products match to the same PowerPoint slide.
+    This indicates they are variants (sizes/flavors) that should be displayed together.
+
+    Args:
+        confirmed_matches: Dict mapping {gs_product_name: pptx_slide_name}
+
+    Returns:
+        Tuple of:
+            - variant_groups: Dict {pptx_slide_name: [gs_product1, gs_product2, ...]}
+            - single_products: Dict {pptx_slide_name: gs_product}
+
+    Example:
+        Input: {
+            'Strawberry Jam - 4oz': 'STRAWBERRY JAM',
+            'Strawberry Jam - 8oz': 'STRAWBERRY JAM',
+            'Cutting Board': 'BUTCHER BLOCK'
+        }
+        Output: (
+            {'STRAWBERRY JAM': ['Strawberry Jam - 4oz', 'Strawberry Jam - 8oz']},
+            {'BUTCHER BLOCK': 'Cutting Board'}
+        )
+    """
+    # Invert dictionary: group by PowerPoint slide name
+    slide_to_products = {}
+
+    for gs_product, pptx_slide in confirmed_matches.items():
+        if pptx_slide not in slide_to_products:
+            slide_to_products[pptx_slide] = []
+        slide_to_products[pptx_slide].append(gs_product)
+
+    # Separate into variant groups (2+ products) and single products
+    variant_groups = {}
+    single_products = {}
+
+    for pptx_slide, products in slide_to_products.items():
+        if len(products) > 1:
+            # Multiple products matched to same slide → variant group
+            variant_groups[pptx_slide] = products
+        else:
+            # Single product → normal case
+            single_products[pptx_slide] = products[0]
+
+    return variant_groups, single_products
+
+
+def extract_variant_identifier(proposal_item: Dict, variant_index: int = 0) -> str:
+    """
+    Extract the variant identifier from product name for display in table's variant column.
+
+    Tries multiple strategies to extract variant info:
+    1. Text after last dash: "Product - 4oz" → "4oz"
+    2. Size keywords anywhere in name: "Beeswax Candle Small" → "Small"
+    3. Numeric + unit patterns: "Product 4oz", "Product 2 oz" → "4oz"
+    4. Text in parentheses: "Product (New!)" → "New!"
+    5. Fallback: "Option 1", "Option 2", etc.
+
+    Args:
+        proposal_item: Dict with product_data containing Product/Service name
+        variant_index: Index of this variant (0, 1, 2...) for fallback naming
+
+    Returns:
+        str: Variant identifier (e.g., "4oz", "Small", "Cashews", "Option 1")
+    """
+    product_data = proposal_item.get('product_data', {})
+    product_name = product_data.get('Product/Service', '')
+
+    print(f"DEBUG extract_variant_identifier: Processing '{product_name}'")
+
+    # Strategy 1: Try to extract variant after last dash
+    if ' - ' in product_name:
+        parts = product_name.split(' - ')
+        variant = parts[-1].strip()
+        # Clean up common patterns: remove parentheses
+        variant = re.sub(r'[()]', '', variant)
+        print(f"DEBUG extract_variant_identifier: Strategy 1 (dash) → '{variant}'")
+        return variant
+
+    # Strategy 2: Check for size keywords ANYWHERE in name (not just first word)
+    size_keywords = ['Small', 'Medium', 'Large', 'Mini', 'Extra Large', 'XL', 'Regular',
+                     'small', 'medium', 'large', 'mini', 'extra large', 'xl', 'regular']
+
+    for keyword in size_keywords:
+        if keyword.lower() in product_name.lower():
+            # Return capitalized version
+            result = keyword.capitalize()
+            print(f"DEBUG extract_variant_identifier: Strategy 2 (size keyword) → '{result}'")
+            return result
+
+    # Strategy 3: Extract numeric + unit patterns (4oz, 2 oz, 8oz, etc.)
+    unit_pattern = r'(\d+\.?\d*\s*(?:oz|ml|g|kg|lb|ct|pack|pk))'
+    unit_match = re.search(unit_pattern, product_name, re.IGNORECASE)
+    if unit_match:
+        result = unit_match.group(1).strip()
+        print(f"DEBUG extract_variant_identifier: Strategy 3 (unit pattern) → '{result}'")
+        return result
+
+    # Strategy 4: Extract text from parentheses (if present)
+    paren_match = re.search(r'\((.*?)\)', product_name)
+    if paren_match:
+        result = paren_match.group(1)
+        print(f"DEBUG extract_variant_identifier: Strategy 4 (parentheses) → '{result}'")
+        return result
+
+    # Fallback: Use "Option N" numbering
+    result = f"Option {variant_index + 1}"
+    print(f"DEBUG extract_variant_identifier: Fallback → '{result}'")
+    return result
+
+
+def check_pricing_consistency(pricing_data_list: List[Dict]) -> bool:
+    """
+    Check if all variants have identical pricing (both MOQ and client_price).
+
+    This function determines whether a simple single-row table is sufficient
+    or if a multi-row variant table is needed to show pricing differences.
+
+    Args:
+        pricing_data_list: List of pricing data dicts from calculate_proposal_pricing()
+
+    Returns:
+        bool: True if all variants share same MOQ and client_price, False otherwise
+
+    Examples:
+        >>> pricing_data_list = [
+        ...     {'moq': 50, 'client_price': 12.00},
+        ...     {'moq': 50, 'client_price': 12.00},
+        ...     {'moq': 50, 'client_price': 12.00}
+        ... ]
+        >>> check_pricing_consistency(pricing_data_list)
+        True
+
+        >>> pricing_data_list = [
+        ...     {'moq': 69, 'client_price': 14.50},
+        ...     {'moq': 55, 'client_price': 18.50}
+        ... ]
+        >>> check_pricing_consistency(pricing_data_list)
+        False
+    """
+    if len(pricing_data_list) <= 1:
+        return True
+
+    first_moq = pricing_data_list[0].get('moq', 0)
+    first_price = pricing_data_list[0].get('client_price', 0)
+
+    for item in pricing_data_list[1:]:
+        item_moq = item.get('moq', 0)
+        item_price = item.get('client_price', 0)
+
+        # Check both MOQ and price (must be identical)
+        if item_moq != first_moq or abs(item_price - first_price) > 0.01:
+            return False
+
+    return True
 
 
 def update_cell_text_preserve_format(cell, new_text: str):
@@ -271,17 +453,26 @@ def copy_slide_with_images(source_prs: Presentation, target_prs: Presentation, s
     return new_slide
 
 
-def update_pricing_table(slide: object, proposal_item: Dict) -> bool:
+def update_pricing_table(slide: object, proposal_items, variant_mode: bool = False) -> bool:
     """
     Update pricing table in slide with proposal data.
-    Handles 3 table formats: 2x3, 2x4, 3x4
+    Supports both single-product and multi-variant tables.
+    Handles table formats: 2x3, 2x4, 3x4, and multi-row variant tables (v6.13).
 
     Args:
         slide: Slide object with table
-        proposal_item: Dict with calculated pricing data
+        proposal_items: Single Dict OR List[Dict] for variants (when variant_mode=True)
+        variant_mode: If True, proposal_items is a list of variants
 
     Returns:
         True if table was updated, False if no table found
+
+    Examples:
+        Single product:
+            update_pricing_table(slide, proposal_item, variant_mode=False)
+
+        Multi-variant (2 sizes):
+            update_pricing_table(slide, [item_4oz, item_8oz], variant_mode=True)
     """
     # Find table in slide
     table = None
@@ -293,72 +484,191 @@ def update_pricing_table(slide: object, proposal_item: Dict) -> bool:
     if not table:
         return False
 
-    # Get proposal data
-    moq = proposal_item.get('moq', 10)
-    base_price = proposal_item.get('moq_price_per_unit', 0)
-    client_price = proposal_item.get('client_price', base_price)
-    delivery_time = proposal_item.get('delivery_time', '6-8 weeks')
-    setup_fee = proposal_item.get('customization_setup_fee', 0)
-    per_unit_cost = proposal_item.get('customization_per_unit', 0)
+    # Convert single item to list for consistent handling
+    if not variant_mode:
+        proposal_items = [proposal_items]
+    else:
+        print(f"DEBUG update_pricing_table: variant_mode=True with {len(proposal_items)} items")
 
-    # Format prices
-    base_price_str = f"${base_price:.2f}"
-    client_price_str = f"${client_price:.2f}"
-
-    # Detect table format
+    # Detect table structure
     rows = len(table.rows)
     cols = len(table.columns)
+    print(f"DEBUG update_pricing_table: Table structure {rows} rows x {cols} cols")
 
-    # Update based on format
-    if rows >= 2:
-        # Update MOQ (Row 1, Col 0)
-        update_cell_text_preserve_format(table.cell(1, 0), str(moq))
+    # Detect customization row (last row with keywords like "Customization", "Artwork", "Branding")
+    customization_row_idx = None
+    for r in range(rows - 1, 0, -1):  # Start from bottom, skip header
+        try:
+            cell_text = table.cell(r, 0).text.lower()
+            if any(keyword in cell_text for keyword in ['customization', 'artwork', 'branding', 'setup', 'sticker', 'engraving', 'no customization']):
+                customization_row_idx = r
+                break
+        except:
+            continue
 
+    # Calculate available data rows (between header row 0 and customization row)
+    if customization_row_idx:
+        available_data_rows = customization_row_idx - 1  # Rows 1 to customization_row_idx-1
+    else:
+        available_data_rows = rows - 1  # All rows except header
+
+    # Check if we need to add rows for all variants
+    num_variants = len(proposal_items)
+    if num_variants > available_data_rows:
+        # Add new rows to accommodate all variants
+        rows_to_add = num_variants - available_data_rows
+        print(f"DEBUG: Adding {rows_to_add} rows to table for {num_variants} variants")
+
+        import copy
+
+        for i in range(rows_to_add):
+            # Clone row 1 (first data row) using XML deep copy
+            source_tr = table._tbl.tr_lst[1]  # Row 1 (first data row after header)
+            new_tr = copy.deepcopy(source_tr)
+
+            # Insert new row BEFORE customization row (if exists) or at end
+            if customization_row_idx:
+                # Insert before customization row
+                table._tbl.insert(customization_row_idx + i, new_tr)
+            else:
+                # Append at end
+                table._tbl.append(new_tr)
+
+        # Update customization_row_idx (it shifted down by rows_to_add)
+        if customization_row_idx:
+            customization_row_idx += rows_to_add
+
+        # Update rows count
+        rows = len(table.rows)
+        available_data_rows = num_variants
+
+    # Read delivery time from PowerPoint template (preserves original template value)
+    template_delivery_time = None
+    if cols >= 3:
+        try:
+            # Read from row 1 (first data row), last column (delivery column)
+            template_delivery_time = table.cell(1, cols - 1).text.strip()
+            if template_delivery_time:
+                print(f"DEBUG: Using template delivery time: '{template_delivery_time}'")
+        except:
+            pass
+
+    # For variant mode with 4 columns, check if we can simplify the table layout
+    can_simplify_table = False
+    if variant_mode and cols == 4:
+        # Check if price at MOQ equals price at qty 100 for the first variant
+        first_variant = proposal_items[0]
+        first_client_price = first_variant.get('client_price', 0)
+        first_client_price_at_100 = first_variant.get('client_price_at_100', 0)
+
+        # Can simplify if columns 2 and 3 would show identical values
+        # (no tiered pricing benefit between MOQ and 100, and no discount difference)
+        can_simplify_table = abs(first_client_price - first_client_price_at_100) < 0.01  # Use small epsilon for float comparison
+        print(f"DEBUG: can_simplify_table={can_simplify_table} (client_price={first_client_price:.2f}, client_price_at_100={first_client_price_at_100:.2f})")
+
+    # Update each data row with variant data
+    for idx, proposal_item in enumerate(proposal_items):
+        data_row_idx = idx + 1  # Row 0 is header, data starts at row 1
+
+        # Extract variant identifier for first column
+        if variant_mode:
+            variant_identifier = extract_variant_identifier(proposal_item, idx)
+            print(f"DEBUG update_pricing_table: Row {data_row_idx} - Variant ID: {variant_identifier}")
+        else:
+            # Single product: use MOQ number in first column
+            variant_identifier = str(proposal_item.get('moq', 10))
+
+        # Get pricing data
+        moq = proposal_item.get('moq', 10)
+        base_price = proposal_item.get('moq_price_per_unit', 0)
+        price_at_100 = proposal_item.get('price_at_100', base_price)
+        client_price = proposal_item.get('client_price', base_price)
+        client_price_at_100 = proposal_item.get('client_price_at_100', client_price)
+
+        # Delivery time: use template value if available, otherwise use Google Sheets data
+        if template_delivery_time:
+            delivery_time = template_delivery_time
+        else:
+            delivery_time = proposal_item.get('delivery_time', '6-8 weeks')
+
+        # Format prices
+        base_price_str = f"${base_price:.2f}"
+        price_at_100_str = f"${price_at_100:.2f}"
+        client_price_str = f"${client_price:.2f}"
+        client_price_at_100_str = f"${client_price_at_100:.2f}"
+
+        # Update cells based on table format
         if cols == 3:
-            # Format 2x3: MOQ | Price Ea | Delivery
-            # Use client price (with discount if applicable)
-            update_cell_text_preserve_format(table.cell(1, 1), client_price_str)
-            update_cell_text_preserve_format(table.cell(1, 2), delivery_time)
+            # Format 2x3: MOQ/Variant | Price Ea | Delivery
+            update_cell_text_preserve_format(table.cell(data_row_idx, 0), variant_identifier)
+            update_cell_text_preserve_format(table.cell(data_row_idx, 1), client_price_str)
 
-            # Update header for price column
-            update_cell_text_preserve_format(table.cell(0, 1), f"Price Ea\n(@ Qty {moq})")
+            # Delivery time - always update (in variant mode, all rows show same delivery time)
+            update_cell_text_preserve_format(table.cell(data_row_idx, 2), delivery_time)
+
+            # Update header for price column (only for first variant/single product)
+            if idx == 0 and not variant_mode:
+                update_cell_text_preserve_format(table.cell(0, 1), f"Price Ea\n(@ Qty {moq})")
 
         elif cols == 4:
-            # Format 2x4 or 3x4: MOQ | Base Price | Client Price | Delivery
-            # Column 1: Base price (with markup, no discount)
-            update_cell_text_preserve_format(table.cell(1, 1), base_price_str)
+            if variant_mode and can_simplify_table:
+                # SIMPLIFIED LAYOUT: Variant | MOQ | Price Ea @ MOQ | Delivery
+                # Use this when price at MOQ equals price at qty 100 (no tiered pricing, no discount)
+                update_cell_text_preserve_format(table.cell(data_row_idx, 0), variant_identifier)
+                update_cell_text_preserve_format(table.cell(data_row_idx, 1), str(moq))
+                update_cell_text_preserve_format(table.cell(data_row_idx, 2), client_price_str)
+                update_cell_text_preserve_format(table.cell(data_row_idx, 3), delivery_time)
 
-            # Column 2: Client price (with discount if applicable)
-            update_cell_text_preserve_format(table.cell(1, 2), client_price_str)
+                # Update headers (only once)
+                if idx == 0:
+                    update_cell_text_preserve_format(table.cell(0, 0), "Variant")
+                    update_cell_text_preserve_format(table.cell(0, 1), "MOQ")
+                    update_cell_text_preserve_format(table.cell(0, 2), "Price Ea @ MOQ")
+                    update_cell_text_preserve_format(table.cell(0, 3), "Delivery")
 
-            # Column 3: Delivery
-            update_cell_text_preserve_format(table.cell(1, 3), delivery_time)
+            elif variant_mode and not can_simplify_table:
+                # FULL LAYOUT: Variant | Price @ MOQ | Price @ Qty 100 | Delivery
+                # Use this when prices differ (tiered pricing OR discount applied)
+                update_cell_text_preserve_format(table.cell(data_row_idx, 0), variant_identifier)
+                update_cell_text_preserve_format(table.cell(data_row_idx, 1), client_price_str)
+                update_cell_text_preserve_format(table.cell(data_row_idx, 2), client_price_at_100_str)
+                update_cell_text_preserve_format(table.cell(data_row_idx, 3), delivery_time)
 
-            # Update headers
-            update_cell_text_preserve_format(table.cell(0, 0), "MOQ")
-            update_cell_text_preserve_format(table.cell(0, 1), f"Price Ea\n(@ Qty {moq})")
+                # Update headers (only once)
+                if idx == 0:
+                    update_cell_text_preserve_format(table.cell(0, 0), "Variant")
+                    update_cell_text_preserve_format(table.cell(0, 1), "Price Ea @ MOQ")
+                    update_cell_text_preserve_format(table.cell(0, 2), "Price Ea\n(@ Qty 100)")
+                    update_cell_text_preserve_format(table.cell(0, 3), "Delivery")
 
-            # Build client price header based on whether discount is applied
-            if client_price < base_price:
-                # Discount was applied
-                discount_pct = ((base_price - client_price) / base_price) * 100
-                update_cell_text_preserve_format(table.cell(0, 2), f"Client Price\n({discount_pct:.0f}% discount)")
             else:
-                # No discount
-                update_cell_text_preserve_format(table.cell(0, 2), f"Client Price\n(@ Qty {moq})")
+                # SINGLE PRODUCT MODE: MOQ | Price @ MOQ | Price @ Qty 100 | Delivery
+                update_cell_text_preserve_format(table.cell(data_row_idx, 0), str(moq))
+                update_cell_text_preserve_format(table.cell(data_row_idx, 1), client_price_str)
+                update_cell_text_preserve_format(table.cell(data_row_idx, 2), client_price_at_100_str)
+                update_cell_text_preserve_format(table.cell(data_row_idx, 3), delivery_time)
 
-            update_cell_text_preserve_format(table.cell(0, 3), "Delivery\n(after art ✓)")
+                # Update headers (only once)
+                if idx == 0:
+                    update_cell_text_preserve_format(table.cell(0, 0), "MOQ")
+                    update_cell_text_preserve_format(table.cell(0, 1), f"Price Ea\n(@ Qty {moq})")
+                    update_cell_text_preserve_format(table.cell(0, 2), f"Price Ea\n(@ Qty 100)")
+                    update_cell_text_preserve_format(table.cell(0, 3), "Delivery")
 
-    # Update customization row if it exists (3x4 format)
-    if rows >= 3 and (setup_fee > 0 or per_unit_cost > 0):
-        # Format customization text
-        if per_unit_cost > 0:
-            customization_text = f"Artwork set-up: ${setup_fee:.2f} / Engraving per piece: From ${per_unit_cost:.2f}"
-        else:
-            customization_text = f"Artwork set-up: ${setup_fee:.2f}"
+    # Update customization row if it exists (preserve at bottom, don't overwrite)
+    # Only update if we have customization data from the first variant
+    if customization_row_idx and not variant_mode:
+        setup_fee = proposal_items[0].get('customization_setup_fee', 0)
+        per_unit_cost = proposal_items[0].get('customization_per_unit', 0)
 
-        # Update Row 2, Col 0 (customization row typically spans columns)
-        update_cell_text_preserve_format(table.cell(2, 0), customization_text)
+        if setup_fee > 0 or per_unit_cost > 0:
+            # Format customization text
+            if per_unit_cost > 0:
+                customization_text = f"Artwork set-up: ${setup_fee:.2f} / Engraving per piece: From ${per_unit_cost:.2f}"
+            else:
+                customization_text = f"Artwork set-up: ${setup_fee:.2f}"
+
+            update_cell_text_preserve_format(table.cell(customization_row_idx, 0), customization_text)
 
     return True
 
@@ -665,10 +975,13 @@ def create_complete_proposal_presentation(
     get_unit_price_func,
     marketing_rounding: bool = False,
     discount_percent: float = 0.0,
-    impact_slide_overrides: Optional[Dict[str, Dict]] = None
+    impact_slide_overrides: Optional[Dict[str, Dict]] = None,
+    variant_groups: Optional[Dict[str, List[str]]] = None,
+    variant_grouping_prefs: Optional[Dict[str, str]] = None
 ) -> Presentation:
     """
     Create complete presentation with intro, products, impact, and outro slides.
+    Supports multi-variant product consolidation (v6.13).
 
     Slide Assembly Order:
     1. Intro slides (1-8) from Intro_Outro_Slides_PbP_Proposals.pptx
@@ -686,6 +999,10 @@ def create_complete_proposal_presentation(
         discount_percent: Discount percentage to apply
         impact_slide_overrides: Optional dict of {partner: {"slide_index": X, "slide_title": Y}}
                                 If provided, overrides reference table for that partner
+        variant_groups: Optional dict of {pptx_slide_name: [gs_product1, gs_product2, ...]}
+                       Identifies which products are variants of same slide
+        variant_grouping_prefs: Optional dict of {pptx_slide_name: user_choice_string}
+                               User preferences for how to handle each variant group
 
     Returns:
         Complete Presentation with all slides assembled
@@ -763,16 +1080,28 @@ def create_complete_proposal_presentation(
             prs_november.part.drop_rel(rId)
             del prs_november.slides._sldIdLst[idx]
 
-    # Step 4: Update pricing tables in product slides
+    # Step 4: Update pricing tables in product slides (with variant support)
     for slide in prs_november.slides:
         if len(slide.shapes) >= 1:
             first_shape = slide.shapes[0]
             if hasattr(first_shape, "text") and first_shape.text.strip():
-                product_name = first_shape.text.strip()
+                slide_title = first_shape.text.strip()
 
-                # Find if this is a product slide
-                for gs_name, pptx_name in confirmed_matches.items():
-                    if pptx_name == product_name:
+                # Check if this slide has variant groups
+                is_variant_group = variant_groups and slide_title in variant_groups
+
+                if is_variant_group:
+                    # Get user preference for this variant group
+                    user_choice = variant_grouping_prefs.get(slide_title, "") if variant_grouping_prefs else ""
+                    print(f"DEBUG: Variant group detected for '{slide_title}' with {len(variant_groups[slide_title])} products")
+                    print(f"DEBUG: User choice: '{user_choice}'")
+
+                    if "single row" in user_choice.lower():
+                        # Display simple single-row table (consistent pricing)
+                        # Use first variant as representative since all have same pricing
+                        variant_products = variant_groups[slide_title]
+                        gs_name = variant_products[0]
+
                         proposal_item = next(
                             (item for item in proposal_products
                              if item['product_data']['Product/Service'] == gs_name),
@@ -788,8 +1117,67 @@ def create_complete_proposal_presentation(
                             )
 
                             if pricing_data:
-                                update_pricing_table(slide, pricing_data)
-                        break
+                                # Update table with single row (variant_mode=False for simple table)
+                                update_pricing_table(slide, pricing_data, variant_mode=False)
+                                print(f"DEBUG: Created single-row table for {slide_title} (consistent pricing)")
+
+                    elif "all variants" in user_choice.lower() or "together" in user_choice.lower():
+                        # Display variants together - collect all variants for this slide
+                        variant_products = variant_groups[slide_title]
+                        pricing_data_list = []
+
+                        for gs_name in variant_products:
+                            proposal_item = next(
+                                (item for item in proposal_products
+                                 if item['product_data']['Product/Service'] == gs_name),
+                                None
+                            )
+
+                            if proposal_item:
+                                pricing_data = calculate_proposal_pricing(
+                                    proposal_item,
+                                    get_unit_price_func,
+                                    marketing_rounding,
+                                    discount_percent
+                                )
+
+                                if pricing_data:
+                                    pricing_data_list.append(pricing_data)
+
+                        # Update table with all variants (variant_mode=True)
+                        if pricing_data_list:
+                            update_pricing_table(slide, pricing_data_list, variant_mode=True)
+                            print(f"DEBUG: Created multi-row table for {slide_title} with {len(pricing_data_list)} variants")
+
+                    elif "skip" in user_choice.lower():
+                        # Skip - slide should have been removed already, but just in case
+                        pass
+
+                    # If "separate" was chosen, each variant gets its own slide
+                    # This would require slide duplication, which is handled differently
+                    # For now, we'll treat "separate" like single products (first variant wins)
+
+                else:
+                    # Single product - normal behavior
+                    for gs_name, pptx_name in confirmed_matches.items():
+                        if pptx_name == slide_title:
+                            proposal_item = next(
+                                (item for item in proposal_products
+                                 if item['product_data']['Product/Service'] == gs_name),
+                                None
+                            )
+
+                            if proposal_item:
+                                pricing_data = calculate_proposal_pricing(
+                                    proposal_item,
+                                    get_unit_price_func,
+                                    marketing_rounding,
+                                    discount_percent
+                                )
+
+                                if pricing_data:
+                                    update_pricing_table(slide, pricing_data, variant_mode=False)
+                            break
 
     # Step 5: Add intro/outro slides to END in their original order
     # This keeps intro slides together, making it obvious they need to be moved to beginning

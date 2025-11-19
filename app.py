@@ -1,7 +1,7 @@
 """
 Peace by Piece International - Order Management System
 4-tab workflow: Proposals → Client Order Forms → Order & Client Info → Execution & Accounting
-Version: 6.12 (HTML Form Template Customization)
+Version: 6.13 (Multi-Variant Product Consolidation in PowerPoint)
 """
 
 import streamlit as st
@@ -1127,6 +1127,121 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
         st.success(f"Ready to generate PowerPoint with {len(confirmed_matches)} products!")
 
         # ============================================================
+        # VARIANT DETECTION AND GROUPING (v6.13)
+        # ============================================================
+        from src.pptx_generator import detect_variant_groups, check_pricing_consistency, calculate_proposal_pricing
+
+        # Detect if multiple products match to same slide (variant groups)
+        variant_groups, single_products = detect_variant_groups(confirmed_matches)
+
+        # Initialize variant grouping preferences and pricing consistency flags if not exists
+        if 'variant_grouping_prefs' not in st.session_state:
+            st.session_state.variant_grouping_prefs = {}
+        if 'variant_pricing_consistent' not in st.session_state:
+            st.session_state.variant_pricing_consistent = {}
+
+        # Show variant confirmation UI if variants detected
+        if variant_groups:
+            st.markdown("---")
+            st.subheader("⚠️ Multi-Variant Products Detected")
+            st.info(
+                "Multiple products matched to the same PowerPoint slide. "
+                "These are typically size/flavor variants."
+            )
+
+            for slide_name, products in variant_groups.items():
+                # Calculate pricing for all variants to check consistency
+                pricing_data_list = []
+                for gs_name in products:
+                    proposal_item = next(
+                        (item for item in st.session_state.proposal_products
+                         if item['product_data']['Product/Service'] == gs_name),
+                        None
+                    )
+                    if proposal_item:
+                        pricing_data = calculate_proposal_pricing(
+                            proposal_item,
+                            get_unit_price_new_system,
+                            st.session_state.get('marketing_rounding', False),
+                            st.session_state.get('discount_percent', 0)
+                        )
+                        if pricing_data:
+                            pricing_data_list.append(pricing_data)
+
+                # Check pricing consistency
+                has_consistent_pricing = check_pricing_consistency(pricing_data_list)
+                st.session_state.variant_pricing_consistent[slide_name] = has_consistent_pricing
+
+                # Expander title with pricing indicator
+                if has_consistent_pricing:
+                    expander_title = f"📊 {slide_name} ({len(products)} variants) - ✅ Consistent Pricing"
+                else:
+                    expander_title = f"📊 {slide_name} ({len(products)} variants) - ⚠️ Variable Pricing"
+
+                with st.expander(expander_title, expanded=True):
+                    st.markdown("**Products matched to this slide:**")
+
+                    # Show each product with its price and MOQ
+                    for idx, gs_name in enumerate(products):
+                        if idx < len(pricing_data_list):
+                            price = pricing_data_list[idx].get('client_price', 0)
+                            moq = pricing_data_list[idx].get('moq', 0)
+                            st.markdown(f"• {gs_name} - MOQ: {moq}, Price: ${price:.2f}")
+                        else:
+                            st.markdown(f"• {gs_name}")
+
+                    # Get partner info to check if all variants are from same partner
+                    partners = set()
+                    for prod in products:
+                        prod_item = next(
+                            (item for item in st.session_state.proposal_products
+                             if item['product_data']['Product/Service'] == prod),
+                            None
+                        )
+                        if prod_item:
+                            partner = prod_item['product_data'].get('Partner', '')
+                            if partner:
+                                partners.add(partner)
+
+                    # Warning if multiple partners
+                    if len(partners) > 1:
+                        st.warning(
+                            f"⚠️ These products are from different partners: {', '.join(partners)}. "
+                            "Creating separate slides is recommended."
+                        )
+
+                    # Conditional radio button options based on pricing consistency
+                    if has_consistent_pricing:
+                        options = [
+                            "Display single row (all variants have same pricing)",
+                            "Display all variants (show each variant in separate row)",
+                            "Create separate slides (duplicate slide for each variant)",
+                            "Skip these products"
+                        ]
+                        default_choice = 0  # Simple table by default for consistent pricing
+                    else:
+                        options = [
+                            "Display together (recommended - fills multiple table rows)",
+                            "Create separate slides (duplicate slide for each variant)",
+                            "Skip these products"
+                        ]
+                        default_choice = 0 if len(partners) <= 1 else 1  # Default to "together" unless multiple partners
+
+                    # Get existing preference or use default
+                    existing_pref = st.session_state.variant_grouping_prefs.get(slide_name, options[default_choice])
+                    if existing_pref not in options:
+                        existing_pref = options[default_choice]
+
+                    group_choice = st.radio(
+                        "How should these be displayed?",
+                        options=options,
+                        key=f"variant_choice_{slide_name}",
+                        index=options.index(existing_pref) if existing_pref in options else default_choice
+                    )
+
+                    st.session_state.variant_grouping_prefs[slide_name] = group_choice
+
+        # ============================================================
         # IMPACT SLIDE SELECTION (SIMPLIFIED)
         # ============================================================
         st.markdown("---")
@@ -1285,6 +1400,19 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     num_products = len(confirmed_matches)
                     num_impacts = len([s for s in impact_slide_overrides.values() if s.get('slide_index') is not None])
 
+                    # Get variant groups and preferences
+                    variant_groups_for_generation = variant_groups if variant_groups else None
+                    variant_prefs_for_generation = st.session_state.get('variant_grouping_prefs', None)
+
+                    # Debug output
+                    if variant_groups_for_generation:
+                        print(f"DEBUG: Passing {len(variant_groups_for_generation)} variant groups to generator")
+                        for slide_name, products in variant_groups_for_generation.items():
+                            print(f"  - {slide_name}: {products}")
+                        print(f"DEBUG: Preferences: {variant_prefs_for_generation}")
+                    else:
+                        print("DEBUG: No variant groups detected")
+
                     # Create complete presentation (products + impacts + outro only)
                     progress_container.info(f"Step 2/4: Selecting and updating {num_products} product slide(s) + {num_impacts} impact slide(s)...")
                     prs = create_complete_proposal_presentation(
@@ -1295,7 +1423,9 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                         get_unit_price_new_system,
                         marketing_rounding,
                         discount_percent,
-                        impact_slide_overrides if impact_slide_overrides else None
+                        impact_slide_overrides if impact_slide_overrides else None,
+                        variant_groups_for_generation,
+                        variant_prefs_for_generation
                     )
 
                     progress_container.info(f"Step 3/4: Adding outro slides (4 slides)...")

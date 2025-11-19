@@ -3,7 +3,7 @@
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
 **Current Status:** ✅ Production Ready - Complete 4-Tab Workflow with PowerPoint Automation
-**Version:** 6.12 - HTML Form Template Customization
+**Version:** 6.13 - Multi-Variant Product Consolidation & Smart Pricing Detection
 
 ---
 
@@ -77,7 +77,13 @@ pricing-data-solution-pbp/
 - **Proposal Configuration:** Set quantity, markup %, MSRP pricing (auto-calculated)
 - **Saved Proposals:** Save and load proposals across sessions (cloud-persistent)
 - **MOQ-Based Pricing Tables:** Automatic minimum order quantity calculations
-- **PowerPoint Generation:** Automated slide matching and customized presentations
+- **PowerPoint Generation (v6.13):**
+  - Automated slide matching and customized presentations
+  - **Multi-variant product support:** Consolidates product variants (sizes/flavors) intelligently
+  - **Smart pricing detection:** Automatically detects if variants have consistent pricing
+  - **Conditional display options:** Simple single-row tables for consistent pricing, multi-row for variable pricing
+  - **Price transparency:** Shows MOQ and price for each variant before generation
+  - **Dynamic table layouts:** Adapts table format based on pricing (MOQ column vs Price @ 100 column)
 - **CSV Downloads:** Export proposal tables
 
 #### Tab 2: Client Order Form Generator
@@ -284,5 +290,35 @@ Peace by Piece International - Internal Tool
 
 ---
 
-**Last Updated:** 2025-11-17
-**Version:** 6.12 (HTML Form Template Customization)
+**Last Updated:** 2025-11-19
+**Version:** 6.13 (Multi-Variant Product Consolidation & Smart Pricing Detection)
+
+## 🆕 Recent Updates (v6.13 - 2025-11-19)
+
+### Multi-Variant Product Consolidation
+Intelligent handling of product variants (different sizes/flavors) that map to the same PowerPoint slide:
+
+**Smart Pricing Detection:**
+- Automatically detects if variants have identical MOQ and pricing
+- Shows visual indicators: ✅ Consistent Pricing or ⚠️ Variable Pricing
+- Displays MOQ and price for each variant for transparency
+
+**Conditional Display Options:**
+- **Consistent Pricing:** Recommends single-row table (avoids redundant multi-row display)
+- **Variable Pricing:** Recommends multi-row table (shows price differences clearly)
+- User can still override automatic recommendations
+
+**Dynamic Table Layouts:**
+- **Single-row variant table:** `MOQ | Price Ea @ MOQ | Price @ Qty 100 | Delivery`
+- **Multi-row variant table (simplified):** `Variant | MOQ | Price Ea @ MOQ | Delivery`
+- **Multi-row variant table (full):** `Variant | Price @ MOQ | Price @ Qty 100 | Delivery`
+
+**Examples:**
+- **Honey Flavors (same price):** Single-row table, one price applies to all flavors
+- **Beeswax Candles (different prices):** Multi-row table, shows each size with its price
+
+**Technical Improvements:**
+- New function: `check_pricing_consistency()` - Compares MOQ and price across variants
+- Enhanced variant detection UI with pricing info displayed inline
+- Delivery time preservation from PowerPoint template (fixes hardcoded fallback bug)
+- Price @ Qty 100 calculation added to all pricing data
