@@ -17,6 +17,7 @@ import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
+import os
 
 
 # Dataset configurations for demo and real pricing data
@@ -67,15 +68,38 @@ def connect_to_sheets():
         Exception: If connection fails or credentials are invalid
 
     Note:
-        Requires st.secrets["gcp_service_account"] to be configured
-        with valid Google Cloud service account credentials.
+        Supports two authentication methods:
+        1. Streamlit secrets (local): st.secrets["gcp_service_account"]
+        2. Environment variables (Render): GCP_* environment variables
     """
-    creds_info = st.secrets["gcp_service_account"]
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
-    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+
+    # Try Streamlit secrets first (local development)
+    if "gcp_service_account" in st.secrets:
+        creds_info = st.secrets["gcp_service_account"]
+        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+    # Fall back to environment variables (Render deployment)
+    elif os.getenv("GCP_PROJECT_ID"):
+        creds_info = {
+            "type": os.getenv("GCP_TYPE"),
+            "project_id": os.getenv("GCP_PROJECT_ID"),
+            "private_key_id": os.getenv("GCP_PRIVATE_KEY_ID"),
+            "private_key": os.getenv("GCP_PRIVATE_KEY"),
+            "client_email": os.getenv("GCP_CLIENT_EMAIL"),
+            "client_id": os.getenv("GCP_CLIENT_ID"),
+            "auth_uri": os.getenv("GCP_AUTH_URI"),
+            "token_uri": os.getenv("GCP_TOKEN_URI"),
+            "auth_provider_x509_cert_url": os.getenv("GCP_AUTH_PROVIDER_X509_CERT_URL"),
+            "client_x509_cert_url": os.getenv("GCP_CLIENT_X509_CERT_URL"),
+            "universe_domain": os.getenv("GCP_UNIVERSE_DOMAIN")
+        }
+        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+    else:
+        raise Exception("No Google Cloud credentials found. Please configure either st.secrets['gcp_service_account'] or GCP_* environment variables.")
+
     return gspread.authorize(creds)
 
 
