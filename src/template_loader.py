@@ -29,12 +29,12 @@ TEMPLATE_CONFIG = {
 
 
 @st.cache_data(show_spinner=False)
-def find_file_in_drive(gc, filename, parent_path=None):
+def find_file_in_drive(_gc, filename, parent_path=None):
     """
     Find a file in Google Drive by name and optional parent path.
 
     Args:
-        gc: Authorized gspread client
+        _gc: Authorized gspread client (underscore prefix prevents hashing)
         filename: Name of file to find
         parent_path: Optional path like 'data/all_slides/latest'
 
@@ -43,7 +43,7 @@ def find_file_in_drive(gc, filename, parent_path=None):
     """
     try:
         # List all files accessible to service account
-        files = gc.list('drive')
+        files = _gc.list('drive')
 
         # Search for exact filename match
         for file_obj in files:
