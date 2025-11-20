@@ -99,6 +99,7 @@ def calculate_msrp_markup(product_data):
 # ============================================================
 st.set_page_config(
     page_title="PBP Order Management",
+    page_icon="🕊️",  # Peace dove icon
     layout="wide",
     initial_sidebar_state="auto"
 )
