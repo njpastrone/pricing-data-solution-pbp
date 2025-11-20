@@ -21,7 +21,7 @@ import json
 from datetime import datetime
 import streamlit as st
 from src.data_loader import connect_to_sheets, DATASET_CONFIGS
-from src.match_manager import normalize_product_name
+from src.match_manager import normalize_for_storage
 
 
 def _get_matches_sheet():
@@ -115,7 +115,7 @@ def save_confirmed_match(product_name, slide_index, slide_title, dataset, match_
             return False, "Failed to connect to matches sheet"
 
         # Normalize product name for matching
-        normalized_name = normalize_product_name(product_name)
+        normalized_name = normalize_for_storage(product_name)
 
         # Load current data to check for existing match
         all_values = _load_all_matches_data()
@@ -192,7 +192,7 @@ def get_confirmed_match(product_name, dataset):
             return None
 
         # Normalize product name for lookup
-        normalized_name = normalize_product_name(product_name)
+        normalized_name = normalize_for_storage(product_name)
 
         # Find match (normalized name + dataset)
         for row in all_values[1:]:  # Skip header
@@ -283,7 +283,7 @@ def delete_confirmed_match(product_name, dataset):
             return False, "Failed to connect to matches sheet"
 
         # Normalize product name for lookup
-        normalized_name = normalize_product_name(product_name)
+        normalized_name = normalize_for_storage(product_name)
 
         all_values = _load_all_matches_data()
 

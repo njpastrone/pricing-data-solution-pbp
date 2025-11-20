@@ -89,7 +89,7 @@ def save_manual_match(
         data = load_manual_matches()
 
         # Normalize product name for consistent storage
-        normalized_name = normalize_product_name(product_name)
+        normalized_name = normalize_for_storage(product_name)
 
         # Determine which section to save to
         if match_category == "product":
@@ -143,7 +143,7 @@ def delete_manual_match(
         data = load_manual_matches()
 
         # Normalize product name
-        normalized_name = normalize_product_name(product_name)
+        normalized_name = normalize_for_storage(product_name)
 
         # Determine which section to delete from
         if match_category == "product":
@@ -200,7 +200,7 @@ def get_manual_match(
         data = load_manual_matches()
 
         # Normalize product name
-        normalized_name = normalize_product_name(product_name)
+        normalized_name = normalize_for_storage(product_name)
 
         # Determine which section to search
         if match_category == "product":
@@ -252,9 +252,12 @@ def get_all_manual_matches(match_category: str = "product") -> Dict:
         return {}
 
 
-def normalize_product_name(name: str) -> str:
+def normalize_for_storage(name: str) -> str:
     """
-    Normalize product name for consistent matching.
+    Normalize product name for consistent storage key generation.
+
+    Converts to lowercase for case-insensitive storage lookups.
+    Used by JSON file storage and Google Sheets storage systems.
 
     Normalization steps:
     1. Convert to lowercase
@@ -272,7 +275,7 @@ def normalize_product_name(name: str) -> str:
         name: Original product name
 
     Returns:
-        str: Normalized product name
+        str: Normalized product name (lowercase)
     """
     # Convert to lowercase
     normalized = name.lower()

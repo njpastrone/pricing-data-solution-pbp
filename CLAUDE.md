@@ -257,6 +257,8 @@ pricing-data-solution-pbp/
 ├── docs/                       # Documentation (organized by topic)
 │   ├── README.md              # Documentation index
 │   ├── CLIENT_QUESTIONS.md    # Unanswered client questions
+│   ├── SCROLL_PRESERVATION_PATTERN.md # Scroll preservation implementation
+│   ├── SESSION_STATE_AUDIT.md # Session state management
 │   ├── planning/              # Core project documentation
 │   │   ├── PLANNING.md        # Project requirements & goals
 │   │   ├── METHODOLOGY_LOGIC.md # Pricing calculations & business rules
@@ -264,13 +266,11 @@ pricing-data-solution-pbp/
 │   │   └── INVOICE_AND_PROPOSAL_SPEC.md # Invoice/PO format
 │   ├── powerpoint/            # PowerPoint automation (Phase 1 & 2)
 │   │   ├── PHASE_2_COMPLETION_SUMMARY.md # Phase 2 final summary
-│   │   ├── PHASE_1_COMPLETION_SUMMARY.md # Phase 1 technical deep dive
-│   │   ├── PPTX_AUTOMATION_IMPLEMENTATION_ROADMAP.md # Full roadmap
-│   │   └── [13 other PowerPoint docs]
-│   ├── tab2-improvements/     # Historical Tab 2 redesign docs
-│   │   └── [9 UI redesign documents]
-│   └── archive/               # Deprecated/historical docs
-│       └── [5 archived documents]
+│   │   └── PHASE_1_COMPLETION_SUMMARY.md # Phase 1 technical deep dive
+│   └── archive/               # Historical/deprecated documentation
+│       ├── powerpoint-planning/ # PowerPoint planning docs (14 files)
+│       ├── tab2-improvements/   # Tab 2 UI redesign docs (9 files)
+│       └── [Other archived documents]
 │
 ├── src/                        # Modular code (extracted from app.py)
 │   ├── data_loader.py         # Google Sheets data loading
@@ -279,7 +279,8 @@ pricing-data-solution-pbp/
 │   ├── slide_matcher.py       # PowerPoint slide matching (Phase 1)
 │   ├── pptx_generator.py      # PowerPoint generation (Phase 2)
 │   ├── template_loader.py     # Cloud-based PowerPoint template loading (v6.16)
-│   ├── match_memory.py        # Confirmed match storage (v6.9)
+│   ├── match_manager.py       # Manual match storage (JSON-based)
+│   ├── match_memory.py        # Confirmed match storage (Google Sheets, v6.9)
 │   ├── proposal_manager.py    # Save/load/delete proposals (v6.6)
 │   └── order_manager.py       # Save/load/delete orders (v6.7)
 │
@@ -288,22 +289,16 @@ pricing-data-solution-pbp/
 │   ├── TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED.md
 │   └── TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED.pdf
 │
-├── scripts/                    # Utility scripts
-│   ├── test_connection.py     # Test Google Sheets connection
-│   ├── check_jaggery_demo.py  # Investigate jaggery_demo (Python)
-│   ├── investigate_jaggery_demo.py  # Investigate tool (Streamlit)
-│   ├── test_improved_matching.py    # Test Phase 1 matching improvements
-│   ├── test_edge_cases.py     # Test Phase 1 edge cases
-│   ├── test_integration.py    # Test Phase 1 complete workflow
+├── scripts/                    # Essential utility scripts only
+│   ├── test_connection.py     # Test Google Sheets connection (ESSENTIAL)
+│   ├── investigate_data.py    # Data debugging tool
 │   ├── test_saved_proposals.py # Test save/load/delete proposals (v6.6)
 │   ├── test_saved_orders.py   # Test save/load/delete orders (v6.7)
 │   ├── test_units_per_package.py # Test Units Per Package normalization (v6.8)
 │   └── test_match_memory.py   # Test confirmed match memory system (v6.9)
 │
-├── backups/                    # Backup files
-│   └── app_mvp_backup.py      # Original MVP
-│
-└── archive/                    # Deprecated files (old scripts & data)
+└── backups/                    # Reference backup
+    └── app_before_modular_refactor_20251027.py  # Pre-modular structure reference
 ```
 
 ## Common Tasks
@@ -319,11 +314,33 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 6.17 - Render Deployment & Memory Optimization
+**Version:** 6.18 - Codebase Cleanup & normalize_for_storage() Rename
 
 **Last Updated:** 2025-11-20
 
-**Deployment:** Render Standard tier (2GB RAM, $25/month)
+**Deployment:** ✅ **IN PRODUCTION** at https://pricing-data-solution-pbp.onrender.com
+- Render Standard tier (2GB RAM, $25/month)
+- Active partner data: Partial (collecting remaining partner data)
+- Cloud-based PowerPoint template loading
+
+**Codebase Status:**
+- ~14,138 lines of Python code (49% reduction from cleanup)
+- 6 essential test scripts (13 deleted)
+- Clean documentation structure (23 files archived)
+
+**Recent Improvements (2025-11-20 - v6.18):**
+- ✅ **Codebase Simplification & Cleanup:**
+  - Deleted archive/ directory (22.5MB, deprecated jaggery_demo code)
+  - Consolidated backups (3 of 4 deleted, kept modular refactor reference)
+  - Removed 13 obsolete test scripts (~1,249 lines)
+  - Archived 23 completed planning docs to docs/archive/ (preserved for reference)
+  - Total reduction: ~13,649 lines of code deleted, 22MB saved
+- ✅ **Code Clarity Improvement:**
+  - Renamed `normalize_product_name()` → `normalize_for_storage()` in match_manager.py
+  - Fixed confusing duplicate function names (uppercase vs lowercase)
+  - Removed unused imports in slide_matcher.py
+  - Updated function docstrings for clarity
+  - Now beginner-friendly and self-documenting
 
 **Recent Improvements (2025-11-20 - v6.17):**
 - ✅ **Render Deployment Optimizations:**

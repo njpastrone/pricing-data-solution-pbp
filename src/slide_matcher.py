@@ -17,8 +17,7 @@ from typing import Optional, Dict, List, Tuple
 import re
 from .match_manager import (
     load_manual_matches,
-    get_manual_match,
-    normalize_product_name as normalize_name_from_manager
+    get_manual_match
 )
 from pptx import Presentation
 
@@ -604,8 +603,8 @@ def match_impact_slides(
         category = entry['product_category']
 
         # Check manual matches first
-        # Note: match_manager normalizes keys to lowercase, so we need to match that
-        from .match_manager import normalize_product_name as normalize_key
+        # Note: normalize_for_storage() converts to lowercase for storage keys
+        from .match_manager import normalize_for_storage as normalize_key
         manual_key = normalize_key(f"{partner}_{category}")
         manual_match = manual_matches.get('partner_impact_matches', {}).get(manual_key)
 
@@ -785,7 +784,7 @@ def match_impact_slides_by_partner(
 
     for partner in partners:
         # Check manual matches first
-        from .match_manager import normalize_product_name as normalize_key
+        from .match_manager import normalize_for_storage as normalize_key
         manual_key = normalize_key(partner)
         manual_match = manual_matches.get('partner_impact_matches', {}).get(manual_key)
 
