@@ -216,10 +216,11 @@ def get_template_path(template_key='all_slides', show_loading=True):
     # Check if already in cache
     cache_key = config['cache_key']
     if cache_key in st.session_state:
-        # Return cached BytesIO object (reset position to beginning)
+        # Return a NEW BytesIO copy of cached data (don't reuse same object)
         cached_template = st.session_state[cache_key]
         cached_template.seek(0)
-        return cached_template
+        # Create new BytesIO with same content
+        return io.BytesIO(cached_template.read())
 
     # Download from cloud
     if show_loading:
