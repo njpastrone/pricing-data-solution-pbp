@@ -13,6 +13,7 @@ from datetime import datetime
 import pandas as pd
 import math
 import re
+import gc  # For memory optimization
 
 
 def calculate_moq(estimated_unit_price):
@@ -759,6 +760,9 @@ def create_proposal_presentation(
             prs.part.drop_rel(rId)
             del prs.slides._sldIdLst[idx]
 
+    # Force garbage collection after slide removal (memory optimization)
+    gc.collect()
+
     # Update pricing tables in remaining slides
     # Note: After deletion, slide indices change, so we need to match by name
     for slide in prs.slides:
@@ -888,6 +892,9 @@ def create_proposal_presentation_with_impact(
             rId = prs.slides._sldIdLst[idx].rId
             prs.part.drop_rel(rId)
             del prs.slides._sldIdLst[idx]
+
+    # Force garbage collection after slide removal (memory optimization)
+    gc.collect()
 
     # Update pricing tables in product slides
     for slide in prs.slides:
@@ -1079,6 +1086,9 @@ def create_complete_proposal_presentation(
             rId = prs_november.slides._sldIdLst[idx].rId
             prs_november.part.drop_rel(rId)
             del prs_november.slides._sldIdLst[idx]
+
+    # Force garbage collection after slide removal (memory optimization)
+    gc.collect()
 
     # Step 4: Update pricing tables in product slides (with variant support)
     for slide in prs_november.slides:

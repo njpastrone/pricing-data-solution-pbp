@@ -4,7 +4,12 @@ Peace by Piece International - Order Management System
 Version: 6.13 (Multi-Variant Product Consolidation in PowerPoint)
 """
 
+# MEMORY OPTIMIZATION TOGGLE
+# Set to False to disable memory optimization and use full caching (if issues arise)
+USE_MEMORY_OPTIMIZATION = True
+
 import streamlit as st
+import gc  # For memory optimization
 import streamlit.components.v1 as components
 import gspread
 from google.oauth2.service_account import Credentials
@@ -1367,6 +1372,13 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     import time
                     start_time = time.time()
 
+                    # Memory optimization: clear template cache before generation
+                    if USE_MEMORY_OPTIMIZATION:
+                        from src.template_loader import clear_template_cache
+                        clear_template_cache()
+                        gc.collect()
+                        st.info("Memory optimization enabled - using direct download mode")
+
                     # Import generator functions
                     from src.pptx_generator import (
                         create_complete_proposal_presentation,
@@ -1376,8 +1388,9 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     # Load templates from cloud/local (with loading spinner)
                     st.info(f"Using template: **{get_template_name('all_slides')}**")
 
-                    november_template_path = get_template_path('all_slides', show_loading=True)
-                    intro_outro_template_path = get_template_path('intro_outro', show_loading=False)
+                    # Load templates with memory optimization if enabled
+                    november_template_path = get_template_path('all_slides', show_loading=True, use_cache=not USE_MEMORY_OPTIMIZATION)
+                    intro_outro_template_path = get_template_path('intro_outro', show_loading=False, use_cache=not USE_MEMORY_OPTIMIZATION)
 
                     # Validation checks
                     if not november_template_path:
@@ -1446,6 +1459,10 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     progress_container.info("Step 4/4: Preparing download...")
                     client_name = st.session_state.order_details.get('company_name', 'Client')
                     pptx_file = download_presentation(prs, client_name)
+
+                    # Memory optimization: force garbage collection after generation
+                    if USE_MEMORY_OPTIMIZATION:
+                        gc.collect()
 
                     # Calculate generation time
                     generation_time = time.time() - start_time

@@ -204,7 +204,51 @@ def download_template_from_drive(template_key='all_slides'):
         return None, None
 
 
-def get_template_path(template_key='all_slides', show_loading=True):
+def _download_no_cache(template_key, show_loading=True):
+    """
+    Download template directly to temp file without caching in session state.
+    Used for memory optimization during PowerPoint generation.
+
+    Args:
+        template_key: Which template to load ('all_slides' or 'intro_outro')
+        show_loading: Whether to show loading spinner
+
+    Returns:
+        Path to temporary file or None on error
+    """
+    config = TEMPLATE_CONFIG.get(template_key)
+    if not config:
+        return None
+
+    # For intro_outro, use local path if available
+    if template_key == 'intro_outro' and 'local_path' in config:
+        local_path = Path(config['local_path'])
+        if local_path.exists():
+            return local_path
+
+    # Download directly without caching
+    if show_loading:
+        with st.spinner(f"Downloading template: {config['name']}..."):
+            template_data, template_name = download_template_from_drive(template_key)
+    else:
+        template_data, template_name = download_template_from_drive(template_key)
+
+    if template_data:
+        # Write to temporary file and return path
+        template_data.seek(0)
+        data = template_data.read()
+
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pptx')
+        temp_file.write(data)
+        temp_file.flush()
+        temp_file.close()
+
+        return Path(temp_file.name)
+
+    return None
+
+
+def get_template_path(template_key='all_slides', show_loading=True, use_cache=True):
     """
     Get PowerPoint template for use in presentation generation.
     Downloads from cloud if needed, or uses cached version.
@@ -212,10 +256,15 @@ def get_template_path(template_key='all_slides', show_loading=True):
     Args:
         template_key: Which template to load ('all_slides' or 'intro_outro')
         show_loading: Whether to show loading spinner
+        use_cache: Whether to use session state caching (set False for memory optimization)
 
     Returns:
         BytesIO object ready for Presentation() or Path for local files
     """
+    # Memory optimization: skip cache and download directly
+    if not use_cache:
+        return _download_no_cache(template_key, show_loading)
+
     config = TEMPLATE_CONFIG.get(template_key)
     if not config:
         return None
