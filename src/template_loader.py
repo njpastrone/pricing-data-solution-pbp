@@ -32,7 +32,7 @@ TEMPLATE_CONFIG = {
 
 def get_drive_credentials():
     """
-    Get Google Drive credentials from Streamlit secrets or environment variables.
+    Get Google Drive credentials from environment variables or Streamlit secrets.
     Returns credentials object ready for Drive API.
     """
     import os
@@ -43,14 +43,8 @@ def get_drive_credentials():
         "https://www.googleapis.com/auth/drive"
     ]
 
-    # Try Streamlit secrets first (local development)
-    if "gcp_service_account" in st.secrets:
-        creds_info = dict(st.secrets["gcp_service_account"])
-        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-        return creds
-
-    # Fall back to environment variables (Render deployment)
-    elif os.getenv("GCP_PROJECT_ID"):
+    # Try environment variables first (Render deployment)
+    if os.getenv("GCP_PROJECT_ID"):
         # Fix private key newlines
         private_key = os.getenv("GCP_PRIVATE_KEY", "").replace("\\n", "\n")
 
@@ -69,6 +63,15 @@ def get_drive_credentials():
         }
         creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
         return creds
+
+    # Fall back to Streamlit secrets (local development)
+    try:
+        if "gcp_service_account" in st.secrets:
+            creds_info = dict(st.secrets["gcp_service_account"])
+            creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+            return creds
+    except Exception:
+        pass
 
     raise Exception("No Google Cloud credentials found")
 
