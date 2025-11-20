@@ -6,7 +6,8 @@ Version: 6.13 (Multi-Variant Product Consolidation in PowerPoint)
 
 # MEMORY OPTIMIZATION TOGGLE
 # Set to False to disable memory optimization and use full caching (if issues arise)
-USE_MEMORY_OPTIMIZATION = True
+# Disabled since upgrading to Render Standard tier (2GB RAM) - caching improves UX
+USE_MEMORY_OPTIMIZATION = False
 
 import streamlit as st
 import gc  # For memory optimization
