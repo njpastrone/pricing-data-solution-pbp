@@ -7,6 +7,8 @@ Templates are cached in session state to avoid repeated downloads.
 
 import streamlit as st
 import io
+import tempfile
+import os
 from pathlib import Path
 
 
@@ -223,18 +225,28 @@ def get_template_path(template_key='all_slides', show_loading=True):
 
     # Check if already in cache
     cache_key = config['cache_key']
+    temp_file_key = f"{cache_key}_tempfile"
+
     if cache_key in st.session_state:
-        # Return a NEW BytesIO copy of cached data (don't reuse same object)
+        # Write cached data to a temporary file and return the path
         cached_template = st.session_state[cache_key]
         cached_template.seek(0)
         data = cached_template.read()
         # Reset cache back to start
         cached_template.seek(0)
-        # Create new BytesIO
-        new_copy = io.BytesIO(data)
-        new_copy.seek(0)
+
         st.info(f"Using cached template ({len(data):,} bytes)")
-        return new_copy
+
+        # Create or reuse temp file
+        if temp_file_key not in st.session_state or not os.path.exists(st.session_state[temp_file_key]):
+            # Create a new temporary file that persists for the session
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pptx')
+            temp_file.write(data)
+            temp_file.flush()
+            temp_file.close()
+            st.session_state[temp_file_key] = temp_file.name
+
+        return Path(st.session_state[temp_file_key])
 
     # Download from cloud
     if show_loading:
@@ -244,9 +256,17 @@ def get_template_path(template_key='all_slides', show_loading=True):
         template_data, template_name = download_template_from_drive(template_key)
 
     if template_data:
-        # Reset to beginning before returning
+        # Write to temporary file and return path
         template_data.seek(0)
-        return template_data
+        data = template_data.read()
+
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pptx')
+        temp_file.write(data)
+        temp_file.flush()
+        temp_file.close()
+        st.session_state[temp_file_key] = temp_file.name
+
+        return Path(temp_file.name)
 
     return None
 
