@@ -28,29 +28,83 @@ TEMPLATE_CONFIG = {
 }
 
 
-@st.cache_data(show_spinner=False)
-def find_file_in_drive(_gc, filename, parent_path=None):
+def get_drive_credentials():
     """
-    Find a file in Google Drive by name and optional parent path.
+    Get Google Drive credentials from Streamlit secrets or environment variables.
+    Returns credentials object ready for Drive API.
+    """
+    import os
+    from google.oauth2.service_account import Credentials
+
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+
+    # Try Streamlit secrets first (local development)
+    if "gcp_service_account" in st.secrets:
+        creds_info = dict(st.secrets["gcp_service_account"])
+        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+        return creds
+
+    # Fall back to environment variables (Render deployment)
+    elif os.getenv("GCP_PROJECT_ID"):
+        # Fix private key newlines
+        private_key = os.getenv("GCP_PRIVATE_KEY", "").replace("\\n", "\n")
+
+        creds_info = {
+            "type": os.getenv("GCP_TYPE"),
+            "project_id": os.getenv("GCP_PROJECT_ID"),
+            "private_key_id": os.getenv("GCP_PRIVATE_KEY_ID"),
+            "private_key": private_key,
+            "client_email": os.getenv("GCP_CLIENT_EMAIL"),
+            "client_id": os.getenv("GCP_CLIENT_ID"),
+            "auth_uri": os.getenv("GCP_AUTH_URI"),
+            "token_uri": os.getenv("GCP_TOKEN_URI"),
+            "auth_provider_x509_cert_url": os.getenv("GCP_AUTH_PROVIDER_X509_CERT_URL"),
+            "client_x509_cert_url": os.getenv("GCP_CLIENT_X509_CERT_URL"),
+            "universe_domain": os.getenv("GCP_UNIVERSE_DOMAIN")
+        }
+        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+        return creds
+
+    raise Exception("No Google Cloud credentials found")
+
+
+def find_file_in_drive(filename):
+    """
+    Find a file in Google Drive by name using Drive API.
 
     Args:
-        _gc: Authorized gspread client (underscore prefix prevents hashing)
-        filename: Name of file to find
-        parent_path: Optional path like 'data/all_slides/latest'
+        filename: Name of file to find (e.g., "November All Slides.pptx")
 
     Returns:
         File ID if found, None otherwise
     """
     try:
-        # List all files accessible to service account
-        files = _gc.list('drive')
+        from googleapiclient.discovery import build
 
-        # Search for exact filename match
-        for file_obj in files:
-            if file_obj.title == filename:
-                return file_obj.id
+        # Get credentials
+        creds = get_drive_credentials()
+
+        # Build Drive service
+        drive_service = build('drive', 'v3', credentials=creds)
+
+        # Search for file by name
+        query = f"name='{filename}' and trashed=false"
+        results = drive_service.files().list(
+            q=query,
+            spaces='drive',
+            fields='files(id, name)'
+        ).execute()
+
+        files = results.get('files', [])
+
+        if files:
+            return files[0]['id']  # Return first match
 
         return None
+
     except Exception as e:
         st.error(f"Error finding file in Drive: {e}")
         return None
@@ -90,31 +144,21 @@ def download_template_from_drive(template_key='all_slides'):
 
     # Download from Google Drive
     try:
-        # Connect to Google (uses same credentials as Sheets)
-        from src.data_loader import connect_to_sheets
-        gc = connect_to_sheets()
-
-        # Find file in Drive
-        file_id = find_file_in_drive(gc, config['name'], config.get('drive_path'))
-
-        if not file_id:
-            st.error(f"Template file not found in Google Drive: {config['name']}")
-            st.info(f"Please ensure '{config['name']}' is shared with the service account: {gc.auth.signer_email}")
-            return None, None
-
-        # Download file
-        file_obj = gc.open_by_key(file_id)
-
-        # Export as binary (for .pptx files, we need to download the raw file)
-        # Note: gspread doesn't directly support Drive file downloads, so we need to use Drive API
-        # For now, let's use a workaround with file export
-
-        # Import Google Drive API client
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaIoBaseDownload
 
-        # Build Drive service using same credentials
-        drive_service = build('drive', 'v3', credentials=gc.auth)
+        # Find file in Drive
+        file_id = find_file_in_drive(config['name'])
+
+        if not file_id:
+            st.error(f"Template file not found in Google Drive: {config['name']}")
+            creds = get_drive_credentials()
+            st.info(f"Please ensure '{config['name']}' is shared with the service account: {creds.service_account_email}")
+            return None, None
+
+        # Get credentials and build Drive service
+        creds = get_drive_credentials()
+        drive_service = build('drive', 'v3', credentials=creds)
 
         # Download file
         request = drive_service.files().get_media(fileId=file_id)
