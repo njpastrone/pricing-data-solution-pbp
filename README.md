@@ -2,8 +2,8 @@
 
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
-**Current Status:** ✅ Production Ready - Complete 4-Tab Workflow with PowerPoint Automation
-**Version:** 6.15 - HTML Order Form Product Extraction
+**Current Status:** ✅ Production Ready - Deployed on Render (https://pricing-data-solution-pbp.onrender.com)
+**Version:** 6.17 - Render Deployment & Memory Optimization
 
 ---
 
@@ -239,11 +239,27 @@ See [docs/METHODOLOGY_LOGIC.md](docs/METHODOLOGY_LOGIC.md) for detailed single-p
 
 ## 🚢 Deployment
 
-### Streamlit Cloud
-1. Push to GitHub repository
-2. Connect Streamlit Cloud to repo
-3. Add secrets in app settings (paste contents of `.streamlit/secrets.toml`)
-4. Deploy!
+### Render (Current Deployment)
+**Live URL:** https://pricing-data-solution-pbp.onrender.com
+
+**Configuration:**
+- **Instance Type:** Standard ($25/month)
+- **RAM:** 2GB
+- **CPU:** 1 core
+- **Automatic Deployment:** Connected to GitHub (deploys on push to main)
+- **Environment Variables:** Set in Render dashboard (GCP credentials)
+- **Startup Command:** Defined in `start.sh`
+
+**Template Storage:**
+- 43MB PowerPoint template stored in Google Drive
+- Downloaded on-demand (not bundled with app)
+- Cached in session for performance
+
+**Local Development:**
+1. Clone repository
+2. Install dependencies: `pip install -r requirements.txt`
+3. Create `.streamlit/secrets.toml` with GCP credentials
+4. Run: `streamlit run app.py`
 
 ---
 
@@ -290,10 +306,48 @@ Peace by Piece International - Internal Tool
 
 ---
 
-**Last Updated:** 2025-11-19
-**Version:** 6.15 (HTML Order Form Product Extraction)
+**Last Updated:** 2025-11-20
+**Version:** 6.17 (Render Deployment & Memory Optimization)
 
-## 🆕 Recent Updates (v6.15 - 2025-11-19)
+## 🆕 Recent Updates (v6.17 - 2025-11-20)
+
+### Render Deployment & Memory Optimization
+Successfully deployed to production on Render with cloud-based template management:
+
+**Deployment Infrastructure:**
+- Deployed to Render Standard tier (2GB RAM, $25/month)
+- Created `start.sh` for Render startup configuration
+- Added environment variable support to `data_loader.py` for credentials
+- Moved 43MB PowerPoint template to Google Drive (prevents bundling in deployment)
+
+**New Module: template_loader.py**
+- Cloud-based PowerPoint template management
+- On-demand download from Google Drive
+- Session-based caching for performance
+- Supports both Google Drive and local fallback modes
+
+**Memory Optimization Infrastructure (v6.16):**
+- Added `USE_MEMORY_OPTIMIZATION` toggle (currently disabled)
+- Lazy loading support with `use_cache=False` parameter
+- Garbage collection after heavy operations in `pptx_generator.py`
+- Optimization disabled after tier upgrade (caching provides better UX)
+- Template downloads once and stays cached (no duplicate downloads)
+
+**Branding:**
+- Added peace dove icon (🕊️) to replace Streamlit crown
+- Visible in browser tab and bookmarks
+
+**Key Files:**
+- `start.sh` - Render deployment configuration
+- `src/template_loader.py` - Cloud template management
+- Updated `src/data_loader.py` - Environment variable support
+- Updated `app.py` - Memory optimization toggle
+
+**Production URL:** https://pricing-data-solution-pbp.onrender.com
+
+---
+
+## Previous Updates (v6.15 - 2025-11-19)
 
 ### HTML Order Form Product Extraction
 Complete automation of client order form import with product parsing:

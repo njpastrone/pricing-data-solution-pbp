@@ -246,12 +246,13 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 ```
 pricing-data-solution-pbp/
 ├── app.py                      # Main application (PRODUCTION)
+├── start.sh                    # Render deployment startup script
 ├── requirements.txt            # Python dependencies
 ├── CLAUDE.md                   # This file - project rules & context
 ├── README.md                   # Project overview & quick start
 │
 ├── .streamlit/
-│   └── secrets.toml           # Google credentials (SECRET - never commit)
+│   └── secrets.toml           # Google credentials (SECRET - never commit locally)
 │
 ├── docs/                       # Documentation (organized by topic)
 │   ├── README.md              # Documentation index
@@ -277,6 +278,7 @@ pricing-data-solution-pbp/
 │   ├── pricing_engine.py      # Pricing calculations and quote generation
 │   ├── slide_matcher.py       # PowerPoint slide matching (Phase 1)
 │   ├── pptx_generator.py      # PowerPoint generation (Phase 2)
+│   ├── template_loader.py     # Cloud-based PowerPoint template loading (v6.16)
 │   ├── match_memory.py        # Confirmed match storage (v6.9)
 │   ├── proposal_manager.py    # Save/load/delete proposals (v6.6)
 │   └── order_manager.py       # Save/load/delete orders (v6.7)
@@ -310,15 +312,37 @@ pricing-data-solution-pbp/
 - **Update credentials:** Edit `.streamlit/secrets.toml`
 - **Test API connection:** `streamlit run scripts/test_connection.py`
 - **Investigate data structure:** `streamlit run scripts/investigate_jaggery_demo.py` or `python scripts/check_jaggery_demo.py`
-- **Deploy to cloud:** Follow Streamlit Cloud deployment guide (add secrets in app settings)
+- **Deploy to Render:** Automatic deployment on git push (environment variables set in Render dashboard)
+- **Local development:** Use `.streamlit/secrets.toml` for credentials (never commit)
 
 ---
 
 ## Current Status
 
-**Version:** 6.15 - HTML Order Form Product Extraction
+**Version:** 6.17 - Render Deployment & Memory Optimization
 
-**Last Updated:** 2025-11-19
+**Last Updated:** 2025-11-20
+
+**Deployment:** Render Standard tier (2GB RAM, $25/month)
+
+**Recent Improvements (2025-11-20 - v6.17):**
+- ✅ **Render Deployment Optimizations:**
+  - Successfully deployed to Render at https://pricing-data-solution-pbp.onrender.com
+  - Upgraded from Starter tier (512MB) to Standard tier (2GB RAM)
+  - Moved 43MB PowerPoint template to Google Drive for on-demand loading
+  - Added `template_loader.py` module with cloud-based template management
+  - Updated `data_loader.py` to support environment variables for Render deployment
+  - Created `start.sh` for Render deployment configuration
+- ✅ **Memory Optimization Infrastructure (v6.16):**
+  - Added `USE_MEMORY_OPTIMIZATION` toggle in app.py (currently disabled)
+  - Lazy loading support in `template_loader.py` with `use_cache` parameter
+  - Garbage collection in `pptx_generator.py` after heavy operations
+  - Memory optimization disabled after tier upgrade (better UX with caching)
+  - Template downloads once and caches for session (no duplicate downloads)
+- ✅ **Branding Improvements:**
+  - Added peace dove icon (🕊️) to replace Streamlit crown logo
+  - Fits "Peace by Piece International" brand identity
+  - Visible in browser tab and bookmarks
 
 **Recent Improvements (2025-11-19 - v6.15):**
 - ✅ **HTML Order Form Product Extraction:**
