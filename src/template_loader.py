@@ -172,6 +172,14 @@ def download_template_from_drive(template_key='all_slides'):
         # Reset buffer to beginning
         template_data.seek(0)
 
+        # Debug: Check if data was actually downloaded
+        data_size = len(template_data.getvalue())
+        if data_size == 0:
+            st.error(f"Downloaded file is empty! File ID: {file_id}")
+            return None, None
+
+        st.success(f"Successfully downloaded {data_size:,} bytes from Google Drive")
+
         # Cache in session state
         st.session_state[cache_key] = template_data
 
@@ -219,8 +227,14 @@ def get_template_path(template_key='all_slides', show_loading=True):
         # Return a NEW BytesIO copy of cached data (don't reuse same object)
         cached_template = st.session_state[cache_key]
         cached_template.seek(0)
-        # Create new BytesIO with same content
-        return io.BytesIO(cached_template.read())
+        data = cached_template.read()
+        # Reset cache back to start
+        cached_template.seek(0)
+        # Create new BytesIO
+        new_copy = io.BytesIO(data)
+        new_copy.seek(0)
+        st.info(f"Using cached template ({len(data):,} bytes)")
+        return new_copy
 
     # Download from cloud
     if show_loading:
