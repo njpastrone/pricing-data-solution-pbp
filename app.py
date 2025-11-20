@@ -49,6 +49,11 @@ from src.order_manager import (
     load_order_data,
     delete_order
 )
+from src.template_loader import (
+    get_template_path,
+    get_template_name,
+    TEMPLATE_CONFIG
+)
 
 # ============================================================
 # HELPER FUNCTIONS
@@ -1297,9 +1302,13 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
 
                     st.markdown(f"**{partner}**")
 
-                    # Load all impact slide options
-                    pptx_path = Path("templates/November All Slides.pptx")
-                    all_impact_slides = find_all_impact_slides(str(pptx_path))
+                    # Load all impact slide options (from cloud or local)
+                    pptx_template = get_template_path('all_slides', show_loading=False)
+                    if pptx_template:
+                        all_impact_slides = find_all_impact_slides(pptx_template)
+                    else:
+                        st.error("Could not load PowerPoint template")
+                        continue
 
                     dropdown_options = ["None - Skip impact slide"]
                     dropdown_options.extend([f"{slide['slide_title']}" for slide in all_impact_slides])
@@ -1364,16 +1373,19 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                         download_presentation
                     )
 
-                    # Validation checks
-                    november_template_path = Path("templates/November All Slides.pptx")
-                    intro_outro_template_path = Path("templates/Intro_Outro_Slides_PbP_Proposals.pptx")
+                    # Load templates from cloud/local (with loading spinner)
+                    st.info(f"Using template: **{get_template_name('all_slides')}**")
 
-                    if not november_template_path.exists():
-                        st.error("PowerPoint template not found. Please ensure 'templates/November All Slides.pptx' exists.")
+                    november_template_path = get_template_path('all_slides', show_loading=True)
+                    intro_outro_template_path = get_template_path('intro_outro', show_loading=False)
+
+                    # Validation checks
+                    if not november_template_path:
+                        st.error("PowerPoint template could not be loaded. Please check Google Drive access.")
                         return None
 
-                    if not intro_outro_template_path.exists():
-                        st.error("Intro/Outro template not found. Please ensure 'templates/Intro_Outro_Slides_PbP_Proposals.pptx' exists.")
+                    if not intro_outro_template_path:
+                        st.error("Intro/Outro template could not be loaded.")
                         return None
 
                     if len(confirmed_matches) == 0:
@@ -2616,19 +2628,21 @@ with tab1:
             try:
                 # Only load PowerPoint and run matching if not already cached
                 if 'pptx_match_results' not in st.session_state or st.session_state.pptx_match_results is None:
-                    # Load PowerPoint product names
-                    from pathlib import Path
+                    # Load PowerPoint template from cloud/local
                     from pptx import Presentation
 
-                    pptx_path = Path("templates/November All Slides.pptx")
+                    # Display template name
+                    st.info(f"Using template: **{get_template_name('all_slides')}**")
 
-                    if not pptx_path.exists():
-                        st.error("PowerPoint template not found at templates/November All Slides.pptx")
+                    pptx_template = get_template_path('all_slides', show_loading=True)
+
+                    if not pptx_template:
+                        st.error("PowerPoint template could not be loaded. Please check Google Drive access.")
                         st.session_state.show_pptx_matching = False
                     else:
                         # Extract product names from PowerPoint
-                        with st.spinner("Loading PowerPoint slides..."):
-                            prs = Presentation(str(pptx_path))
+                        with st.spinner("Analyzing PowerPoint slides..."):
+                            prs = Presentation(pptx_template)
 
                             pptx_product_names = []
                             pptx_name_to_index = {}  # Map slide names to indices for saving confirmations
