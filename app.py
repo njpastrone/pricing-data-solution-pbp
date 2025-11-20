@@ -321,7 +321,7 @@ with st.sidebar:
 
     # Initialize dataset selection in session state
     if 'selected_dataset' not in st.session_state:
-        st.session_state.selected_dataset = 'demo'
+        st.session_state.selected_dataset = 'real'
 
     selected_dataset = st.radio(
         "Select pricing dataset:",
@@ -631,7 +631,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
     from src.match_memory import save_confirmed_match
 
     # Get current dataset for saving confirmations
-    current_dataset = st.session_state.get('selected_dataset', 'demo')
+    current_dataset = st.session_state.get('selected_dataset', 'real')
     st.markdown("---")
     st.subheader("Step 1. Review Product Matches")
 
@@ -2688,7 +2688,7 @@ with tab1:
                             _load_all_matches_data.clear()
 
                             matcher = SlideMatcher(pptx_product_names)
-                            current_dataset = st.session_state.get('selected_dataset', 'demo')
+                            current_dataset = st.session_state.get('selected_dataset', 'real')
                             match_results = matcher.batch_match(gs_product_names, dataset=current_dataset)
 
                         # Cache results in session state
