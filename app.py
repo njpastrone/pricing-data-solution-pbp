@@ -5213,7 +5213,81 @@ Rates default to current estimates but can be adjusted as needed.
             st.session_state.order_confirmed = False
             st.rerun()
 
-    # Navigation button at bottom of Tab 2
+    # Save Your Work section at bottom of Tab 3
+    st.divider()
+    st.markdown("### Save Your Work")
+
+    # Check if there are products to save
+    has_order_items = len(st.session_state.order_items) > 0
+
+    if has_order_items:
+        col1, col2 = st.columns(2)
+        with col1:
+            order_name = st.text_input(
+                "Order name:",
+                key="save_order_name_bottom",
+                placeholder="e.g., Client ABC Q1 2025 Order"
+            )
+        with col2:
+            created_by = st.text_input(
+                "Your name (optional):",
+                key="save_order_creator_bottom",
+                placeholder="e.g., John Smith"
+            )
+
+        if st.button("Save Order", type="primary", use_container_width=True, key="save_order_btn_bottom"):
+            if not order_name or not order_name.strip():
+                st.error("Please enter an order name")
+            else:
+                # Prepare order data
+                order_data = {
+                    'order_items': st.session_state.order_items,
+                    'order_shipping': st.session_state.order_shipping,
+                    'partner_shipping': st.session_state.partner_shipping,
+                    'order_discount_type': st.session_state.order_discount_type,
+                    'order_discount_preset': st.session_state.order_discount_preset,
+                    'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
+                    'order_discount_custom_value': st.session_state.order_discount_custom_value,
+                    'order_use_marketing_rounding': st.session_state.order_use_marketing_rounding,
+                    'apply_cc_fee': st.session_state.apply_cc_fee,
+                    'cc_fee_percent': st.session_state.cc_fee_percent,
+                    'client_info': st.session_state.client_info,
+                    'order_notes': st.session_state.order_notes,
+                    'order_confirmed': st.session_state.order_confirmed
+                }
+
+                success, message, result = save_order(
+                    name=order_name.strip(),
+                    created_by=created_by.strip() if created_by else "",
+                    order_data=order_data,
+                    dataset=st.session_state.selected_dataset
+                )
+
+                if success:
+                    st.success(f"{message} - You can find it in the sidebar under 'Saved Orders'")
+                    time.sleep(1.5)
+                    st.rerun()
+                else:
+                    # Check if it's a naming conflict
+                    if result:  # result contains suggested name
+                        st.error(message)
+                        if st.button(f"Save as '{result}'", key="save_with_new_name_order_bottom"):
+                            success2, message2, _ = save_order(
+                                name=result,
+                                created_by=created_by.strip() if created_by else "",
+                                order_data=order_data,
+                                dataset=st.session_state.selected_dataset
+                            )
+                            if success2:
+                                st.success(f"{message2} - You can find it in the sidebar")
+                                time.sleep(1.5)
+                                st.rerun()
+                    else:
+                        st.error(message)
+    else:
+        st.info("Add products to your order to enable saving")
+
+    # Navigation button at bottom of Tab 3
     st.divider()
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
