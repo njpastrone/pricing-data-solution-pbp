@@ -14,6 +14,7 @@ Proposals are stored in the saved_proposals spreadsheet with the following colum
 import json
 from datetime import datetime
 import streamlit as st
+import gspread
 from src.data_loader import connect_to_sheets, DATASET_CONFIGS
 
 
@@ -28,11 +29,16 @@ def initialize_proposals_sheet():
         client = connect_to_sheets()
         spreadsheet = client.open_by_key(DATASET_CONFIGS['saved_proposals']['spreadsheet_id'])
 
-        # Try to get Sheet1, or create it
+        # Try to get Sheet1, or create it if it doesn't exist
         try:
             sheet = spreadsheet.worksheet('Sheet1')
-        except:
-            sheet = spreadsheet.add_worksheet(title='Sheet1', rows=100, cols=6)
+        except gspread.exceptions.WorksheetNotFound:
+            # Only try to create if it genuinely doesn't exist
+            try:
+                sheet = spreadsheet.add_worksheet(title='Sheet1', rows=100, cols=6)
+            except Exception as create_error:
+                # If creation fails, it might already exist - try getting it again
+                sheet = spreadsheet.worksheet('Sheet1')
 
         # Check if headers exist
         first_row = sheet.row_values(1)
@@ -45,7 +51,8 @@ def initialize_proposals_sheet():
 
     except Exception as e:
         error_msg = str(e)
-        if "429" in error_msg or "Quota exceeded" in error_msg:
+        # Only show rate limit message for actual rate limit errors
+        if "429" in error_msg or "Quota exceeded" in error_msg or "quota" in error_msg.lower():
             st.warning("""
             **Google Sheets is temporarily busy**
 
@@ -61,6 +68,7 @@ def initialize_proposals_sheet():
             The limit will reset automatically in about 1 minute.
             """)
         else:
+            # For other errors, show the actual error message
             st.error(f"Error initializing proposals sheet: {error_msg}")
         return None
 
