@@ -100,8 +100,8 @@ def initialize_orders_sheet():
 
     except Exception as e:
         error_msg = str(e)
-        # Only show rate limit message for actual rate limit errors
-        if "429" in error_msg or "Quota exceeded" in error_msg or "quota" in error_msg.lower():
+        # Only show rate limit message for actual rate limit errors (429 status code)
+        if "429" in error_msg or "Quota exceeded" in error_msg:
             st.warning("""
             **Google Sheets is temporarily busy**
 
@@ -117,8 +117,8 @@ def initialize_orders_sheet():
             The limit will reset automatically in about 1 minute.
             """)
         else:
-            # For other errors, show the actual error message
-            st.error(f"Error initializing orders sheet: {error_msg}")
+            # For other errors, log to console but don't show in UI (too noisy)
+            print(f"Error initializing orders sheet: {error_msg}")
         return None
 
 
@@ -230,7 +230,8 @@ def load_all_orders():
         return orders
 
     except Exception as e:
-        st.error(f"Error loading orders: {str(e)}")
+        # Silently fail - error already shown by initialize_orders_sheet if needed
+        print(f"Error loading orders: {str(e)}")
         return []
 
 
