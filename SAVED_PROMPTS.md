@@ -1,6 +1,6 @@
 # Implementing Changes from Active Development Todo
 
-    1. "“Make a detailed plan to accomplish the [task]. Think hardest.
+    1. "Make a detailed plan to accomplish the [task]. Think hardest.
 
     How will we implement the only functionality we need right now?
 

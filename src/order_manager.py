@@ -93,7 +93,24 @@ def initialize_orders_sheet():
         return sheet
 
     except Exception as e:
-        st.error(f"Error initializing orders sheet: {str(e)}")
+        error_msg = str(e)
+        if "429" in error_msg or "Quota exceeded" in error_msg:
+            st.warning("""
+            **Google Sheets is temporarily busy**
+
+            The app is making too many requests to Google Sheets. This usually happens when:
+            - Multiple users are using the app simultaneously
+            - You're refreshing the page frequently
+
+            **What to do:**
+            1. Wait 60 seconds before trying again
+            2. Avoid rapid page refreshes
+            3. Your data is safe - this is just a temporary limit
+
+            The limit will reset automatically in about 1 minute.
+            """)
+        else:
+            st.error(f"Error initializing orders sheet: {error_msg}")
         return None
 
 

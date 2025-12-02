@@ -396,11 +396,17 @@ with st.sidebar:
     st.markdown("---")
 
     # Section 2: Saved Work Management
-    st.markdown("### 📁 Saved Work")
+    st.markdown("### Saved Work")
 
     # Load saved proposals and orders
     saved_proposals = load_all_proposals()
     saved_orders = load_all_orders()
+
+    # Handle potential None returns from rate limiting
+    if saved_proposals is None:
+        saved_proposals = []
+    if saved_orders is None:
+        saved_orders = []
 
     # Saved Proposals subsection
     with st.expander(f"**Saved Proposals ({len(saved_proposals)})**", expanded=False):
@@ -410,7 +416,7 @@ with st.sidebar:
             for proposal in saved_proposals[:5]:  # Show max 5 most recent
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.caption(f"📄 {proposal['name']}")
+                    st.caption(f"{proposal['name']}")
                     st.caption(f"   {proposal['created_date'][:10]}")
                 with col2:
                     if st.button("Load", key=f"load_prop_{proposal['proposal_id']}", use_container_width=True):
@@ -440,7 +446,7 @@ with st.sidebar:
             for order in saved_orders[:5]:  # Show max 5 most recent
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.caption(f"📦 {order['name']}")
+                    st.caption(f"{order['name']}")
                     st.caption(f"   {order['created_date'][:10]}")
                 with col2:
                     if st.button("Load", key=f"load_ord_{order['order_id']}", use_container_width=True):
@@ -493,7 +499,7 @@ with st.sidebar:
         - Current order ({order_count} items)
         - Current client info
 
-        ✅ Your {len(saved_proposals)} saved proposals and {len(saved_orders)} saved orders will remain safe.
+        Your {len(saved_proposals)} saved proposals and {len(saved_orders)} saved orders will remain safe.
         """)
         col1, col2 = st.columns(2)
         with col1:
@@ -529,7 +535,7 @@ with st.sidebar:
                 st.session_state.confirm_clear = False
 
                 # Show success message before rerun
-                st.success(f"✅ Session reset successfully! Your {len(saved_proposals)} saved proposals and {len(saved_orders)} saved orders are still available above.")
+                st.success(f"Session reset successfully! Your {len(saved_proposals)} saved proposals and {len(saved_orders)} saved orders are still available above.")
                 time.sleep(1)  # Brief pause to show message
                 st.rerun()
         with col2:
@@ -2100,7 +2106,7 @@ with tab1:
                                 st.session_state.proposal_discount_percent = proposal_data.get('proposal_discount_percent', 0.0)
                                 st.session_state.proposal_client_budget = proposal_data.get('proposal_client_budget', 0.0)
 
-                                st.success(f"✅ Loaded proposal: {selected_proposal['name']}")
+                                st.success(f"Loaded proposal: {selected_proposal['name']}")
                                 st.rerun()
                             else:
                                 st.error("Failed to load proposal data")
@@ -2855,7 +2861,7 @@ with tab1:
                 placeholder="e.g., John Smith"
             )
 
-        if st.button("💾 Save Proposal", type="primary", use_container_width=True, key="save_proposal_btn_bottom"):
+        if st.button("Save Proposal", type="primary", use_container_width=True, key="save_proposal_btn_bottom"):
             if not proposal_name or not proposal_name.strip():
                 st.error("Please enter a proposal name")
             else:
@@ -2877,7 +2883,7 @@ with tab1:
                 )
 
                 if success:
-                    st.success(f"✅ {message} - You can find it in the sidebar under 'Saved Proposals'")
+                    st.success(f"{message} - You can find it in the sidebar under 'Saved Proposals'")
                     time.sleep(1.5)
                     st.rerun()
                 else:
@@ -2892,7 +2898,7 @@ with tab1:
                                 dataset=st.session_state.selected_dataset
                             )
                             if success2:
-                                st.success(f"✅ {message2} - You can find it in the sidebar")
+                                st.success(f"{message2} - You can find it in the sidebar")
                                 time.sleep(1.5)
                                 st.rerun()
                     else:
@@ -3360,7 +3366,7 @@ with tab3:
                     label_visibility="collapsed"
                 )
             with col3:
-                if st.button("💾 Save", type="primary", use_container_width=True, key="quick_save_order_btn"):
+                if st.button("Save", type="primary", use_container_width=True, key="quick_save_order_btn"):
                     if not quick_order_name or not quick_order_name.strip():
                         st.error("Please enter an order name")
                     else:
@@ -3389,7 +3395,7 @@ with tab3:
                         )
 
                         if success:
-                            st.success(f"✅ {message} - Available in sidebar under 'Saved Orders'")
+                            st.success(f"{message} - Available in sidebar under 'Saved Orders'")
                             time.sleep(1)
                             st.rerun()
                         else:
@@ -3497,7 +3503,7 @@ with tab3:
                                 st.session_state.order_notes = order_data.get('order_notes', {'notes_to_partner': '', 'accounting_notes': ''})
                                 st.session_state.order_confirmed = order_data.get('order_confirmed', False)
 
-                                st.success(f"✅ Loaded order: {selected_order['name']}")
+                                st.success(f"Loaded order: {selected_order['name']}")
                                 st.rerun()
                             else:
                                 st.error("Failed to load order data")
