@@ -16,6 +16,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 from datetime import datetime
+import time
 
 # Import extracted modules
 from src.data_loader import load_pricing_data, DATASET_CONFIGS
@@ -394,17 +395,109 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Section 2: Clear All Data Button
+    # Section 2: Saved Work Management
+    st.markdown("### 📁 Saved Work")
+
+    # Load saved proposals and orders
+    saved_proposals = load_all_proposals()
+    saved_orders = load_all_orders()
+
+    # Saved Proposals subsection
+    with st.expander(f"**Saved Proposals ({len(saved_proposals)})**", expanded=False):
+        if len(saved_proposals) == 0:
+            st.info("No saved proposals yet")
+        else:
+            for proposal in saved_proposals[:5]:  # Show max 5 most recent
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.caption(f"📄 {proposal['name']}")
+                    st.caption(f"   {proposal['created_date'][:10]}")
+                with col2:
+                    if st.button("Load", key=f"load_prop_{proposal['proposal_id']}", use_container_width=True):
+                        success, proposal_data, dataset = load_proposal_data(proposal['proposal_id'])
+                        if success:
+                            if dataset != st.session_state.selected_dataset:
+                                st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
+
+                            st.session_state.proposal_products = proposal_data.get('proposal_products', [])
+                            st.session_state.proposal_marketing_rounding = proposal_data.get('proposal_marketing_rounding', False)
+                            st.session_state.proposal_use_msrp = proposal_data.get('proposal_use_msrp', True)
+                            st.session_state.proposal_discount_type = proposal_data.get('proposal_discount_type', None)
+                            st.session_state.proposal_discount_percent = proposal_data.get('proposal_discount_percent', 0.0)
+                            st.session_state.proposal_client_budget = proposal_data.get('proposal_client_budget', 0.0)
+
+                            st.success(f"Loaded: {proposal['name']}")
+                            st.rerun()
+
+            if len(saved_proposals) > 5:
+                st.caption(f"...and {len(saved_proposals) - 5} more. Go to Tab 1 to see all.")
+
+    # Saved Orders subsection
+    with st.expander(f"**Saved Orders ({len(saved_orders)})**", expanded=False):
+        if len(saved_orders) == 0:
+            st.info("No saved orders yet")
+        else:
+            for order in saved_orders[:5]:  # Show max 5 most recent
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.caption(f"📦 {order['name']}")
+                    st.caption(f"   {order['created_date'][:10]}")
+                with col2:
+                    if st.button("Load", key=f"load_ord_{order['order_id']}", use_container_width=True):
+                        success, order_data, dataset = load_order_data(order['order_id'])
+                        if success:
+                            if dataset != st.session_state.selected_dataset:
+                                st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
+
+                            st.session_state.order_items = order_data.get('order_items', [])
+                            st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
+                            st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
+                            st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
+                            st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
+                            st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
+                            st.session_state.order_discount_custom_value = order_data.get('order_discount_custom_value', 0.0)
+                            st.session_state.order_use_marketing_rounding = order_data.get('order_use_marketing_rounding', False)
+                            st.session_state.apply_cc_fee = order_data.get('apply_cc_fee', False)
+                            st.session_state.cc_fee_percent = order_data.get('cc_fee_percent', 3.0)
+                            st.session_state.client_info = order_data.get('client_info', st.session_state.client_info)
+                            st.session_state.order_notes = order_data.get('order_notes', {'notes_to_partner': '', 'accounting_notes': ''})
+                            st.session_state.order_confirmed = order_data.get('order_confirmed', False)
+
+                            st.success(f"Loaded: {order['name']}")
+                            st.rerun()
+
+            if len(saved_orders) > 5:
+                st.caption(f"...and {len(saved_orders) - 5} more. Go to Tab 3 to see all.")
+
+    st.markdown("---")
+
+    # Section 3: Clear Current Session Button (renamed from Clear All Data)
     st.markdown("### Session Management")
 
-    if st.button("Clear All Data", type="secondary", use_container_width=True):
+    # Show current work status
+    proposal_count = len(st.session_state.proposal_products)
+    order_count = len(st.session_state.order_items)
+
+    if proposal_count > 0 or order_count > 0:
+        st.caption(f"Current work: {proposal_count} proposal items, {order_count} order items")
+
+    if st.button("Reset Current Session", type="secondary", use_container_width=True):
         st.session_state.confirm_clear = True
 
     if st.session_state.get('confirm_clear', False):
-        st.warning("Are you sure? This will clear all proposals, orders, and client info.")
+        st.warning(f"""
+        **Start a fresh session?**
+
+        This will clear your current working session:
+        - Current proposal ({proposal_count} items)
+        - Current order ({order_count} items)
+        - Current client info
+
+        ✅ Your {len(saved_proposals)} saved proposals and {len(saved_orders)} saved orders will remain safe.
+        """)
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Yes, Clear", type="primary", use_container_width=True):
+            if st.button("Yes, Reset", type="primary", use_container_width=True):
                 # Clear all session state data
                 st.session_state.proposal_products = []
                 st.session_state.order_items = []
@@ -434,6 +527,10 @@ with st.sidebar:
                 st.session_state.order_discount_type = "none"
                 st.session_state.order_history = []
                 st.session_state.confirm_clear = False
+
+                # Show success message before rerun
+                st.success(f"✅ Session reset successfully! Your {len(saved_proposals)} saved proposals and {len(saved_orders)} saved orders are still available above.")
+                time.sleep(1)  # Brief pause to show message
                 st.rerun()
         with col2:
             if st.button("Cancel", use_container_width=True):
@@ -2736,7 +2833,74 @@ with tab1:
         - Move to **Tab 2** to generate a client order form
         """)
 
-    # Navigation button at bottom of Tab 1
+    # Save and Navigation buttons at bottom of Tab 1
+    st.divider()
+    st.markdown("### Save Your Work")
+
+    # Check if there are products to save
+    has_products = len(st.session_state.proposal_products) > 0
+
+    if has_products:
+        col1, col2 = st.columns(2)
+        with col1:
+            proposal_name = st.text_input(
+                "Proposal name:",
+                key="save_proposal_name_bottom",
+                placeholder="e.g., Client ABC Winter Campaign"
+            )
+        with col2:
+            created_by = st.text_input(
+                "Your name (optional):",
+                key="save_proposal_creator_bottom",
+                placeholder="e.g., John Smith"
+            )
+
+        if st.button("💾 Save Proposal", type="primary", use_container_width=True, key="save_proposal_btn_bottom"):
+            if not proposal_name or not proposal_name.strip():
+                st.error("Please enter a proposal name")
+            else:
+                # Prepare proposal data
+                proposal_data = {
+                    'proposal_products': st.session_state.proposal_products,
+                    'proposal_marketing_rounding': st.session_state.proposal_marketing_rounding,
+                    'proposal_use_msrp': st.session_state.proposal_use_msrp,
+                    'proposal_discount_type': st.session_state.get('proposal_discount_type'),
+                    'proposal_discount_percent': st.session_state.get('proposal_discount_percent', 0.0),
+                    'proposal_client_budget': st.session_state.get('proposal_client_budget', 0.0)
+                }
+
+                success, message, result = save_proposal(
+                    name=proposal_name.strip(),
+                    created_by=created_by.strip() if created_by else "",
+                    proposal_data=proposal_data,
+                    dataset=st.session_state.selected_dataset
+                )
+
+                if success:
+                    st.success(f"✅ {message} - You can find it in the sidebar under 'Saved Proposals'")
+                    time.sleep(1.5)
+                    st.rerun()
+                else:
+                    # Check if it's a naming conflict
+                    if result:  # result contains suggested name
+                        st.error(message)
+                        if st.button(f"Save as '{result}'", key="save_with_new_name_bottom"):
+                            success2, message2, _ = save_proposal(
+                                name=result,
+                                created_by=created_by.strip() if created_by else "",
+                                proposal_data=proposal_data,
+                                dataset=st.session_state.selected_dataset
+                            )
+                            if success2:
+                                st.success(f"✅ {message2} - You can find it in the sidebar")
+                                time.sleep(1.5)
+                                st.rerun()
+                    else:
+                        st.error(message)
+    else:
+        st.info("Add products to your proposal to enable saving")
+
+    # Navigation button
     st.divider()
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
@@ -3175,6 +3339,65 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
 # ============================================================
 with tab3:
     st.header("Order & Client Info - Input Order & Client Details")
+
+    # Quick Save Section at top
+    has_order = len(st.session_state.order_items) > 0
+    if has_order:
+        with st.container():
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col1:
+                quick_order_name = st.text_input(
+                    "Quick save order:",
+                    key="quick_save_order_name",
+                    placeholder="e.g., Client ABC Q1 2025",
+                    label_visibility="collapsed"
+                )
+            with col2:
+                quick_creator = st.text_input(
+                    "Your name:",
+                    key="quick_save_creator",
+                    placeholder="Your name (optional)",
+                    label_visibility="collapsed"
+                )
+            with col3:
+                if st.button("💾 Save", type="primary", use_container_width=True, key="quick_save_order_btn"):
+                    if not quick_order_name or not quick_order_name.strip():
+                        st.error("Please enter an order name")
+                    else:
+                        # Prepare order data
+                        order_data = {
+                            'order_items': st.session_state.order_items,
+                            'order_shipping': st.session_state.order_shipping,
+                            'partner_shipping': st.session_state.partner_shipping,
+                            'order_discount_type': st.session_state.order_discount_type,
+                            'order_discount_preset': st.session_state.order_discount_preset,
+                            'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
+                            'order_discount_custom_value': st.session_state.order_discount_custom_value,
+                            'order_use_marketing_rounding': st.session_state.order_use_marketing_rounding,
+                            'apply_cc_fee': st.session_state.apply_cc_fee,
+                            'cc_fee_percent': st.session_state.cc_fee_percent,
+                            'client_info': st.session_state.client_info,
+                            'order_notes': st.session_state.order_notes,
+                            'order_confirmed': st.session_state.order_confirmed
+                        }
+
+                        success, message, result = save_order(
+                            name=quick_order_name.strip(),
+                            created_by=quick_creator.strip() if quick_creator else "",
+                            order_data=order_data,
+                            dataset=st.session_state.selected_dataset
+                        )
+
+                        if success:
+                            st.success(f"✅ {message} - Available in sidebar under 'Saved Orders'")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            if result:
+                                st.error(f"{message} Try: {result}")
+                            else:
+                                st.error(message)
+
     st.divider()
 
     # ============================================================
