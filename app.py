@@ -413,67 +413,176 @@ with st.sidebar:
         if len(saved_proposals) == 0:
             st.info("No saved proposals yet")
         else:
-            for proposal in saved_proposals[:5]:  # Show max 5 most recent
-                col1, col2 = st.columns([3, 1])
+            # Add manage mode checkbox
+            manage_proposals = st.checkbox("Manage proposals (delete)", key="manage_proposals_mode")
+
+            for proposal in saved_proposals[:10]:  # Show max 10 most recent
+                if manage_proposals:
+                    # Delete mode - show delete buttons
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    with col1:
+                        st.caption(f"{proposal['name']}")
+                        st.caption(f"   {proposal['created_date'][:10]}")
+                    with col2:
+                        if st.button("Load", key=f"load_prop_{proposal['proposal_id']}", use_container_width=True):
+                            success, proposal_data, dataset = load_proposal_data(proposal['proposal_id'])
+                            if success:
+                                if dataset != st.session_state.selected_dataset:
+                                    st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
+
+                                st.session_state.proposal_products = proposal_data.get('proposal_products', [])
+                                st.session_state.proposal_marketing_rounding = proposal_data.get('proposal_marketing_rounding', False)
+                                st.session_state.proposal_use_msrp = proposal_data.get('proposal_use_msrp', True)
+                                st.session_state.proposal_discount_type = proposal_data.get('proposal_discount_type', None)
+                                st.session_state.proposal_discount_percent = proposal_data.get('proposal_discount_percent', 0.0)
+                                st.session_state.proposal_client_budget = proposal_data.get('proposal_client_budget', 0.0)
+
+                                st.success(f"Loaded: {proposal['name']}")
+                                st.rerun()
+                    with col3:
+                        if st.button("Delete", key=f"del_prop_{proposal['proposal_id']}", use_container_width=True, help="Delete this proposal"):
+                            # Store the proposal to delete in session state for confirmation
+                            st.session_state.delete_proposal_confirm = proposal
+                else:
+                    # Normal mode - just load button
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.caption(f"{proposal['name']}")
+                        st.caption(f"   {proposal['created_date'][:10]}")
+                    with col2:
+                        if st.button("Load", key=f"load_prop_{proposal['proposal_id']}", use_container_width=True):
+                            success, proposal_data, dataset = load_proposal_data(proposal['proposal_id'])
+                            if success:
+                                if dataset != st.session_state.selected_dataset:
+                                    st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
+
+                                st.session_state.proposal_products = proposal_data.get('proposal_products', [])
+                                st.session_state.proposal_marketing_rounding = proposal_data.get('proposal_marketing_rounding', False)
+                                st.session_state.proposal_use_msrp = proposal_data.get('proposal_use_msrp', True)
+                                st.session_state.proposal_discount_type = proposal_data.get('proposal_discount_type', None)
+                                st.session_state.proposal_discount_percent = proposal_data.get('proposal_discount_percent', 0.0)
+                                st.session_state.proposal_client_budget = proposal_data.get('proposal_client_budget', 0.0)
+
+                                st.success(f"Loaded: {proposal['name']}")
+                                st.rerun()
+
+            # Handle delete confirmation
+            if 'delete_proposal_confirm' in st.session_state:
+                prop = st.session_state.delete_proposal_confirm
+                st.warning(f"Delete '{prop['name']}'?")
+                col1, col2 = st.columns(2)
                 with col1:
-                    st.caption(f"{proposal['name']}")
-                    st.caption(f"   {proposal['created_date'][:10]}")
-                with col2:
-                    if st.button("Load", key=f"load_prop_{proposal['proposal_id']}", use_container_width=True):
-                        success, proposal_data, dataset = load_proposal_data(proposal['proposal_id'])
+                    if st.button("Yes, Delete", key="confirm_del_prop", type="primary"):
+                        success, message = delete_proposal(prop['proposal_id'])
                         if success:
-                            if dataset != st.session_state.selected_dataset:
-                                st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
-
-                            st.session_state.proposal_products = proposal_data.get('proposal_products', [])
-                            st.session_state.proposal_marketing_rounding = proposal_data.get('proposal_marketing_rounding', False)
-                            st.session_state.proposal_use_msrp = proposal_data.get('proposal_use_msrp', True)
-                            st.session_state.proposal_discount_type = proposal_data.get('proposal_discount_type', None)
-                            st.session_state.proposal_discount_percent = proposal_data.get('proposal_discount_percent', 0.0)
-                            st.session_state.proposal_client_budget = proposal_data.get('proposal_client_budget', 0.0)
-
-                            st.success(f"Loaded: {proposal['name']}")
+                            st.success("Deleted successfully")
+                            del st.session_state.delete_proposal_confirm
+                            time.sleep(0.5)
                             st.rerun()
+                        else:
+                            st.error(message)
+                with col2:
+                    if st.button("Cancel", key="cancel_del_prop"):
+                        del st.session_state.delete_proposal_confirm
+                        st.rerun()
 
-            if len(saved_proposals) > 5:
-                st.caption(f"...and {len(saved_proposals) - 5} more. Go to Tab 1 to see all.")
+            if len(saved_proposals) > 10:
+                st.caption(f"...and {len(saved_proposals) - 10} more.")
 
     # Saved Orders subsection
     with st.expander(f"**Saved Orders ({len(saved_orders)})**", expanded=False):
         if len(saved_orders) == 0:
             st.info("No saved orders yet")
         else:
-            for order in saved_orders[:5]:  # Show max 5 most recent
-                col1, col2 = st.columns([3, 1])
+            # Add manage mode checkbox
+            manage_orders = st.checkbox("Manage orders (delete)", key="manage_orders_mode")
+
+            for order in saved_orders[:10]:  # Show max 10 most recent
+                if manage_orders:
+                    # Delete mode - show delete buttons
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    with col1:
+                        st.caption(f"{order['name']}")
+                        st.caption(f"   {order['created_date'][:10]}")
+                    with col2:
+                        if st.button("Load", key=f"load_ord_{order['order_id']}", use_container_width=True):
+                            success, order_data, dataset = load_order_data(order['order_id'])
+                            if success:
+                                if dataset != st.session_state.selected_dataset:
+                                    st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
+
+                                st.session_state.order_items = order_data.get('order_items', [])
+                                st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
+                                st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
+                                st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
+                                st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
+                                st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
+                                st.session_state.order_discount_custom_value = order_data.get('order_discount_custom_value', 0.0)
+                                st.session_state.order_use_marketing_rounding = order_data.get('order_use_marketing_rounding', False)
+                                st.session_state.apply_cc_fee = order_data.get('apply_cc_fee', False)
+                                st.session_state.cc_fee_percent = order_data.get('cc_fee_percent', 3.0)
+                                st.session_state.client_info = order_data.get('client_info', st.session_state.client_info)
+                                st.session_state.order_notes = order_data.get('order_notes', {'notes_to_partner': '', 'accounting_notes': ''})
+                                st.session_state.order_confirmed = order_data.get('order_confirmed', False)
+
+                                st.success(f"Loaded: {order['name']}")
+                                st.rerun()
+                    with col3:
+                        if st.button("Delete", key=f"del_ord_{order['order_id']}", use_container_width=True, help="Delete this order"):
+                            # Store the order to delete in session state for confirmation
+                            st.session_state.delete_order_confirm = order
+                else:
+                    # Normal mode - just load button
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.caption(f"{order['name']}")
+                        st.caption(f"   {order['created_date'][:10]}")
+                    with col2:
+                        if st.button("Load", key=f"load_ord_{order['order_id']}", use_container_width=True):
+                            success, order_data, dataset = load_order_data(order['order_id'])
+                            if success:
+                                if dataset != st.session_state.selected_dataset:
+                                    st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
+
+                                st.session_state.order_items = order_data.get('order_items', [])
+                                st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
+                                st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
+                                st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
+                                st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
+                                st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
+                                st.session_state.order_discount_custom_value = order_data.get('order_discount_custom_value', 0.0)
+                                st.session_state.order_use_marketing_rounding = order_data.get('order_use_marketing_rounding', False)
+                                st.session_state.apply_cc_fee = order_data.get('apply_cc_fee', False)
+                                st.session_state.cc_fee_percent = order_data.get('cc_fee_percent', 3.0)
+                                st.session_state.client_info = order_data.get('client_info', st.session_state.client_info)
+                                st.session_state.order_notes = order_data.get('order_notes', {'notes_to_partner': '', 'accounting_notes': ''})
+                                st.session_state.order_confirmed = order_data.get('order_confirmed', False)
+
+                                st.success(f"Loaded: {order['name']}")
+                                st.rerun()
+
+            # Handle delete confirmation
+            if 'delete_order_confirm' in st.session_state:
+                ord = st.session_state.delete_order_confirm
+                st.warning(f"Delete '{ord['name']}'?")
+                col1, col2 = st.columns(2)
                 with col1:
-                    st.caption(f"{order['name']}")
-                    st.caption(f"   {order['created_date'][:10]}")
-                with col2:
-                    if st.button("Load", key=f"load_ord_{order['order_id']}", use_container_width=True):
-                        success, order_data, dataset = load_order_data(order['order_id'])
+                    if st.button("Yes, Delete", key="confirm_del_ord", type="primary"):
+                        success, message = delete_order(ord['order_id'])
                         if success:
-                            if dataset != st.session_state.selected_dataset:
-                                st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
-
-                            st.session_state.order_items = order_data.get('order_items', [])
-                            st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
-                            st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
-                            st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
-                            st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
-                            st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
-                            st.session_state.order_discount_custom_value = order_data.get('order_discount_custom_value', 0.0)
-                            st.session_state.order_use_marketing_rounding = order_data.get('order_use_marketing_rounding', False)
-                            st.session_state.apply_cc_fee = order_data.get('apply_cc_fee', False)
-                            st.session_state.cc_fee_percent = order_data.get('cc_fee_percent', 3.0)
-                            st.session_state.client_info = order_data.get('client_info', st.session_state.client_info)
-                            st.session_state.order_notes = order_data.get('order_notes', {'notes_to_partner': '', 'accounting_notes': ''})
-                            st.session_state.order_confirmed = order_data.get('order_confirmed', False)
-
-                            st.success(f"Loaded: {order['name']}")
+                            st.success("Deleted successfully")
+                            del st.session_state.delete_order_confirm
+                            time.sleep(0.5)
                             st.rerun()
+                        else:
+                            st.error(message)
+                with col2:
+                    if st.button("Cancel", key="cancel_del_ord"):
+                        del st.session_state.delete_order_confirm
+                        st.rerun()
 
-            if len(saved_orders) > 5:
-                st.caption(f"...and {len(saved_orders) - 5} more. Go to Tab 3 to see all.")
+            if len(saved_orders) > 10:
+                st.caption(f"...and {len(saved_orders) - 10} more.")
 
     st.markdown("---")
 
