@@ -1,0 +1,202 @@
+# Active Development TODO List
+
+**Last Updated:** 2025-12-02
+**Status:** Active Development
+**Related Docs:**
+- [STAKEHOLDER_MEETING_NOTES.md](STAKEHOLDER_MEETING_NOTES.md) - Full context and details
+- [RAW_MEETING_NOTES_113024.md](RAW_MEETING_NOTES_113024.md) - Original meeting notes
+
+---
+
+## 🔴 CRITICAL FIXES - IN PROGRESS
+*These cause data loss and must be fixed immediately*
+
+### Clear Data Bug
+- [ ] **ISSUE:** "Clear Data" button deletes saved orders from database
+- [ ] Modify clear_data() function to only clear session state
+- [ ] Keep saved_orders and saved_proposals intact in Google Sheets
+- **File:** app.py (search for clear_data function)
+- **Test:** Click Clear Data, verify saved items remain in dropdowns
+
+### Client Info Persistence Bug
+- [ ] **ISSUE:** Client info deleted when editing confirmed orders
+- [ ] Store client info in session state before confirmation
+- [ ] Restore client info when "Edit Order" clicked
+- **File:** app.py (Tab 4 section)
+- **Test:** Confirm order → Edit → Verify data persists
+
+### Save Proposal UX
+- [ ] Move "Save Proposal" button to bottom of Tab 1
+- [ ] Add "Saved Proposals" section to sidebar
+- [ ] Add visual indicator when unsaved changes exist
+- **Files:** app.py (Tab 1), consider new src/sidebar_manager.py
+
+### Save Order UX
+- [ ] Add prominent "Save Order" button at top AND bottom of Tab 3
+- [ ] Add auto-save indicator/status
+- [ ] Warning before clearing unsaved changes
+- **File:** app.py (Tab 3)
+
+---
+
+## 🟠 HIGH PRIORITY FEATURES - TODO
+
+### Spreadsheet Structure Changes
+- [ ] Add "Shipping Cost (PBP)" column to master spreadsheet
+- [ ] Rename "Shipping" → "Shipping Price (Client)"
+- [ ] Fix Mi Eelo shipping cost data
+- [ ] Update data_loader.py to read new columns
+- [ ] Connect to Tab 3 "Shipping Cost from Partner ($)"
+- **Files:** Google Sheets, src/data_loader.py, app.py
+
+### Tab 1: Search & Pricing
+- [ ] Add search bar above product catalog
+  - Filter products by name/partner/description
+  - Use st.text_input with real-time filtering
+- [ ] Add bidirectional price editing in proposal table
+  - Currently: Markup % → Price
+  - Need: Price → Markup % calculation
+- [ ] Add "Cancel" button to match change window
+- [ ] Add $0.50 rounding option (make default)
+  - Add to both Tab 1 and Tab 3
+- **File:** app.py (Tab 1)
+
+### Tab 3: Table Restructuring
+- [ ] **Pricing Breakdown Table Changes:**
+  - [ ] Add "Units" column between "Per Unit" and "Total"
+  - [ ] Split "Total" → "PBP Cost" | "Client Price" columns
+  - [ ] Add product name as table header
+- [ ] **Order Summary Table Changes:**
+  - [ ] Reorder: Products → Subtotal → Customization → Subtotal
+  - [ ] Split "Total" → "PBP Cost" | "Client Price" columns
+  - [ ] Add product name headers
+- **File:** app.py (Tab 3, sections 2 and 4)
+
+### Tab 3: New Fields
+- [ ] Add "Estimated Sales Tax" field in Order Settings
+  - Simple number input like shipping
+  - Include in order summary calculations
+- [ ] Add "Kitting Pricing" section
+  - PBP Cost field
+  - Client Price field
+  - Include in calculations
+- [ ] Improve Order Notes UX
+  - Move from dropdown to always-visible text areas
+  - One section per note type
+- [ ] Add multiple contacts support
+  - Dynamic "Add Contact" button
+  - Contact 1, Contact 2, etc.
+- [ ] Add "Net 15" to payment terms dropdown
+  - Add custom payment terms option
+- **File:** app.py (Tab 3, section 3)
+
+### Tab 4: Editable Descriptions
+- [ ] Make "Item + Specs" column editable
+- [ ] Add inline text inputs for each product
+- [ ] Save edited descriptions to session state
+- **File:** app.py (Tab 4)
+
+---
+
+## 🟡 TESTING CHECKLIST
+
+### Calculation Tests
+- [ ] Test client discount (5% NGO, custom %)
+- [ ] Test "All Natural Salve" PowerPoint edge case
+- [ ] Verify markup % calculations accuracy
+- [ ] Test tiered pricing at all tier boundaries
+
+### Data Flow Tests
+- [ ] Test Tab 3 → Tab 4 client info transfer
+- [ ] Test order confirmation → edit → data persistence
+- [ ] Test saved proposals/orders across sessions
+- [ ] Test dataset switching (demo ↔ real)
+
+### PowerPoint Tests
+- [ ] Test multi-variant products
+- [ ] Test all table formats (2×3, 2×4, 3×4)
+- [ ] Test impact slides for all partners
+
+---
+
+## 🔵 NEEDS DISCUSSION
+
+### Tab 2 Redesign
+- [ ] Research Google Forms API integration
+- [ ] Design dropshipping-specific form with warnings
+- [ ] Consider TypeForm or other alternatives
+- [ ] **Action:** Schedule stakeholder meeting
+
+---
+
+## 🟢 FUTURE ENHANCEMENTS (After MVP)
+- [ ] Custom product creation
+- [ ] Executive samples handling
+- [ ] Cloud-based PowerPoint templates
+- [ ] Advanced tax calculations
+
+---
+
+## Development Notes
+
+### Session State Keys to Watch
+- `proposal_products` - Products in Tab 1 proposal
+- `order_items` - Products in Tab 3 order
+- `client_info` - Must persist through Tab 4 edit
+- `saved_proposals` - Must not be cleared
+- `saved_orders` - Must not be cleared
+
+### Testing Commands
+```bash
+# Test with demo data
+streamlit run app.py
+
+# Test connection
+streamlit run scripts/test_connection.py
+
+# Check saved data
+streamlit run scripts/test_saved_orders.py
+```
+
+### Git Commit Pattern
+```bash
+# Use clear prefixes
+git commit -m "FIX: Clear Data no longer deletes saved orders"
+git commit -m "FEAT: Add product search bar to Tab 1"
+git commit -m "TEST: Verify markup calculations"
+```
+
+---
+
+## Progress Tracking
+
+### Completed
+- ✅ Organized stakeholder feedback
+- ✅ Created prioritized task list
+
+### Current Sprint (Week 1)
+- 🔴 Critical fixes (4 items)
+- Start high-priority features
+
+### Next Sprint (Week 2)
+- Complete high-priority features
+- Run testing suite
+- Schedule Tab 2 discussion
+
+---
+
+## Quick Context for AI Assistant
+
+When you lose context, reference these files in order:
+1. **CLAUDE.md** - Project rules and current state
+2. **This file (ACTIVE_DEVELOPMENT_TODO.md)** - Current tasks
+3. **STAKEHOLDER_MEETING_NOTES.md** - Detailed requirements
+4. **app.py** - Main application code
+5. **src/** - Modular helpers
+
+Key project rules:
+- Python/Streamlit only
+- Beginner-friendly code
+- Always simplest solution
+- No emojis in app
+- Make autonomous decisions

@@ -18,6 +18,33 @@
 
 ---
 
+## 🔥 ACTIVE DEVELOPMENT STATUS - December 2025 🔥
+
+**Current Focus:** Post-stakeholder meeting fixes and improvements
+- **Meeting Date:** November 30, 2025
+- **Status:** Implementing critical fixes from executive feedback
+- **Priority:** Fixing data loss issues, then core features
+
+### Active Development Documents (READ THESE FIRST):
+1. **[ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md)** - Current task list with implementation details
+2. **[STAKEHOLDER_MEETING_NOTES.md](STAKEHOLDER_MEETING_NOTES.md)** - Organized requirements from Nov 30 meeting
+3. **[RAW_MEETING_NOTES_113024.md](RAW_MEETING_NOTES_113024.md)** - Original meeting notes (do not edit)
+
+### Development Workflow:
+1. Start with ACTIVE_DEVELOPMENT_TODO.md for current tasks
+2. Reference STAKEHOLDER_MEETING_NOTES.md for requirement details
+3. Update this file (CLAUDE.md) after completing major phases
+4. Use clear git commit prefixes: `FIX:`, `FEAT:`, `TEST:`
+
+### Quick Context Recovery:
+**If you lose context, read these files in order:**
+1. This section of CLAUDE.md (current status)
+2. ACTIVE_DEVELOPMENT_TODO.md (what to work on)
+3. STAKEHOLDER_MEETING_NOTES.md (why we're doing it)
+4. The relevant code sections mentioned in the TODO
+
+---
+
 ## Important References
 
 **Documentation is organized by topic. See [docs/README.md](docs/README.md) for complete index.**
@@ -314,14 +341,20 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 7.0 - Production Deployment Complete
+**Version:** 7.1 - Active Development (Post-Stakeholder Fixes)
 
-**Last Updated:** 2025-11-20
+**Last Updated:** 2025-12-02
 
 **Deployment:** ✅ **IN PRODUCTION** at https://pricing-data-solution-pbp.onrender.com
 - Render Standard tier (2GB RAM, $25/month)
 - Active partner data: Partial (collecting remaining partner data)
 - Cloud-based PowerPoint template loading
+
+**Current Sprint:** Implementing stakeholder feedback from Nov 30 meeting
+- **Focus:** Critical data loss fixes → Core features → Testing
+- **Active Tasks:** See [ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md)
+- **Requirements:** See [STAKEHOLDER_MEETING_NOTES.md](STAKEHOLDER_MEETING_NOTES.md)
+- **Issues Count:** 4 critical, 14 high priority, 6 testing needed
 
 **Codebase Status:**
 - ~14,138 lines of Python code (49% reduction from cleanup)

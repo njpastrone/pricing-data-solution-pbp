@@ -3,8 +3,15 @@
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
 **Current Status:** ✅ **IN PRODUCTION** - https://pricing-data-solution-pbp.onrender.com
-**Version:** 7.0 - Production Deployment Complete
+**Version:** 7.1 - Active Development (Post-Stakeholder Fixes)
+**Development Sprint:** Implementing critical fixes from Nov 30 stakeholder meeting
 **Data Status:** Partial partner data loaded (collecting remaining partners)
+
+## 📋 Active Development
+- **Current Focus:** Critical data loss fixes → Core features → Testing
+- **Active Tasks:** [ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md)
+- **Requirements:** [STAKEHOLDER_MEETING_NOTES.md](STAKEHOLDER_MEETING_NOTES.md)
+- **Issues:** 4 critical, 14 high priority, 6 testing needed
 
 ---
 
