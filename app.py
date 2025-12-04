@@ -2049,7 +2049,7 @@ with tab1:
 
     # Search bar - prominently placed above all filters
     search_query = st.text_input(
-        "🔍 Search product names",
+        "Search product names",
         placeholder="Type to search product names...",
         key="product_search",
         help="Search filters products by name only. Use the filters below for partner and country."
