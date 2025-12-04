@@ -18,9 +18,23 @@
 - **Solution:** Reorganized UI to make saved work always visible in sidebar
 - **Result:** Users now clearly see saved work is separate from current session
 
+### Save UX Improvements ✅ COMPLETE (2025-12-04)
+- [X] Moved saved proposals to sidebar (always visible)
+- [X] Moved saved orders to sidebar (always visible)
+- [X] Added save button at bottom of Tab 1
+- [X] Added quick save at top of Tab 3 and bottom of Tab 3
+- [X] Add unsaved changes indicator - Shows ⚠️ in sidebar and save sections
+- [X] Add auto-save status - Shows "Saved X minutes ago" in sidebar and tabs
+- **Implementation:**
+  - Added hash-based change detection for proposals and orders
+  - Track save timestamps and display relative time
+  - Visual indicators in sidebar, Tab 1, and Tab 3
+  - Updates automatically after successful saves
+- **Result:** Users always know when they have unsaved changes and when last saved
+
 ---
 
-## 🔴 CRITICAL FIXES - REMAINING
+## 🔴 CRITICAL FIXES - REMAINING (1 left)
 *These cause data loss and must be fixed immediately*
 
 ### Client Info Persistence Bug
@@ -29,15 +43,6 @@
 - [ ] Restore client info when "Edit Order" clicked
 - **File:** app.py (Tab 4 section)
 - **Test:** Confirm order → Edit → Verify data persists
-
-### Save UX Improvements ✅ PARTIALLY COMPLETE
-- [X] Moved saved proposals to sidebar (always visible)
-- [X] Moved saved orders to sidebar (always visible)
-- [X] Added save button at bottom of Tab 1
-- [X] Added quick save at top of Tab 3
-- [ ] Add unsaved changes indicator
-- [ ] Add auto-save status
-- **Status:** Core UX issues resolved, minor enhancements remain
 
 ---
 

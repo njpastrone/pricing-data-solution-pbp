@@ -95,6 +95,145 @@ def calculate_msrp_markup(product_data):
     # No valid MSRP or cost, return default 100% markup
     return 100.0
 
+def compute_proposal_hash(proposal_products):
+    """
+    Compute a hash of the proposal products for change detection.
+    Includes product IDs, quantities, markups, and key settings.
+    """
+    import hashlib
+    import json
+
+    # Extract key fields that matter for saving
+    proposal_data = []
+    for item in proposal_products:
+        key_fields = {
+            'product': item.get('Product/Service', ''),
+            'partner': item.get('Partner', ''),
+            'quantity': item.get('quantity', 1),
+            'markup': item.get('markup_percentage', 100.0)
+        }
+        proposal_data.append(key_fields)
+
+    # Convert to JSON string and hash
+    data_str = json.dumps(proposal_data, sort_keys=True)
+    return hashlib.md5(data_str.encode()).hexdigest()
+
+def compute_order_hash(order_items, client_info):
+    """
+    Compute a hash of the order items and client info for change detection.
+    Includes all order data and client information fields.
+    """
+    import hashlib
+    import json
+
+    # Extract key fields from order items
+    order_data = []
+    for item in order_items:
+        key_fields = {
+            'product': item.get('Product/Service', ''),
+            'partner': item.get('Partner', ''),
+            'quantity': item.get('quantity', 1),
+            'markup': item.get('markup_percentage', 100.0),
+            'customization': item.get('has_customization', False)
+        }
+        order_data.append(key_fields)
+
+    # Include client info in hash
+    combined_data = {
+        'order_items': order_data,
+        'client_info': {
+            'company': client_info.get('company_name', ''),
+            'contact': client_info.get('contact_name', ''),
+            'email': client_info.get('contact_email', ''),
+            'client_type': client_info.get('client_type', '')
+        }
+    }
+
+    # Convert to JSON string and hash
+    data_str = json.dumps(combined_data, sort_keys=True, default=str)
+    return hashlib.md5(data_str.encode()).hexdigest()
+
+def has_unsaved_proposal_changes():
+    """
+    Check if there are unsaved changes in the current proposal.
+    Returns True if products or settings have changed since last save.
+    """
+    if 'proposal_products' not in st.session_state or not st.session_state.proposal_products:
+        return False
+
+    current_hash = compute_proposal_hash(st.session_state.proposal_products)
+    last_saved_hash = st.session_state.get('last_saved_proposal_hash', None)
+
+    return last_saved_hash is None or current_hash != last_saved_hash
+
+def has_unsaved_order_changes():
+    """
+    Check if there are unsaved changes in the current order.
+    Returns True if order or client data changed since last save.
+    """
+    if 'order_items' not in st.session_state or not st.session_state.order_items:
+        return False
+
+    current_hash = compute_order_hash(
+        st.session_state.order_items,
+        st.session_state.client_info
+    )
+    last_saved_hash = st.session_state.get('last_saved_order_hash', None)
+
+    return last_saved_hash is None or current_hash != last_saved_hash
+
+def format_time_since_save(save_type):
+    """
+    Format the time since last save in a user-friendly way.
+    save_type: 'proposal' or 'order'
+    Returns string like "Saved 2 minutes ago" or "Last saved at 3:45 PM"
+    """
+    from datetime import datetime, timedelta
+
+    time_key = f'last_{save_type}_save_time'
+    last_save = st.session_state.get(time_key, None)
+
+    if last_save is None:
+        return None
+
+    now = datetime.now()
+    delta = now - last_save
+
+    # If saved in the last minute
+    if delta.total_seconds() < 60:
+        return "Just saved"
+    # If saved in the last hour
+    elif delta.total_seconds() < 3600:
+        minutes = int(delta.total_seconds() / 60)
+        return f"Saved {minutes} minute{'s' if minutes != 1 else ''} ago"
+    # If saved today
+    elif delta.days == 0:
+        return f"Last saved at {last_save.strftime('%-I:%M %p')}"
+    # If saved yesterday
+    elif delta.days == 1:
+        return f"Last saved yesterday at {last_save.strftime('%-I:%M %p')}"
+    else:
+        return f"Last saved {delta.days} days ago"
+
+def update_last_save_time(save_type):
+    """
+    Update the last save time for a given save type.
+    save_type: 'proposal' or 'order'
+    """
+    from datetime import datetime
+    st.session_state[f'last_{save_type}_save_time'] = datetime.now()
+
+    # Also update the hash to match current state
+    if save_type == 'proposal':
+        st.session_state['last_saved_proposal_hash'] = compute_proposal_hash(
+            st.session_state.proposal_products
+        )
+    elif save_type == 'order':
+        st.session_state['last_saved_order_hash'] = compute_order_hash(
+            st.session_state.order_items,
+            st.session_state.client_info
+        )
+
 # ============================================================
 # PAGE CONFIGURATION
 # ============================================================
@@ -408,8 +547,21 @@ with st.sidebar:
     if saved_orders is None:
         saved_orders = []
 
+    # Check for unsaved proposal changes
+    proposal_unsaved = has_unsaved_proposal_changes()
+    proposal_save_status = format_time_since_save('proposal')
+
+    # Build proposal header with indicators
+    proposal_header = f"**Saved Proposals ({len(saved_proposals)})**"
+    if proposal_unsaved:
+        proposal_header += " ⚠️ Unsaved changes"
+
     # Saved Proposals subsection
-    with st.expander(f"**Saved Proposals ({len(saved_proposals)})**", expanded=False):
+    with st.expander(proposal_header, expanded=False):
+        # Show save status if available
+        if proposal_save_status:
+            st.caption(f"✓ {proposal_save_status}")
+
         if len(saved_proposals) == 0:
             st.info("No saved proposals yet")
         else:
@@ -489,8 +641,21 @@ with st.sidebar:
             if len(saved_proposals) > 10:
                 st.caption(f"...and {len(saved_proposals) - 10} more.")
 
+    # Check for unsaved order changes
+    order_unsaved = has_unsaved_order_changes()
+    order_save_status = format_time_since_save('order')
+
+    # Build order header with indicators
+    order_header = f"**Saved Orders ({len(saved_orders)})**"
+    if order_unsaved:
+        order_header += " ⚠️ Unsaved changes"
+
     # Saved Orders subsection
-    with st.expander(f"**Saved Orders ({len(saved_orders)})**", expanded=False):
+    with st.expander(order_header, expanded=False):
+        # Show save status if available
+        if order_save_status:
+            st.caption(f"✓ {order_save_status}")
+
         if len(saved_orders) == 0:
             st.info("No saved orders yet")
         else:
@@ -2287,6 +2452,7 @@ with tab1:
                     )
 
                     if success:
+                        update_last_save_time('proposal')
                         st.success(message)
                         st.rerun()  # Rerun to clear form
                     else:
@@ -2302,6 +2468,7 @@ with tab1:
                                     dataset=st.session_state.selected_dataset
                                 )
                                 if success2:
+                                    update_last_save_time('proposal')
                                     st.success(message2)
                                     st.rerun()
                         else:
@@ -2952,6 +3119,14 @@ with tab1:
     st.divider()
     st.markdown("### Save Your Work")
 
+    # Show unsaved changes indicator and save status
+    if has_unsaved_proposal_changes():
+        st.warning("⚠️ You have unsaved changes in your proposal")
+
+    save_status = format_time_since_save('proposal')
+    if save_status:
+        st.caption(f"✓ {save_status}")
+
     # Check if there are products to save
     has_products = len(st.session_state.proposal_products) > 0
 
@@ -3455,6 +3630,16 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
 with tab3:
     st.header("Order & Client Info - Input Order & Client Details")
 
+    # Show unsaved changes indicator and save status
+    col1_status, col2_status = st.columns([1, 1])
+    with col1_status:
+        if has_unsaved_order_changes():
+            st.warning("⚠️ You have unsaved changes in your order")
+    with col2_status:
+        save_status = format_time_since_save('order')
+        if save_status:
+            st.caption(f"✓ {save_status}")
+
     # Quick Save Section at top
     has_order = len(st.session_state.order_items) > 0
     if has_order:
@@ -3504,6 +3689,7 @@ with tab3:
                         )
 
                         if success:
+                            update_last_save_time('order')
                             st.success(f"{message} - Available in sidebar under 'Saved Orders'")
                             time.sleep(1)
                             st.rerun()
@@ -3691,6 +3877,7 @@ with tab3:
                     )
 
                     if success:
+                        update_last_save_time('order')
                         st.success(message)
                         st.rerun()  # Rerun to clear form
                     else:
@@ -3706,6 +3893,7 @@ with tab3:
                                     dataset=st.session_state.selected_dataset
                                 )
                                 if success2:
+                                    update_last_save_time('order')
                                     st.success(message2)
                                     st.rerun()
                         else:
@@ -5217,6 +5405,14 @@ Rates default to current estimates but can be adjusted as needed.
     st.divider()
     st.markdown("### Save Your Work")
 
+    # Show unsaved changes indicator and save status
+    if has_unsaved_order_changes():
+        st.warning("⚠️ You have unsaved changes in your order")
+
+    save_status_bottom = format_time_since_save('order')
+    if save_status_bottom:
+        st.caption(f"✓ {save_status_bottom}")
+
     # Check if there are products to save
     has_order_items = len(st.session_state.order_items) > 0
 
@@ -5264,6 +5460,7 @@ Rates default to current estimates but can be adjusted as needed.
                 )
 
                 if success:
+                    update_last_save_time('order')
                     st.success(f"{message} - You can find it in the sidebar under 'Saved Orders'")
                     time.sleep(1.5)
                     st.rerun()
@@ -5279,6 +5476,7 @@ Rates default to current estimates but can be adjusted as needed.
                                 dataset=st.session_state.selected_dataset
                             )
                             if success2:
+                                update_last_save_time('order')
                                 st.success(f"{message2} - You can find it in the sidebar")
                                 time.sleep(1.5)
                                 st.rerun()

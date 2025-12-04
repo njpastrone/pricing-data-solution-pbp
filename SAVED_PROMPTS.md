@@ -1,6 +1,10 @@
 # Implementing Changes from Active Development Todo
 
-    1. "Make a detailed plan to accomplish the [task]. Think hardest.
+    1. "
+    
+    Review the relevant context by checking the active development section in @CLAUDE.md , Open @ACTIVE_DEVELOPMENT_TODO.md  to see what to work on, and reference @STAKEHOLDER_MEETING_NOTES.md for requirement details
+    
+    Make a detailed plan to accomplish the [task]. Think hardest.
 
     How will we implement the only functionality we need right now?
 
@@ -12,6 +16,8 @@
 
     Write function names and 1-3 sentences about what they do.
 
-    Write test names and 5-10 words about what they cover.”
+    Write test names and 5-10 words about what they cover.
+    
+    "
     
     2. "Execute x based on plan y."
