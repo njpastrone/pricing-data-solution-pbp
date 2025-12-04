@@ -2049,10 +2049,10 @@ with tab1:
 
     # Search bar - prominently placed above all filters
     search_query = st.text_input(
-        "🔍 Search products",
-        placeholder="Search by product name, partner, or description...",
+        "🔍 Search product names",
+        placeholder="Type to search product names...",
         key="product_search",
-        help="Type to filter products by name, partner, or description"
+        help="Search filters products by name only. Use the filters below for partner and country."
     )
 
     col1, col2, col3 = st.columns(3)
@@ -2115,26 +2115,19 @@ with tab1:
                 price_filtered_indices.append(idx)
         filtered_df = filtered_df.loc[price_filtered_indices]
 
-    # Search filtering - check product name, partner, and description
+    # Search filtering - only search product names
     if search_query:
         search_lower = search_query.lower()
-        search_mask = (
-            filtered_df['Product/Service'].str.lower().str.contains(search_lower, na=False) |
-            filtered_df['Partner'].str.lower().str.contains(search_lower, na=False)
-        )
-        # Also check Product Description column if it exists
-        if 'Product Description' in filtered_df.columns:
-            search_mask = search_mask | filtered_df['Product Description'].str.lower().str.contains(search_lower, na=False)
-
+        search_mask = filtered_df['Product/Service'].str.lower().str.contains(search_lower, na=False)
         filtered_df = filtered_df[search_mask]
 
     st.divider()
 
     # Enhanced filter results message
     if search_query and len(filtered_df) == 0:
-        st.caption(f"**No products found matching '{search_query}'** - Try a different search term")
+        st.caption(f"**No products found with name containing '{search_query}'** - Try a different search term")
     elif search_query:
-        st.caption(f"**Filtered Results:** {len(filtered_df)} products match '{search_query}' and your filters")
+        st.caption(f"**Filtered Results:** {len(filtered_df)} products with names containing '{search_query}'")
     else:
         st.caption(f"**Filtered Results:** {len(filtered_df)} products match your filters")
 
@@ -2284,7 +2277,7 @@ with tab1:
 
     if len(filtered_df) == 0:
         if search_query:
-            st.warning(f"No products found matching '{search_query}'. Try a different search term or adjust filters.")
+            st.warning(f"No products found with name containing '{search_query}'. Try a different search term or adjust filters.")
         else:
             st.warning("No products match your filters. Try adjusting the filter criteria above.")
     else:
