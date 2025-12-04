@@ -2047,6 +2047,14 @@ with tab1:
     st.subheader("1. Browse & Filter Products")
     st.caption(f"{len(df_template)} total products available")
 
+    # Search bar - prominently placed above all filters
+    search_query = st.text_input(
+        "🔍 Search products",
+        placeholder="Search by product name, partner, or description...",
+        key="product_search",
+        help="Type to filter products by name, partner, or description"
+    )
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -2107,8 +2115,28 @@ with tab1:
                 price_filtered_indices.append(idx)
         filtered_df = filtered_df.loc[price_filtered_indices]
 
+    # Search filtering - check product name, partner, and description
+    if search_query:
+        search_lower = search_query.lower()
+        search_mask = (
+            filtered_df['Product/Service'].str.lower().str.contains(search_lower, na=False) |
+            filtered_df['Partner'].str.lower().str.contains(search_lower, na=False)
+        )
+        # Also check Product Description column if it exists
+        if 'Product Description' in filtered_df.columns:
+            search_mask = search_mask | filtered_df['Product Description'].str.lower().str.contains(search_lower, na=False)
+
+        filtered_df = filtered_df[search_mask]
+
     st.divider()
-    st.caption(f"**Filtered Results:** {len(filtered_df)} products match your filters")
+
+    # Enhanced filter results message
+    if search_query and len(filtered_df) == 0:
+        st.caption(f"**No products found matching '{search_query}'** - Try a different search term")
+    elif search_query:
+        st.caption(f"**Filtered Results:** {len(filtered_df)} products match '{search_query}' and your filters")
+    else:
+        st.caption(f"**Filtered Results:** {len(filtered_df)} products match your filters")
 
     # Display success message if a product was just added
     if 'show_success_message' in st.session_state and st.session_state.show_success_message:
@@ -2255,7 +2283,10 @@ with tab1:
                 st.caption("Select one or more partners above to see product count")
 
     if len(filtered_df) == 0:
-        st.warning("No products match your filters. Try adjusting the filter criteria above.")
+        if search_query:
+            st.warning(f"No products found matching '{search_query}'. Try a different search term or adjust filters.")
+        else:
+            st.warning("No products match your filters. Try adjusting the filter criteria above.")
     else:
         # Keep catalog expanded if user just added a product, otherwise collapse after first product added
         if 'keep_catalog_expanded' in st.session_state and st.session_state.keep_catalog_expanded:
