@@ -234,6 +234,30 @@ def update_last_save_time(save_type):
             st.session_state.client_info
         )
 
+@st.cache_data(ttl=60)  # Cache for 60 seconds
+def cached_load_all_proposals():
+    """
+    Cached version of load_all_proposals to reduce API calls.
+    Cache expires after 60 seconds to allow for updates.
+    """
+    return load_all_proposals()
+
+@st.cache_data(ttl=60)  # Cache for 60 seconds
+def cached_load_all_orders():
+    """
+    Cached version of load_all_orders to reduce API calls.
+    Cache expires after 60 seconds to allow for updates.
+    """
+    return load_all_orders()
+
+def clear_saved_data_cache():
+    """
+    Clear the cache for saved proposals and orders.
+    Call this after saving, deleting, or modifying saved data.
+    """
+    cached_load_all_proposals.clear()
+    cached_load_all_orders.clear()
+
 # ============================================================
 # PAGE CONFIGURATION
 # ============================================================
@@ -537,9 +561,9 @@ with st.sidebar:
     # Section 2: Saved Work Management
     st.markdown("### Saved Work")
 
-    # Load saved proposals and orders
-    saved_proposals = load_all_proposals()
-    saved_orders = load_all_orders()
+    # Load saved proposals and orders (cached to reduce API calls)
+    saved_proposals = cached_load_all_proposals()
+    saved_orders = cached_load_all_orders()
 
     # Handle potential None returns from rate limiting
     if saved_proposals is None:
@@ -627,6 +651,7 @@ with st.sidebar:
                     if st.button("Yes, Delete", key="confirm_del_prop", type="primary"):
                         success, message = delete_proposal(prop['proposal_id'])
                         if success:
+                            clear_saved_data_cache()  # Clear cache after deletion
                             st.success("Deleted successfully")
                             del st.session_state.delete_proposal_confirm
                             time.sleep(0.5)
@@ -735,6 +760,7 @@ with st.sidebar:
                     if st.button("Yes, Delete", key="confirm_del_ord", type="primary"):
                         success, message = delete_order(ord['order_id'])
                         if success:
+                            clear_saved_data_cache()  # Clear cache after deletion
                             st.success("Deleted successfully")
                             del st.session_state.delete_order_confirm
                             time.sleep(0.5)
@@ -2326,8 +2352,8 @@ with tab1:
     with st.expander("Saved Proposals", expanded=False):
         st.caption("Save your current proposal or load a previously saved one")
 
-        # Load all saved proposals
-        saved_proposals = load_all_proposals()
+        # Load all saved proposals (cached to reduce API calls)
+        saved_proposals = cached_load_all_proposals()
 
         # Two columns: Load/Delete on left, Save on right
         load_col, save_col = st.columns(2)
@@ -2397,6 +2423,7 @@ with tab1:
                                     if st.button("Yes, Delete", key="confirm_delete_yes", type="primary"):
                                         success, message = delete_proposal(st.session_state.confirm_delete_proposal_id)
                                         if success:
+                                            clear_saved_data_cache()  # Clear cache after deletion
                                             st.success(message)
                                             del st.session_state.confirm_delete_proposal_id
                                             st.rerun()
@@ -2453,6 +2480,7 @@ with tab1:
 
                     if success:
                         update_last_save_time('proposal')
+                        clear_saved_data_cache()  # Clear cache to show new proposal
                         st.success(message)
                         st.rerun()  # Rerun to clear form
                     else:
@@ -2469,6 +2497,7 @@ with tab1:
                                 )
                                 if success2:
                                     update_last_save_time('proposal')
+                                    clear_saved_data_cache()  # Clear cache to show new proposal
                                     st.success(message2)
                                     st.rerun()
                         else:
@@ -3690,6 +3719,7 @@ with tab3:
 
                         if success:
                             update_last_save_time('order')
+                            clear_saved_data_cache()  # Clear cache to show new order
                             st.success(f"{message} - Available in sidebar under 'Saved Orders'")
                             time.sleep(1)
                             st.rerun()
@@ -3738,7 +3768,7 @@ with tab3:
         st.caption("Save your current order or load a previously saved one")
 
         # Load all saved orders
-        saved_orders = load_all_orders()
+        saved_orders = cached_load_all_orders()  # Use cached version to reduce API calls
 
         # Two columns: Load/Delete on left, Save on right
         load_col, save_col = st.columns(2)
@@ -3815,6 +3845,7 @@ with tab3:
                                     if st.button("Yes, Delete", key="confirm_delete_order_yes", type="primary"):
                                         success, message = delete_order(st.session_state.confirm_delete_order_id)
                                         if success:
+                                            clear_saved_data_cache()  # Clear cache after deletion
                                             st.success(message)
                                             del st.session_state.confirm_delete_order_id
                                             st.rerun()
@@ -3878,6 +3909,7 @@ with tab3:
 
                     if success:
                         update_last_save_time('order')
+                        clear_saved_data_cache()  # Clear cache to show new order
                         st.success(message)
                         st.rerun()  # Rerun to clear form
                     else:
@@ -3894,6 +3926,7 @@ with tab3:
                                 )
                                 if success2:
                                     update_last_save_time('order')
+                                    clear_saved_data_cache()  # Clear cache to show new order
                                     st.success(message2)
                                     st.rerun()
                         else:
@@ -5461,6 +5494,7 @@ Rates default to current estimates but can be adjusted as needed.
 
                 if success:
                     update_last_save_time('order')
+                    clear_saved_data_cache()  # Clear cache to show new order
                     st.success(f"{message} - You can find it in the sidebar under 'Saved Orders'")
                     time.sleep(1.5)
                     st.rerun()
@@ -5477,6 +5511,7 @@ Rates default to current estimates but can be adjusted as needed.
                             )
                             if success2:
                                 update_last_save_time('order')
+                                clear_saved_data_cache()  # Clear cache to show new order
                                 st.success(f"{message2} - You can find it in the sidebar")
                                 time.sleep(1.5)
                                 st.rerun()
