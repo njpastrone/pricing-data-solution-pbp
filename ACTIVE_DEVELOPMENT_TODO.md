@@ -61,7 +61,7 @@
 - **Result:** Backward compatible with demo dataset, auto-populates partner_shipping field
 
 ### Tab 1: Search & Pricing
-- [ ] Add search bar above product catalog
+- [X] Add search bar above product catalog ✅ COMPLETE (2025-12-04)
   - Filter products by name/partner/description
   - Use st.text_input with real-time filtering
 - [ ] Add bidirectional price editing in proposal table
@@ -189,7 +189,7 @@ git commit -m "TEST: Verify markup calculations"
 
 ### Current Sprint (Week 1)
 - ✅ Critical fixes (4 items - ALL COMPLETE)
-- 🟠 High-priority features (1 of 14 complete)
+- 🟠 High-priority features (2 of 14 complete)
 
 ### Next Sprint (Week 2)
 - Complete high-priority features
