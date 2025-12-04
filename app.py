@@ -17,6 +17,7 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 from datetime import datetime
 import time
+import copy  # For deep copying client info during backup/restore
 
 # Import extracted modules
 from src.data_loader import load_pricing_data, DATASET_CONFIGS
@@ -348,6 +349,11 @@ if 'order_use_marketing_rounding' not in st.session_state:
 # Initialize order confirmed flag
 if 'order_confirmed' not in st.session_state:
     st.session_state.order_confirmed = False
+
+# Initialize order backup for persistence during edit/confirm cycles
+# This preserves data entered in Tab 4 when user clicks "Edit Order"
+if 'order_backup' not in st.session_state:
+    st.session_state.order_backup = {}
 
 # Initialize client information
 if 'client_info' not in st.session_state:
@@ -5597,90 +5603,139 @@ with tab4:
 
             with col1:
                 st.markdown("**Client Information**")
-                st.session_state.client_info['company_name'] = st.text_input(
+                # Use callback to update client_info to ensure persistence
+                def update_company_name():
+                    st.session_state.client_info['company_name'] = st.session_state.tab3_company_name
+
+                st.text_input(
                     "Company Name",
                     value=st.session_state.client_info.get('company_name', ''),
-                    key="tab3_company_name"
+                    key="tab3_company_name",
+                    on_change=update_company_name
                 )
 
-                st.session_state.client_info['contact_name'] = st.text_input(
+                def update_contact_name():
+                    st.session_state.client_info['contact_name'] = st.session_state.tab3_contact_name
+
+                st.text_input(
                     "Contact Name",
                     value=st.session_state.client_info.get('contact_name', ''),
-                    key="tab3_contact_name"
+                    key="tab3_contact_name",
+                    on_change=update_contact_name
                 )
 
-                st.session_state.client_info['contact_email'] = st.text_input(
+                def update_contact_email():
+                    st.session_state.client_info['contact_email'] = st.session_state.tab3_contact_email
+
+                st.text_input(
                     "Contact Email",
                     value=st.session_state.client_info.get('contact_email', ''),
-                    key="tab3_contact_email"
+                    key="tab3_contact_email",
+                    on_change=update_contact_email
                 )
 
-                st.session_state.client_info['billing_address'] = st.text_area(
+                def update_billing_address():
+                    st.session_state.client_info['billing_address'] = st.session_state.tab3_billing_address
+
+                st.text_area(
                     "Billing Address",
                     value=st.session_state.client_info.get('billing_address', ''),
                     key="tab3_billing_address",
-                    height=80
+                    height=80,
+                    on_change=update_billing_address
                 )
 
-                st.session_state.client_info['shipping_address'] = st.text_area(
+                def update_shipping_address():
+                    st.session_state.client_info['shipping_address'] = st.session_state.tab3_shipping_address
+
+                st.text_area(
                     "Shipping Address",
                     value=st.session_state.client_info.get('shipping_address', ''),
                     key="tab3_shipping_address",
-                    height=80
+                    height=80,
+                    on_change=update_shipping_address
                 )
 
             with col2:
                 st.markdown("**Order Details**")
 
-                st.session_state.client_info['client_in_hands_date'] = st.date_input(
+                def update_in_hands_date():
+                    st.session_state.client_info['client_in_hands_date'] = st.session_state.tab3_in_hands_date
+
+                st.date_input(
                     "Client In-Hands Date",
                     value=st.session_state.client_info.get('client_in_hands_date'),
-                    key="tab3_in_hands_date"
+                    key="tab3_in_hands_date",
+                    on_change=update_in_hands_date
                 )
+
+                def update_ship_method():
+                    st.session_state.client_info['shipping_type'] = st.session_state.tab3_ship_method
 
                 ship_method_options = ['Ground', 'Air', 'Freight', 'Other']
                 current_ship = st.session_state.client_info.get('shipping_type', 'Ground')
-                st.session_state.client_info['shipping_type'] = st.selectbox(
+                st.selectbox(
                     "Ship Method",
                     options=ship_method_options,
                     index=ship_method_options.index(current_ship) if current_ship in ship_method_options else 0,
-                    key="tab3_ship_method"
+                    key="tab3_ship_method",
+                    on_change=update_ship_method
                 )
+
+                def update_payment_terms():
+                    st.session_state.client_info['payment_timeline'] = st.session_state.tab3_payment_terms
 
                 payment_terms_options = ['Net 30', 'Net 60', 'Due on Receipt', '50% Deposit']
                 current_terms = st.session_state.client_info.get('payment_timeline', 'Net 30')
-                st.session_state.client_info['payment_timeline'] = st.selectbox(
+                st.selectbox(
                     "Payment Terms",
                     options=payment_terms_options,
                     index=payment_terms_options.index(current_terms) if current_terms in payment_terms_options else 0,
-                    key="tab3_payment_terms"
+                    key="tab3_payment_terms",
+                    on_change=update_payment_terms
                 )
+
+                def update_payment_method():
+                    st.session_state.client_info['payment_preference'] = st.session_state.tab3_payment_method
 
                 payment_method_options = ['Check', 'ACH', 'Credit Card', 'Wire Transfer']
                 current_method = st.session_state.client_info.get('payment_preference', 'Check')
-                st.session_state.client_info['payment_preference'] = st.selectbox(
+                st.selectbox(
                     "Payment Method",
                     options=payment_method_options,
                     index=payment_method_options.index(current_method) if current_method in payment_method_options else 0,
-                    key="tab3_payment_method"
+                    key="tab3_payment_method",
+                    on_change=update_payment_method
                 )
 
-                st.session_state.client_info['order_submitted_by'] = st.text_input(
+                def update_order_submitted_by():
+                    st.session_state.client_info['order_submitted_by'] = st.session_state.tab3_order_submitted_by
+
+                st.text_input(
                     "Order Submitted By",
                     value=st.session_state.client_info.get('order_submitted_by', ''),
-                    key="tab3_order_submitted_by"
+                    key="tab3_order_submitted_by",
+                    on_change=update_order_submitted_by
                 )
 
-                st.session_state.client_info['cost_submitted_by'] = st.text_input(
+                def update_cost_submitted_by():
+                    st.session_state.client_info['cost_submitted_by'] = st.session_state.tab3_cost_submitted_by
+
+                st.text_input(
                     "Cost Submitted By",
                     value=st.session_state.client_info.get('cost_submitted_by', ''),
-                    key="tab3_cost_submitted_by"
+                    key="tab3_cost_submitted_by",
+                    on_change=update_cost_submitted_by
                 )
 
-                st.session_state.client_info['cost_submitted_date'] = st.date_input(
+                def update_cost_submitted_date():
+                    st.session_state.client_info['cost_submitted_date'] = st.session_state.tab3_cost_submitted_date
+
+                st.date_input(
                     "Cost Submitted Date",
                     value=st.session_state.client_info.get('cost_submitted_date'),
-                    key="tab3_cost_submitted_date"
+                    key="tab3_cost_submitted_date",
+                    on_change=update_cost_submitted_date
                 )
 
         st.divider()
