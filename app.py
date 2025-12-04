@@ -235,18 +235,20 @@ def update_last_save_time(save_type):
         )
 
 @st.cache_data(ttl=60)  # Cache for 60 seconds
-def cached_load_all_proposals():
+def cached_load_all_proposals(refresh_counter=0):
     """
     Cached version of load_all_proposals to reduce API calls.
     Cache expires after 60 seconds to allow for updates.
+    refresh_counter: Used to force cache refresh when needed.
     """
     return load_all_proposals()
 
 @st.cache_data(ttl=60)  # Cache for 60 seconds
-def cached_load_all_orders():
+def cached_load_all_orders(refresh_counter=0):
     """
     Cached version of load_all_orders to reduce API calls.
     Cache expires after 60 seconds to allow for updates.
+    refresh_counter: Used to force cache refresh when needed.
     """
     return load_all_orders()
 
@@ -255,6 +257,12 @@ def clear_saved_data_cache():
     Clear the cache for saved proposals and orders.
     Call this after saving, deleting, or modifying saved data.
     """
+    # Increment counter to force cache refresh
+    if 'saved_data_refresh_counter' not in st.session_state:
+        st.session_state.saved_data_refresh_counter = 0
+    st.session_state.saved_data_refresh_counter += 1
+
+    # Also clear the cache directly
     cached_load_all_proposals.clear()
     cached_load_all_orders.clear()
 
@@ -561,9 +569,17 @@ with st.sidebar:
     # Section 2: Saved Work Management
     st.markdown("### Saved Work")
 
+    # Add refresh button if data seems stale
+    if st.button("🔄 Refresh Saved Items", key="refresh_saved_work", help="Click to refresh saved proposals and orders", use_container_width=True):
+        clear_saved_data_cache()
+        st.rerun()
+
+    st.caption("Saved items refresh automatically every 60 seconds")
+
     # Load saved proposals and orders (cached to reduce API calls)
-    saved_proposals = cached_load_all_proposals()
-    saved_orders = cached_load_all_orders()
+    refresh_counter = st.session_state.get('saved_data_refresh_counter', 0)
+    saved_proposals = cached_load_all_proposals(refresh_counter)
+    saved_orders = cached_load_all_orders(refresh_counter)
 
     # Handle potential None returns from rate limiting
     if saved_proposals is None:
@@ -2353,7 +2369,8 @@ with tab1:
         st.caption("Save your current proposal or load a previously saved one")
 
         # Load all saved proposals (cached to reduce API calls)
-        saved_proposals = cached_load_all_proposals()
+        refresh_counter = st.session_state.get('saved_data_refresh_counter', 0)
+        saved_proposals = cached_load_all_proposals(refresh_counter)
 
         # Two columns: Load/Delete on left, Save on right
         load_col, save_col = st.columns(2)
@@ -3768,7 +3785,8 @@ with tab3:
         st.caption("Save your current order or load a previously saved one")
 
         # Load all saved orders
-        saved_orders = cached_load_all_orders()  # Use cached version to reduce API calls
+        refresh_counter = st.session_state.get('saved_data_refresh_counter', 0)
+        saved_orders = cached_load_all_orders(refresh_counter)  # Use cached version to reduce API calls
 
         # Two columns: Load/Delete on left, Save on right
         load_col, save_col = st.columns(2)
