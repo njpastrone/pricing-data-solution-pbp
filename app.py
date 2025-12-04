@@ -482,6 +482,16 @@ st.markdown("**→ Tab 3: Order & Client Info** - Build orders, collect client d
 st.markdown("**→ Tab 4: Execution & Accounting** - Generate invoices and purchase orders")
 st.divider()
 
+# Initialize save tracking
+if 'last_saved_proposal_hash' not in st.session_state:
+    st.session_state.last_saved_proposal_hash = None
+if 'last_saved_order_hash' not in st.session_state:
+    st.session_state.last_saved_order_hash = None
+if 'last_proposal_save_time' not in st.session_state:
+    st.session_state.last_proposal_save_time = None
+if 'last_order_save_time' not in st.session_state:
+    st.session_state.last_order_save_time = None
+
 # ============================================================
 # SIDEBAR - APP INFORMATION
 # ============================================================
@@ -570,7 +580,7 @@ with st.sidebar:
     st.markdown("### Saved Work")
 
     # Add refresh button if data seems stale
-    if st.button("🔄 Refresh Saved Items", key="refresh_saved_work", help="Click to refresh saved proposals and orders", use_container_width=True):
+    if st.button("Refresh Saved Items", key="refresh_saved_work", help="Click to refresh saved proposals and orders", use_container_width=True):
         clear_saved_data_cache()
         st.rerun()
 
@@ -594,13 +604,13 @@ with st.sidebar:
     # Build proposal header with indicators
     proposal_header = f"**Saved Proposals ({len(saved_proposals)})**"
     if proposal_unsaved:
-        proposal_header += " ⚠️ Unsaved changes"
+        proposal_header += " - Unsaved changes"
 
     # Saved Proposals subsection
     with st.expander(proposal_header, expanded=False):
         # Show save status if available
         if proposal_save_status:
-            st.caption(f"✓ {proposal_save_status}")
+            st.caption(f"{proposal_save_status}")
 
         if len(saved_proposals) == 0:
             st.info("No saved proposals yet")
@@ -689,13 +699,13 @@ with st.sidebar:
     # Build order header with indicators
     order_header = f"**Saved Orders ({len(saved_orders)})**"
     if order_unsaved:
-        order_header += " ⚠️ Unsaved changes"
+        order_header += " - Unsaved changes"
 
     # Saved Orders subsection
     with st.expander(order_header, expanded=False):
         # Show save status if available
         if order_save_status:
-            st.caption(f"✓ {order_save_status}")
+            st.caption(f"{order_save_status}")
 
         if len(saved_orders) == 0:
             st.info("No saved orders yet")
@@ -3167,11 +3177,11 @@ with tab1:
 
     # Show unsaved changes indicator and save status
     if has_unsaved_proposal_changes():
-        st.warning("⚠️ You have unsaved changes in your proposal")
+        st.warning("You have unsaved changes in your proposal")
 
     save_status = format_time_since_save('proposal')
     if save_status:
-        st.caption(f"✓ {save_status}")
+        st.caption(f"{save_status}")
 
     # Check if there are products to save
     has_products = len(st.session_state.proposal_products) > 0
@@ -3680,11 +3690,11 @@ with tab3:
     col1_status, col2_status = st.columns([1, 1])
     with col1_status:
         if has_unsaved_order_changes():
-            st.warning("⚠️ You have unsaved changes in your order")
+            st.warning("You have unsaved changes in your order")
     with col2_status:
         save_status = format_time_since_save('order')
         if save_status:
-            st.caption(f"✓ {save_status}")
+            st.caption(f"{save_status}")
 
     # Quick Save Section at top
     has_order = len(st.session_state.order_items) > 0
@@ -5458,11 +5468,11 @@ Rates default to current estimates but can be adjusted as needed.
 
     # Show unsaved changes indicator and save status
     if has_unsaved_order_changes():
-        st.warning("⚠️ You have unsaved changes in your order")
+        st.warning("You have unsaved changes in your order")
 
     save_status_bottom = format_time_since_save('order')
     if save_status_bottom:
-        st.caption(f"✓ {save_status_bottom}")
+        st.caption(f"{save_status_bottom}")
 
     # Check if there are products to save
     has_order_items = len(st.session_state.order_items) > 0
