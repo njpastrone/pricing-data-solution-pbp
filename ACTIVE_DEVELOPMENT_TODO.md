@@ -50,13 +50,15 @@
 
 ## 🟠 HIGH PRIORITY FEATURES - TODO
 
-### Spreadsheet Structure Changes
-- [ ] Add "Shipping Cost (PBP)" column to master spreadsheet
-- [ ] Rename "Shipping" → "Shipping Price (Client)"
-- [ ] Fix Mi Eelo shipping cost data
-- [ ] Update data_loader.py to read new columns
-- [ ] Connect to Tab 3 "Shipping Cost from Partner ($)"
+### Spreadsheet Structure Changes ✅ COMPLETE (2025-12-04)
+- [X] Add "Shipping Cost (PBP)" column to master spreadsheet (completed by user)
+- [X] Rename "Shipping" → "Shipping Price (Client)" (completed by user)
+- [X] Fix Mi Eelo shipping cost data (completed by user)
+- [X] Update data_loader.py to read new columns
+- [X] Connect to Tab 3 "Shipping Cost from Partner ($)"
 - **Files:** Google Sheets, src/data_loader.py, app.py
+- **Implementation:** Added helper functions in helpers.py to handle both column structures
+- **Result:** Backward compatible with demo dataset, auto-populates partner_shipping field
 
 ### Tab 1: Search & Pricing
 - [ ] Add search bar above product catalog
@@ -182,10 +184,12 @@ git commit -m "TEST: Verify markup calculations"
 ### Completed
 - ✅ Organized stakeholder feedback
 - ✅ Created prioritized task list
+- ✅ All critical fixes (4 items - COMPLETE)
+- ✅ Spreadsheet structure changes (shipping columns)
 
 ### Current Sprint (Week 1)
-- 🔴 Critical fixes (4 items)
-- Start high-priority features
+- ✅ Critical fixes (4 items - ALL COMPLETE)
+- 🟠 High-priority features (1 of 14 complete)
 
 ### Next Sprint (Week 2)
 - Complete high-priority features
