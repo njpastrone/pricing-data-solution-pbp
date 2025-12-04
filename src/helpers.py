@@ -693,3 +693,87 @@ def parse_client_order_form_html(html_content):
                     extracted_data['products'].append(product_name)
 
     return extracted_data
+
+
+# ========== SHIPPING UTILITIES ==========
+
+def get_shipping_costs(product_data):
+    """
+    Extract shipping costs from product data, handling both new and legacy column structures.
+
+    New structure (Real dataset):
+    - 'Shipping Cost (PBP)': What PBP pays to partner
+    - 'Shipping Price (Client)': What client pays
+
+    Legacy structure (Demo dataset):
+    - 'Shipping': Single value used for both PBP and client
+
+    Args:
+        product_data (dict): Product data dictionary from spreadsheet
+
+    Returns:
+        tuple: (pbp_cost, client_price) - both as float or 0.0 if not available
+
+    Examples:
+        >>> # New structure
+        >>> get_shipping_costs({'Shipping Cost (PBP)': '$10', 'Shipping Price (Client)': '$15'})
+        (10.0, 15.0)
+
+        >>> # Legacy structure
+        >>> get_shipping_costs({'Shipping': '$12.50'})
+        (12.5, 12.5)
+
+        >>> # Missing data
+        >>> get_shipping_costs({})
+        (0.0, 0.0)
+    """
+    # Try new column structure first
+    if 'Shipping Cost (PBP)' in product_data and 'Shipping Price (Client)' in product_data:
+        pbp_cost = clean_price(product_data.get('Shipping Cost (PBP)', '')) or 0.0
+        client_price = clean_price(product_data.get('Shipping Price (Client)', '')) or 0.0
+        return (pbp_cost, client_price)
+
+    # Fall back to legacy single column
+    elif 'Shipping' in product_data:
+        shipping_value = clean_price(product_data.get('Shipping', '')) or 0.0
+        return (shipping_value, shipping_value)  # Use same value for both
+
+    # No shipping data available
+    return (0.0, 0.0)
+
+
+def format_shipping_display(product_data):
+    """
+    Format shipping costs for display in UI.
+
+    Args:
+        product_data (dict): Product data dictionary
+
+    Returns:
+        str: Formatted shipping string for display
+
+    Examples:
+        >>> # Both costs available
+        >>> format_shipping_display({'Shipping Cost (PBP)': '$10', 'Shipping Price (Client)': '$15'})
+        'PBP: $10.00 | Client: $15.00'
+
+        >>> # Single legacy cost
+        >>> format_shipping_display({'Shipping': '$12.50'})
+        'Shipping: $12.50'
+
+        >>> # No shipping
+        >>> format_shipping_display({})
+        'No shipping data'
+    """
+    pbp_cost, client_price = get_shipping_costs(product_data)
+
+    # Both costs available (new structure)
+    if 'Shipping Cost (PBP)' in product_data and 'Shipping Price (Client)' in product_data:
+        if pbp_cost > 0 or client_price > 0:
+            return f"PBP: ${pbp_cost:.2f} | Client: ${client_price:.2f}"
+
+    # Single cost (legacy structure)
+    elif 'Shipping' in product_data and pbp_cost > 0:
+        return f"Shipping: ${pbp_cost:.2f}"
+
+    return "No shipping data"

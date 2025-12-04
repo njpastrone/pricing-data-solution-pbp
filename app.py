@@ -33,7 +33,9 @@ from src.helpers import (
     parse_tariff_rate,
     calculate_product_tariff,
     convert_proposal_to_order,
-    parse_client_order_form_html
+    parse_client_order_form_html,
+    get_shipping_costs,
+    format_shipping_display
 )
 from src.pricing_engine import (
     determine_tier_number,
@@ -2361,6 +2363,11 @@ with tab1:
                     if msrp_value and msrp_value > 0:
                         st.caption(f"Manufacturer's Suggested Retail Price (MSRP): ${msrp_value:.2f}/unit")
 
+                # Show shipping costs
+                shipping_display = format_shipping_display(product_data)
+                if shipping_display != "No shipping data":
+                    st.caption(f"Shipping: {shipping_display}")
+
                 # Show estimated prices at MOQ
                 if moq_cost and estimated_moq:
                     st.caption(f"Est. Cost & Price at MOQ ({estimated_moq} units): ${moq_cost:.2f}/unit cost → ${moq_client_price:.2f}/unit client price (100% markup)")
@@ -4143,6 +4150,7 @@ with tab3:
                     if len(selected_product_indices) > 0:
                         if st.button(f"Add {len(selected_product_indices)} Selected Product(s) to Order", type="primary", use_container_width=True, key="add_form_products_btn"):
                             # Add products to order
+                            max_pbp_shipping = 0.0
                             for idx in selected_product_indices:
                                 match = matched_products[idx]
                                 product_data = match['product_data']
@@ -4196,6 +4204,14 @@ with tab3:
 
                                 st.session_state.order_items.append(order_item)
 
+                                # Track maximum PBP shipping cost
+                                pbp_shipping, _ = get_shipping_costs(product_data)
+                                max_pbp_shipping = max(max_pbp_shipping, pbp_shipping)
+
+                            # Auto-populate partner shipping with the maximum cost found
+                            if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
+                                st.session_state.partner_shipping = max_pbp_shipping
+
                             st.toast(f"Added {len(selected_product_indices)} product(s) from order form!")
                             st.rerun()
                     else:
@@ -4226,6 +4242,8 @@ with tab3:
             if st.button("Import All Products from Proposal", type="primary", use_container_width=True, key="import_all_proposal"):
                 # Import all proposal products to order
                 imported_count = 0
+                max_pbp_shipping = 0.0  # Track maximum shipping cost among all products
+
                 for prop_item in st.session_state.proposal_products:
                     order_item = convert_proposal_to_order(
                         prop_item,
@@ -4234,6 +4252,14 @@ with tab3:
                     )
                     st.session_state.order_items.append(order_item)
                     imported_count += 1
+
+                    # Track maximum PBP shipping cost
+                    pbp_shipping, _ = get_shipping_costs(prop_item.get('product_data', {}))
+                    max_pbp_shipping = max(max_pbp_shipping, pbp_shipping)
+
+                # Auto-populate partner shipping with the maximum cost found
+                if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
+                    st.session_state.partner_shipping = max_pbp_shipping
 
                 st.success(f"Imported all {imported_count} product(s) from proposal!")
                 st.rerun()
@@ -4274,13 +4300,23 @@ with tab3:
             if len(selected_proposal_indices) > 0:
                 if st.button(f"Add {len(selected_proposal_indices)} Selected Product(s) to Order", type="primary", use_container_width=True):
                     # Convert and add to order
+                    max_pbp_shipping = 0.0
                     for idx in selected_proposal_indices:
+                        prop_item = st.session_state.proposal_products[idx]
                         order_item = convert_proposal_to_order(
-                            st.session_state.proposal_products[idx],
+                            prop_item,
                             get_unit_price_new_system,
                             calculate_product_tariff
                         )
                         st.session_state.order_items.append(order_item)
+
+                        # Track maximum PBP shipping cost
+                        pbp_shipping, _ = get_shipping_costs(prop_item.get('product_data', {}))
+                        max_pbp_shipping = max(max_pbp_shipping, pbp_shipping)
+
+                    # Auto-populate partner shipping with the maximum cost found
+                    if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
+                        st.session_state.partner_shipping = max_pbp_shipping
 
                     st.toast(f"Added {len(selected_proposal_indices)} product(s) to order!")
                     st.rerun()
@@ -4386,6 +4422,12 @@ with tab3:
                 })
 
                 st.session_state.order_items.append(new_item)
+
+                # Auto-populate partner shipping if this product has shipping data
+                pbp_shipping_cost, _ = get_shipping_costs(product_data.to_dict())
+                if pbp_shipping_cost > 0 and st.session_state.partner_shipping == 0:
+                    st.session_state.partner_shipping = pbp_shipping_cost
+
                 st.rerun()
             else:
                 st.error("Could not determine pricing for this product")
