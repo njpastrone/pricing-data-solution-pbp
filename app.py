@@ -27,6 +27,7 @@ from src.helpers import (
     round_to_nearest_five,
     calculate_moq,
     calculate_credit_card_fee,
+    calculate_markup_from_price,
     extract_partner_contacts,
     validate_invoice_completeness,
     parse_tier_info,
@@ -2688,7 +2689,7 @@ with tab1:
                 # Editable markup field
                 new_markup = st.number_input(
                     f"Markup for {idx}",
-                    min_value=0.0,
+                    min_value=-50.0,  # Allow negative markup for below-cost pricing
                     value=item['markup_percent'],
                     step=5.0,
                     key=f"markup_{idx}",
@@ -2697,11 +2698,34 @@ with tab1:
                 # Update markup if changed
                 if new_markup != item['markup_percent']:
                     st.session_state.proposal_products[idx]['markup_percent'] = new_markup
+                    # Set flag to prevent circular updates
+                    st.session_state[f'updating_from_markup_{idx}'] = True
 
             with col4:
-                # Show client price (cost + markup)
-                if client_price:
-                    st.markdown(f"${client_price:.2f}")
+                # Editable client price field
+                if base_cost and client_price:
+                    # Check if we're updating from markup to prevent circular updates
+                    if st.session_state.get(f'updating_from_markup_{idx}', False):
+                        # Just display the calculated price, don't create input
+                        st.markdown(f"${client_price:.2f}")
+                        # Clear the flag
+                        st.session_state[f'updating_from_markup_{idx}'] = False
+                    else:
+                        new_price = st.number_input(
+                            f"Price for {idx}",
+                            min_value=0.01,
+                            value=client_price,
+                            step=1.0,
+                            format="%.2f",
+                            key=f"price_{idx}",
+                            label_visibility="collapsed"
+                        )
+                        # Update markup if price changed
+                        if abs(new_price - client_price) > 0.01:  # Check if meaningfully different
+                            # Calculate new markup from the price
+                            new_markup_calc = calculate_markup_from_price(base_cost, new_price)
+                            st.session_state.proposal_products[idx]['markup_percent'] = new_markup_calc
+                            st.rerun()
                 else:
                     st.markdown("—")
 

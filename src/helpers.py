@@ -145,6 +145,36 @@ def calculate_credit_card_fee(total, apply_fee=False, fee_percent=3.0):
     return 0.0
 
 
+def calculate_markup_from_price(base_cost, client_price):
+    """
+    Calculate markup percentage given base cost and desired client price.
+    Formula: markup = ((client_price / base_cost) - 1) * 100
+
+    Args:
+        base_cost (float): Base cost of the product
+        client_price (float): Desired client price
+
+    Returns:
+        float: Markup percentage (e.g., 100.0 for 100% markup)
+               Returns 0.0 if base_cost is 0 or negative
+
+    Examples:
+        >>> calculate_markup_from_price(50.0, 100.0)
+        100.0
+        >>> calculate_markup_from_price(50.0, 75.0)
+        50.0
+        >>> calculate_markup_from_price(50.0, 50.0)
+        0.0
+        >>> calculate_markup_from_price(50.0, 40.0)
+        -20.0
+    """
+    if base_cost <= 0:
+        return 0.0
+
+    markup = ((client_price / base_cost) - 1) * 100
+    return round(markup, 2)  # Round to 2 decimal places for display
+
+
 # ========== PARTNER & DATA EXTRACTION ==========
 
 def extract_partner_contacts(df_partner_info):

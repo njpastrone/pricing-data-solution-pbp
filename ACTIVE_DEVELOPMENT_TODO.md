@@ -64,9 +64,10 @@
 - [X] Add search bar above product catalog ✅ COMPLETE (2025-12-04)
   - Filter products by name/partner/description
   - Use st.text_input with real-time filtering
-- [ ] Add bidirectional price editing in proposal table
+- [x] Add bidirectional price editing in proposal table
   - Currently: Markup % → Price
   - Need: Price → Markup % calculation
+  - ✅ COMPLETED (2025-12-10): Client Price column now editable, automatically updates Markup %
 - [ ] Add "Cancel" button to match change window
 - [ ] Add $0.50 rounding option (make default)
   - Add to both Tab 1 and Tab 3
