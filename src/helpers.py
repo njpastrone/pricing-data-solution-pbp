@@ -835,3 +835,102 @@ def format_shipping_display(product_data):
         return f"Shipping: ${pbp_cost:.2f}"
 
     return "No shipping data"
+
+
+# ========== SPLIT TOTALS CALCULATIONS ==========
+
+def calculate_split_totals(order_items, markup_only=False):
+    """
+    Calculate PBP costs and client prices separately for order items.
+
+    Args:
+        order_items (list): List of order items with pricing information
+        markup_only (bool): If True, only return product costs with markup (no customization)
+
+    Returns:
+        dict: Dictionary containing:
+            - products_pbp_cost: Total PBP cost for products
+            - products_client_price: Total client price for products (with markup)
+            - customization_pbp_cost: Total PBP cost for customization
+            - customization_client_price: Total client price for customization
+            - products_only_client_price: Products with markup (no customization)
+            - total_pbp_cost: Combined PBP cost
+            - total_client_price: Combined client price
+    """
+    results = {
+        'products_pbp_cost': 0.0,
+        'products_client_price': 0.0,
+        'customization_pbp_cost': 0.0,
+        'customization_client_price': 0.0,
+        'products_only_client_price': 0.0,
+        'total_pbp_cost': 0.0,
+        'total_client_price': 0.0
+    }
+
+    for item in order_items:
+        # Skip custom line items (they have different structure)
+        if item.get('is_custom', False):
+            # Custom items are already marked up, so both cost and price are the same
+            custom_total = item.get('product_total', 0)
+            results['products_pbp_cost'] += custom_total
+            results['products_client_price'] += custom_total
+            results['products_only_client_price'] += custom_total
+            continue
+
+        # Regular products
+        # Product base cost (what PBP pays)
+        product_cost = item.get('product_subtotal', 0)
+        results['products_pbp_cost'] += product_cost
+
+        # Product client price (with markup)
+        markup_amount = item.get('markup_amount', 0)
+        product_with_markup = product_cost + markup_amount
+        results['products_client_price'] += product_with_markup
+        results['products_only_client_price'] += product_with_markup
+
+        # Customization costs (if not markup_only)
+        if not markup_only:
+            # Setup fee (one-time)
+            setup_pbp = item.get('customization_setup_cost', 0)
+            setup_client = item.get('customization_setup_total', 0)
+            results['customization_pbp_cost'] += setup_pbp
+            results['customization_client_price'] += setup_client
+
+            # Per-unit customization
+            per_unit_pbp = item.get('customization_unit_cost', 0)
+            per_unit_client = item.get('customization_unit_total', 0)
+            results['customization_pbp_cost'] += per_unit_pbp
+            results['customization_client_price'] += per_unit_client
+
+    # Calculate totals
+    results['total_pbp_cost'] = results['products_pbp_cost'] + results['customization_pbp_cost']
+    results['total_client_price'] = results['products_client_price'] + results['customization_client_price']
+
+    return results
+
+
+def format_pricing_breakdown_row(description, units, per_unit_cost, pbp_total, client_total):
+    """
+    Format a row for the pricing breakdown table.
+
+    Args:
+        description (str): Line item description
+        units (int/str): Number of units or "one-time"
+        per_unit_cost (float): Cost per unit
+        pbp_total (float): Total PBP cost
+        client_total (float): Total client price
+
+    Returns:
+        list: Formatted row data for DataFrame
+    """
+    # Format units column
+    units_str = str(units) if units != "one-time" else "1"
+
+    # Format per unit column
+    per_unit_str = f"${per_unit_cost:.2f}" if per_unit_cost > 0 else ""
+
+    # Format totals
+    pbp_str = f"${pbp_total:.2f}" if pbp_total > 0 else "$0.00"
+    client_str = f"${client_total:.2f}" if client_total > 0 else "$0.00"
+
+    return [description, units_str, per_unit_str, pbp_str, client_str]
