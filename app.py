@@ -25,6 +25,7 @@ from src.helpers import (
     clean_price,
     apply_marketing_rounding,
     round_to_nearest_five,
+    round_to_nearest_fifty_cents,
     calculate_moq,
     calculate_credit_card_fee,
     calculate_markup_from_price,
@@ -345,9 +346,12 @@ if 'order_discount_custom_desc' not in st.session_state:
 if 'order_discount_custom_value' not in st.session_state:
     st.session_state.order_discount_custom_value = 0.0
 
-# Initialize marketing rounding setting
+# Initialize rounding settings
 if 'order_use_marketing_rounding' not in st.session_state:
     st.session_state.order_use_marketing_rounding = False
+
+if 'order_fifty_cent_rounding' not in st.session_state:
+    st.session_state.order_fifty_cent_rounding = True  # Default to checked
 
 # Initialize order confirmed flag
 if 'order_confirmed' not in st.session_state:
@@ -397,6 +401,9 @@ if 'proposal_products' not in st.session_state:
 
 if 'proposal_marketing_rounding' not in st.session_state:
     st.session_state.proposal_marketing_rounding = False
+
+if 'proposal_fifty_cent_rounding' not in st.session_state:
+    st.session_state.proposal_fifty_cent_rounding = True  # Default to checked
 
 if 'proposal_use_msrp' not in st.session_state:
     st.session_state.proposal_use_msrp = True  # Default to checked (use MSRP)
@@ -2654,11 +2661,20 @@ with tab1:
                 help="When enabled, products with MSRP will have markup automatically calculated to match MSRP. Products without MSRP will use 100% markup."
             )
 
+            # $0.50 rounding (new feature, defaults to checked)
+            st.session_state.proposal_fifty_cent_rounding = st.checkbox(
+                "Round prices to nearest $0.50",
+                value=st.session_state.proposal_fifty_cent_rounding,
+                key="proposal_fifty_cent_rounding_checkbox",
+                help="Rounds all prices to nearest 50 cents (e.g., $24.37 → $24.50)"
+            )
+
             # Marketing rounding
             st.session_state.proposal_marketing_rounding = st.checkbox(
                 "Apply marketing rounding (e.g., $60 → $59)",
                 value=st.session_state.proposal_marketing_rounding,
-                key="proposal_marketing_rounding_checkbox"
+                key="proposal_marketing_rounding_checkbox",
+                help="Apply charm pricing to prices ending in 0 (e.g., $60 → $59). Applied after $0.50 rounding."
             )
 
         st.divider()
@@ -2693,6 +2709,18 @@ with tab1:
             if base_cost:
                 # Calculate client price with markup
                 client_price = base_cost * (1 + item['markup_percent'] / 100)
+
+                # Apply $0.50 rounding if enabled
+                client_price = round_to_nearest_fifty_cents(
+                    client_price,
+                    st.session_state.proposal_fifty_cent_rounding
+                )
+
+                # Apply marketing rounding if enabled (after $0.50 rounding)
+                client_price = apply_marketing_rounding(
+                    client_price,
+                    st.session_state.proposal_marketing_rounding
+                )
             else:
                 client_price = None
 
@@ -2811,9 +2839,17 @@ with tab1:
                         moq_product_only_total = moq_product_cost + moq_markup_amount
                         moq_product_price_per_unit = moq_product_only_total / moq
 
-                        # Apply marketing rounding if enabled
-                        if st.session_state.proposal_marketing_rounding:
-                            moq_product_price_per_unit = apply_marketing_rounding(moq_product_price_per_unit, True)
+                        # Apply $0.50 rounding if enabled
+                        moq_product_price_per_unit = round_to_nearest_fifty_cents(
+                            moq_product_price_per_unit,
+                            st.session_state.proposal_fifty_cent_rounding
+                        )
+
+                        # Apply marketing rounding if enabled (after $0.50 rounding)
+                        moq_product_price_per_unit = apply_marketing_rounding(
+                            moq_product_price_per_unit,
+                            st.session_state.proposal_marketing_rounding
+                        )
 
                         # Calculate Client Price based on discount and budget
                         client_price = moq_product_price_per_unit
@@ -2842,9 +2878,17 @@ with tab1:
                                     budget_qty_product_only_total = budget_qty_product_cost + budget_qty_markup_amount
                                     budget_qty_price_per_unit = budget_qty_product_only_total / potential_quantity
 
-                                    # Apply marketing rounding if enabled
-                                    if st.session_state.proposal_marketing_rounding:
-                                        budget_qty_price_per_unit = apply_marketing_rounding(budget_qty_price_per_unit, True)
+                                    # Apply $0.50 rounding if enabled
+                                    budget_qty_price_per_unit = round_to_nearest_fifty_cents(
+                                        budget_qty_price_per_unit,
+                                        st.session_state.proposal_fifty_cent_rounding
+                                    )
+
+                                    # Apply marketing rounding if enabled (after $0.50 rounding)
+                                    budget_qty_price_per_unit = apply_marketing_rounding(
+                                        budget_qty_price_per_unit,
+                                        st.session_state.proposal_marketing_rounding
+                                    )
 
                                     # Use the better price if different from MOQ price
                                     if budget_qty_price_per_unit < moq_product_price_per_unit:
@@ -2858,9 +2902,17 @@ with tab1:
                             client_price = client_price * (1 - discount_percent / 100)
                             discount_applied = True
 
+                            # Apply $0.50 rounding after discount if enabled
+                            client_price = round_to_nearest_fifty_cents(
+                                client_price,
+                                st.session_state.proposal_fifty_cent_rounding
+                            )
+
                             # Apply marketing rounding again after discount if enabled
-                            if st.session_state.proposal_marketing_rounding:
-                                client_price = apply_marketing_rounding(client_price, True)
+                            client_price = apply_marketing_rounding(
+                                client_price,
+                                st.session_state.proposal_marketing_rounding
+                            )
 
                         # Build price note for column header
                         client_price_header = "Client Price"
@@ -2964,9 +3016,17 @@ with tab1:
                         moq_product_only_total = moq_product_cost + moq_markup_amount
                         moq_product_price_per_unit = moq_product_only_total / moq
 
-                        # Apply marketing rounding if enabled
-                        if st.session_state.proposal_marketing_rounding:
-                            moq_product_price_per_unit = apply_marketing_rounding(moq_product_price_per_unit, True)
+                        # Apply $0.50 rounding if enabled
+                        moq_product_price_per_unit = round_to_nearest_fifty_cents(
+                            moq_product_price_per_unit,
+                            st.session_state.proposal_fifty_cent_rounding
+                        )
+
+                        # Apply marketing rounding if enabled (after $0.50 rounding)
+                        moq_product_price_per_unit = apply_marketing_rounding(
+                            moq_product_price_per_unit,
+                            st.session_state.proposal_marketing_rounding
+                        )
 
                         # Calculate Client Price based on discount and budget
                         client_price = moq_product_price_per_unit
@@ -2994,9 +3054,17 @@ with tab1:
                                     budget_qty_product_only_total = budget_qty_product_cost + budget_qty_markup_amount
                                     budget_qty_price_per_unit = budget_qty_product_only_total / potential_quantity
 
-                                    # Apply marketing rounding if enabled
-                                    if st.session_state.proposal_marketing_rounding:
-                                        budget_qty_price_per_unit = apply_marketing_rounding(budget_qty_price_per_unit, True)
+                                    # Apply $0.50 rounding if enabled
+                                    budget_qty_price_per_unit = round_to_nearest_fifty_cents(
+                                        budget_qty_price_per_unit,
+                                        st.session_state.proposal_fifty_cent_rounding
+                                    )
+
+                                    # Apply marketing rounding if enabled (after $0.50 rounding)
+                                    budget_qty_price_per_unit = apply_marketing_rounding(
+                                        budget_qty_price_per_unit,
+                                        st.session_state.proposal_marketing_rounding
+                                    )
 
                                     # Use the better price if different from MOQ price
                                     if budget_qty_price_per_unit < moq_product_price_per_unit:
@@ -3010,9 +3078,17 @@ with tab1:
                             client_price = client_price * (1 - discount_percent / 100)
                             discount_applied = True
 
+                            # Apply $0.50 rounding after discount if enabled
+                            client_price = round_to_nearest_fifty_cents(
+                                client_price,
+                                st.session_state.proposal_fifty_cent_rounding
+                            )
+
                             # Apply marketing rounding again after discount if enabled
-                            if st.session_state.proposal_marketing_rounding:
-                                client_price = apply_marketing_rounding(client_price, True)
+                            client_price = apply_marketing_rounding(
+                                client_price,
+                                st.session_state.proposal_marketing_rounding
+                            )
 
                         # Build price note for column header
                         client_price_header = "Client Price"
@@ -5071,10 +5147,18 @@ Rates default to current estimates but can be adjusted as needed.
                 st.session_state.order_discount_custom_desc = ""
 
         with col2:
+            st.session_state.order_fifty_cent_rounding = st.checkbox(
+                "Round prices to nearest $0.50",
+                value=st.session_state.order_fifty_cent_rounding,
+                key="order_fifty_cent_rounding_checkbox",
+                help="Rounds all prices to nearest 50 cents (e.g., $24.37 → $24.50)"
+            )
+
             st.session_state.order_use_marketing_rounding = st.checkbox(
                 "Apply marketing rounding (e.g., $60 → $59)",
                 value=st.session_state.order_use_marketing_rounding,
-                key="marketing_rounding_checkbox"
+                key="marketing_rounding_checkbox",
+                help="Apply charm pricing to prices ending in 0. Applied after $0.50 rounding."
             )
 
         with col3:
@@ -5273,7 +5357,10 @@ Rates default to current estimates but can be adjusted as needed.
         # Final total
         total_quote = total_before_cc + cc_fee_amount
 
-        # Apply marketing rounding if enabled
+        # Apply $0.50 rounding if enabled
+        total_quote = round_to_nearest_fifty_cents(total_quote, st.session_state.order_fifty_cent_rounding)
+
+        # Apply marketing rounding if enabled (after $0.50 rounding)
         total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
 
         total_units = sum(item['quantity'] for item in st.session_state.order_items)
@@ -5990,10 +6077,18 @@ with tab4:
                     st.session_state.order_discount_custom_desc = ""
 
             with col2:
+                st.session_state.order_fifty_cent_rounding = st.checkbox(
+                    "Round prices to nearest $0.50",
+                    value=st.session_state.order_fifty_cent_rounding,
+                    key="tab4_fifty_cent_rounding_checkbox",
+                    help="Rounds all prices to nearest 50 cents (e.g., $24.37 → $24.50)"
+                )
+
                 st.session_state.order_use_marketing_rounding = st.checkbox(
                     "Apply marketing rounding (e.g., $60 → $59)",
                     value=st.session_state.order_use_marketing_rounding,
-                    key="tab3_marketing_rounding_checkbox"
+                    key="tab3_marketing_rounding_checkbox",
+                    help="Apply charm pricing to prices ending in 0. Applied after $0.50 rounding."
                 )
 
             with col3:

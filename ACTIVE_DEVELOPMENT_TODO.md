@@ -70,8 +70,10 @@
   - ✅ COMPLETED (2025-12-10): Client Price column now editable, automatically updates Markup %
 - [x] Add "Cancel" button to match change window
   - ✅ COMPLETED (2025-12-10): Added Cancel buttons to both alternatives and search modes
-- [ ] Add $0.50 rounding option (make default)
+- [x] Add $0.50 rounding option (make default)
   - Add to both Tab 1 and Tab 3
+  - ✅ COMPLETED (2025-12-10): Added round_to_nearest_fifty_cents() function and checkboxes in all tabs
+  - Default enabled, applied before marketing rounding
 - **File:** app.py (Tab 1)
 
 ### Tab 3: Table Restructuring

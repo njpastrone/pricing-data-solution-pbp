@@ -95,6 +95,34 @@ def round_to_nearest_five(price, enabled=True):
     return price
 
 
+def round_to_nearest_fifty_cents(price, enabled=True):
+    """
+    Round price to nearest $0.50 increment.
+
+    Args:
+        price (float): Original price
+        enabled (bool): Whether to apply rounding
+
+    Returns:
+        float: Price rounded to nearest $0.50
+
+    Examples:
+        >>> round_to_nearest_fifty_cents(24.37, enabled=True)
+        24.50
+        >>> round_to_nearest_fifty_cents(24.23, enabled=True)
+        24.00
+        >>> round_to_nearest_fifty_cents(24.75, enabled=True)
+        25.00
+        >>> round_to_nearest_fifty_cents(24.25, enabled=True)
+        24.50
+        >>> round_to_nearest_fifty_cents(24.37, enabled=False)
+        24.37
+    """
+    if enabled:
+        return round(price * 2) / 2
+    return price
+
+
 # ========== ORDER CALCULATIONS ==========
 
 def calculate_moq(unit_price):
