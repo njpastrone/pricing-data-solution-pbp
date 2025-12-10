@@ -68,7 +68,8 @@
   - Currently: Markup % → Price
   - Need: Price → Markup % calculation
   - ✅ COMPLETED (2025-12-10): Client Price column now editable, automatically updates Markup %
-- [ ] Add "Cancel" button to match change window
+- [x] Add "Cancel" button to match change window
+  - ✅ COMPLETED (2025-12-10): Added Cancel buttons to both alternatives and search modes
 - [ ] Add $0.50 rounding option (make default)
   - Add to both Tab 1 and Tab 3
 - **File:** app.py (Tab 1)

@@ -1453,14 +1453,26 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     else:
                         st.info("No slides found. Try different keywords.")
 
-                # Add Skip button
+                # Add Skip and Cancel buttons
                 st.markdown("")
-                if st.button("Skip this product", key=f"{match_key}_skip_alt", use_container_width=True):
-                    st.session_state.match_confirmations[result.gs_product_name] = {
-                        'confirmed': False,
-                        'skipped': True
-                    }
-                    st.rerun()
+                col_skip, col_cancel = st.columns(2)
+                with col_skip:
+                    if st.button("Skip this product", key=f"{match_key}_skip_alt", use_container_width=True):
+                        st.session_state.match_confirmations[result.gs_product_name] = {
+                            'confirmed': False,
+                            'skipped': True
+                        }
+                        st.rerun()
+
+                with col_cancel:
+                    if st.button("Cancel", key=f"{match_key}_cancel_alt", type="secondary",
+                                 help="Return without making changes", use_container_width=True):
+                        # Clear the show_alternatives flag to close the change interface
+                        st.session_state.match_confirmations[result.gs_product_name] = {
+                            'confirmed': False,
+                            'show_alternatives': False
+                        }
+                        st.rerun()
 
                 st.markdown("")
 
@@ -1518,14 +1530,26 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     else:
                         st.info("No slides found. Try different keywords.")
 
-                # Add Skip button for poor matches
+                # Add Skip and Cancel buttons for poor matches
                 st.markdown("")
-                if st.button("Skip this product", key=f"{match_key}_skip_poor", use_container_width=True):
-                    st.session_state.match_confirmations[result.gs_product_name] = {
-                        'confirmed': False,
-                        'skipped': True
-                    }
-                    st.rerun()
+                col_skip_poor, col_cancel_poor = st.columns(2)
+                with col_skip_poor:
+                    if st.button("Skip this product", key=f"{match_key}_skip_poor", use_container_width=True):
+                        st.session_state.match_confirmations[result.gs_product_name] = {
+                            'confirmed': False,
+                            'skipped': True
+                        }
+                        st.rerun()
+
+                with col_cancel_poor:
+                    if st.button("Cancel", key=f"{match_key}_cancel_poor", type="secondary",
+                                 help="Return without making changes", use_container_width=True):
+                        # Clear the show_search flag to close the change interface
+                        st.session_state.match_confirmations[result.gs_product_name] = {
+                            'confirmed': False,
+                            'show_search': False
+                        }
+                        st.rerun()
 
                 st.markdown("")
 
