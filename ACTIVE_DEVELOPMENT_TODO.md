@@ -98,10 +98,12 @@
   - Include in order summary calculations
   - Sales tax only affects client price, not PBP cost
   - Persists through order save/load
-- [ ] Add "Kitting Pricing" section
+- [X] Add "Kitting Pricing" section ✅ COMPLETE (2025-12-11)
   - PBP Cost field
   - Client Price field
   - Include in calculations
+  - Added to both Tab 3 and Tab 4
+  - Persists through save/load
 - [ ] Improve Order Notes UX
   - Move from dropdown to always-visible text areas
   - One section per note type
@@ -200,10 +202,11 @@ git commit -m "TEST: Verify markup calculations"
 - ✅ Tab 1 search bar and pricing improvements (bidirectional editing, cancel button, $0.50 rounding)
 - ✅ Tab 3 table restructuring (PBP Cost vs Client Price columns)
 - ✅ Tab 3 sales tax field (estimated sales tax input and calculations)
+- ✅ Tab 3 kitting pricing section (separate PBP and client costs)
 
 ### Current Sprint (Week 1)
 - ✅ Critical fixes (4 items - ALL COMPLETE)
-- 🟠 High-priority features (8 of 14 complete)
+- 🟠 High-priority features (9 of 14 complete)
 
 ### Next Sprint (Week 2)
 - Complete high-priority features
