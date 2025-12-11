@@ -1,6 +1,6 @@
 # Active Development TODO List
 
-**Last Updated:** 2025-12-10
+**Last Updated:** 2025-12-11
 **Status:** Active Development
 **Related Docs:**
 - [STAKEHOLDER_MEETING_NOTES.md](STAKEHOLDER_MEETING_NOTES.md) - Full context and details
@@ -93,9 +93,11 @@
 - **Files:** app.py (Tab 3, sections 2 and 4), src/helpers.py
 
 ### Tab 3: New Fields
-- [ ] Add "Estimated Sales Tax" field in Order Settings
+- [X] Add "Estimated Sales Tax" field in Order Settings ✅ COMPLETE (2025-12-11)
   - Simple number input like shipping
   - Include in order summary calculations
+  - Sales tax only affects client price, not PBP cost
+  - Persists through order save/load
 - [ ] Add "Kitting Pricing" section
   - PBP Cost field
   - Client Price field
@@ -197,10 +199,11 @@ git commit -m "TEST: Verify markup calculations"
 - ✅ Spreadsheet structure changes (shipping columns)
 - ✅ Tab 1 search bar and pricing improvements (bidirectional editing, cancel button, $0.50 rounding)
 - ✅ Tab 3 table restructuring (PBP Cost vs Client Price columns)
+- ✅ Tab 3 sales tax field (estimated sales tax input and calculations)
 
 ### Current Sprint (Week 1)
 - ✅ Critical fixes (4 items - ALL COMPLETE)
-- 🟠 High-priority features (7 of 14 complete)
+- 🟠 High-priority features (8 of 14 complete)
 
 ### Next Sprint (Week 2)
 - Complete high-priority features
