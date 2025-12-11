@@ -373,8 +373,14 @@ if 'client_info' not in st.session_state:
     st.session_state.client_info = {
         'is_new_client': True,
         'company_name': '',
-        'contact_name': '',
-        'contact_email': '',
+        'contacts': [  # NEW: Support multiple contacts
+            {
+                'name': '',
+                'email': '',
+                'phone': '',
+                'role': 'Primary Contact'
+            }
+        ],
         'client_po': '',
         'billing_address': '',
         'shipping_type': 'Ground',  # MODIFIED: Changed to dropdown default
@@ -387,6 +393,47 @@ if 'client_info' not in st.session_state:
         'cost_submitted_by': '',  # NEW: Person submitting costs
         'cost_submitted_date': None  # NEW: Date costs were submitted
     }
+
+# Migrate old contact fields to new structure if needed
+if 'contact_name' in st.session_state.client_info:
+    # Old structure detected - migrate to new
+    old_name = st.session_state.client_info.get('contact_name', '')
+    old_email = st.session_state.client_info.get('contact_email', '')
+
+    # Create contacts array with old data
+    st.session_state.client_info['contacts'] = [
+        {
+            'name': old_name,
+            'email': old_email,
+            'phone': '',
+            'role': 'Primary Contact'
+        }
+    ]
+
+    # Remove old fields
+    if 'contact_name' in st.session_state.client_info:
+        del st.session_state.client_info['contact_name']
+    if 'contact_email' in st.session_state.client_info:
+        del st.session_state.client_info['contact_email']
+
+# Ensure contacts array exists and has at least one contact
+if 'contacts' not in st.session_state.client_info:
+    st.session_state.client_info['contacts'] = [
+        {
+            'name': '',
+            'email': '',
+            'phone': '',
+            'role': 'Primary Contact'
+        }
+    ]
+elif len(st.session_state.client_info['contacts']) == 0:
+    # Ensure at least one contact exists
+    st.session_state.client_info['contacts'].append({
+        'name': '',
+        'email': '',
+        'phone': '',
+        'role': 'Primary Contact'
+    })
 
 # Initialize order notes (5 categories for better organization)
 if 'order_notes' not in st.session_state:
@@ -5763,17 +5810,6 @@ Rates default to current estimates but can be adjusted as needed.
                 placeholder="e.g., Acme Corp"
             )
 
-            st.session_state.client_info['contact_name'] = st.text_input(
-                "Contact Name",
-                value=st.session_state.client_info['contact_name'],
-                placeholder="e.g., John Smith"
-            )
-
-            st.session_state.client_info['contact_email'] = st.text_input(
-                "Contact Email",
-                value=st.session_state.client_info['contact_email'],
-                placeholder="e.g., john@acme.com"
-            )
 
             st.session_state.client_info['client_po'] = st.text_input(
                 "Client PO Number (optional)",
@@ -5805,6 +5841,85 @@ Rates default to current estimates but can be adjusted as needed.
             else:
                 st.session_state.client_info['shipping_address'] = ''
                 st.caption("Drop shipping details to be arranged separately")
+
+        # Contacts Management Section
+        st.markdown("---")
+        st.markdown("**Contacts Information**")
+
+        # Display all contacts
+        contacts = st.session_state.client_info.get('contacts', [])
+        if not contacts:
+            contacts = [{'name': '', 'email': '', 'phone': '', 'role': 'Primary Contact'}]
+            st.session_state.client_info['contacts'] = contacts
+
+        # Add/Remove buttons
+        col_add, col_spacer = st.columns([1, 3])
+        with col_add:
+            if st.button("Add Another Contact", key="add_contact_tab3"):
+                st.session_state.client_info['contacts'].append({
+                    'name': '',
+                    'email': '',
+                    'phone': '',
+                    'role': ''
+                })
+                st.rerun()
+
+        # Display each contact
+        for idx, contact in enumerate(contacts):
+            contact_num = idx + 1
+
+            # Contact header with remove button
+            if len(contacts) > 1:
+                col_header, col_remove = st.columns([3, 1])
+                with col_header:
+                    st.markdown(f"**Contact {contact_num}**")
+                with col_remove:
+                    if st.button(f"Remove", key=f"remove_contact_{idx}_tab3"):
+                        st.session_state.client_info['contacts'].pop(idx)
+                        st.rerun()
+            else:
+                st.markdown(f"**Contact {contact_num}**")
+
+            # Contact fields in 2 columns
+            col_contact1, col_contact2 = st.columns(2)
+
+            with col_contact1:
+                contact['name'] = st.text_input(
+                    "Name",
+                    value=contact.get('name', ''),
+                    key=f"contact_name_{idx}_tab3",
+                    placeholder="e.g., John Smith"
+                )
+
+                contact['email'] = st.text_input(
+                    "Email",
+                    value=contact.get('email', ''),
+                    key=f"contact_email_{idx}_tab3",
+                    placeholder="e.g., john@company.com"
+                )
+
+            with col_contact2:
+                contact['phone'] = st.text_input(
+                    "Phone",
+                    value=contact.get('phone', ''),
+                    key=f"contact_phone_{idx}_tab3",
+                    placeholder="e.g., (555) 123-4567"
+                )
+
+                role_options = ['Primary Contact', 'Billing Contact', 'Technical Contact', 'Shipping Contact', 'Other']
+                current_role = contact.get('role', 'Primary Contact')
+                if current_role not in role_options and current_role:
+                    role_options.append(current_role)
+
+                contact['role'] = st.selectbox(
+                    "Role",
+                    options=role_options,
+                    index=role_options.index(current_role) if current_role in role_options else 0,
+                    key=f"contact_role_{idx}_tab3"
+                )
+
+            if idx < len(contacts) - 1:
+                st.markdown("")  # Add spacing between contacts
 
         st.markdown("---")
         st.markdown("**Payment & Delivery Terms**")
@@ -6074,25 +6189,6 @@ with tab4:
                     on_change=update_company_name
                 )
 
-                def update_contact_name():
-                    st.session_state.client_info['contact_name'] = st.session_state.tab3_contact_name
-
-                st.text_input(
-                    "Contact Name",
-                    value=st.session_state.client_info.get('contact_name', ''),
-                    key="tab3_contact_name",
-                    on_change=update_contact_name
-                )
-
-                def update_contact_email():
-                    st.session_state.client_info['contact_email'] = st.session_state.tab3_contact_email
-
-                st.text_input(
-                    "Contact Email",
-                    value=st.session_state.client_info.get('contact_email', ''),
-                    key="tab3_contact_email",
-                    on_change=update_contact_email
-                )
 
                 def update_billing_address():
                     st.session_state.client_info['billing_address'] = st.session_state.tab3_billing_address
@@ -6115,6 +6211,88 @@ with tab4:
                     height=80,
                     on_change=update_shipping_address
                 )
+
+            # Contacts Management Section
+            st.markdown("---")
+            st.markdown("**Contacts Management**")
+
+            # Display all contacts
+            contacts = st.session_state.client_info.get('contacts', [])
+            if not contacts:
+                contacts = [{'name': '', 'email': '', 'phone': '', 'role': 'Primary Contact'}]
+                st.session_state.client_info['contacts'] = contacts
+
+            # Add button
+            if st.button("Add Contact", key="add_contact_tab4"):
+                st.session_state.client_info['contacts'].append({
+                    'name': '',
+                    'email': '',
+                    'phone': '',
+                    'role': ''
+                })
+                st.rerun()
+
+            # Display each contact
+            for idx, contact in enumerate(contacts):
+                with st.expander(f"Contact {idx + 1}", expanded=True):
+                    contact_col1, contact_col2 = st.columns(2)
+
+                    with contact_col1:
+                        # Create callback functions for each field
+                        def update_contact_name(idx=idx):
+                            st.session_state.client_info['contacts'][idx]['name'] = st.session_state[f"tab4_contact_name_{idx}"]
+
+                        def update_contact_email(idx=idx):
+                            st.session_state.client_info['contacts'][idx]['email'] = st.session_state[f"tab4_contact_email_{idx}"]
+
+                        contact['name'] = st.text_input(
+                            "Name",
+                            value=contact.get('name', ''),
+                            key=f"tab4_contact_name_{idx}",
+                            on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
+                                {'name': st.session_state[f"tab4_contact_name_{idx}"]}
+                            )
+                        )
+
+                        contact['email'] = st.text_input(
+                            "Email",
+                            value=contact.get('email', ''),
+                            key=f"tab4_contact_email_{idx}",
+                            on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
+                                {'email': st.session_state[f"tab4_contact_email_{idx}"]}
+                            )
+                        )
+
+                    with contact_col2:
+                        contact['phone'] = st.text_input(
+                            "Phone",
+                            value=contact.get('phone', ''),
+                            key=f"tab4_contact_phone_{idx}",
+                            on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
+                                {'phone': st.session_state[f"tab4_contact_phone_{idx}"]}
+                            )
+                        )
+
+                        role_options = ['Primary Contact', 'Billing Contact', 'Technical Contact', 'Shipping Contact', 'Other']
+                        current_role = contact.get('role', 'Primary Contact')
+                        if current_role not in role_options and current_role:
+                            role_options.append(current_role)
+
+                        contact['role'] = st.selectbox(
+                            "Role",
+                            options=role_options,
+                            index=role_options.index(current_role) if current_role in role_options else 0,
+                            key=f"tab4_contact_role_{idx}",
+                            on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
+                                {'role': st.session_state[f"tab4_contact_role_{idx}"]}
+                            )
+                        )
+
+                    # Remove button if more than one contact
+                    if len(contacts) > 1:
+                        if st.button(f"Remove Contact {idx + 1}", key=f"remove_contact_{idx}_tab4"):
+                            st.session_state.client_info['contacts'].pop(idx)
+                            st.rerun()
 
             with col2:
                 st.markdown("**Order Details**")

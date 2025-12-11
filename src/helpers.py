@@ -261,8 +261,16 @@ def validate_invoice_completeness(client_info, order_items):
     # Check client info required fields
     if not client_info.get('company_name'):
         missing.append("Company Name is required")
-    if not client_info.get('contact_email'):
-        missing.append("Contact Email is required")
+
+    # Check for at least one contact with email
+    contacts = client_info.get('contacts', [])
+    if not contacts:
+        missing.append("At least one contact is required")
+    else:
+        # Check if primary contact has email
+        primary_contact = contacts[0] if contacts else {}
+        if not primary_contact.get('email'):
+            missing.append("Primary Contact Email is required")
     if not client_info.get('client_in_hands_date'):
         missing.append("Client In-Hands Date is required")
     if not client_info.get('order_submitted_by'):
