@@ -1,6 +1,6 @@
 # Active Development TODO List
 
-**Last Updated:** 2025-12-02
+**Last Updated:** 2025-12-10
 **Status:** Active Development
 **Related Docs:**
 - [STAKEHOLDER_MEETING_NOTES.md](STAKEHOLDER_MEETING_NOTES.md) - Full context and details
@@ -76,16 +76,21 @@
   - Default enabled, applied before marketing rounding
 - **File:** app.py (Tab 1)
 
-### Tab 3: Table Restructuring
-- [ ] **Pricing Breakdown Table Changes:**
-  - [ ] Add "Units" column between "Per Unit" and "Total"
-  - [ ] Split "Total" → "PBP Cost" | "Client Price" columns
-  - [ ] Add product name as table header
-- [ ] **Order Summary Table Changes:**
-  - [ ] Reorder: Products → Subtotal → Customization → Subtotal
-  - [ ] Split "Total" → "PBP Cost" | "Client Price" columns
-  - [ ] Add product name headers
-- **File:** app.py (Tab 3, sections 2 and 4)
+### Tab 3: Table Restructuring ✅ COMPLETE (2025-12-10)
+- [X] **Pricing Breakdown Table Changes:**
+  - [X] Add "Units" column between "Per Unit" and "Total"
+  - [X] Split "Total" → "PBP Cost" | "Client Price" columns
+  - [X] Add product name as table header
+- [X] **Order Summary Table Changes:**
+  - [X] Reorder: Products → Subtotal → Customization → Subtotal
+  - [X] Split "Total" → "PBP Cost" | "Client Price" columns
+  - [X] Add product name headers
+- **Implementation:**
+  - New column order: Description | Units | PBP Cost (Per Unit) | PBP Cost | Client Price (Per Unit) | Client Price
+  - Added helper functions in helpers.py for split calculations
+  - Product descriptions now show "Base Product: [Product Name]"
+  - Clear differentiation between PBP costs and client prices
+- **Files:** app.py (Tab 3, sections 2 and 4), src/helpers.py
 
 ### Tab 3: New Fields
 - [ ] Add "Estimated Sales Tax" field in Order Settings
@@ -190,10 +195,12 @@ git commit -m "TEST: Verify markup calculations"
 - ✅ Created prioritized task list
 - ✅ All critical fixes (4 items - COMPLETE)
 - ✅ Spreadsheet structure changes (shipping columns)
+- ✅ Tab 1 search bar and pricing improvements (bidirectional editing, cancel button, $0.50 rounding)
+- ✅ Tab 3 table restructuring (PBP Cost vs Client Price columns)
 
 ### Current Sprint (Week 1)
 - ✅ Critical fixes (4 items - ALL COMPLETE)
-- 🟠 High-priority features (2 of 14 complete)
+- 🟠 High-priority features (7 of 14 complete)
 
 ### Next Sprint (Week 2)
 - Complete high-priority features
