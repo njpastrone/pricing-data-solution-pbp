@@ -104,9 +104,12 @@
   - Include in calculations
   - Added to both Tab 3 and Tab 4
   - Persists through save/load
-- [ ] Improve Order Notes UX
+- [X] Improve Order Notes UX ✅ COMPLETE (2025-12-11)
   - Move from dropdown to always-visible text areas
   - One section per note type
+  - Changed from 2 to 5 specific categories
+  - 3-2 column layout with word counts
+  - Backward compatible with old orders
 - [ ] Add multiple contacts support
   - Dynamic "Add Contact" button
   - Contact 1, Contact 2, etc.
@@ -203,10 +206,11 @@ git commit -m "TEST: Verify markup calculations"
 - ✅ Tab 3 table restructuring (PBP Cost vs Client Price columns)
 - ✅ Tab 3 sales tax field (estimated sales tax input and calculations)
 - ✅ Tab 3 kitting pricing section (separate PBP and client costs)
+- ✅ Tab 3 order notes UX improvements (5 always-visible fields)
 
 ### Current Sprint (Week 1)
 - ✅ Critical fixes (4 items - ALL COMPLETE)
-- 🟠 High-priority features (9 of 14 complete)
+- 🟠 High-priority features (10 of 14 complete)
 
 ### Next Sprint (Week 2)
 - Complete high-priority features
