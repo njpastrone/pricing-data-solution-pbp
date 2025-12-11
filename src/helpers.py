@@ -909,28 +909,31 @@ def calculate_split_totals(order_items, markup_only=False):
     return results
 
 
-def format_pricing_breakdown_row(description, units, per_unit_cost, pbp_total, client_total):
+def format_pricing_breakdown_row(description, units, pbp_per_unit, pbp_total, client_per_unit, client_total):
     """
     Format a row for the pricing breakdown table.
 
     Args:
         description (str): Line item description
         units (int/str): Number of units or "one-time"
-        per_unit_cost (float): Cost per unit
+        pbp_per_unit (float): PBP cost per unit
         pbp_total (float): Total PBP cost
+        client_per_unit (float): Client price per unit
         client_total (float): Total client price
 
     Returns:
-        list: Formatted row data for DataFrame
+        list: Formatted row data for DataFrame with columns:
+        [Description, Units, PBP Cost, PBP Cost (Per Unit), Client Price, Client Price (Per Unit)]
     """
     # Format units column
     units_str = str(units) if units != "one-time" else "1"
 
-    # Format per unit column
-    per_unit_str = f"${per_unit_cost:.2f}" if per_unit_cost > 0 else ""
+    # Format per unit columns
+    pbp_per_unit_str = f"${pbp_per_unit:.2f}" if pbp_per_unit > 0 else ""
+    client_per_unit_str = f"${client_per_unit:.2f}" if client_per_unit > 0 else ""
 
     # Format totals
     pbp_str = f"${pbp_total:.2f}" if pbp_total > 0 else "$0.00"
     client_str = f"${client_total:.2f}" if client_total > 0 else "$0.00"
 
-    return [description, units_str, per_unit_str, pbp_str, client_str]
+    return [description, units_str, pbp_str, pbp_per_unit_str, client_str, client_per_unit_str]

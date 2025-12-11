@@ -4928,16 +4928,19 @@ with tab3:
 
                 breakdown_data = []
 
-                # Base product row
+                # Base product row - include product name in description
                 product_pbp_cost = product_subtotal
                 product_client_price = product_subtotal + markup_amount
+                client_per_unit = (product_subtotal + markup_amount) / new_quantity if new_quantity > 0 else 0
+
                 breakdown_data.append(
                     format_pricing_breakdown_row(
-                        "Base Product",
+                        f"Base Product: {item['product_name']}",
                         new_quantity,
-                        base_price,
-                        product_pbp_cost,
-                        product_client_price
+                        base_price,  # PBP per unit
+                        product_pbp_cost,  # PBP total
+                        client_per_unit,  # Client per unit
+                        product_client_price  # Client total
                     )
                 )
 
@@ -4947,9 +4950,10 @@ with tab3:
                         format_pricing_breakdown_row(
                             "Customization Setup",
                             "one-time",
-                            customization_setup_total,
-                            partner_customization_setup_total,  # PBP pays partner
-                            customization_setup_total  # Client pays
+                            partner_customization_setup_total,  # PBP per unit (same as total for one-time)
+                            partner_customization_setup_total,  # PBP total
+                            customization_setup_total,  # Client per unit (same as total for one-time)
+                            customization_setup_total  # Client total
                         )
                     )
 
@@ -4960,16 +4964,17 @@ with tab3:
                         format_pricing_breakdown_row(
                             "Customization Per-Unit",
                             effective_custom_qty,
-                            new_perunit_cost,
-                            partner_customization_unit_total,  # PBP pays partner
-                            customization_unit_total  # Client pays
+                            new_partner_perunit_cost,  # PBP per unit cost
+                            partner_customization_unit_total,  # PBP total
+                            new_perunit_cost,  # Client per unit price
+                            customization_unit_total  # Client total
                         )
                     )
 
                 # Create DataFrame with new column structure
                 breakdown_df = pd.DataFrame(
                     breakdown_data,
-                    columns=["Description", "Units", "Per Unit", "PBP Cost", "Client Price"]
+                    columns=["Description", "Units", "PBP Cost", "PBP Cost (Per Unit)", "Client Price", "Client Price (Per Unit)"]
                 )
                 st.table(breakdown_df)
 
@@ -5371,40 +5376,44 @@ Rates default to current estimates but can be adjusted as needed.
                 summary_items.append([
                     item['product_name'],
                     item['quantity'],
+                    f"${item['product_total']:.2f}",
                     f"${item['total_per_unit']:.2f}",
                     f"${item['product_total']:.2f}",
-                    f"${item['product_total']:.2f}"  # Custom items have same cost and price
+                    f"${item['total_per_unit']:.2f}"  # Custom items have same cost and price
                 ])
                 continue
 
             # Product header
             st.caption(f"**{item['product_name']}**")
 
-            # Regular product: show base product
+            # Regular product: show base product with product name
             product_pbp_cost = item.get('product_subtotal', 0)
             product_client_price = product_pbp_cost + item.get('markup_amount', 0)
-            product_per_unit = product_pbp_cost / item['quantity'] if item['quantity'] > 0 else 0
+            product_pbp_per_unit = product_pbp_cost / item['quantity'] if item['quantity'] > 0 else 0
+            product_client_per_unit = product_client_price / item['quantity'] if item['quantity'] > 0 else 0
 
             summary_items.append([
-                "Base Product",
+                f"Base Product: {item['product_name']}",
                 item['quantity'],
-                f"${product_per_unit:.2f}",
                 f"${product_pbp_cost:.2f}",
-                f"${product_client_price:.2f}"
+                f"${product_pbp_per_unit:.2f}",
+                f"${product_client_price:.2f}",
+                f"${product_client_per_unit:.2f}"
             ])
 
         # Products subtotal row
         summary_items.append([
             "**Products Subtotal**",
             "",
-            "",
             f"**${split_totals['products_pbp_cost']:.2f}**",
-            f"**${split_totals['products_client_price']:.2f}**"
+            "",
+            f"**${split_totals['products_client_price']:.2f}**",
+            ""
         ])
 
         # SECTION 2: Customization (if any)
         if split_totals['customization_client_price'] > 0:
-            summary_items.append(["", "", "", "", ""])  # Empty row for spacing
+            summary_items.append(["", "", "", "", "", ""])  # Empty row for spacing
             st.markdown("##### Customization")
 
             for item in st.session_state.order_items:
@@ -5416,39 +5425,44 @@ Rates default to current estimates but can be adjusted as needed.
                 setup_client = item.get('customization_setup_total', 0)
                 unit_pbp = item.get('customization_unit_cost', 0)
                 unit_client = item.get('customization_unit_total', 0)
+                partner_per_unit = item.get('partner_customization_per_unit', 0)
 
                 if setup_client > 0:
                     summary_items.append([
                         f"{item['product_name']} - Setup",
                         "one-time",
-                        "",
                         f"${setup_pbp:.2f}",
-                        f"${setup_client:.2f}"
+                        f"${setup_pbp:.2f}",  # Per unit same as total for one-time
+                        f"${setup_client:.2f}",
+                        f"${setup_client:.2f}"  # Per unit same as total for one-time
                     ])
 
                 if unit_client > 0:
                     effective_custom_qty = item.get('customization_minimum_qty', item['quantity']) if item.get('apply_custom_minimum', False) else item['quantity']
                     custom_per_unit = item.get('customization_per_unit', 0)
+                    pbp_custom_per_unit = unit_pbp / effective_custom_qty if effective_custom_qty > 0 else 0
 
                     summary_items.append([
                         f"{item['product_name']} - Per Unit",
                         effective_custom_qty,
-                        f"${custom_per_unit:.2f}",
                         f"${unit_pbp:.2f}",
-                        f"${unit_client:.2f}"
+                        f"${partner_per_unit:.2f}",
+                        f"${unit_client:.2f}",
+                        f"${custom_per_unit:.2f}"
                     ])
 
             # Customization subtotal row
             summary_items.append([
                 "**Customization Subtotal**",
                 "",
-                "",
                 f"**${split_totals['customization_pbp_cost']:.2f}**",
-                f"**${split_totals['customization_client_price']:.2f}**"
+                "",
+                f"**${split_totals['customization_client_price']:.2f}**",
+                ""
             ])
 
         # SECTION 3: Discounts, Shipping, Tariffs, Fees
-        summary_items.append(["", "", "", "", ""])  # Empty row for spacing
+        summary_items.append(["", "", "", "", "", ""])  # Empty row for spacing
 
         # Add discount line if applicable (applies to products only, not customization)
         if discount_percent > 0:
@@ -5457,11 +5471,12 @@ Rates default to current estimates but can be adjusted as needed.
                 "",
                 "",
                 "",
-                f"-${discount_amount:.2f}"
+                f"-${discount_amount:.2f}",
+                ""
             ])
 
         # Shipping (same for PBP and client)
-        summary_items.append(["Shipping", "", "", f"${shipping:.2f}", f"${shipping:.2f}"])
+        summary_items.append(["Shipping", "", f"${shipping:.2f}", "", f"${shipping:.2f}", ""])
 
         # Add tariff for each product (if > 0)
         for item in st.session_state.order_items:
@@ -5472,9 +5487,10 @@ Rates default to current estimates but can be adjusted as needed.
                 summary_items.append([
                     f"Tariff: {item['product_name']} ({tariff_rate}% - {country})",
                     "",
+                    f"${tariff_amount:.2f}",
                     "",
                     f"${tariff_amount:.2f}",
-                    f"${tariff_amount:.2f}"
+                    ""
                 ])
 
         # Add credit card fee if applicable (client pays)
@@ -5484,7 +5500,8 @@ Rates default to current estimates but can be adjusted as needed.
                 "",
                 "",
                 "",
-                f"${cc_fee_amount:.2f}"
+                f"${cc_fee_amount:.2f}",
+                ""
             ])
 
         # Calculate total PBP cost
@@ -5494,13 +5511,14 @@ Rates default to current estimates but can be adjusted as needed.
         summary_items.append([
             "**TOTAL**",
             f"**{total_units} units**",
-            "",
             f"**${total_pbp_cost:.2f}**",
-            f"**${total_quote:.2f}**"
+            "",
+            f"**${total_quote:.2f}**",
+            ""
         ])
 
         # Create and display table with new column structure
-        summary_df = pd.DataFrame(summary_items, columns=["Item", "Qty", "Per Unit", "PBP Cost", "Client Price"])
+        summary_df = pd.DataFrame(summary_items, columns=["Item", "Qty", "PBP Cost", "PBP Cost (Per Unit)", "Client Price", "Client Price (Per Unit)"])
         st.table(summary_df)
 
         # Display total

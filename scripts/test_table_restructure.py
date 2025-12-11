@@ -109,38 +109,42 @@ def test_format_pricing_breakdown_row():
     print("\nTesting format_pricing_breakdown_row function...")
     print("=" * 50)
 
-    # Test case 1: Regular product row
+    # Test case 1: Regular product row with new column structure
     row_1 = format_pricing_breakdown_row(
-        "Base Product",
+        "Base Product: Test Product",
         10,
-        25.0,
-        250.0,
-        500.0
+        25.0,  # PBP per unit
+        250.0,  # PBP total
+        50.0,   # Client per unit
+        500.0   # Client total
     )
-    assert row_1 == ["Base Product", "10", "$25.00", "$250.00", "$500.00"]
-    print("✓ Test 1 passed: Regular product row")
+    # New order: Description, Units, PBP Cost, PBP Cost (Per Unit), Client Price, Client Price (Per Unit)
+    assert row_1 == ["Base Product: Test Product", "10", "$250.00", "$25.00", "$500.00", "$50.00"]
+    print("✓ Test 1 passed: Regular product row with new column order")
 
     # Test case 2: One-time setup fee
     row_2 = format_pricing_breakdown_row(
         "Customization Setup",
         "one-time",
-        100.0,
-        100.0,
-        100.0
+        100.0,  # PBP per unit (same as total for one-time)
+        100.0,  # PBP total
+        200.0,  # Client per unit (same as total for one-time)
+        200.0   # Client total
     )
-    assert row_2 == ["Customization Setup", "1", "$100.00", "$100.00", "$100.00"]
+    assert row_2 == ["Customization Setup", "1", "$100.00", "$100.00", "$200.00", "$200.00"]
     print("✓ Test 2 passed: One-time setup fee")
 
     # Test case 3: Zero values
     row_3 = format_pricing_breakdown_row(
         "No cost item",
         5,
-        0,
-        0,
-        0
+        0,  # PBP per unit
+        0,  # PBP total
+        0,  # Client per unit
+        0   # Client total
     )
-    assert row_3 == ["No cost item", "5", "", "$0.00", "$0.00"]
-    print("✓ Test 3 passed: Zero values")
+    assert row_3 == ["No cost item", "5", "$0.00", "", "$0.00", ""]
+    print("✓ Test 3 passed: Zero values with proper empty strings")
 
     print("\n✅ All format_pricing_breakdown_row tests passed!")
     return True
@@ -166,9 +170,11 @@ def main():
             print("✓ Pricing breakdown row formatting")
             print("✓ Handles products, customization, and custom line items")
             print("\nYou can now test the UI to verify:")
-            print("1. Section 2 (Current Order) shows new table with Units, PBP Cost, Client Price")
-            print("2. Section 4 (Order Summary) reorganized with products first, then customization")
-            print("3. Both sections clearly differentiate PBP costs vs client prices")
+            print("1. Section 2 (Current Order) shows proper column order: Description, Units, PBP Cost, PBP Cost (Per Unit), Client Price, Client Price (Per Unit)")
+            print("2. Section 4 (Order Summary) uses the same column structure")
+            print("3. Product descriptions show 'Base Product: [Product Name]' format")
+            print("4. Per Unit columns positioned after their respective total columns")
+            print("5. Both sections clearly differentiate PBP costs vs client prices")
         else:
             print("\n❌ Some tests failed. Please review the output above.")
 
