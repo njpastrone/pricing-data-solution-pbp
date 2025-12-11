@@ -388,11 +388,14 @@ if 'client_info' not in st.session_state:
         'cost_submitted_date': None  # NEW: Date costs were submitted
     }
 
-# Initialize order notes (simplified to 2 categories)
+# Initialize order notes (5 categories for better organization)
 if 'order_notes' not in st.session_state:
     st.session_state.order_notes = {
-        'notes_to_partner': '',  # Notes for Purchase Orders (sent to partners)
-        'accounting_notes': ''  # Notes for Invoices (sent to clients/accounting)
+        'kitting_specs': '',      # Kitting/packaging specifications
+        'client_requests': '',    # Special client requests
+        'addon_samples': '',      # Additional samples needed
+        'artwork_attachments': '', # Artwork file references
+        'general_notes': ''       # General/miscellaneous notes
     }
 
 # Initialize credit card fee settings
@@ -763,7 +766,20 @@ with st.sidebar:
                                 st.session_state.apply_cc_fee = order_data.get('apply_cc_fee', False)
                                 st.session_state.cc_fee_percent = order_data.get('cc_fee_percent', 3.0)
                                 st.session_state.client_info = order_data.get('client_info', st.session_state.client_info)
-                                st.session_state.order_notes = order_data.get('order_notes', {'notes_to_partner': '', 'accounting_notes': ''})
+                                # Handle both old and new order_notes structures
+                                loaded_notes = order_data.get('order_notes', {})
+                                if 'kitting_specs' in loaded_notes:
+                                    # New 5-category structure
+                                    st.session_state.order_notes = loaded_notes
+                                else:
+                                    # Old 2-category structure - migrate to new
+                                    st.session_state.order_notes = {
+                                        'kitting_specs': '',
+                                        'client_requests': loaded_notes.get('accounting_notes', ''),
+                                        'addon_samples': '',
+                                        'artwork_attachments': '',
+                                        'general_notes': loaded_notes.get('notes_to_partner', '')
+                                    }
                                 st.session_state.order_confirmed = order_data.get('order_confirmed', False)
 
                                 st.success(f"Loaded: {order['name']}")
@@ -799,7 +815,20 @@ with st.sidebar:
                                 st.session_state.apply_cc_fee = order_data.get('apply_cc_fee', False)
                                 st.session_state.cc_fee_percent = order_data.get('cc_fee_percent', 3.0)
                                 st.session_state.client_info = order_data.get('client_info', st.session_state.client_info)
-                                st.session_state.order_notes = order_data.get('order_notes', {'notes_to_partner': '', 'accounting_notes': ''})
+                                # Handle both old and new order_notes structures
+                                loaded_notes = order_data.get('order_notes', {})
+                                if 'kitting_specs' in loaded_notes:
+                                    # New 5-category structure
+                                    st.session_state.order_notes = loaded_notes
+                                else:
+                                    # Old 2-category structure - migrate to new
+                                    st.session_state.order_notes = {
+                                        'kitting_specs': '',
+                                        'client_requests': loaded_notes.get('accounting_notes', ''),
+                                        'addon_samples': '',
+                                        'artwork_attachments': '',
+                                        'general_notes': loaded_notes.get('notes_to_partner', '')
+                                    }
                                 st.session_state.order_confirmed = order_data.get('order_confirmed', False)
 
                                 st.success(f"Loaded: {order['name']}")
@@ -879,8 +908,11 @@ with st.sidebar:
                     'cost_submitted_date': None
                 }
                 st.session_state.order_notes = {
-                    'notes_to_partner': '',
-                    'accounting_notes': ''
+                    'kitting_specs': '',
+                    'client_requests': '',
+                    'addon_samples': '',
+                    'artwork_attachments': '',
+                    'general_notes': ''
                 }
                 st.session_state.order_shipping = 0.0
                 st.session_state.partner_shipping = 0.0
@@ -4032,7 +4064,20 @@ with tab3:
                                 st.session_state.apply_cc_fee = order_data.get('apply_cc_fee', False)
                                 st.session_state.cc_fee_percent = order_data.get('cc_fee_percent', 3.0)
                                 st.session_state.client_info = order_data.get('client_info', st.session_state.client_info)
-                                st.session_state.order_notes = order_data.get('order_notes', {'notes_to_partner': '', 'accounting_notes': ''})
+                                # Handle both old and new order_notes structures
+                                loaded_notes = order_data.get('order_notes', {})
+                                if 'kitting_specs' in loaded_notes:
+                                    # New 5-category structure
+                                    st.session_state.order_notes = loaded_notes
+                                else:
+                                    # Old 2-category structure - migrate to new
+                                    st.session_state.order_notes = {
+                                        'kitting_specs': '',
+                                        'client_requests': loaded_notes.get('accounting_notes', ''),
+                                        'addon_samples': '',
+                                        'artwork_attachments': '',
+                                        'general_notes': loaded_notes.get('notes_to_partner', '')
+                                    }
                                 st.session_state.order_confirmed = order_data.get('order_confirmed', False)
 
                                 st.success(f"Loaded order: {selected_order['name']}")
@@ -5344,24 +5389,89 @@ Rates default to current estimates but can be adjusted as needed.
                         st.rerun()
 
         with col_notes:
-            with st.expander(f"Add Order Notes ({filled_notes_count} filled)", expanded=False):
-                st.caption("Add specific details for this order")
+            st.write(f"**Order Notes** ({filled_notes_count} filled)")
+            st.caption("Add important details about this order")
 
-                st.session_state.order_notes['notes_to_partner'] = st.text_area(
-                    "Notes to Partner",
-                    value=st.session_state.order_notes.get('notes_to_partner', ''),
-                    placeholder="Kitting specs, packaging requirements, artwork files, special handling instructions...",
-                    height=100,
-                    help="These notes will appear in Purchase Orders sent to partners"
-                )
+    # Order Notes Section - Always visible text areas in 2-column layout
+    st.divider()
+    st.subheader("Order Notes")
+    st.caption("Capture all important details about this order. These notes will appear in purchase orders and invoices.")
 
-                st.session_state.order_notes['accounting_notes'] = st.text_area(
-                    "Accounting Notes",
-                    value=st.session_state.order_notes.get('accounting_notes', ''),
-                    placeholder="Client requests, payment terms, special billing notes...",
-                    height=100,
-                    help="These notes will appear in Invoices sent to clients and accounting"
-                )
+    # First row - 3 fields
+    notes_col1, notes_col2, notes_col3 = st.columns(3)
+
+    with notes_col1:
+        kitting_value = st.session_state.order_notes.get('kitting_specs', '')
+        st.session_state.order_notes['kitting_specs'] = st.text_area(
+            "Kitting Specifications",
+            value=kitting_value,
+            placeholder="Box size, packaging requirements, assembly instructions...",
+            height=100,
+            key="kitting_specs_input",
+            help="Details about gift sets, packaging, and assembly"
+        )
+        if kitting_value:
+            word_count = len(kitting_value.split())
+            st.caption(f"{word_count} words")
+
+    with notes_col2:
+        client_value = st.session_state.order_notes.get('client_requests', '')
+        st.session_state.order_notes['client_requests'] = st.text_area(
+            "Client Requests",
+            value=client_value,
+            placeholder="Rush delivery, special handling, specific requirements...",
+            height=100,
+            key="client_requests_input",
+            help="Special requests or requirements from the client"
+        )
+        if client_value:
+            word_count = len(client_value.split())
+            st.caption(f"{word_count} words")
+
+    with notes_col3:
+        samples_value = st.session_state.order_notes.get('addon_samples', '')
+        st.session_state.order_notes['addon_samples'] = st.text_area(
+            "Samples Required",
+            value=samples_value,
+            placeholder="Executive samples, approval samples, extra units...",
+            height=100,
+            key="addon_samples_input",
+            help="Sample products needed for this order"
+        )
+        if samples_value:
+            word_count = len(samples_value.split())
+            st.caption(f"{word_count} words")
+
+    # Second row - 2 fields
+    notes_col4, notes_col5 = st.columns(2)
+
+    with notes_col4:
+        artwork_value = st.session_state.order_notes.get('artwork_attachments', '')
+        st.session_state.order_notes['artwork_attachments'] = st.text_area(
+            "Artwork Details",
+            value=artwork_value,
+            placeholder="Logo files, design specifications, brand guidelines, file names...",
+            height=100,
+            key="artwork_attachments_input",
+            help="Logo placement, design requirements, branding information"
+        )
+        if artwork_value:
+            word_count = len(artwork_value.split())
+            st.caption(f"{word_count} words")
+
+    with notes_col5:
+        general_value = st.session_state.order_notes.get('general_notes', '')
+        st.session_state.order_notes['general_notes'] = st.text_area(
+            "General Notes",
+            value=general_value,
+            placeholder="Any other important information about this order...",
+            height=100,
+            key="general_notes_input",
+            help="Catch-all for any other notes or details"
+        )
+        if general_value:
+            word_count = len(general_value.split())
+            st.caption(f"{word_count} words")
 
     # Use session state values for calculations
     shipping = st.session_state.order_shipping
@@ -6777,10 +6887,16 @@ with tab4:
 
         # Display notes if any are filled
         notes_content = []
-        if order_notes.get('notes_to_partner'):
-            notes_content.append(f"**Notes to Partner (for Purchase Orders):**\n{order_notes['notes_to_partner']}")
-        if order_notes.get('accounting_notes'):
-            notes_content.append(f"**Accounting Notes (for Invoices):**\n{order_notes['accounting_notes']}")
+        if order_notes.get('kitting_specs'):
+            notes_content.append(f"**Kitting Specifications:**\n{order_notes['kitting_specs']}")
+        if order_notes.get('client_requests'):
+            notes_content.append(f"**Client Requests:**\n{order_notes['client_requests']}")
+        if order_notes.get('addon_samples'):
+            notes_content.append(f"**Samples Required:**\n{order_notes['addon_samples']}")
+        if order_notes.get('artwork_attachments'):
+            notes_content.append(f"**Artwork Details:**\n{order_notes['artwork_attachments']}")
+        if order_notes.get('general_notes'):
+            notes_content.append(f"**General Notes:**\n{order_notes['general_notes']}")
 
         if notes_content:
             for note in notes_content:
