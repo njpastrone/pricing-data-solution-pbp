@@ -118,9 +118,9 @@ def test_format_pricing_breakdown_row():
         50.0,   # Client per unit
         500.0   # Client total
     )
-    # New order: Description, Units, PBP Cost, PBP Cost (Per Unit), Client Price, Client Price (Per Unit)
-    assert row_1 == ["Base Product: Test Product", "10", "$250.00", "$25.00", "$500.00", "$50.00"]
-    print("✓ Test 1 passed: Regular product row with new column order")
+    # New order: Description, Units, PBP Cost (Per Unit), PBP Cost, Client Price (Per Unit), Client Price
+    assert row_1 == ["Base Product: Test Product", "10", "$25.00", "$250.00", "$50.00", "$500.00"]
+    print("✓ Test 1 passed: Regular product row with logical column order")
 
     # Test case 2: One-time setup fee
     row_2 = format_pricing_breakdown_row(
@@ -143,7 +143,7 @@ def test_format_pricing_breakdown_row():
         0,  # Client per unit
         0   # Client total
     )
-    assert row_3 == ["No cost item", "5", "$0.00", "", "$0.00", ""]
+    assert row_3 == ["No cost item", "5", "", "$0.00", "", "$0.00"]
     print("✓ Test 3 passed: Zero values with proper empty strings")
 
     print("\n✅ All format_pricing_breakdown_row tests passed!")
@@ -170,10 +170,10 @@ def main():
             print("✓ Pricing breakdown row formatting")
             print("✓ Handles products, customization, and custom line items")
             print("\nYou can now test the UI to verify:")
-            print("1. Section 2 (Current Order) shows proper column order: Description, Units, PBP Cost, PBP Cost (Per Unit), Client Price, Client Price (Per Unit)")
+            print("1. Section 2 (Current Order) shows logical column order: Description, Units, PBP Cost (Per Unit), PBP Cost, Client Price (Per Unit), Client Price")
             print("2. Section 4 (Order Summary) uses the same column structure")
             print("3. Product descriptions show 'Base Product: [Product Name]' format")
-            print("4. Per Unit columns positioned after their respective total columns")
+            print("4. Per-unit prices come before totals (showing rate before calculation)")
             print("5. Both sections clearly differentiate PBP costs vs client prices")
         else:
             print("\n❌ Some tests failed. Please review the output above.")

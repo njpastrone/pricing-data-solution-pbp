@@ -923,7 +923,7 @@ def format_pricing_breakdown_row(description, units, pbp_per_unit, pbp_total, cl
 
     Returns:
         list: Formatted row data for DataFrame with columns:
-        [Description, Units, PBP Cost, PBP Cost (Per Unit), Client Price, Client Price (Per Unit)]
+        [Description, Units, PBP Cost (Per Unit), PBP Cost, Client Price (Per Unit), Client Price]
     """
     # Format units column
     units_str = str(units) if units != "one-time" else "1"
@@ -936,4 +936,5 @@ def format_pricing_breakdown_row(description, units, pbp_per_unit, pbp_total, cl
     pbp_str = f"${pbp_total:.2f}" if pbp_total > 0 else "$0.00"
     client_str = f"${client_total:.2f}" if client_total > 0 else "$0.00"
 
-    return [description, units_str, pbp_str, pbp_per_unit_str, client_str, client_per_unit_str]
+    # Return in the new logical order: Description, Units, PBP Per Unit, PBP Total, Client Per Unit, Client Total
+    return [description, units_str, pbp_per_unit_str, pbp_str, client_per_unit_str, client_str]
