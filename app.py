@@ -337,6 +337,10 @@ if 'partner_shipping' not in st.session_state:
     st.session_state.partner_shipping = 0.0
 if 'sales_tax' not in st.session_state:
     st.session_state.sales_tax = 0.0
+if 'kitting_pbp_cost' not in st.session_state:
+    st.session_state.kitting_pbp_cost = 0.0
+if 'kitting_client_price' not in st.session_state:
+    st.session_state.kitting_client_price = 0.0
 
 # Initialize discount settings in session state
 if 'order_discount_type' not in st.session_state:
@@ -749,6 +753,8 @@ with st.sidebar:
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
+                                st.session_state.kitting_pbp_cost = order_data.get('kitting_pbp_cost', 0.0)
+                                st.session_state.kitting_client_price = order_data.get('kitting_client_price', 0.0)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -783,6 +789,8 @@ with st.sidebar:
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
+                                st.session_state.kitting_pbp_cost = order_data.get('kitting_pbp_cost', 0.0)
+                                st.session_state.kitting_client_price = order_data.get('kitting_client_price', 0.0)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -3891,6 +3899,8 @@ with tab3:
                             'order_shipping': st.session_state.order_shipping,
                             'partner_shipping': st.session_state.partner_shipping,
                             'sales_tax': st.session_state.sales_tax,
+                            'kitting_pbp_cost': st.session_state.kitting_pbp_cost,
+                            'kitting_client_price': st.session_state.kitting_client_price,
                             'order_discount_type': st.session_state.order_discount_type,
                             'order_discount_preset': st.session_state.order_discount_preset,
                             'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
@@ -4012,6 +4022,8 @@ with tab3:
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
+                                st.session_state.kitting_pbp_cost = order_data.get('kitting_pbp_cost', 0.0)
+                                st.session_state.kitting_client_price = order_data.get('kitting_client_price', 0.0)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -4084,6 +4096,8 @@ with tab3:
                         'order_shipping': st.session_state.order_shipping,
                         'partner_shipping': st.session_state.partner_shipping,
                         'sales_tax': st.session_state.sales_tax,
+                        'kitting_pbp_cost': st.session_state.kitting_pbp_cost,
+                        'kitting_client_price': st.session_state.kitting_client_price,
                         'order_discount_type': st.session_state.order_discount_type,
                         'order_discount_preset': st.session_state.order_discount_preset,
                         'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
@@ -5226,6 +5240,33 @@ Rates default to current estimates but can be adjusted as needed.
                         help="Percentage fee charged for credit card payments"
                     )
 
+        # Kitting & Gift Set Pricing
+        st.divider()
+        st.subheader("Kitting & Gift Set Pricing")
+        st.caption("Add costs for gift boxes, custom packaging, or product assembly")
+
+        col1_kitting, col2_kitting = st.columns(2)
+
+        with col1_kitting:
+            st.session_state.kitting_pbp_cost = st.number_input(
+                "Kitting Cost (PBP) ($)",
+                min_value=0.0,
+                value=st.session_state.kitting_pbp_cost,
+                step=10.0,
+                key="kitting_pbp_input",
+                help="What PBP pays for gift set assembly and packaging"
+            )
+
+        with col2_kitting:
+            st.session_state.kitting_client_price = st.number_input(
+                "Kitting Price (Client) ($)",
+                min_value=0.0,
+                value=st.session_state.kitting_client_price,
+                step=10.0,
+                key="kitting_client_input",
+                help="What client pays for gift sets and custom packaging"
+            )
+
         # Custom Line Items & Order Notes - Side by Side
         st.divider()
 
@@ -5369,8 +5410,12 @@ Rates default to current estimates but can be adjusted as needed.
         # Get sales tax amount
         sales_tax = st.session_state.sales_tax
 
+        # Get kitting costs
+        kitting_pbp = st.session_state.kitting_pbp_cost
+        kitting_client = st.session_state.kitting_client_price
+
         # Calculate base total before CC fee
-        total_before_cc = subtotal_after_discount + shipping + sales_tax + tariff
+        total_before_cc = subtotal_after_discount + shipping + sales_tax + kitting_client + tariff
 
         # Calculate credit card fee (applied to total before CC fee)
         cc_fee_amount = calculate_credit_card_fee(total_before_cc, st.session_state.apply_cc_fee, st.session_state.cc_fee_percent)
@@ -5502,6 +5547,10 @@ Rates default to current estimates but can be adjusted as needed.
         if sales_tax > 0:
             summary_items.append(["Sales Tax (Estimated)", "", "", "", "", f"${sales_tax:.2f}"])
 
+        # Kitting/Gift Set Assembly (show if either cost > 0)
+        if kitting_pbp > 0 or kitting_client > 0:
+            summary_items.append(["Kitting/Gift Set Assembly", "", "", f"${kitting_pbp:.2f}", "", f"${kitting_client:.2f}"])
+
         # Add tariff for each product (if > 0)
         for item in st.session_state.order_items:
             tariff_amount = item.get('tariff_amount', 0)
@@ -5529,7 +5578,7 @@ Rates default to current estimates but can be adjusted as needed.
             ])
 
         # Calculate total PBP cost (sales tax only affects client, not PBP)
-        total_pbp_cost = split_totals['total_pbp_cost'] + shipping + tariff
+        total_pbp_cost = split_totals['total_pbp_cost'] + shipping + kitting_pbp + tariff
 
         # Final total row
         summary_items.append([
@@ -5806,6 +5855,8 @@ Rates default to current estimates but can be adjusted as needed.
                     'order_shipping': st.session_state.order_shipping,
                     'partner_shipping': st.session_state.partner_shipping,
                     'sales_tax': st.session_state.sales_tax,
+                    'kitting_pbp_cost': st.session_state.kitting_pbp_cost,
+                    'kitting_client_price': st.session_state.kitting_client_price,
                     'order_discount_type': st.session_state.order_discount_type,
                     'order_discount_preset': st.session_state.order_discount_preset,
                     'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
@@ -6236,6 +6287,32 @@ with tab4:
                             key="tab3_cc_fee_percent_input",
                             help="Percentage fee charged for credit card payments"
                         )
+
+            # Kitting & Gift Set Pricing
+            st.divider()
+            st.subheader("Kitting & Gift Set Pricing")
+
+            col1_kitting, col2_kitting = st.columns(2)
+
+            with col1_kitting:
+                st.session_state.kitting_pbp_cost = st.number_input(
+                    "Kitting Cost (PBP) ($)",
+                    min_value=0.0,
+                    value=st.session_state.kitting_pbp_cost,
+                    step=10.0,
+                    key="tab4_kitting_pbp_input",
+                    help="What PBP pays for gift set assembly and packaging"
+                )
+
+            with col2_kitting:
+                st.session_state.kitting_client_price = st.number_input(
+                    "Kitting Price (Client) ($)",
+                    min_value=0.0,
+                    value=st.session_state.kitting_client_price,
+                    step=10.0,
+                    key="tab4_kitting_client_input",
+                    help="What client pays for gift sets and custom packaging"
+                )
 
             # Custom Line Items & Order Notes - Side by Side
             st.divider()
