@@ -335,6 +335,8 @@ if 'order_shipping' not in st.session_state:
     st.session_state.order_shipping = 0.0
 if 'partner_shipping' not in st.session_state:
     st.session_state.partner_shipping = 0.0
+if 'sales_tax' not in st.session_state:
+    st.session_state.sales_tax = 0.0
 
 # Initialize discount settings in session state
 if 'order_discount_type' not in st.session_state:
@@ -746,6 +748,7 @@ with st.sidebar:
                                 st.session_state.order_items = order_data.get('order_items', [])
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
+                                st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -779,6 +782,7 @@ with st.sidebar:
                                 st.session_state.order_items = order_data.get('order_items', [])
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
+                                st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -3886,6 +3890,7 @@ with tab3:
                             'order_items': st.session_state.order_items,
                             'order_shipping': st.session_state.order_shipping,
                             'partner_shipping': st.session_state.partner_shipping,
+                            'sales_tax': st.session_state.sales_tax,
                             'order_discount_type': st.session_state.order_discount_type,
                             'order_discount_preset': st.session_state.order_discount_preset,
                             'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
@@ -4006,6 +4011,7 @@ with tab3:
                                 st.session_state.order_items = order_data.get('order_items', [])
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
+                                st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -4077,6 +4083,7 @@ with tab3:
                         'order_items': st.session_state.order_items,
                         'order_shipping': st.session_state.order_shipping,
                         'partner_shipping': st.session_state.partner_shipping,
+                        'sales_tax': st.session_state.sales_tax,
                         'order_discount_type': st.session_state.order_discount_type,
                         'order_discount_preset': st.session_state.order_discount_preset,
                         'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
@@ -5043,6 +5050,16 @@ with tab3:
                 help="Shipping cost PBP pays to partner (for Purchase Orders)"
             )
 
+            st.markdown("**Sales Tax:**")
+            st.session_state.sales_tax = st.number_input(
+                "Estimated Sales Tax ($)",
+                min_value=0.0,
+                value=st.session_state.sales_tax,
+                step=5.0,
+                key="sales_tax_input",
+                help="Estimated sales tax amount to be charged to client"
+            )
+
         with col_tariff:
             # Calculate total tariff for expander label
             total_tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
@@ -5349,8 +5366,11 @@ Rates default to current estimates but can be adjusted as needed.
         # Build subtotal: products after discount + customization (no discount on customization)
         subtotal_after_discount = products_after_discount + split_totals['customization_client_price']
 
+        # Get sales tax amount
+        sales_tax = st.session_state.sales_tax
+
         # Calculate base total before CC fee
-        total_before_cc = subtotal_after_discount + shipping + tariff
+        total_before_cc = subtotal_after_discount + shipping + sales_tax + tariff
 
         # Calculate credit card fee (applied to total before CC fee)
         cc_fee_amount = calculate_credit_card_fee(total_before_cc, st.session_state.apply_cc_fee, st.session_state.cc_fee_percent)
@@ -5478,6 +5498,10 @@ Rates default to current estimates but can be adjusted as needed.
         # Shipping (same for PBP and client)
         summary_items.append(["Shipping", "", "", f"${shipping:.2f}", "", f"${shipping:.2f}"])
 
+        # Sales Tax (only affects client price)
+        if sales_tax > 0:
+            summary_items.append(["Sales Tax (Estimated)", "", "", "", "", f"${sales_tax:.2f}"])
+
         # Add tariff for each product (if > 0)
         for item in st.session_state.order_items:
             tariff_amount = item.get('tariff_amount', 0)
@@ -5504,7 +5528,7 @@ Rates default to current estimates but can be adjusted as needed.
                 f"${cc_fee_amount:.2f}"
             ])
 
-        # Calculate total PBP cost
+        # Calculate total PBP cost (sales tax only affects client, not PBP)
         total_pbp_cost = split_totals['total_pbp_cost'] + shipping + tariff
 
         # Final total row
@@ -5781,6 +5805,7 @@ Rates default to current estimates but can be adjusted as needed.
                     'order_items': st.session_state.order_items,
                     'order_shipping': st.session_state.order_shipping,
                     'partner_shipping': st.session_state.partner_shipping,
+                    'sales_tax': st.session_state.sales_tax,
                     'order_discount_type': st.session_state.order_discount_type,
                     'order_discount_preset': st.session_state.order_discount_preset,
                     'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
@@ -6044,6 +6069,16 @@ with tab4:
                     step=10.0,
                     key="tab3_partner_shipping_input",
                     help="Shipping cost PBP pays to partner (for Purchase Orders)"
+                )
+
+                st.markdown("**Sales Tax:**")
+                st.session_state.sales_tax = st.number_input(
+                    "Estimated Sales Tax ($)",
+                    min_value=0.0,
+                    value=st.session_state.sales_tax,
+                    step=5.0,
+                    key="tab3_sales_tax_input",
+                    help="Estimated sales tax amount to be charged to client"
                 )
 
             with col_tariff:
