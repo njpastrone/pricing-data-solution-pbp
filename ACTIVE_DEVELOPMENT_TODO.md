@@ -116,9 +116,13 @@
   - 4 fields per contact (name, email, phone, role)
   - Add/remove functionality with minimum 1 contact
   - Backward compatible with old orders
-- [ ] Add "Net 15" to payment terms dropdown
-  - Add custom payment terms option
-- **File:** app.py (Tab 3, section 3)
+- [X] Add "Net 15" to payment terms dropdown ✅ COMPLETE (2025-12-11)
+  - Added Net 15 option after Net 30
+  - Added Custom option with conditional text input
+  - Tab 3: Dropdown with custom terms input when Custom selected
+  - Tab 4: Same functionality with callbacks for persistence
+  - Backward compatible - existing orders work unchanged
+- **File:** app.py (Tab 3 section 3, Tab 4 payment terms)
 
 ### Tab 4: Editable Descriptions
 - [ ] Make "Item + Specs" column editable
@@ -211,10 +215,11 @@ git commit -m "TEST: Verify markup calculations"
 - ✅ Tab 3 kitting pricing section (separate PBP and client costs)
 - ✅ Tab 3 order notes UX improvements (5 always-visible fields)
 - ✅ Tab 3 multiple contacts support (dynamic add/remove functionality)
+- ✅ Tab 3 payment terms Net 15 + custom option (dropdown with conditional input)
 
 ### Current Sprint (Week 1)
 - ✅ Critical fixes (4 items - ALL COMPLETE)
-- 🟠 High-priority features (11 of 14 complete)
+- 🟠 High-priority features (12 of 14 complete)
 
 ### Next Sprint (Week 2)
 - Complete high-priority features

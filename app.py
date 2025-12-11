@@ -435,6 +435,10 @@ elif len(st.session_state.client_info['contacts']) == 0:
         'role': 'Primary Contact'
     })
 
+# Initialize custom payment terms
+if 'custom_payment_terms' not in st.session_state:
+    st.session_state.custom_payment_terms = ''
+
 # Initialize order notes (5 categories for better organization)
 if 'order_notes' not in st.session_state:
     st.session_state.order_notes = {
@@ -5927,17 +5931,36 @@ Rates default to current estimates but can be adjusted as needed.
         col3, col4 = st.columns(2)
 
         with col3:
-            # Updated to dropdown
-            payment_terms_options = ['Net 30', 'Net 60', 'Due on Receipt', '50% Deposit']
+            # Updated to dropdown with Net 15 and Custom option
+            payment_terms_options = ['Net 30', 'Net 15', 'Net 60', 'Due on Receipt', '50% Deposit', 'Custom']
             current_timeline = st.session_state.client_info.get('payment_timeline', 'Net 30')
-            if current_timeline not in payment_terms_options:
-                payment_terms_options.append(current_timeline)
 
-            st.session_state.client_info['payment_timeline'] = st.selectbox(
+            # If current value is custom (not in standard options), select Custom
+            if current_timeline not in payment_terms_options[:-1]:  # Exclude 'Custom' from check
+                if current_timeline and current_timeline != 'Custom':
+                    st.session_state.custom_payment_terms = current_timeline
+                selected_index = payment_terms_options.index('Custom')
+            else:
+                selected_index = payment_terms_options.index(current_timeline)
+
+            selected_payment = st.selectbox(
                 "Payment Terms",
                 options=payment_terms_options,
-                index=payment_terms_options.index(current_timeline) if current_timeline in payment_terms_options else 0
+                index=selected_index
             )
+
+            # If Custom is selected, show text input
+            if selected_payment == "Custom":
+                custom_terms = st.text_input(
+                    "Enter Custom Payment Terms",
+                    value=st.session_state.custom_payment_terms,
+                    placeholder="e.g., Net 45, 2/10 Net 30, etc.",
+                    key="custom_payment_input_tab3"
+                )
+                st.session_state.custom_payment_terms = custom_terms
+                st.session_state.client_info['payment_timeline'] = custom_terms if custom_terms else "Custom"
+            else:
+                st.session_state.client_info['payment_timeline'] = selected_payment
 
         with col4:
             # Updated to match template options
@@ -6321,17 +6344,46 @@ with tab4:
                 )
 
                 def update_payment_terms():
-                    st.session_state.client_info['payment_timeline'] = st.session_state.tab3_payment_terms
+                    selected = st.session_state.tab3_payment_terms
+                    if selected == "Custom":
+                        # Use the custom terms if available
+                        if st.session_state.custom_payment_terms:
+                            st.session_state.client_info['payment_timeline'] = st.session_state.custom_payment_terms
+                    else:
+                        st.session_state.client_info['payment_timeline'] = selected
 
-                payment_terms_options = ['Net 30', 'Net 60', 'Due on Receipt', '50% Deposit']
+                payment_terms_options = ['Net 30', 'Net 15', 'Net 60', 'Due on Receipt', '50% Deposit', 'Custom']
                 current_terms = st.session_state.client_info.get('payment_timeline', 'Net 30')
-                st.selectbox(
+
+                # Handle custom terms display
+                if current_terms not in payment_terms_options[:-1]:  # Exclude 'Custom' from check
+                    if current_terms and current_terms != 'Custom':
+                        st.session_state.custom_payment_terms = current_terms
+                    display_index = payment_terms_options.index("Custom")
+                else:
+                    display_index = payment_terms_options.index(current_terms)
+
+                selected_payment = st.selectbox(
                     "Payment Terms",
                     options=payment_terms_options,
-                    index=payment_terms_options.index(current_terms) if current_terms in payment_terms_options else 0,
+                    index=display_index,
                     key="tab3_payment_terms",
                     on_change=update_payment_terms
                 )
+
+                # If Custom is selected, show text input
+                if selected_payment == "Custom":
+                    def update_custom_terms():
+                        st.session_state.custom_payment_terms = st.session_state.custom_terms_edit_input
+                        st.session_state.client_info['payment_timeline'] = st.session_state.custom_terms_edit_input
+
+                    st.text_input(
+                        "Custom Payment Terms",
+                        value=st.session_state.custom_payment_terms,
+                        placeholder="e.g., Net 45, 2/10 Net 30, etc.",
+                        key="custom_terms_edit_input",
+                        on_change=update_custom_terms
+                    )
 
                 def update_payment_method():
                     st.session_state.client_info['payment_preference'] = st.session_state.tab3_payment_method
