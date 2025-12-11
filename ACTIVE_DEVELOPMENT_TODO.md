@@ -124,11 +124,15 @@
   - Backward compatible - existing orders work unchanged
 - **File:** app.py (Tab 3 section 3, Tab 4 payment terms)
 
-### Tab 4: Editable Descriptions
-- [ ] Make "Item + Specs" column editable
-- [ ] Add inline text inputs for each product
-- [ ] Save edited descriptions to session state
-- **File:** app.py (Tab 4)
+### Tab 4: Editable Descriptions ✅ COMPLETE (2025-12-11)
+- [X] Make "Item + Specs" column editable
+- [X] Add inline text inputs for each product
+- [X] Save edited descriptions to session state
+- [X] Added "Edit Product Descriptions" expander in Tab 4
+- [X] Text inputs with callbacks for each product
+- [X] Invoice table uses edited descriptions
+- [X] CSV and HTML exports use edited descriptions
+- **File:** app.py (Tab 4), src/helpers.py
 
 ---
 
@@ -216,10 +220,11 @@ git commit -m "TEST: Verify markup calculations"
 - ✅ Tab 3 order notes UX improvements (5 always-visible fields)
 - ✅ Tab 3 multiple contacts support (dynamic add/remove functionality)
 - ✅ Tab 3 payment terms Net 15 + custom option (dropdown with conditional input)
+- ✅ Tab 4 editable product descriptions ("Item + Specs" column)
 
 ### Current Sprint (Week 1)
 - ✅ Critical fixes (4 items - ALL COMPLETE)
-- 🟠 High-priority features (12 of 14 complete)
+- 🟠 High-priority features (13 of 14 complete)
 
 ### Next Sprint (Week 2)
 - Complete high-priority features

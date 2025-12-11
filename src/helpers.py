@@ -512,7 +512,10 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         # Order fulfillment (to be filled in Tab 2 if needed)
         'partner_in_hands_date': '',
         'cost_verified': 'Pending',
-        'product_specs': product_data.get('Marketing Description', '')
+        'product_specs': product_data.get('Marketing Description', ''),
+
+        # Editable description field (empty by default, user can customize)
+        'edited_description': ''
     }
 
     return order_item

@@ -322,6 +322,11 @@ components.html("""
 if 'order_items' not in st.session_state:
     st.session_state.order_items = []
 
+# Ensure all order items have edited_description field (backward compatibility)
+for item in st.session_state.order_items:
+    if 'edited_description' not in item:
+        item['edited_description'] = ''
+
 # Initialize edit_index (None = adding new item, number = editing existing item)
 if 'edit_index' not in st.session_state:
     st.session_state.edit_index = None
@@ -4464,7 +4469,8 @@ with tab3:
                                     'tariff_info': f"{product_data.get('Country', 'N/A')} - {tariff_rate_percent}%" if tariff_rate_percent > 0 else '',
                                     'tariff_rate_percent': tariff_rate_percent,
                                     'tariff_base': tariff_base,
-                                    'tariff_amount': tariff_amount
+                                    'tariff_amount': tariff_amount,
+                                    'edited_description': ''  # Initialize with empty for user to edit later
                                 }
 
                                 st.session_state.order_items.append(order_item)
@@ -4683,7 +4689,8 @@ with tab3:
                     'product_total': (base_price * 1) + ((base_price * 1) * (markup / 100)),
                     'total_per_unit': ((base_price * 1) + ((base_price * 1) * (markup / 100))) / 1,
                     'tariff_rate_percent': 0.0,
-                    'tariff_amount': 0.0
+                    'tariff_amount': 0.0,
+                    'edited_description': ''  # Initialize with empty for user to edit later
                 })
 
                 st.session_state.order_items.append(new_item)
@@ -5432,7 +5439,8 @@ Rates default to current estimates but can be adjusted as needed.
                             'tariff_rate_percent': 0.0,
                             'tariff_info': '',
                             'tariff_base': 0.0,
-                            'tariff_amount': 0.0
+                            'tariff_amount': 0.0,
+                            'edited_description': ''  # Empty for custom items, they use custom_description
                         }
 
                         st.session_state.order_items.append(custom_item)
@@ -6428,6 +6436,47 @@ with tab4:
                     on_change=update_cost_submitted_date
                 )
 
+        # ============================================================
+        # EDITABLE PRODUCT DESCRIPTIONS
+        # ============================================================
+        with st.expander("Edit Product Descriptions", expanded=False):
+            st.caption("Customize product descriptions for clearer invoices and bookkeeping")
+
+            if st.session_state.order_items:
+                for idx, item in enumerate(st.session_state.order_items):
+                    # Create callback for this specific item
+                    def update_description(idx=idx):
+                        st.session_state.order_items[idx]['edited_description'] = st.session_state[f'desc_edit_{idx}']
+
+                    # Generate default description
+                    if item.get('is_custom', False):
+                        # Custom items use their custom_description
+                        default_desc = item.get('custom_description', item.get('product_name', 'Custom Item'))
+                    else:
+                        # Regular products use product name
+                        default_desc = item.get('product_name', 'Unknown Product')
+                        # Add quantity info if more than 1
+                        quantity = item.get('quantity', 1)
+                        if quantity > 1:
+                            default_desc += f" (Qty: {quantity})"
+
+                    # Get current edited description or use default
+                    current_desc = item.get('edited_description', '')
+                    if not current_desc:
+                        current_desc = default_desc
+
+                    # Display text input for description
+                    st.text_input(
+                        f"{item.get('product_name', 'Product')} - {item.get('partner', 'Unknown Partner')}",
+                        value=current_desc,
+                        key=f"desc_edit_{idx}",
+                        on_change=update_description,
+                        placeholder=default_desc,
+                        help=f"Default: {default_desc}"
+                    )
+            else:
+                st.info("No products in order to edit descriptions for.")
+
         st.divider()
 
         # ============================================================
@@ -6731,7 +6780,8 @@ with tab4:
                                 'tariff_rate_percent': 0.0,
                                 'tariff_info': '',
                                 'tariff_base': 0.0,
-                                'tariff_amount': 0.0
+                                'tariff_amount': 0.0,
+                                'edited_description': ''  # Empty for custom items, they use custom_description
                             }
 
                             st.session_state.order_items.append(custom_item)
@@ -6948,8 +6998,14 @@ with tab4:
                 # Regular product
                 partner = item['partner']
                 product_name = item['product_name']
-                product_specs = item.get('product_specs', item.get('tier_range', ''))
-                items_specs = f"{product_name}\n{product_specs}"
+
+                # Use edited description if available, otherwise use product name
+                edited_desc = item.get('edited_description', '')
+                if edited_desc:
+                    items_specs = edited_desc
+                else:
+                    product_specs = item.get('product_specs', item.get('tier_range', ''))
+                    items_specs = f"{product_name}\n{product_specs}"
                 qty = item['quantity']
 
                 partner_in_hands = item.get('partner_in_hands_date', 'TBD')
