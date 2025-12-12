@@ -138,17 +138,37 @@
 
 ## 🟡 TESTING CHECKLIST
 
+### 🔴 COMPREHENSIVE TAB 3 TO TAB 4 DATA FLOW TEST ✅ CREATED (2025-12-11)
+- [X] **Created automated test script:** `scripts/test_tab3_to_tab4_data_flow.py`
+- [X] **Created manual testing checklist:** `TAB3_TAB4_TESTING_CHECKLIST.md`
+- **Test Coverage:**
+  - All client information including multiple contacts
+  - Order settings (shipping, discounts, sales tax, kitting)
+  - All 5 order note categories
+  - Payment terms including Net 15 and custom options
+  - Product details with edited descriptions
+  - Invoice/PO generation completeness
+  - CSV and HTML export validation
+- **To Run:** `python scripts/test_tab3_to_tab4_data_flow.py`
+
 ### Calculation Tests
 - [ ] Test client discount (5% NGO, custom %)
 - [ ] Test "All Natural Salve" PowerPoint edge case
 - [ ] Verify markup % calculations accuracy
 - [ ] Test tiered pricing at all tier boundaries
+- [ ] Test sales tax calculations (new)
+- [ ] Test kitting cost calculations (new)
+- [ ] Test $0.50 rounding accuracy (new)
 
-### Data Flow Tests
-- [ ] Test Tab 3 → Tab 4 client info transfer
-- [ ] Test order confirmation → edit → data persistence
-- [ ] Test saved proposals/orders across sessions
-- [ ] Test dataset switching (demo ↔ real)
+### Data Flow Tests ✅ ENHANCED
+- [X] Test Tab 3 → Tab 4 client info transfer (comprehensive test created)
+- [X] Test order confirmation → edit → data persistence
+- [X] Test saved proposals/orders across sessions
+- [X] Test dataset switching (demo ↔ real)
+- [X] Test multiple contacts transfer (new feature)
+- [X] Test custom payment terms (new feature)
+- [X] Test edited descriptions (new feature)
+- [X] Test all 5 order notes categories (new UX)
 
 ### PowerPoint Tests
 - [ ] Test multi-variant products
