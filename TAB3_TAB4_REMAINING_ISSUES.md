@@ -10,10 +10,17 @@
 
 All 4 issues have been successfully resolved:
 
-1. **Contact + Email** - ✅ Fixed to use contacts array
-2. **Company Email in Billing** - ✅ Fixed to use contacts array
+1. **Contact + Email** - ✅ Fixed to use contacts array (app.py lines 6879-6905)
+   - **Enhanced:** Now displays ALL contacts when multiple exist, not just primary
+   - Shows each contact with role in format: "Name <email> (Role)"
+   - Multiple contacts separated by " | " in invoice display
+2. **Company Email in Billing** - ✅ Fixed to use contacts array (app.py line 6909)
 3. **Partner POCs** - ✅ Code verified working (data may be missing in sheets)
-4. **Kitting Costs** - ✅ Added to invoice generation
+   - **Investigation Complete:** Added debug logging to sidebar (app.py lines 2112-2118)
+   - Shows "Loaded X partner POCs" or warning if none found
+   - Pipeline verified: data_loader.py → helpers.py → app.py
+   - If POCs not showing, check "Partner-Specific Info" sheet for data
+4. **Kitting Costs** - ✅ Added to invoice generation (app.py lines 7137-7151)
 
 ---
 
