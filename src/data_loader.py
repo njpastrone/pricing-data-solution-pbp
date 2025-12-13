@@ -209,18 +209,18 @@ def load_pricing_data(dataset='demo'):
         df_metadata = pd.DataFrame(metadata_data, columns=metadata_headers)
 
     # ========== LOAD PARTNER-SPECIFIC INFO SHEET ==========
-    # Header at row 2 (index 1), data starts at row 3 (index 2)
+    # Header at row 3 (index 2), data starts at row 4 (index 3)
     partner_sheet = spreadsheet.worksheet("Partner-Specific Info")
     partner_values = partner_sheet.get_all_values()
 
     # Check if sheet has enough rows
-    if len(partner_values) < 2:
+    if len(partner_values) < 3:
         # Create empty DataFrame with minimal structure if sheet is empty
         df_partner_info = pd.DataFrame()
     else:
-        # Row 2 has headers, may have empty first column - skip it
-        raw_partner_headers = partner_values[1]
-        raw_partner_data = partner_values[2:] if len(partner_values) > 2 else []
+        # Row 3 has headers (index 2), data starts at row 4 (index 3)
+        raw_partner_headers = partner_values[2]  # Changed from [1] to [2]
+        raw_partner_data = partner_values[3:] if len(partner_values) > 3 else []  # Changed from 2: to 3:
 
         # Find first non-empty column index for partner sheet
         first_partner_col_idx = 0
