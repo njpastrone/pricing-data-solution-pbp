@@ -6265,65 +6265,74 @@ with tab4:
 
             # Display each contact
             for idx, contact in enumerate(contacts):
-                with st.expander(f"Contact {idx + 1}", expanded=True):
-                    contact_col1, contact_col2 = st.columns(2)
-
-                    with contact_col1:
-                        # Create callback functions for each field
-                        def update_contact_name(idx=idx):
-                            st.session_state.client_info['contacts'][idx]['name'] = st.session_state[f"tab4_contact_name_{idx}"]
-
-                        def update_contact_email(idx=idx):
-                            st.session_state.client_info['contacts'][idx]['email'] = st.session_state[f"tab4_contact_email_{idx}"]
-
-                        contact['name'] = st.text_input(
-                            "Name",
-                            value=contact.get('name', ''),
-                            key=f"tab4_contact_name_{idx}",
-                            on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
-                                {'name': st.session_state[f"tab4_contact_name_{idx}"]}
-                            )
-                        )
-
-                        contact['email'] = st.text_input(
-                            "Email",
-                            value=contact.get('email', ''),
-                            key=f"tab4_contact_email_{idx}",
-                            on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
-                                {'email': st.session_state[f"tab4_contact_email_{idx}"]}
-                            )
-                        )
-
-                    with contact_col2:
-                        contact['phone'] = st.text_input(
-                            "Phone",
-                            value=contact.get('phone', ''),
-                            key=f"tab4_contact_phone_{idx}",
-                            on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
-                                {'phone': st.session_state[f"tab4_contact_phone_{idx}"]}
-                            )
-                        )
-
-                        role_options = ['Primary Contact', 'Billing Contact', 'Technical Contact', 'Shipping Contact', 'Other']
-                        current_role = contact.get('role', 'Primary Contact')
-                        if current_role not in role_options and current_role:
-                            role_options.append(current_role)
-
-                        contact['role'] = st.selectbox(
-                            "Role",
-                            options=role_options,
-                            index=role_options.index(current_role) if current_role in role_options else 0,
-                            key=f"tab4_contact_role_{idx}",
-                            on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
-                                {'role': st.session_state[f"tab4_contact_role_{idx}"]}
-                            )
-                        )
-
-                    # Remove button if more than one contact
-                    if len(contacts) > 1:
-                        if st.button(f"Remove Contact {idx + 1}", key=f"remove_contact_{idx}_tab4"):
+                # Display contact header with remove button if multiple contacts
+                if len(contacts) > 1:
+                    contact_header_col, remove_col = st.columns([5, 1])
+                    with contact_header_col:
+                        st.markdown(f"**Contact {idx + 1}**")
+                    with remove_col:
+                        if st.button("Remove", key=f"tab4_remove_contact_{idx}"):
                             st.session_state.client_info['contacts'].pop(idx)
                             st.rerun()
+                else:
+                    st.markdown(f"**Contact {idx + 1}**")
+
+                contact_col1, contact_col2 = st.columns(2)
+
+                with contact_col1:
+                    # Create callback functions for each field
+                    def update_contact_name(idx=idx):
+                        st.session_state.client_info['contacts'][idx]['name'] = st.session_state[f"tab4_contact_name_{idx}"]
+
+                    def update_contact_email(idx=idx):
+                        st.session_state.client_info['contacts'][idx]['email'] = st.session_state[f"tab4_contact_email_{idx}"]
+
+                    contact['name'] = st.text_input(
+                        "Name",
+                        value=contact.get('name', ''),
+                        key=f"tab4_contact_name_{idx}",
+                        on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
+                            {'name': st.session_state[f"tab4_contact_name_{idx}"]}
+                        )
+                    )
+
+                    contact['email'] = st.text_input(
+                        "Email",
+                        value=contact.get('email', ''),
+                        key=f"tab4_contact_email_{idx}",
+                        on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
+                            {'email': st.session_state[f"tab4_contact_email_{idx}"]}
+                        )
+                    )
+
+                with contact_col2:
+                    contact['phone'] = st.text_input(
+                        "Phone",
+                        value=contact.get('phone', ''),
+                        key=f"tab4_contact_phone_{idx}",
+                        on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
+                            {'phone': st.session_state[f"tab4_contact_phone_{idx}"]}
+                        )
+                    )
+
+                    role_options = ['Primary Contact', 'Billing Contact', 'Technical Contact', 'Shipping Contact', 'Other']
+                    current_role = contact.get('role', 'Primary Contact')
+                    if current_role not in role_options and current_role:
+                        role_options.append(current_role)
+
+                    contact['role'] = st.selectbox(
+                        "Role",
+                        options=role_options,
+                        index=role_options.index(current_role) if current_role in role_options else 0,
+                        key=f"tab4_contact_role_{idx}",
+                        on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
+                            {'role': st.session_state[f"tab4_contact_role_{idx}"]}
+                        )
+                    )
+
+                # Add separator between contacts if not the last one
+                if idx < len(contacts) - 1:
+                    st.divider()
 
             with col2:
                 st.markdown("**Order Details**")
