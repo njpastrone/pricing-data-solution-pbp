@@ -2111,6 +2111,12 @@ try:
         # Extract and store partner contacts
         st.session_state.partner_contacts = extract_partner_contacts(df_partner_info)
 
+        # Debug: Log partner contacts info
+        if st.session_state.partner_contacts:
+            st.sidebar.info(f"Loaded {len(st.session_state.partner_contacts)} partner POCs")
+        else:
+            st.sidebar.warning("No partner POCs found in Partner-Specific Info sheet")
+
         # Clear proposal and order data when switching datasets (prevents data mismatch)
         if st.session_state.get('loaded_dataset') != st.session_state.selected_dataset:
             st.session_state.proposal_products = []
@@ -6876,17 +6882,33 @@ with tab4:
         company_name = client_info.get('company_name', 'Not specified')
         client_info_data.append(["Company/Client Name", f"{company_name} ({company_status})"])
 
-        # Contact + Email (using new contacts array)
+        # Contact + Email (using new contacts array - show all contacts if multiple)
         contacts = client_info.get('contacts', [])
         if contacts and len(contacts) > 0:
-            primary_contact = contacts[0]
-            contact_name = primary_contact.get('name', 'Not specified')
-            contact_email = primary_contact.get('email', 'Not specified')
+            if len(contacts) == 1:
+                # Single contact
+                contact = contacts[0]
+                contact_name = contact.get('name', 'Not specified')
+                contact_email = contact.get('email', 'Not specified')
+                contact_display = f"{contact_name} <{contact_email}>"
+            else:
+                # Multiple contacts - show all with roles
+                contact_lines = []
+                for contact in contacts:
+                    name = contact.get('name', 'Not specified')
+                    email = contact.get('email', 'Not specified')
+                    role = contact.get('role', '')
+                    if role:
+                        contact_lines.append(f"{name} <{email}> ({role})")
+                    else:
+                        contact_lines.append(f"{name} <{email}>")
+                contact_display = " | ".join(contact_lines)
         else:
             # Fallback to old fields if they exist (backward compatibility)
             contact_name = client_info.get('contact_name', 'Not specified')
             contact_email = client_info.get('contact_email', 'Not specified')
-        client_info_data.append(["Contact + Email", f"{contact_name} <{contact_email}>"])
+            contact_display = f"{contact_name} <{contact_email}>"
+        client_info_data.append(["Contact + Email", contact_display])
 
         # Company Billing Address + Email (using new contacts array)
         billing_address = client_info.get('billing_address', 'Not specified')
@@ -7314,7 +7336,7 @@ with tab4:
         </tr>
         <tr>
             <td>Contact + Email</td>
-            <td>{contact_name} &lt;{contact_email}&gt;</td>
+            <td>{contact_display.replace('<', '&lt;').replace('>', '&gt;')}</td>
         </tr>
         <tr>
             <td>Company Billing Address + Email</td>
