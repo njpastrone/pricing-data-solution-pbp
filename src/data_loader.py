@@ -209,18 +209,30 @@ def load_pricing_data(dataset='demo'):
         df_metadata = pd.DataFrame(metadata_data, columns=metadata_headers)
 
     # ========== LOAD PARTNER-SPECIFIC INFO SHEET ==========
-    # Header at row 3 (index 2), data starts at row 4 (index 3)
+    # Note: Header row varies by dataset
+    # Demo dataset: Header at row 3 (index 2)
+    # Real dataset: Header at row 2 (index 1)
     partner_sheet = spreadsheet.worksheet("Partner-Specific Info")
     partner_values = partner_sheet.get_all_values()
 
+    # Determine header row based on dataset
+    if dataset == 'real':
+        header_row_idx = 1  # Row 2 (index 1) for real dataset
+        data_start_idx = 2  # Row 3 (index 2) for real dataset
+        min_rows = 2
+    else:  # demo dataset
+        header_row_idx = 2  # Row 3 (index 2) for demo dataset
+        data_start_idx = 3  # Row 4 (index 3) for demo dataset
+        min_rows = 3
+
     # Check if sheet has enough rows
-    if len(partner_values) < 3:
+    if len(partner_values) < min_rows:
         # Create empty DataFrame with minimal structure if sheet is empty
         df_partner_info = pd.DataFrame()
     else:
-        # Row 3 has headers (index 2), data starts at row 4 (index 3)
-        raw_partner_headers = partner_values[2]  # Changed from [1] to [2]
-        raw_partner_data = partner_values[3:] if len(partner_values) > 3 else []  # Changed from 2: to 3:
+        # Get headers and data based on dataset
+        raw_partner_headers = partner_values[header_row_idx]
+        raw_partner_data = partner_values[data_start_idx:] if len(partner_values) > data_start_idx else []
 
         # Find first non-empty column index for partner sheet
         first_partner_col_idx = 0
