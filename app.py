@@ -6876,14 +6876,25 @@ with tab4:
         company_name = client_info.get('company_name', 'Not specified')
         client_info_data.append(["Company/Client Name", f"{company_name} ({company_status})"])
 
-        # Contact + Email
-        contact_name = client_info.get('contact_name', 'Not specified')
-        contact_email = client_info.get('contact_email', 'Not specified')
+        # Contact + Email (using new contacts array)
+        contacts = client_info.get('contacts', [])
+        if contacts and len(contacts) > 0:
+            primary_contact = contacts[0]
+            contact_name = primary_contact.get('name', 'Not specified')
+            contact_email = primary_contact.get('email', 'Not specified')
+        else:
+            # Fallback to old fields if they exist (backward compatibility)
+            contact_name = client_info.get('contact_name', 'Not specified')
+            contact_email = client_info.get('contact_email', 'Not specified')
         client_info_data.append(["Contact + Email", f"{contact_name} <{contact_email}>"])
 
-        # Company Billing Address + Email
+        # Company Billing Address + Email (using new contacts array)
         billing_address = client_info.get('billing_address', 'Not specified')
-        billing_email = client_info.get('contact_email', 'Not specified')  # Using contact email as billing email
+        if contacts and len(contacts) > 0:
+            billing_email = contacts[0].get('email', 'Not specified')
+        else:
+            # Fallback to old field if it exists (backward compatibility)
+            billing_email = client_info.get('contact_email', 'Not specified')
         client_info_data.append(["Company Billing Address + Email", f"{billing_address} | {billing_email}"])
 
         # Company Shipping Address
@@ -7123,6 +7134,22 @@ with tab4:
                 'TOTAL SELL PRICE': f"${client_shipping_price:.2f}"
             })
 
+        # Add kitting line item (show partner cost vs. client price)
+        kitting_pbp_cost = st.session_state.get('kitting_pbp_cost', 0)
+        kitting_client_price = st.session_state.get('kitting_client_price', 0)
+        if kitting_pbp_cost > 0 or kitting_client_price > 0:
+            invoice_line_items.append({
+                'PARTNER': 'Kitting',
+                'ITEMS + SPECS': 'Gift Set Assembly & Packaging',
+                'QTY': 1,
+                'IN-HANDS from Partner': 'N/A',
+                'COST/UNIT': f"${kitting_pbp_cost:.2f}",
+                'TOTAL COST': f"${kitting_pbp_cost:.2f}",
+                'COST VERIFIED?': 'Yes',
+                'SELL PRICE/UNIT': f"${kitting_client_price:.2f}",
+                'TOTAL SELL PRICE': f"${kitting_client_price:.2f}"
+            })
+
         # Display line items table with better column sizing
         invoice_df = pd.DataFrame(invoice_line_items)
         st.dataframe(
@@ -7287,11 +7314,11 @@ with tab4:
         </tr>
         <tr>
             <td>Contact + Email</td>
-            <td>{client_info.get('contact_name', 'Not specified')} &lt;{client_info.get('contact_email', 'Not specified')}&gt;</td>
+            <td>{contact_name} &lt;{contact_email}&gt;</td>
         </tr>
         <tr>
             <td>Company Billing Address + Email</td>
-            <td>{client_info.get('billing_address', 'Not specified').replace(chr(10), ', ')} | {client_info.get('contact_email', 'Not specified')}</td>
+            <td>{client_info.get('billing_address', 'Not specified').replace(chr(10), ', ')} | {billing_email}</td>
         </tr>
         <tr>
             <td>Company Shipping Address</td>
