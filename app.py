@@ -15,7 +15,7 @@ import streamlit.components.v1 as components
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 import time
 import copy  # For deep copying client info during backup/restore
 
@@ -70,6 +70,17 @@ from src.template_loader import (
 # ============================================================
 # HELPER FUNCTIONS
 # ============================================================
+def format_date_display(date_obj):
+    """Format a date object as MM/DD/YY for display"""
+    if date_obj:
+        if isinstance(date_obj, str):
+            return date_obj  # Return as-is if already a string
+        try:
+            return date_obj.strftime("%m/%d/%y")
+        except:
+            return str(date_obj)
+    return "Not specified"
+
 def calculate_msrp_markup(product_data):
     """
     Calculate markup percentage required to match MSRP price.
@@ -7054,7 +7065,7 @@ with tab4:
 
         # Client In-Hands Date
         client_in_hands = client_info.get('client_in_hands_date', 'Not specified')
-        order_details_data.append(["Client In-Hands Date", str(client_in_hands)])
+        order_details_data.append(["Client In-Hands Date", format_date_display(client_in_hands)])
 
         # Ship Method
         ship_method = client_info.get('shipping_type', 'Not specified')
@@ -7071,12 +7082,13 @@ with tab4:
         # Order Submitted By + Date
         order_submitted_by = client_info.get('order_submitted_by', 'Not specified')
         order_submitted_date = client_info.get('order_submitted_date', datetime.now().date())
-        order_details_data.append(["Order Submitted By", f"{order_submitted_by} (Date: {order_submitted_date})"])
+        order_details_data.append(["Order Submitted By", f"{order_submitted_by} (Date: {format_date_display(order_submitted_date)})"])
 
         # Cost Submitted By + Date
         cost_submitted_by = client_info.get('cost_submitted_by', 'Not specified')
         cost_submitted_date = client_info.get('cost_submitted_date', 'Not specified')
-        order_details_data.append(["Cost Submitted By", f"{cost_submitted_by} (Date: {cost_submitted_date if cost_submitted_date else 'Not specified'})"])
+        formatted_cost_date = format_date_display(cost_submitted_date) if cost_submitted_date else 'Not specified'
+        order_details_data.append(["Cost Submitted By", f"{cost_submitted_by} (Date: {formatted_cost_date})"])
 
         # Display as table
         order_details_df = pd.DataFrame(order_details_data, columns=["Field", "Value"])
@@ -7465,7 +7477,7 @@ with tab4:
     <table>
         <tr>
             <td>Client In-Hands Date</td>
-            <td>{client_in_hands}</td>
+            <td>{format_date_display(client_in_hands)}</td>
         </tr>
         <tr>
             <td>Ship Method</td>
@@ -7481,11 +7493,11 @@ with tab4:
         </tr>
         <tr>
             <td>Order Submitted By</td>
-            <td>{order_submitted_by} (Date: {order_submitted_date})</td>
+            <td>{order_submitted_by} (Date: {format_date_display(order_submitted_date)})</td>
         </tr>
         <tr>
             <td>Cost Submitted By</td>
-            <td>{cost_submitted_by} (Date: {cost_submitted_date if cost_submitted_date else 'Not specified'})</td>
+            <td>{cost_submitted_by} (Date: {format_date_display(cost_submitted_date) if cost_submitted_date else 'Not specified'})</td>
         </tr>
     </table>
 
