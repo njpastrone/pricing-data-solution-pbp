@@ -4706,6 +4706,8 @@ with tab3:
                 if pbp_shipping_cost > 0 and st.session_state.partner_shipping == 0:
                     st.session_state.partner_shipping = pbp_shipping_cost
 
+                # Show success toast
+                st.toast(f"Added {product_data.get('Product/Service', 'product')} to order")
                 st.rerun()
             else:
                 st.error("Could not determine pricing for this product")
