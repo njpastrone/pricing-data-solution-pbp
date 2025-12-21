@@ -351,7 +351,7 @@ if 'kitting_client_price' not in st.session_state:
 if 'order_discount_type' not in st.session_state:
     st.session_state.order_discount_type = "none"
 if 'order_discount_preset' not in st.session_state:
-    st.session_state.order_discount_preset = "NGO Discount (5%)"
+    st.session_state.order_discount_preset = "Non-profit Discount (5%)"
 if 'order_discount_custom_desc' not in st.session_state:
     st.session_state.order_discount_custom_desc = ""
 if 'order_discount_custom_value' not in st.session_state:
@@ -2734,14 +2734,14 @@ with tab1:
             # Discount options
             discount_type = st.selectbox(
                 "Client Discount",
-                options=["None", "NGO (5%)", "Custom"],
+                options=["None", "Non-profit (5%)", "Custom"],
                 index=0 if not st.session_state.get('proposal_discount_type') else
-                      (1 if st.session_state.get('proposal_discount_type') == 'NGO' else 2),
+                      (1 if st.session_state.get('proposal_discount_type') == 'Non-profit' else 2),
                 key="proposal_discount_type_select"
             )
 
-            if discount_type == "NGO (5%)":
-                st.session_state.proposal_discount_type = 'NGO'
+            if discount_type == "Non-profit (5%)":
+                st.session_state.proposal_discount_type = 'Non-profit'
                 st.session_state.proposal_discount_percent = 5.0
             elif discount_type == "Custom":
                 st.session_state.proposal_discount_type = 'Custom'
@@ -3028,8 +3028,8 @@ with tab1:
                                 notes.append(f"Price ea @ Qty {volume_pricing_quantity}")
                             if discount_applied:
                                 discount_type = st.session_state.get('proposal_discount_type')
-                                if discount_type == 'NGO':
-                                    notes.append("5% NGO discount")
+                                if discount_type == 'Non-profit':
+                                    notes.append("5% Non-profit discount")
                                 else:
                                     notes.append(f"{discount_percent:.1f}% discount")
                             client_price_header = f"Client Price ({', '.join(notes)})"
@@ -3204,8 +3204,8 @@ with tab1:
                                 notes.append(f"Price ea @ Qty {volume_pricing_quantity}")
                             if discount_applied:
                                 discount_type = st.session_state.get('proposal_discount_type')
-                                if discount_type == 'NGO':
-                                    notes.append("5% NGO discount")
+                                if discount_type == 'Non-profit':
+                                    notes.append("5% Non-profit discount")
                                 else:
                                     notes.append(f"{discount_percent:.1f}% discount")
                             client_price_header = f"Client Price ({', '.join(notes)})"
@@ -5309,10 +5309,10 @@ Rates default to current estimates but can be adjusted as needed.
 
         with col1:
             # Discount as dropdown (like in Proposals tab)
-            discount_options = ["None", "NGO (5%)", "Custom"]
+            discount_options = ["None", "Non-profit (5%)", "Custom"]
             current_discount = "None"
             if st.session_state.order_discount_type == "preset":
-                current_discount = "NGO (5%)"
+                current_discount = "Non-profit (5%)"
             elif st.session_state.order_discount_type == "custom":
                 current_discount = "Custom"
 
@@ -5327,17 +5327,17 @@ Rates default to current estimates but can be adjusted as needed.
             proposal_discount_type = st.session_state.get('proposal_discount_type')
             proposal_discount_percent = st.session_state.get('proposal_discount_percent', 0.0)
 
-            if proposal_discount_type == 'NGO':
-                st.caption("Discount Quoted to Client: NGO Discount (5%)")
+            if proposal_discount_type == 'Non-profit':
+                st.caption("Discount Quoted to Client: Non-profit Discount (5%)")
             elif proposal_discount_type == 'Custom' and proposal_discount_percent > 0:
                 st.caption(f"Discount Quoted to Client: Custom ({proposal_discount_percent}%)")
             else:
                 st.caption("Discount Quoted to Client: None")
 
             # Update session state based on selection
-            if discount_selection == "NGO (5%)":
+            if discount_selection == "Non-profit (5%)":
                 st.session_state.order_discount_type = "preset"
-                st.session_state.order_discount_preset = "NGO Discount (5%)"
+                st.session_state.order_discount_preset = "Non-profit Discount (5%)"
                 st.session_state.order_discount_custom_value = 0.0
                 st.session_state.order_discount_custom_desc = ""
             elif discount_selection == "Custom":
@@ -5603,7 +5603,7 @@ Rates default to current estimates but can be adjusted as needed.
         # Extract percentage from preset string (e.g., "NGO Discount (5%)" -> 5.0)
         preset = st.session_state.order_discount_preset
         discount_description = preset
-        # Parse percentage from string like "NGO Discount (5%)"
+        # Parse percentage from string like "Non-profit Discount (5%)"
         if "(" in preset and "%" in preset:
             percent_str = preset.split("(")[1].split("%")[0]
             discount_percent = float(percent_str)
@@ -6664,10 +6664,10 @@ with tab4:
 
             with col1:
                 # Discount as dropdown
-                discount_options = ["None", "NGO (5%)", "Custom"]
+                discount_options = ["None", "Non-profit (5%)", "Custom"]
                 current_discount = "None"
                 if st.session_state.order_discount_type == "preset":
-                    current_discount = "NGO (5%)"
+                    current_discount = "Non-profit (5%)"
                 elif st.session_state.order_discount_type == "custom":
                     current_discount = "Custom"
 
@@ -6679,9 +6679,9 @@ with tab4:
                 )
 
                 # Update session state based on selection
-                if discount_selection == "NGO (5%)":
+                if discount_selection == "Non-profit (5%)":
                     st.session_state.order_discount_type = "preset"
-                    st.session_state.order_discount_preset = "NGO Discount (5%)"
+                    st.session_state.order_discount_preset = "Non-profit Discount (5%)"
                     st.session_state.order_discount_custom_value = 0.0
                     st.session_state.order_discount_custom_desc = ""
                 elif discount_selection == "Custom":
