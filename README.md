@@ -3,15 +3,15 @@
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
 **Current Status:** ✅ **IN PRODUCTION** - https://pricing-data-solution-pbp.onrender.com
-**Version:** 7.1 - Active Development (Post-Stakeholder Fixes)
-**Development Sprint:** Implementing critical fixes from Nov 30 stakeholder meeting
+**Version:** 7.3.0 - Active Development (Week 2 Sprint)
+**Development Sprint:** 16 of 19 features complete (84%)
 **Data Status:** Partial partner data loaded (collecting remaining partners)
 
 ## 📋 Active Development
-- **Current Focus:** Critical data loss fixes → Core features → Testing
+- **Current Focus:** Week 2 Sprint - New Feature Implementation
 - **Active Tasks:** [ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md)
-- **Requirements:** [STAKEHOLDER_MEETING_NOTES.md](STAKEHOLDER_MEETING_NOTES.md)
-- **Issues:** 4 critical, 14 high priority, 6 testing needed
+- **Requirements:** [docs/meetings/STAKEHOLDER_MEETING_NOTES.md](docs/meetings/STAKEHOLDER_MEETING_NOTES.md)
+- **Week 2 Progress:** 3 of 6 features complete (Tab 3 pricing, terminology, directory cleanup)
 
 ---
 
@@ -50,7 +50,7 @@ pricing-data-solution-pbp/
 ├── .streamlit/
 │   └── secrets.toml           # Google service account credentials (SECRET)
 │
-├── docs/                       # Documentation
+├── docs/                       # Documentation (organized by topic)
 │   ├── planning/              # Core project documentation
 │   │   ├── PLANNING.md        # Project requirements & goals
 │   │   ├── RESTRUCTURE_CONTEXT.md # Data structure reference
@@ -59,12 +59,20 @@ pricing-data-solution-pbp/
 │   ├── powerpoint/            # PowerPoint automation documentation
 │   │   ├── PHASE_2_COMPLETION_SUMMARY.md # Production-ready summary
 │   │   └── PHASE_1_COMPLETION_SUMMARY.md # Technical deep dive
+│   ├── meetings/              # Stakeholder meetings
+│   │   ├── STAKEHOLDER_MEETING_NOTES.md # Organized requirements
+│   │   └── RAW_MEETING_NOTES_113024.md # Original Nov 30 notes
+│   ├── testing/               # Testing documentation
+│   │   └── TAB3_TAB4_TESTING_CHECKLIST.md # Test plans
+│   ├── investigations/        # Technical investigations
+│   │   └── PARTNER_POC_INVESTIGATION.md # Debugging docs
 │   ├── archive/               # Historical documentation (preserved for reference)
 │   │   ├── powerpoint-planning/ # PowerPoint planning docs (14 files)
 │   │   └── tab2-improvements/   # UI redesign docs (9 files)
 │   ├── CLIENT_QUESTIONS.md    # Unanswered client questions
 │   ├── SCROLL_PRESERVATION_PATTERN.md # Scroll preservation implementation
-│   └── SESSION_STATE_AUDIT.md # Session state management
+│   ├── SESSION_STATE_AUDIT.md # Session state management
+│   └── CODE_SIMPLIFICATION_AGENT.md # Code cleanup process
 │
 ├── src/                        # Modular code (10 modules, ~4,918 lines)
 │   ├── data_loader.py         # Google Sheets data loading
@@ -78,13 +86,20 @@ pricing-data-solution-pbp/
 │   ├── proposal_manager.py    # Save/load/delete proposals
 │   └── order_manager.py       # Save/load/delete orders
 │
-├── scripts/                    # Essential utility scripts (6 files)
-│   ├── test_connection.py     # Google Sheets API test (ESSENTIAL)
-│   ├── investigate_data.py    # Data debugging tool
-│   ├── test_saved_proposals.py # Test proposals feature
-│   ├── test_saved_orders.py   # Test orders feature
-│   ├── test_units_per_package.py # Test multi-unit products
-│   └── test_match_memory.py   # Test match memory feature
+├── scripts/                    # Utility scripts (organized, 26 files)
+│   ├── core/                  # Essential core functionality (2 files)
+│   │   ├── test_connection.py # Google Sheets API test (ESSENTIAL)
+│   │   └── investigate_data.py # Data debugging tool
+│   ├── features/              # Feature-specific tests (19 files)
+│   │   ├── test_saved_proposals.py # Test proposals feature
+│   │   ├── test_saved_orders.py # Test orders feature
+│   │   ├── test_units_per_package.py # Test multi-unit products
+│   │   ├── test_match_memory.py # Test match memory feature
+│   │   ├── test_bidirectional_pricing.py # Tab 1 & 3 price editing
+│   │   └── [14 more feature tests...]
+│   └── investigations/        # Technical debugging (7 files)
+│       ├── investigate_partner_poc.py # Partner contact debugging
+│       └── [6 more investigation scripts...]
 │
 └── backups/                    # Reference backup (1 file)
     └── app_before_modular_refactor_20251027.py  # Pre-modular structure
@@ -332,10 +347,34 @@ Peace by Piece International - Internal Tool
 
 ---
 
-**Last Updated:** 2025-11-20
-**Version:** 7.0 (Production Deployment Complete)
+**Last Updated:** 2025-12-20
+**Version:** 7.3.0 (Week 2 Sprint - 84% Complete)
 
-## 🆕 Recent Updates (v7.0 - 2025-11-20)
+## 🆕 Recent Updates (v7.3.0 - 2025-12-20)
+
+### Week 2 Sprint Features
+**3 of 6 features complete:**
+
+**Bidirectional Price Editing in Tab 3:**
+- Users can now edit client price per unit directly, not just markup %
+- Markup % automatically recalculates when price is changed
+- Matches Tab 1 pricing behavior for consistency
+- Fixed critical undefined variable error
+
+**NGO to Non-profit Terminology:**
+- Updated all references throughout the app for better inclusivity
+- Changed discount label, form fields, and UI text
+- Maintains 5% preset for non-profit organizations
+
+**Directory Reorganization:**
+- Organized docs/ into subdirectories (meetings, testing, investigations)
+- Organized scripts/ into core, features, investigations folders
+- Created comprehensive CHANGELOG.md for version history
+- Cleaner, more maintainable project structure
+
+---
+
+## Previous Updates (v7.0 - 2025-11-20)
 
 ### Production Deployment Complete
 Application is now fully operational in production on Render:

@@ -1,8 +1,8 @@
 # Documentation Index
 
 **Project:** Peace by Piece International - Order Management System
-**Current Version:** 5.0
-**Last Updated:** 2025-11-05
+**Current Version:** 7.3.0
+**Last Updated:** 2025-12-20
 
 ---
 
@@ -21,6 +21,9 @@
 docs/
 ├── README.md                    # This file - documentation index
 ├── CLIENT_QUESTIONS.md          # Unanswered client questions
+├── SCROLL_PRESERVATION_PATTERN.md # Scroll preservation implementation
+├── SESSION_STATE_AUDIT.md       # Session state management
+├── CODE_SIMPLIFICATION_AGENT.md # Code cleanup process documentation
 │
 ├── planning/                    # Core project documentation
 │   ├── PLANNING.md             # Project requirements & goals (READ FIRST)
@@ -30,37 +33,22 @@ docs/
 │
 ├── powerpoint/                  # PowerPoint Automation (Phase 1 & 2)
 │   ├── PHASE_2_COMPLETION_SUMMARY.md  # Phase 2 final summary (READ FOR STATUS)
-│   ├── PHASE_1_COMPLETION_SUMMARY.md  # Phase 1 technical deep dive
-│   ├── PPTX_AUTOMATION_IMPLEMENTATION_ROADMAP.md  # Full roadmap
-│   ├── POWERPOINT_PROPOSAL_AUTOMATION_PLAN.md     # Original plan
-│   ├── PHASE_1_IMPLEMENTATION_GUIDE.md   # Day-by-day guide
-│   ├── PHASE_1_DAY_1_RESULTS.md          # Matching improvements
-│   ├── PHASE_1_DAY_2_RESULTS.md          # UI confirmation
-│   ├── PHASE_1_INTEGRATION_TEST_PLAN.md  # Complete tests
-│   ├── FUZZY_MATCHING_SYSTEM_DESIGN.md   # Technical architecture
-│   ├── FUZZY_MATCH_CONFIRMATION_UX.md    # UX specifications
-│   ├── PRODUCT_NAME_MATCHING_ANALYSIS.md # Algorithm analysis
-│   ├── IMPROVING_MATCH_RATE_STRATEGY.md  # Optimization
-│   ├── MATCH_IMPROVEMENT_NO_PPTX_EDITS.md # Strategy
-│   └── PPTX_INSPECTION_RESULTS.md        # Template structure
+│   └── PHASE_1_COMPLETION_SUMMARY.md  # Phase 1 technical deep dive
 │
-├── tab2-improvements/           # Historical Tab 2 redesign docs
-│   ├── TAB2_REDESIGN_PROPOSAL.md
-│   ├── TAB2_RESTRUCTURE_PLAN.md
-│   ├── TAB2_UX_ANALYSIS.md
-│   ├── TAB2_SCROLL_REDUCTION.md
-│   ├── TAB2_SIMPLE_IMPROVEMENTS.md
-│   ├── TAB_TRANSITION_ANALYSIS.md
-│   ├── UI_RESTRUCTURE_PLAN.md
-│   ├── UI_RESTRUCTURE_PROGRESS.md
-│   └── UI_POLISH_PLAN.md
+├── meetings/                    # Stakeholder meetings and notes
+│   ├── STAKEHOLDER_MEETING_NOTES.md   # Organized requirements from Nov 30
+│   └── RAW_MEETING_NOTES_113024.md    # Original meeting notes (do not edit)
 │
-└── archive/                     # Deprecated/historical docs
-    ├── ARCHITECTURE.md
-    ├── CHANGELOG.md
-    ├── CONTINUATION_PROMPT.md
-    ├── CONTINUATION_PROMPT_NEW_SESSION.md
-    └── CONTINUATION_PROMPT_PHASE_3.md
+├── testing/                     # Testing documentation
+│   └── TAB3_TAB4_TESTING_CHECKLIST.md # Tab 3→4 data flow test plan
+│
+├── investigations/              # Technical investigations and debugging
+│   └── PARTNER_POC_INVESTIGATION.md   # Partner contact pipeline debugging
+│
+└── archive/                     # Historical/deprecated documentation
+    ├── powerpoint-planning/     # PowerPoint planning docs (14 files)
+    ├── tab2-improvements/       # Tab 2 redesign docs (9 files)
+    └── [Other archived documents]
 ```
 
 ---
@@ -76,41 +64,34 @@ docs/
 3. **[planning/RESTRUCTURE_CONTEXT.md](planning/RESTRUCTURE_CONTEXT.md)** - Current data structure from Google Sheets
 4. **[planning/INVOICE_AND_PROPOSAL_SPEC.md](planning/INVOICE_AND_PROPOSAL_SPEC.md)** - Invoice/PO format requirements
 
-### PowerPoint Automation (Latest Feature)
+### PowerPoint Automation
 
 **Phase 2 Complete - Production Ready**
 
-#### Implementation Summary
-- **[powerpoint/PHASE_2_COMPLETION_SUMMARY.md](powerpoint/PHASE_2_COMPLETION_SUMMARY.md)** - Complete Phase 2 summary with bug fixes, testing, deployment notes
+- **[powerpoint/PHASE_2_COMPLETION_SUMMARY.md](powerpoint/PHASE_2_COMPLETION_SUMMARY.md)** - Complete Phase 2 summary
+- **[powerpoint/PHASE_1_COMPLETION_SUMMARY.md](powerpoint/PHASE_1_COMPLETION_SUMMARY.md)** - Technical deep dive on matching system
+- See [archive/powerpoint-planning/](archive/powerpoint-planning/) for detailed planning docs (14 files)
 
-#### Phase 1 Documentation
-- **[powerpoint/PHASE_1_COMPLETION_SUMMARY.md](powerpoint/PHASE_1_COMPLETION_SUMMARY.md)** - 23-page technical deep dive on matching system
-- **[powerpoint/PHASE_1_IMPLEMENTATION_GUIDE.md](powerpoint/PHASE_1_IMPLEMENTATION_GUIDE.md)** - Day-by-day development guide
-- **[powerpoint/PHASE_1_DAY_1_RESULTS.md](powerpoint/PHASE_1_DAY_1_RESULTS.md)** - Matching improvements (78.9% achieved)
-- **[powerpoint/PHASE_1_DAY_2_RESULTS.md](powerpoint/PHASE_1_DAY_2_RESULTS.md)** - User confirmation UI
-- **[powerpoint/PHASE_1_INTEGRATION_TEST_PLAN.md](powerpoint/PHASE_1_INTEGRATION_TEST_PLAN.md)** - Tests (5/5 passed)
+### Stakeholder Meetings
 
-#### Planning & Architecture
-- **[powerpoint/PPTX_AUTOMATION_IMPLEMENTATION_ROADMAP.md](powerpoint/PPTX_AUTOMATION_IMPLEMENTATION_ROADMAP.md)** - Full Phase 1-3 roadmap
-- **[powerpoint/POWERPOINT_PROPOSAL_AUTOMATION_PLAN.md](powerpoint/POWERPOINT_PROPOSAL_AUTOMATION_PLAN.md)** - Original 6-phase plan
-- **[powerpoint/FUZZY_MATCHING_SYSTEM_DESIGN.md](powerpoint/FUZZY_MATCHING_SYSTEM_DESIGN.md)** - Technical architecture
-- **[powerpoint/FUZZY_MATCH_CONFIRMATION_UX.md](powerpoint/FUZZY_MATCH_CONFIRMATION_UX.md)** - UX specifications
+- **[meetings/STAKEHOLDER_MEETING_NOTES.md](meetings/STAKEHOLDER_MEETING_NOTES.md)** - Organized requirements from Nov 30 meeting
+- **[meetings/RAW_MEETING_NOTES_113024.md](meetings/RAW_MEETING_NOTES_113024.md)** - Original meeting notes (do not edit)
 
-#### Analysis & Strategy
-- **[powerpoint/PRODUCT_NAME_MATCHING_ANALYSIS.md](powerpoint/PRODUCT_NAME_MATCHING_ANALYSIS.md)** - Algorithm analysis
-- **[powerpoint/IMPROVING_MATCH_RATE_STRATEGY.md](powerpoint/IMPROVING_MATCH_RATE_STRATEGY.md)** - Optimization approaches
-- **[powerpoint/MATCH_IMPROVEMENT_NO_PPTX_EDITS.md](powerpoint/MATCH_IMPROVEMENT_NO_PPTX_EDITS.md)** - Improvement strategy
-- **[powerpoint/PPTX_INSPECTION_RESULTS.md](powerpoint/PPTX_INSPECTION_RESULTS.md)** - Template structure analysis
+### Testing Documentation
 
-### Tab 2 Improvements (Historical)
+- **[testing/TAB3_TAB4_TESTING_CHECKLIST.md](testing/TAB3_TAB4_TESTING_CHECKLIST.md)** - Tab 3→4 data flow testing plan
+- See scripts/ directory for 26 test scripts organized by type
 
-**Completed in previous versions - kept for reference:**
+### Technical Investigations
 
-- **[tab2-improvements/TAB2_REDESIGN_PROPOSAL.md](tab2-improvements/TAB2_REDESIGN_PROPOSAL.md)** - Original redesign proposal
-- **[tab2-improvements/TAB2_UX_ANALYSIS.md](tab2-improvements/TAB2_UX_ANALYSIS.md)** - UX analysis
-- **[tab2-improvements/UI_RESTRUCTURE_PLAN.md](tab2-improvements/UI_RESTRUCTURE_PLAN.md)** - Full restructure plan
-- **[tab2-improvements/UI_RESTRUCTURE_PROGRESS.md](tab2-improvements/UI_RESTRUCTURE_PROGRESS.md)** - Implementation progress
-- **[tab2-improvements/UI_POLISH_PLAN.md](tab2-improvements/UI_POLISH_PLAN.md)** - Phase 5 polish
+- **[investigations/PARTNER_POC_INVESTIGATION.md](investigations/PARTNER_POC_INVESTIGATION.md)** - Partner contact pipeline debugging
+- See scripts/investigations/ for debugging scripts
+
+### Development Process
+
+- **[CODE_SIMPLIFICATION_AGENT.md](CODE_SIMPLIFICATION_AGENT.md)** - Autonomous code cleanup process documentation
+- **[SCROLL_PRESERVATION_PATTERN.md](SCROLL_PRESERVATION_PATTERN.md)** - Scroll preservation implementation
+- **[SESSION_STATE_AUDIT.md](SESSION_STATE_AUDIT.md)** - Session state management
 
 ### Client Questions
 
@@ -134,7 +115,7 @@ docs/
 - Markup applies to product cost only (not customization)
 - MOQ calculation: `ceil(1000 / unit_price)`
 - Marketing rounding (charm pricing)
-- NGO discount (5%) and custom discounts
+- Non-profit discount (5%) and custom discounts
 
 ### PowerPoint Automation
 
@@ -151,23 +132,33 @@ docs/
 
 ## Recent Updates
 
-### Version 5.0 (2025-11-04)
+### Version 7.3.0 (2025-12-20)
+**Week 2 Sprint - 3 of 6 features complete:**
+- ✅ Bidirectional price editing in Tab 3 (edit price or markup directly)
+- ✅ NGO → Non-profit terminology update (better inclusivity)
+- ✅ Directory reorganization (docs/ and scripts/ organized by topic)
+- ✅ CHANGELOG.md added (comprehensive version history)
+
+### Version 7.2.0 (2025-12-13)
+- ✅ Multiple partner contacts support
+- ✅ Partner POC pipeline debugging and fixes
+- ✅ Tab 3→4 comprehensive test suite
+
+### Version 7.0-7.1 (2025-12-10)
+- ✅ Search bar in Tab 1
+- ✅ Bidirectional pricing in Tab 1
+- ✅ $0.50 rounding option
+- ✅ Tab 3 table restructuring
+- ✅ Kitting pricing sections
+- ✅ Payment terms Net 15
+
+### Version 6.0-6.18 (2025-11-05 to 2025-11-20)
 - ✅ PowerPoint automation complete (Phase 1 & 2)
-- ✅ Intelligent matching (78.9% accuracy)
-- ✅ Dynamic pricing tables (3 formats)
-- ✅ Font preservation (15pt maintained)
-- ✅ Progress indicators and metrics
-- ✅ Production-ready
-
-### Version 4.0 (2025-11-04)
-- ✅ HTML order form import
-- ✅ Phase 1 matching system
-- ✅ User confirmation UI
-
-### Version 3.0 (2025-11-03)
-- ✅ UI/UX polish
-- ✅ CSV download fixes
-- ✅ Price transparency
+- ✅ Production deployment on Render
+- ✅ Codebase simplification (49% reduction)
+- ✅ 4-tab workflow structure
+- ✅ Saved proposals/orders (cloud-persistent)
+- ✅ HTML form import with product extraction
 
 ---
 
@@ -233,4 +224,4 @@ When updating documentation:
 ---
 
 **Maintained by:** Development Team
-**Last Review:** 2025-11-05
+**Last Review:** 2025-12-20

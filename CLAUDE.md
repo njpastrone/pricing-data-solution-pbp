@@ -21,15 +21,16 @@
 
 ## 🔥 ACTIVE DEVELOPMENT STATUS - December 2025 🔥
 
-**Current Focus:** Post-stakeholder meeting fixes and improvements
+**Current Focus:** Week 2 Sprint - New Feature Implementation
 - **Meeting Date:** November 30, 2025
-- **Status:** Implementing critical fixes from executive feedback
-- **Priority:** Fixing data loss issues, then core features
+- **Status:** 16 of 19 features complete (84%)
+- **Priority:** Completing Week 2 Sprint features (3 of 6 done)
 
 ### Active Development Documents (READ THESE FIRST):
 1. **[ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md)** - Current task list with implementation details
-2. **[STAKEHOLDER_MEETING_NOTES.md](STAKEHOLDER_MEETING_NOTES.md)** - Organized requirements from Nov 30 meeting
-3. **[RAW_MEETING_NOTES_113024.md](RAW_MEETING_NOTES_113024.md)** - Original meeting notes (do not edit)
+2. **[CHANGELOG.md](CHANGELOG.md)** - Comprehensive project history and version tracking
+3. **[STAKEHOLDER_MEETING_NOTES.md](docs/meetings/STAKEHOLDER_MEETING_NOTES.md)** - Organized requirements from Nov 30 meeting
+4. **[RAW_MEETING_NOTES_113024.md](docs/meetings/RAW_MEETING_NOTES_113024.md)** - Original meeting notes (do not edit)
 
 ### Development Workflow:
 1. Start with ACTIVE_DEVELOPMENT_TODO.md for current tasks
@@ -160,7 +161,7 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
     - Handles edge cases: MSRP below cost set to 0% (break-even)
     - Markup still manually editable after products are added
   - Editable markup % per product in table
-  - Client discount options (NGO 5% preset or custom)
+  - Client discount options (Non-profit 5% preset or custom)
   - Marketing rounding (charm pricing: $60 → $59)
   - Customization options and MSRP comparison display
 - **Proposal Tables (Section 3):**
@@ -233,7 +234,7 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - If spreadsheet has customization data, defaults are pre-filled
   - If no spreadsheet data, defaults to $0 (user can still add custom values)
 - **Smart Calculations:** Markup applies to product price only (not customization)
-- **Discount Options:** NGO preset (5%) + custom discounts
+- **Discount Options:** Non-profit preset (5%) + custom discounts
 - **Marketing Rounding:** Only applies when total is divisible by 10 (e.g., $60 → $59)
 - **Custom Line Items:** Add unique services/customizations
 - **Order Notes:** 5 categories (kitting, client requests, samples, artwork, general)
@@ -287,6 +288,7 @@ pricing-data-solution-pbp/
 │   ├── CLIENT_QUESTIONS.md    # Unanswered client questions
 │   ├── SCROLL_PRESERVATION_PATTERN.md # Scroll preservation implementation
 │   ├── SESSION_STATE_AUDIT.md # Session state management
+│   ├── CODE_SIMPLIFICATION_AGENT.md # Code cleanup process documentation
 │   ├── planning/              # Core project documentation
 │   │   ├── PLANNING.md        # Project requirements & goals
 │   │   ├── METHODOLOGY_LOGIC.md # Pricing calculations & business rules
@@ -295,6 +297,13 @@ pricing-data-solution-pbp/
 │   ├── powerpoint/            # PowerPoint automation (Phase 1 & 2)
 │   │   ├── PHASE_2_COMPLETION_SUMMARY.md # Phase 2 final summary
 │   │   └── PHASE_1_COMPLETION_SUMMARY.md # Phase 1 technical deep dive
+│   ├── meetings/              # Stakeholder meetings and notes
+│   │   ├── STAKEHOLDER_MEETING_NOTES.md # Organized requirements
+│   │   └── RAW_MEETING_NOTES_113024.md # Original Nov 30 notes
+│   ├── testing/               # Testing documentation
+│   │   └── TAB3_TAB4_TESTING_CHECKLIST.md # Tab 3→4 test plan
+│   ├── investigations/        # Technical investigations
+│   │   └── PARTNER_POC_INVESTIGATION.md # Partner contact debugging
 │   └── archive/               # Historical/deprecated documentation
 │       ├── powerpoint-planning/ # PowerPoint planning docs (14 files)
 │       ├── tab2-improvements/   # Tab 2 UI redesign docs (9 files)
@@ -317,13 +326,20 @@ pricing-data-solution-pbp/
 │   ├── TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED.md
 │   └── TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED.pdf
 │
-├── scripts/                    # Essential utility scripts only
-│   ├── test_connection.py     # Test Google Sheets connection (ESSENTIAL)
-│   ├── investigate_data.py    # Data debugging tool
-│   ├── test_saved_proposals.py # Test save/load/delete proposals (v6.6)
-│   ├── test_saved_orders.py   # Test save/load/delete orders (v6.7)
-│   ├── test_units_per_package.py # Test Units Per Package normalization (v6.8)
-│   └── test_match_memory.py   # Test confirmed match memory system (v6.9)
+├── scripts/                    # Utility scripts (organized, 26 files)
+│   ├── core/                  # Essential core functionality (2 files)
+│   │   ├── test_connection.py # Test Google Sheets API (ESSENTIAL)
+│   │   └── investigate_data.py # Data structure debugging
+│   ├── features/              # Feature-specific tests (19 files)
+│   │   ├── test_saved_proposals.py # Save/load proposals
+│   │   ├── test_saved_orders.py # Save/load orders
+│   │   ├── test_units_per_package.py # Package pricing normalization
+│   │   ├── test_match_memory.py # PowerPoint match memory
+│   │   ├── test_bidirectional_pricing.py # Tab 1 & 3 price editing
+│   │   └── [14 more feature tests...]
+│   └── investigations/        # Technical debugging (7 files)
+│       ├── investigate_partner_poc.py # Partner contact debugging
+│       └── [6 more investigation scripts...]
 │
 └── backups/                    # Reference backup
     └── app_before_modular_refactor_20251027.py  # Pre-modular structure reference
@@ -342,26 +358,44 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 7.2 - Active Development (Critical Fixes Complete)
+**Version:** 7.3.0 - Active Development (Week 2 Sprint)
 
-**Last Updated:** 2025-12-04
+**Last Updated:** 2025-12-20
 
 **Deployment:** ✅ **IN PRODUCTION** at https://pricing-data-solution-pbp.onrender.com
 - Render Standard tier (2GB RAM, $25/month)
 - Active partner data: Partial (collecting remaining partner data)
 - Cloud-based PowerPoint template loading
 
-**Current Sprint:** Implementing stakeholder feedback from Nov 30 meeting
-- **Focus:** All critical fixes COMPLETE → Core features → Testing
+**Current Sprint:** Week 2 - New Feature Implementation
+- **Focus:** 16 of 19 features complete (84%)
+- **Week 2 Progress:** 3 of 6 features done (Tab 3 pricing, terminology, directory cleanup)
 - **Active Tasks:** See [ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md)
-- **Requirements:** See [STAKEHOLDER_MEETING_NOTES.md](STAKEHOLDER_MEETING_NOTES.md)
-- **Issues Count:** 0 critical (ALL FIXED), 14 high priority, 6 testing needed
+- **Requirements:** See [docs/meetings/STAKEHOLDER_MEETING_NOTES.md](docs/meetings/STAKEHOLDER_MEETING_NOTES.md)
+- **Issues Count:** 0 critical (ALL FIXED), 3 remaining Week 2 features
 
 **Codebase Status:**
 - ~14,138 lines of Python code (49% reduction from cleanup)
-- 6 essential test scripts (13 deleted)
-- Clean documentation structure (23 files archived)
+- 26 test scripts organized in scripts/ (core, features, investigations)
+- Clean documentation structure (organized in docs/ subdirectories)
 - Fully deployed and operational on Render
+- CHANGELOG.md added for comprehensive version history
+
+**Recent Improvements (2025-12-20 - v7.3.0):**
+- ✅ **Bidirectional Price Editing in Tab 3:**
+  - Users can now edit client price per unit directly, not just markup %
+  - Markup % automatically recalculates when price is changed
+  - Matches Tab 1 pricing behavior for consistency
+  - Fixed critical undefined `new_markup` variable error
+- ✅ **NGO → Non-profit Terminology:**
+  - Updated all references throughout app for better inclusivity
+  - Changed discount label, form fields, and UI text
+  - Maintains 5% preset for non-profit organizations
+- ✅ **Directory Reorganization:**
+  - Organized docs/ into subdirectories (meetings, testing, investigations)
+  - Organized scripts/ into core, features, investigations
+  - Created comprehensive CHANGELOG.md
+  - Cleaner, more maintainable project structure
 
 **Recent Improvements (2025-12-04 - v7.2):**
 - ✅ **Critical Fixes Complete - All Data Loss Issues Resolved:**
@@ -370,7 +404,6 @@ pricing-data-solution-pbp/
   - Added callback functions to all 12 input fields in "Edit Order Information"
   - Save UX improvements with unsaved changes indicators
   - All critical data loss issues from stakeholder meeting now resolved
-  - Ready to proceed with high-priority features
 
 **Recent Improvements (2025-11-20 - v7.0):**
 - ✅ **Production Milestone:**
@@ -763,7 +796,7 @@ pricing-data-solution-pbp/
 - ✅ Multi-product ordering with add-to-cart pattern
 - ✅ Per-product markup configuration
 - ✅ Smart markup calculation (product only)
-- ✅ Discount options (NGO preset 5% + custom discounts)
+- ✅ Discount options (Non-profit preset 5% + custom discounts)
 - ✅ Marketing rounding (charm pricing: $60 → $59)
 - ✅ Custom line items for unique services/customizations
 - ✅ Per-product proposal tables (4-column MOQ format)
@@ -798,7 +831,7 @@ pricing-data-solution-pbp/
 - ✅ Font formatting preservation verified (15pt maintained)
 - ✅ Table updates verified across all 3 formats (2×3, 2×4, 3×4)
 - ✅ MOQ calculation corrected (math.ceil vs int)
-- ✅ Discount application tested (5% NGO discount)
+- ✅ Discount application tested (5% Non-profit discount)
 
 **Production Status:** ✅ Ready for production use - Phase 1 & 2 complete
 
