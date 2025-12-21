@@ -1,3 +1,24 @@
+# Implementing Changes Dec 20
+
+    "
+    Review the relevant context by checking the active development section in @CLAUDE.md , and @ACTIVE_DEVELOPMENT_TODO.md  to see what to work on. Find the first remaining task (or highest priority) and make a detailed plan to accomplish it.
+
+    How will we implement the only functionality we need right now?
+
+    Identify files that need to be changed.
+
+    Do not include plans for legacy fallback unless required or explicitly requested.
+
+    Write a full overview of what you are about to do.
+
+    Write function names and 1-3 sentences about what they do.
+
+    Write test names and 5-10 words about what they cover.
+    
+    "
+
+
+
 # Implementing Changes from Active Development Todo
 
     1. "

@@ -15,13 +15,11 @@
 2. **NGO → Non-profit terminology** - Updated throughout app
 3. **Directory reorganization** - Cleaner structure
 
-#### 🚧 In Progress
+#### 📝 Remaining
 4. **Tab 3 Option B toast notification**
-   - [ ] Add success message when importing from proposal
-   - [ ] Match behavior from Tab 1 "Add to Proposal"
+   - [ ] Add success message adding to order directly from Tab 3 Option B; will match the behavior from Tab 1 "Add to Proposal"
    - **Location:** app.py (Tab 3, Option B section)
 
-#### 📝 Remaining
 5. **Execution form updates**
    - [ ] Change New/Existing client to checkbox format
    - [ ] Update date format from YYYY-MM-DD to MM/DD/YY app-wide

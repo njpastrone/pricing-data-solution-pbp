@@ -4538,7 +4538,7 @@ with tab3:
                 if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
                     st.session_state.partner_shipping = max_pbp_shipping
 
-                st.success(f"Imported all {imported_count} product(s) from proposal!")
+                st.toast(f"Imported all {imported_count} product(s) from proposal!")
                 st.rerun()
 
         with col2:
