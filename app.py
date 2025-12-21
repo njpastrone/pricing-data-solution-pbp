@@ -3552,12 +3552,15 @@ with tab2:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.session_state.order_details['client_type'] = st.selectbox(
-            "Client Type",
-            options=['New', 'Existing'],
-            index=0 if st.session_state.order_details.get('client_type', 'New') == 'New' else 1,
-            key="order_detail_client_type"
+        # Convert client_type to boolean for checkbox
+        is_new = st.session_state.order_details.get('client_type', 'New') == 'New'
+        st.session_state.order_details['is_new_client'] = st.checkbox(
+            "New Client?",
+            value=is_new,
+            key="order_detail_is_new_client"
         )
+        # Store as 'New' or 'Existing' for backward compatibility
+        st.session_state.order_details['client_type'] = 'New' if st.session_state.order_details['is_new_client'] else 'Existing'
 
         st.session_state.order_details['company_name'] = st.text_input(
             "Company Name",
@@ -6282,6 +6285,18 @@ with tab4:
 
             with col1:
                 st.markdown("**Client Information**")
+
+                # New Client checkbox with callback
+                def update_is_new_client():
+                    st.session_state.client_info['is_new_client'] = st.session_state.tab4_is_new_client
+
+                st.checkbox(
+                    "New Client?",
+                    value=st.session_state.client_info.get('is_new_client', True),
+                    key="tab4_is_new_client",
+                    on_change=update_is_new_client
+                )
+
                 # Use callback to update client_info to ensure persistence
                 def update_company_name():
                     st.session_state.client_info['company_name'] = st.session_state.tab3_company_name
