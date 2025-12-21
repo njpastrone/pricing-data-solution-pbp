@@ -4608,6 +4608,11 @@ with tab3:
     # ============================================================
     # OPTION C (or B): MANUAL PRODUCT SELECTION
     # ============================================================
+    # Display success message if a product was just added
+    if 'show_add_to_order_success' in st.session_state and st.session_state.show_add_to_order_success:
+        st.toast(f"Added {st.session_state.add_to_order_product_name} to order")
+        st.session_state.show_add_to_order_success = False
+
     # Adjust option label based on whether proposal exists
     option_label = "Option C" if has_proposal else "Option B"
     st.header(f"{option_label}: Manual Product Selection")
@@ -4706,8 +4711,9 @@ with tab3:
                 if pbp_shipping_cost > 0 and st.session_state.partner_shipping == 0:
                     st.session_state.partner_shipping = pbp_shipping_cost
 
-                # Show success toast
-                st.toast(f"Added {product_data.get('Product/Service', 'product')} to order")
+                # Set success message for deferred toast
+                st.session_state.show_add_to_order_success = True
+                st.session_state.add_to_order_product_name = product_data.get('Product/Service', 'product')
                 st.rerun()
             else:
                 st.error("Could not determine pricing for this product")
