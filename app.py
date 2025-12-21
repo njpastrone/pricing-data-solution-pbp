@@ -5055,7 +5055,8 @@ with tab3:
                 # Calculate totals
                 product_subtotal = base_price * new_quantity
                 subtotal_before_markup = product_subtotal + customization_setup_total + customization_unit_total
-                markup_amount = product_subtotal * (new_markup / 100)
+                # Use the item's markup_percent which gets updated by the input fields
+                markup_amount = product_subtotal * (item['markup_percent'] / 100)
                 product_total = subtotal_before_markup + markup_amount
                 total_per_unit = product_total / new_quantity
 
@@ -5069,9 +5070,15 @@ with tab3:
                     partner_customization_unit_total = 0.0
 
                 # Update item in session state
+                # Get the current markup (either from the input field or the item's current value)
+                current_markup = item['markup_percent']  # Default to current value
+                # If there's a markup input field in session state, use that
+                if f"prod_markup_{idx}" in st.session_state:
+                    current_markup = st.session_state[f"prod_markup_{idx}"]
+
                 st.session_state.order_items[idx].update({
                     'quantity': new_quantity,
-                    'markup_percent': new_markup,
+                    'markup_percent': current_markup,
                     'include_customization': new_include_custom,
                     'customization_setup_fee': new_setup_fee,
                     'customization_per_unit': new_perunit_cost,
