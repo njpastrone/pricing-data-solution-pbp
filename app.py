@@ -4795,7 +4795,7 @@ with tab3:
             # QUANTITY & PRICING SECTION
             st.markdown("##### Quantity & Pricing")
 
-            col_qty, col_markup = st.columns(2)
+            col_qty, col_markup, col_price = st.columns(3)
 
             with col_qty:
                 new_quantity = st.number_input(
@@ -4819,59 +4819,111 @@ with tab3:
                     st.caption(f"Using tier: {tier_range} units | ${base_price:.2f}/unit")
 
             with col_markup:
-                new_markup = st.number_input(
-                    "Markup %",
-                    min_value=0.0,
-                    value=item['markup_percent'],
-                    step=5.0,
-                    key=f"prod_markup_{idx}",
-                    help="Your profit margin. 100% = double the cost (2x)"
-                )
+                # Check if we're updating from client price to prevent circular updates
+                if st.session_state.get(f'updating_from_price_tab3_{idx}', False):
+                    # Just display the calculated markup, don't create input
+                    st.markdown("**Markup %**")
+                    st.markdown(f"{item['markup_percent']:.1f}%")
+                    st.caption("Your profit margin")
+                    # Clear the flag
+                    st.session_state[f'updating_from_price_tab3_{idx}'] = False
+                else:
+                    new_markup = st.number_input(
+                        "Markup %",
+                        min_value=-50.0,  # Allow negative markup for below-cost pricing
+                        value=item['markup_percent'],
+                        step=5.0,
+                        key=f"prod_markup_{idx}",
+                        help="Your profit margin. 100% = double the cost (2x)"
+                    )
+                    # Set flag if markup changed to prevent circular updates
+                    if new_markup != item['markup_percent']:
+                        st.session_state[f'updating_from_markup_tab3_{idx}'] = True
 
-                # Calculate and show client price (base + markup, before customization)
+            with col_price:
+                # Calculate client price (base + markup, before customization)
                 if base_price:
                     product_subtotal_calc = base_price * new_quantity
-                    markup_amount_calc = product_subtotal_calc * (new_markup / 100)
+
+                    # Use current markup for calculation
+                    current_markup = st.session_state.get(f"prod_markup_{idx}", item['markup_percent'])
+                    if not st.session_state.get(f'updating_from_price_tab3_{idx}', False):
+                        current_markup = new_markup if 'new_markup' in locals() else item['markup_percent']
+                    else:
+                        current_markup = item['markup_percent']
+
+                    markup_amount_calc = product_subtotal_calc * (current_markup / 100)
                     client_price_raw = product_subtotal_calc + markup_amount_calc
                     client_price_per_unit = client_price_raw / new_quantity
 
-                    st.caption(f"Client price: ${client_price_per_unit:.2f}/unit (before customization)")
-
-                    # Show quoted price warning if this came from a proposal and price changed
-                    quoted_price = item.get('quoted_price_per_unit', 0.0)
-                    if quoted_price > 0:
-                        # Product came from proposal - show comparison
-                        if abs(client_price_per_unit - quoted_price) > 0.01:  # Allow for rounding errors
-                            # Determine WHY the price changed
-                            reasons = []
-
-                            # Check if tier changed
-                            proposal_tier = item.get('proposal_tier_column', '')
-                            current_tier = item.get('tier_column', '')
-                            proposal_tier_range = item.get('proposal_tier_range', '')
-                            current_tier_range = tier_range
-
-                            if proposal_tier and current_tier and proposal_tier != current_tier:
-                                reasons.append(f"Tier change: {proposal_tier} ({proposal_tier_range}) → {current_tier} ({current_tier_range})")
-
-                            # Check if markup changed
-                            proposal_markup = item.get('proposal_markup_percent', 0)
-                            current_markup = new_markup
-
-                            if abs(proposal_markup - current_markup) > 0.01:
-                                reasons.append(f"Markup change: {proposal_markup:.0f}% → {current_markup:.0f}%")
-
-                            # Display warning with reasons
-                            if reasons:
-                                reason_text = " | ".join(reasons)
-                                st.warning(f"WARNING: Price changed from proposal (${quoted_price:.2f}/unit → ${client_price_per_unit:.2f}/unit)\n\nReason: {reason_text}")
-                            else:
-                                st.warning(f"WARNING: Price changed from proposal: Quoted price was ${quoted_price:.2f}/unit, current is ${client_price_per_unit:.2f}/unit")
-                        else:
-                            st.info(f"Matches quoted price: ${quoted_price:.2f}/unit")
+                    # Check if we're updating from markup to prevent circular updates
+                    if st.session_state.get(f'updating_from_markup_tab3_{idx}', False):
+                        # Just display the calculated price, don't create input
+                        st.markdown("**Client Price/Unit**")
+                        st.markdown(f"${client_price_per_unit:.2f}")
+                        st.caption("Before customization")
+                        # Clear the flag
+                        st.session_state[f'updating_from_markup_tab3_{idx}'] = False
                     else:
-                        # Product added manually (not from proposal)
-                        st.caption("Quoted price: Unknown (product added manually)")
+                        # Editable client price field
+                        new_client_price = st.number_input(
+                            "Client Price/Unit",
+                            min_value=0.01,
+                            value=client_price_per_unit,
+                            step=1.0,
+                            format="%.2f",
+                            key=f"prod_price_{idx}",
+                            help="Price per unit charged to client (before customization)"
+                        )
+
+                        # Update markup if price changed
+                        if abs(new_client_price - client_price_per_unit) > 0.01:  # Check if meaningfully different
+                            # Calculate new markup from the price
+                            new_markup_calc = calculate_markup_from_price(base_price, new_client_price)
+                            st.session_state.order_items[idx]['markup_percent'] = new_markup_calc
+                            st.session_state[f'updating_from_price_tab3_{idx}'] = True
+                            st.rerun()
+                else:
+                    st.markdown("**Client Price/Unit**")
+                    st.markdown("—")
+                    st.caption("No base price")
+
+            # Show quoted price warning if this came from a proposal and price changed
+            if base_price:
+                quoted_price = item.get('quoted_price_per_unit', 0.0)
+                if quoted_price > 0:
+                    # Product came from proposal - show comparison
+                    if abs(client_price_per_unit - quoted_price) > 0.01:  # Allow for rounding errors
+                        # Determine WHY the price changed
+                        reasons = []
+
+                        # Check if tier changed
+                        proposal_tier = item.get('proposal_tier_column', '')
+                        current_tier = item.get('tier_column', '')
+                        proposal_tier_range = item.get('proposal_tier_range', '')
+                        current_tier_range = tier_range
+
+                        if proposal_tier and current_tier and proposal_tier != current_tier:
+                            reasons.append(f"Tier change: {proposal_tier} ({proposal_tier_range}) → {current_tier} ({current_tier_range})")
+
+                        # Check if markup changed
+                        proposal_markup = item.get('proposal_markup_percent', 0)
+                        current_markup = item['markup_percent']  # Use the actual markup from the item
+
+                        if abs(proposal_markup - current_markup) > 0.01:
+                            reasons.append(f"Markup change: {proposal_markup:.0f}% → {current_markup:.0f}%")
+
+                        # Display warning with reasons
+                        if reasons:
+                            reason_text = " | ".join(reasons)
+                            st.warning(f"WARNING: Price changed from proposal (${quoted_price:.2f}/unit → ${client_price_per_unit:.2f}/unit)\n\nReason: {reason_text}")
+                        else:
+                            st.warning(f"WARNING: Price changed from proposal: Quoted price was ${quoted_price:.2f}/unit, current is ${client_price_per_unit:.2f}/unit")
+                    else:
+                        st.info(f"Matches quoted price: ${quoted_price:.2f}/unit")
+                else:
+                    # Product added manually (not from proposal)
+                    st.caption("Quoted price: Unknown (product added manually)")
 
             # CUSTOMIZATION SECTION (always available)
             customization_info = product_data.get("Customization Info", "")
