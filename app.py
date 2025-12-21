@@ -6979,9 +6979,13 @@ with tab4:
         client_info_data = []
 
         # Company/Client Name
-        company_status = "New" if client_info.get('is_new_client', False) else "Existing"
         company_name = client_info.get('company_name', 'Not specified')
-        client_info_data.append(["Company/Client Name", f"{company_name} ({company_status})"])
+        client_info_data.append(["Company/Client Name", company_name])
+
+        # New Client Status (as separate row with checkbox format)
+        is_new = client_info.get('is_new_client', False)
+        client_status_display = f"[X] Yes  [ ] No" if is_new else "[ ] Yes  [X] No"
+        client_info_data.append(["New Client?", client_status_display])
 
         # Contact + Email (using new contacts array - show all contacts if multiple)
         contacts = client_info.get('contacts', [])
@@ -7434,7 +7438,11 @@ with tab4:
     <table>
         <tr>
             <td>Company/Client Name</td>
-            <td>{client_info.get('company_name', 'Not specified')} ({'New' if client_info.get('is_new_client', False) else 'Existing'})</td>
+            <td>{client_info.get('company_name', 'Not specified')}</td>
+        </tr>
+        <tr>
+            <td>New Client?</td>
+            <td>{'[X] Yes  [ ] No' if client_info.get('is_new_client', False) else '[ ] Yes  [X] No'}</td>
         </tr>
         <tr>
             <td>Contact + Email</td>
