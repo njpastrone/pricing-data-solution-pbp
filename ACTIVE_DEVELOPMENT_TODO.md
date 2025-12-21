@@ -136,6 +136,46 @@
 
 ---
 
+## 🟠 NEW FEATURE REQUESTS (Week 2 Sprint)
+
+### 1. Direct Client Price Editing in Tab 3
+- [ ] Add bidirectional price editing to Tab 3 Section 2 product editing
+- [ ] Allow users to directly change client price (not just markup %)
+- [ ] Borrow implementation from Tab 1 Section 2 (already working there)
+- [ ] Update markup % when client price changes
+- [ ] Ensure proper recalculation of totals
+- **File:** app.py (Tab 3, Section 2 - Current Order)
+
+### 2. Execution Form Updates
+- [ ] Change New/Existing client to checkbox format
+- [ ] Update date format app-wide from YYYY-MM-DD to MM/DD/YY
+- [ ] Update all date displays and inputs
+- [ ] Ensure consistent date formatting
+- **Files:** app.py (Tab 4, all date fields)
+
+### 3. Tab 3 Option B Pop-up Message
+- [ ] Add toast notification when clicking "Add to Order" in Option B
+- [ ] Match behavior from Tab 1 "Add to Proposal" buttons
+- [ ] Show success message with product count
+- **File:** app.py (Tab 3, Option B section)
+
+### 4. Customization Add-On Feature
+- [ ] Add "Customization Add-On" option within Include Customization
+- [ ] Allow multiple add-ons (2nd color, special wood, etc.)
+- [ ] Display as separate line items in invoice
+- [ ] Use same format as current customization costs
+- [ ] Make it easier than Custom Line Items
+- **File:** app.py (Tab 3, Section 2 - Product editing)
+
+### 5. NGO to Non-profit Terminology
+- [ ] Change "NGO Discount" to "Non-profit Discount" app-wide
+- [ ] Update all UI labels
+- [ ] Update variable names for consistency
+- [ ] Search and replace across codebase
+- **Files:** app.py, all relevant files
+
+---
+
 ## 🟡 TESTING CHECKLIST
 
 ### 🔴 COMPREHENSIVE TAB 3 TO TAB 4 DATA FLOW TEST ✅ CREATED (2025-12-11)
@@ -184,6 +224,12 @@
 - [ ] Design dropshipping-specific form with warnings
 - [ ] Consider TypeForm or other alternatives
 - [ ] **Action:** Schedule stakeholder meeting
+
+### Customer Setup Form (NEW)
+- [ ] Define requirements for customer setup form
+- [ ] Determine integration points with existing workflow
+- [ ] Design user experience flow
+- [ ] **Action:** Gather requirements from stakeholders
 
 ---
 
@@ -246,10 +292,10 @@ git commit -m "TEST: Verify markup calculations"
 - ✅ Critical fixes (4 items - ALL COMPLETE)
 - ✅ High-priority features (ALL 13 items COMPLETE)
 
-### Next Sprint (Week 2)
-- Complete high-priority features
-- Run testing suite
-- Schedule Tab 2 discussion
+### Current Sprint (Week 2) - NEW FEATURES
+- 🟠 5 new feature requests to implement
+- 🟡 Testing suite to complete
+- 🔵 2 discussion items pending
 
 ---
 
