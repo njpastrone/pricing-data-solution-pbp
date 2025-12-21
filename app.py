@@ -3711,8 +3711,16 @@ with tab2:
             <td colspan="2" class="section-header">CLIENT INFORMATION</td>
         </tr>
         <tr>
-            <td>Client Type <span class="required">*</span></td>
-            <td class="fill-in">{client_type}</td>
+            <td>New Client? <span class="required">*</span></td>
+            <td class="fill-in">
+                <span style="display: inline-block; margin-right: 20px;">
+                    [{' X ' if client_type == 'New' else '   '}] Yes
+                </span>
+                <span style="display: inline-block;">
+                    [{' X ' if client_type == 'Existing' else '   '}] No (Existing)
+                </span>
+                <span class="helper-text">Check one box</span>
+            </td>
         </tr>
         <tr>
             <td>Company Name <span class="required">*</span></td>
@@ -3859,7 +3867,7 @@ with tab2:
         # Keep TXT version for backup
         client_form_text = """CLIENT ORDER FORM
 
-Client Type: [ ] Existing  [ ] New
+New Client? [ ] Yes  [ ] No (Existing)
 Company Name: _______________________
 Contact: _______________________
 Contact Email: _______________________
@@ -3892,7 +3900,7 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
         # Generate CSV version
         csv_lines = []
         csv_lines.append("FIELD,VALUE")
-        csv_lines.append("Client Type,")
+        csv_lines.append("New Client?,")
         csv_lines.append("Company Name,")
         csv_lines.append("Contact Name,")
         csv_lines.append("Contact Email,")
@@ -4297,7 +4305,7 @@ with tab3:
             st.markdown("**Preview of Extracted Data:**")
 
             preview_data = {
-                "Client Type": parsed_data['client_type'] or "[Not filled]",
+                "New Client?": "Yes" if parsed_data['client_type'] == 'New' else ("No" if parsed_data['client_type'] == 'Existing' else "[Not filled]"),
                 "Company Name": parsed_data['company_name'] or "[Not filled]",
                 "Contact Name": parsed_data['contact_name'] or "[Not filled]",
                 "Contact Email": parsed_data['contact_email'] or "[Not filled]",

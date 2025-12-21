@@ -652,6 +652,7 @@ def parse_client_order_form_html(html_content):
                 field_map[label_clean] = value_clean
 
     # Map to our structure using field labels
+    # Handle both old "Client Type" and new "New Client?" formats
     if 'client type' in field_map:
         client_type = field_map['client type']
         if 'Existing' in client_type and 'New' not in client_type:
@@ -660,6 +661,21 @@ def parse_client_order_form_html(html_content):
             extracted_data['client_type'] = 'New'
         else:
             extracted_data['client_type'] = client_type
+    elif 'new client?' in field_map or 'new client' in field_map:
+        # Handle new checkbox format: "New Client? [X] Yes [ ] No (Existing)"
+        new_client_field = field_map.get('new client?', field_map.get('new client', ''))
+        # Check for X in the Yes checkbox or explicit Yes
+        if '[X]' in new_client_field or '[ X ]' in new_client_field or 'Yes' in new_client_field:
+            if 'No' not in new_client_field or '[ ]' in new_client_field.split('No')[0]:
+                extracted_data['client_type'] = 'New'
+        # Check for X in the No checkbox or explicit No
+        elif '[X]' in new_client_field.split('No')[-1] if 'No' in new_client_field else False:
+            extracted_data['client_type'] = 'Existing'
+        elif 'No' in new_client_field and 'Yes' not in new_client_field:
+            extracted_data['client_type'] = 'Existing'
+        else:
+            # If unclear, default to the field content
+            extracted_data['client_type'] = new_client_field
 
     if 'company name' in field_map:
         extracted_data['company_name'] = field_map['company name']
