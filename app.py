@@ -5060,6 +5060,76 @@ with tab3:
                             st.info(f"Charging for {new_custom_min_qty} customization units (ordering {new_quantity} product units)")
                     else:
                         new_custom_min_qty = 0
+
+                    # CUSTOMIZATION ADD-ONS SECTION
+                    st.divider()
+                    st.markdown("**Customization Add-Ons**")
+                    st.caption("Add additional customization options (e.g., 2nd color, special materials, extra features)")
+
+                    # Initialize add-ons list if not exists
+                    if 'customization_addons' not in item:
+                        item['customization_addons'] = []
+
+                    # Button to add new add-on
+                    if st.button("➕ Add Customization Option", key=f"add_addon_{idx}"):
+                        item['customization_addons'].append({
+                            'name': '',
+                            'setup_fee': 0.0,
+                            'per_unit_cost': 0.0
+                        })
+                        st.rerun()
+
+                    # Display existing add-ons
+                    addons_to_remove = []
+                    for addon_idx, addon in enumerate(item.get('customization_addons', [])):
+                        with st.expander(f"Add-On {addon_idx + 1}: {addon.get('name', 'Unnamed')}", expanded=True):
+                            addon_col1, addon_col2, addon_col3, addon_col4 = st.columns([2, 1, 1, 0.5])
+
+                            with addon_col1:
+                                addon['name'] = st.text_input(
+                                    "Option Name",
+                                    value=addon.get('name', ''),
+                                    placeholder="e.g., Second Color, Premium Wood",
+                                    key=f"addon_name_{idx}_{addon_idx}"
+                                )
+
+                            with addon_col2:
+                                addon['setup_fee'] = st.number_input(
+                                    "Setup Fee",
+                                    min_value=0.0,
+                                    value=float(addon.get('setup_fee', 0.0)),
+                                    step=1.0,
+                                    key=f"addon_setup_{idx}_{addon_idx}",
+                                    help="One-time setup fee for this option"
+                                )
+
+                            with addon_col3:
+                                addon['per_unit_cost'] = st.number_input(
+                                    "Per Unit Cost",
+                                    min_value=0.0,
+                                    value=float(addon.get('per_unit_cost', 0.0)),
+                                    step=0.1,
+                                    key=f"addon_perunit_{idx}_{addon_idx}",
+                                    help="Additional cost per unit"
+                                )
+
+                            with addon_col4:
+                                st.write("")  # Spacing
+                                if st.button("❌", key=f"remove_addon_{idx}_{addon_idx}"):
+                                    addons_to_remove.append(addon_idx)
+
+                    # Remove add-ons marked for deletion
+                    if addons_to_remove:
+                        for addon_idx in sorted(addons_to_remove, reverse=True):
+                            item['customization_addons'].pop(addon_idx)
+                        st.rerun()
+
+                    # Show total add-on costs
+                    if item.get('customization_addons'):
+                        total_addon_setup = sum(addon.get('setup_fee', 0) for addon in item['customization_addons'])
+                        total_addon_perunit = sum(addon.get('per_unit_cost', 0) for addon in item['customization_addons'])
+                        if total_addon_setup > 0 or total_addon_perunit > 0:
+                            st.info(f"**Total Add-Ons:** ${total_addon_setup:.2f} setup + ${total_addon_perunit:.2f}/unit")
             else:
                 new_setup_fee = 0.0
                 new_perunit_cost = 0.0
@@ -5067,6 +5137,8 @@ with tab3:
                 new_partner_perunit_cost = 0.0
                 new_apply_minimum = False
                 new_custom_min_qty = 0
+                # Clear add-ons if customization is disabled
+                item['customization_addons'] = []
 
             # RECALCULATE PRICING
             # Get base price for new quantity
@@ -5078,6 +5150,12 @@ with tab3:
                     effective_custom_qty = new_custom_min_qty if (new_apply_minimum and new_custom_min_qty > new_quantity) else new_quantity
                     customization_setup_total = new_setup_fee
                     customization_unit_total = new_perunit_cost * effective_custom_qty
+
+                    # Add customization add-on costs
+                    for addon in item.get('customization_addons', []):
+                        if addon.get('name'):  # Only include add-ons with names
+                            customization_setup_total += addon.get('setup_fee', 0.0)
+                            customization_unit_total += addon.get('per_unit_cost', 0.0) * effective_custom_qty
                 else:
                     customization_setup_total = 0.0
                     customization_unit_total = 0.0
@@ -7227,6 +7305,41 @@ with tab4:
                             'SELL PRICE/UNIT': f"${customization_per_unit:.2f}",
                             'TOTAL SELL PRICE': f"${customization_unit_total:.2f}"
                         })
+
+                    # Add customization add-on line items
+                    for addon in item.get('customization_addons', []):
+                        if addon.get('name'):  # Only show add-ons with names
+                            addon_setup = addon.get('setup_fee', 0.0)
+                            addon_perunit = addon.get('per_unit_cost', 0.0)
+
+                            # Add-on setup fee line item (if applicable)
+                            if addon_setup > 0:
+                                invoice_line_items.append({
+                                    'PARTNER': partner,
+                                    'ITEMS + SPECS': f"  └ Add-On Setup: {addon['name']}",
+                                    'QTY': 1,
+                                    'IN-HANDS from Partner': partner_in_hands,
+                                    'COST/UNIT': f"${addon_setup:.2f}",
+                                    'TOTAL COST': f"${addon_setup:.2f}",
+                                    'COST VERIFIED?': cost_verified,
+                                    'SELL PRICE/UNIT': f"${addon_setup:.2f}",
+                                    'TOTAL SELL PRICE': f"${addon_setup:.2f}"
+                                })
+
+                            # Add-on per-unit line item (if applicable)
+                            if addon_perunit > 0:
+                                addon_total = addon_perunit * qty
+                                invoice_line_items.append({
+                                    'PARTNER': partner,
+                                    'ITEMS + SPECS': f"  └ Add-On: {addon['name']}",
+                                    'QTY': qty,
+                                    'IN-HANDS from Partner': partner_in_hands,
+                                    'COST/UNIT': f"${addon_perunit:.2f}",
+                                    'TOTAL COST': f"${addon_total:.2f}",
+                                    'COST VERIFIED?': cost_verified,
+                                    'SELL PRICE/UNIT': f"${addon_perunit:.2f}",
+                                    'TOTAL SELL PRICE': f"${addon_total:.2f}"
+                                })
 
                 # Add tariff line item if applicable
                 if item.get('tariff_amount', 0) > 0:
