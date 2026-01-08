@@ -14,6 +14,7 @@ import pandas as pd
 import math
 import re
 import gc  # For memory optimization
+from src.helpers import get_column_value
 
 
 def calculate_moq(estimated_unit_price):
@@ -109,8 +110,10 @@ def calculate_proposal_pricing(proposal_item: Dict, get_unit_price_func, marketi
         client_price_at_100 = price_at_100_per_unit * (1 - discount_percent / 100)
 
     # Get customization costs from product data
-    setup_fee = clean_price(product_row.get('Customization Setup Fee', '')) or 0.0
-    per_unit_cost = clean_price(product_row.get('Customization Cost per Unit', '')) or 0.0
+    setup_fee_raw = get_column_value(product_row, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')
+    per_unit_raw = get_column_value(product_row, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')
+    setup_fee = clean_price(setup_fee_raw) or 0.0
+    per_unit_cost = clean_price(per_unit_raw) or 0.0
 
     # Get delivery time (default to 6-8 weeks)
     delivery_time = product_row.get('Lead Time', '6-8 weeks')

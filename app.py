@@ -37,7 +37,9 @@ from src.helpers import (
     convert_proposal_to_order,
     parse_client_order_form_html,
     get_shipping_costs,
-    format_shipping_display
+    format_shipping_display,
+    get_column_value,
+    get_tariff_rate
 )
 from src.pricing_engine import (
     determine_tier_number,
@@ -93,7 +95,8 @@ def calculate_msrp_markup(product_data):
         float: Markup percentage (0 if MSRP is below cost, calculated value if valid, 100.0 if no MSRP)
     """
     # Get MSRP
-    msrp = clean_price(product_data.get('MSRP', ''))
+    msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', 'MSRP', '')
+    msrp = clean_price(msrp_raw)
 
     if msrp and msrp > 0:
         # Get base cost at quantity 100 as reference
@@ -110,6 +113,35 @@ def calculate_msrp_markup(product_data):
 
     # No valid MSRP or cost, return default 100% markup
     return 100.0
+
+
+def get_default_markup(product_data):
+    """
+    Get default markup for a product.
+    Uses PBP Standard Markup from spreadsheet if available, otherwise 100%.
+
+    Args:
+        product_data: Product row data
+
+    Returns:
+        float: Markup percentage (e.g., 100.0 for 100% markup)
+    """
+    # Check for PBP Standard Markup column
+    pbp_markup = get_column_value(product_data, 'PBP Standard Markup', None, None)
+
+    if pbp_markup:
+        try:
+            # Convert from multiplier to percentage
+            # Format: 2.0 = 200% total = 100% markup
+            multiplier = float(pbp_markup)
+            if multiplier > 0:
+                return (multiplier - 1) * 100
+        except (ValueError, TypeError):
+            pass
+
+    # Default to 100% markup
+    return 100.0
+
 
 def compute_proposal_hash(proposal_products):
     """
@@ -297,7 +329,15 @@ st.set_page_config(
 # ============================================================
 # Lightweight endpoint to keep Streamlit Cloud app awake
 # Responds instantly without loading data or UI
-if st.query_params.get("ping"):
+# Handle both old and new Streamlit API for query params
+try:
+    # Try new API (Streamlit >= 1.30)
+    query_params = st.query_params
+except AttributeError:
+    # Fall back to old API (Streamlit < 1.30)
+    query_params = st.experimental_get_query_params()
+
+if "ping" in query_params:
     st.write("pong")
     st.stop()
 
@@ -2336,11 +2376,11 @@ with tab1:
                     if st.button(f"Add All {new_count_all}", type="secondary", use_container_width=True, key="add_all_products_button"):
                         # Add all new products to proposal with MSRP or 100% markup
                         for product_row in new_products_all:
-                            # Determine markup: use MSRP if enabled, otherwise 100%
+                            # Determine markup: use MSRP if enabled, otherwise default from spreadsheet
                             if st.session_state.proposal_use_msrp:
                                 markup = calculate_msrp_markup(product_row.to_dict())
                             else:
-                                markup = 100.0
+                                markup = get_default_markup(product_row.to_dict())
 
                             proposal_item = {
                                 'product_data': product_row.to_dict(),
@@ -2401,11 +2441,11 @@ with tab1:
                         if st.button(f"Add {new_count} Products", type="primary", use_container_width=True, key="bulk_add_button"):
                             # Add all new products to proposal with MSRP or 100% markup
                             for product_row in new_products:
-                                # Determine markup: use MSRP if enabled, otherwise 100%
+                                # Determine markup: use MSRP if enabled, otherwise default from spreadsheet
                                 if st.session_state.proposal_use_msrp:
                                     markup = calculate_msrp_markup(product_row.to_dict())
                                 else:
-                                    markup = 100.0
+                                    markup = get_default_markup(product_row.to_dict())
 
                                 proposal_item = {
                                     'product_data': product_row.to_dict(),
@@ -2475,7 +2515,7 @@ with tab1:
 
                 # Calculate cost and client price for display
                 preliminary_cost, _, _ = get_unit_price_new_system(product_data, 100)
-                estimated_moq = calculate_moq(preliminary_cost * 2) if preliminary_cost else None
+                estimated_moq = calculate_moq(preliminary_cost * 2, product_data) if preliminary_cost else None
                 moq_cost, _, _ = get_unit_price_new_system(product_data, estimated_moq) if estimated_moq else (None, None, None)
 
                 # Calculate client price (100% markup)
@@ -2505,11 +2545,11 @@ with tab1:
                 with col5:
                     # Add button - adds product to proposal with MSRP or 100% markup
                     if st.button("Add to Proposal", key=f"add_{idx}", use_container_width=True, type="primary"):
-                        # Determine markup: use MSRP if enabled, otherwise 100%
+                        # Determine markup: use MSRP if enabled, otherwise default from spreadsheet
                         if st.session_state.proposal_use_msrp:
                             markup = calculate_msrp_markup(product_data.to_dict())
                         else:
-                            markup = 100.0
+                            markup = get_default_markup(product_data.to_dict())
 
                         proposal_item = {
                             'product_data': product_data.to_dict(),
@@ -2529,7 +2569,7 @@ with tab1:
                 st.caption(f"Country: {product_data.get('Country of Origin', 'N/A')} | Tiered Pricing: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
 
                 # Show MSRP if available
-                msrp_raw = product_data.get('MSRP', '')
+                msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', 'MSRP', '')
                 if msrp_raw and str(msrp_raw).strip() and str(msrp_raw).strip() not in ['nan', '', '0', '0.0']:
                     from src.helpers import clean_price
                     msrp_value = clean_price(msrp_raw)
@@ -2900,7 +2940,8 @@ with tab1:
 
             with col5:
                 # Show MSRP if available
-                msrp = clean_price(product_data.get('MSRP', ''))
+                msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', 'MSRP', '')
+                msrp = clean_price(msrp_raw)
                 if msrp and msrp > 0:
                     st.markdown(f"${msrp:.2f}")
                 else:
@@ -2942,7 +2983,7 @@ with tab1:
                     estimated_unit_price = preliminary_base_price * temp_markup_multiplier
 
                     # Calculate MOQ
-                    moq = calculate_moq(estimated_unit_price)
+                    moq = calculate_moq(estimated_unit_price, product_row)
                     if moq is None:
                         moq = 5
 
@@ -3066,8 +3107,10 @@ with tab1:
 
                         # ALWAYS show customization costs from product data
                         # Get customization costs from the product data
-                        setup_fee = clean_price(product_row.get('Customization Setup Fee', '')) or 0.0
-                        per_unit_cost = clean_price(product_row.get('Customization Cost per Unit', '')) or 0.0
+                        setup_fee_raw = get_column_value(product_row, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')
+                        per_unit_raw = get_column_value(product_row, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')
+                        setup_fee = clean_price(setup_fee_raw) or 0.0
+                        per_unit_cost = clean_price(per_unit_raw) or 0.0
 
                         # Display customization costs at the bottom
                         if setup_fee > 0 or per_unit_cost > 0:
@@ -3119,7 +3162,7 @@ with tab1:
                     estimated_unit_price = preliminary_base_price * temp_markup_multiplier
 
                     # Calculate MOQ
-                    moq = calculate_moq(estimated_unit_price)
+                    moq = calculate_moq(estimated_unit_price, product_row)
                     if moq is None:
                         moq = 5
 
@@ -3231,8 +3274,10 @@ with tab1:
                         csv_lines.append(f"MOQ calculated based on $1,000 minimum order value (MOQ {moq} units = ${moq_total_value:.2f})")
 
                         # ALWAYS show customization costs from product data
-                        setup_fee = clean_price(product_row.get('Customization Setup Fee', '')) or 0.0
-                        per_unit_cost = clean_price(product_row.get('Customization Cost per Unit', '')) or 0.0
+                        setup_fee_raw = get_column_value(product_row, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')
+                        per_unit_raw = get_column_value(product_row, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')
+                        setup_fee = clean_price(setup_fee_raw) or 0.0
+                        per_unit_cost = clean_price(per_unit_raw) or 0.0
 
                         # Display customization costs
                         if setup_fee > 0 or per_unit_cost > 0:
@@ -4463,7 +4508,7 @@ with tab3:
                                 product_total = product_cost_subtotal + markup_amount
 
                                 # Parse tariff
-                                tariff_rate_percent = parse_tariff_rate(product_data.get('Tariff Rate', ''))
+                                tariff_rate_percent = get_tariff_rate(product_data, product_cost_subtotal)
                                 tariff_base = product_cost_subtotal
                                 tariff_amount = calculate_product_tariff(tariff_base, tariff_rate_percent)
 
@@ -4479,12 +4524,12 @@ with tab3:
                                     'base_price': base_price_per_unit,
                                     'tier_range': tier_info if tier_info else '',
                                     'tier_column': f'T{tier_num}' if tier_num else '',
-                                    'markup_percent': 100.0,
+                                    'markup_percent': get_default_markup(product_data),
                                     'markup_amount': markup_amount,
                                     'include_customization': False,
                                     'customization_description': product_data.get('Customization Info', ''),
-                                    'customization_setup_fee': float(clean_price(product_data.get('Customization Setup Fee', '')) or 0.0),
-                                    'customization_per_unit': float(clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0),
+                                    'customization_setup_fee': float(clean_price(get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')) or 0.0),
+                                    'customization_per_unit': float(clean_price(get_column_value(product_data, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')) or 0.0),
                                     'customization_setup_total': 0.0,
                                     'customization_unit_total': 0.0,
                                     'apply_custom_minimum': False,
@@ -4677,14 +4722,16 @@ with tab3:
             ].iloc[0]
 
             # Get default customization costs from spreadsheet
-            default_setup_fee = clean_price(product_data.get('Customization Setup Fee', '')) or 0.0
-            default_per_unit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0
+            default_setup_fee_raw = get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')
+            default_per_unit_raw = get_column_value(product_data, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')
+            default_setup_fee = clean_price(default_setup_fee_raw) or 0.0
+            default_per_unit = clean_price(default_per_unit_raw) or 0.0
 
-            # Determine markup: use MSRP if enabled, otherwise 100%
+            # Determine markup: use MSRP if enabled, otherwise default from spreadsheet
             if st.session_state.order_use_msrp:
                 markup = calculate_msrp_markup(product_data.to_dict())
             else:
-                markup = 100.0
+                markup = get_default_markup(product_data.to_dict())
 
             # Add product with defaults
             new_item = {
@@ -4975,7 +5022,8 @@ with tab3:
                     with col_setup:
                         st.markdown("**Client Pricing:**")
                         # Always read default from product_data, use item value if user has edited it
-                        default_setup = clean_price(product_data.get('Customization Setup Fee', '')) or 0.0
+                        default_setup_raw = get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')
+                        default_setup = clean_price(default_setup_raw) or 0.0
                         stored_setup = item.get('customization_setup_fee', 0.0)
                         # Use stored value if it's non-zero OR if no default exists, otherwise use default
                         display_setup = stored_setup if (stored_setup > 0 or default_setup == 0) else default_setup
@@ -5006,7 +5054,8 @@ with tab3:
                     with col_perunit:
                         st.markdown("**Client Pricing:**")
                         # Always read default from product_data, use item value if user has edited it
-                        default_perunit = clean_price(product_data.get('Customization Cost per Unit', '')) or 0.0
+                        default_perunit_raw = get_column_value(product_data, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')
+                        default_perunit = clean_price(default_perunit_raw) or 0.0
                         stored_perunit = item.get('customization_per_unit', 0.0)
                         # Use stored value if it's non-zero OR if no default exists, otherwise use default
                         display_perunit = stored_perunit if (stored_perunit > 0 or default_perunit == 0) else default_perunit

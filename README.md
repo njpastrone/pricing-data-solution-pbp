@@ -183,21 +183,33 @@ Where:
 
 ## 📊 Data Source
 
-**Active Sheet:** `master_pricing_template_10_14` (Google Sheets)
+**Datasets:** Switchable between Demo and Real data (sidebar selector)
+- **Demo:** `master_pricing_template_10_14` (testing data - 19 products, 4 partners)
+- **Real:** `master_pricing` (production data - 133 products, 4 partners)
 
 **Structure:** 3-sheet workbook
-- **Template** (header at row 6): Partner-product pricing data
-- **Metadata**: Deliverable field definitions
-- **Partner-Specific Info**: Partner configuration reference
+- **Data** (header at row 6): Partner-product pricing data
+- **Metadata** (header at row 2): Deliverable field definitions
+- **Partner-Specific Info** (header at row 2): Partner configuration reference
 
-**Key Fields:**
+**Key Fields (Updated Schema - Jan 2026):**
 - Partner, Product/Service, Purchase Description
-- Pricing Tiers (Y/N) flag
-- Flexible tier definitions (PBP Cost: Tier 1-6 OR PBP Cost (No Tiers))
-- Customization Setup Fee, Customization Cost per Unit
-- Tariff Estimate, Shipping
+- **MOQ** (new): Minimum order quantity from partner
+- Pricing Tiers (Y/N) flag, Pricing Tiers Info
+- PBP Cost columns (No Tiers, Tier 1-6)
+- **Units per Package**: For multi-unit products (e.g., 6-pack)
+- **Client Price: Customization Setup Fee** (renamed from "Customization Setup Fee")
+- **Client Price: Customization Cost per Unit** (renamed from "Customization Cost per Unit")
+- **PBP Standard Markup** (new): Default markup multiplier (e.g., 2.0 = 100% markup)
+- **Vendor Published MSRP** (renamed from "MSRP")
+- Country of Origin, Marketing Description, Billing Description
+- **PBP Cost: Shipping Cost per Unit** (renamed from "Shipping Cost (PBP)")
+- **Client Price: Shipping Price per Unit** (renamed from "Shipping Price (Client)")
+- **Tariff Estimate ($)** and **Tariff Estimate (%)** (dual format support)
 
-See [docs/RESTRUCTURE_CONTEXT.md](docs/RESTRUCTURE_CONTEXT.md) for complete details.
+**Backward Compatibility:** App supports both old and new column names automatically.
+
+See [schema_reference.md](schema_reference.md) for complete schema documentation.
 
 ---
 

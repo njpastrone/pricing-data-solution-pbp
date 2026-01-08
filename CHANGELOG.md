@@ -5,14 +5,41 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-### 🚧 In Progress (Week 2 Sprint - Dec 2024)
+### 🚧 In Progress (Week 2 Sprint - Jan 2026)
 - Tab 3 Option B toast notification
 - Execution form updates (New/Existing checkbox + MM/DD/YY dates)
 - Customization Add-On feature for product editing
 
 ---
 
-## [7.3.0] - 2024-12-20
+## [7.4.0] - 2026-01-08
+
+### Added
+- **Full schema update with backward compatibility** - Implemented new canonical pricing data schema (30 columns)
+- **MOQ field support** - App now uses MOQ from spreadsheet when available, calculates otherwise
+- **PBP Standard Markup field** - Partner-specific default markups replace hardcoded 100%
+- **Dual tariff format support** - Handles both percentage (%) and dollar ($) tariff estimates
+- **Backward compatibility helper** - `get_column_value()` function ensures seamless old→new transitions
+- **Comprehensive documentation** - Added schema_reference.md and testing guides
+
+### Changed
+- **Column name updates** - All references updated to new canonical names with fallback support:
+  - "MSRP" → "Vendor Published MSRP"
+  - "Customization Setup Fee" → "Client Price: Customization Setup Fee"
+  - "Customization Cost per Unit" → "Client Price: Customization Cost per Unit"
+  - "Shipping Cost (PBP)" → "PBP Cost: Shipping Cost per Unit"
+  - "Shipping Price (Client)" → "Client Price: Shipping Price per Unit"
+  - "Tariff Rate" → "Tariff Estimate (%)" with fallback to "Tariff Estimate ($)"
+- **Default markup logic** - Products now use PBP Standard Markup when available instead of hardcoded 100%
+
+### Fixed
+- **Critical: Streamlit query_params compatibility** - Fixed AttributeError with older Streamlit versions
+- **Critical: pandas Series evaluation error** - Fixed ValueError in calculate_moq with DataFrame rows
+- Both errors were blocking app functionality - now resolved
+
+---
+
+## [7.3.0] - 2025-12-20
 
 ### Added
 - **Bidirectional price editing in Tab 3** - Users can now directly edit client price per unit, not just markup %

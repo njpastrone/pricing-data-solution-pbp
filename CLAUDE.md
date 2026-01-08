@@ -109,8 +109,16 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
   - **Real Dataset:** master_pricing (133 products, 4 partners - production data READY)
   - **Required sheet structure:**
     - **Data**: Partner-product pricing data (header at row 6)
-      - Key columns: Partner, Product/Service, Pricing Tiers (Y/N), PBP Cost (No Tiers), PBP Cost: Tier 1-6, MSRP, Units per Package
-      - **Units per Package** (new in v6.8): Normalizes package pricing to per-unit (default: 1, case-sensitive column name)
+      - **Updated Schema (Jan 2026):** Now supports new canonical column names with backward compatibility
+      - Core columns: Partner, Product/Service, MOQ, Pricing Tiers (Y/N), PBP Cost (No Tiers), PBP Cost: Tier 1-6
+      - **Units per Package**: Normalizes package pricing to per-unit (default: 1)
+      - **PBP Standard Markup** (new): Default markup multiplier (e.g., 2.0 = 100% markup)
+      - **Vendor Published MSRP** (renamed from MSRP)
+      - **Client Price: Customization Setup Fee** (renamed from Customization Setup Fee)
+      - **Client Price: Customization Cost per Unit** (renamed from Customization Cost per Unit)
+      - **PBP Cost: Shipping Cost per Unit** and **Client Price: Shipping Price per Unit** (renamed)
+      - **Tariff Estimate ($)** and **Tariff Estimate (%)** (dual format support)
+      - See [schema_reference.md](schema_reference.md) for complete details
     - **Metadata**: Deliverable field definitions (header at row 2)
     - **Partner-Specific Info**: Partner configuration reference (header at row 2)
 - **Code Structure:** Modular with helper functions in `src/` directory
@@ -358,9 +366,9 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 7.3.0 - Active Development (Week 2 Sprint)
+**Version:** 7.4.0 - Schema Update & Bug Fixes
 
-**Last Updated:** 2025-12-20
+**Last Updated:** 2026-01-08
 
 **Deployment:** ✅ **IN PRODUCTION** at https://pricing-data-solution-pbp.onrender.com
 - Render Standard tier (2GB RAM, $25/month)
@@ -380,6 +388,25 @@ pricing-data-solution-pbp/
 - Clean documentation structure (organized in docs/ subdirectories)
 - Fully deployed and operational on Render
 - CHANGELOG.md added for comprehensive version history
+
+**Recent Improvements (2026-01-08 - v7.4.0):**
+- ✅ **Schema Update with Full Backward Compatibility:**
+  - Implemented new canonical pricing data schema (30 columns)
+  - Added `get_column_value()` helper for seamless old→new column name transitions
+  - Updated all column references throughout the codebase
+  - App works with both old spreadsheets and new schema
+- ✅ **New Field Support:**
+  - **MOQ from Spreadsheet:** Uses partner MOQ when available, calculates otherwise
+  - **PBP Standard Markup:** Partner-specific default markups (replaces hardcoded 100%)
+  - **Dual Tariff Format:** Supports both percentage and dollar amount estimates
+- ✅ **Critical Bug Fixes:**
+  - Fixed Streamlit `query_params` compatibility (works with all versions)
+  - Fixed pandas Series boolean evaluation error in `calculate_moq`
+  - Both errors were blocking app functionality - now resolved
+- ✅ **Documentation Updates:**
+  - Added comprehensive schema_reference.md
+  - Updated README.md and CLAUDE.md with new schema details
+  - Created testing guide for schema validation
 
 **Recent Improvements (2025-12-20 - v7.3.0):**
 - ✅ **Bidirectional Price Editing in Tab 3:**

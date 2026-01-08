@@ -4,7 +4,7 @@ Handles tier selection, price lookup, customization costs, and tariff calculatio
 """
 
 import pandas as pd
-from src.helpers import parse_tier_info, parse_tariff_rate, clean_price
+from src.helpers import parse_tier_info, parse_tariff_rate, clean_price, get_column_value
 
 
 def determine_tier_number(quantity, tier_info_string, has_tiers):
@@ -250,8 +250,11 @@ def calculate_customization_costs(row, quantity, include_customization, customiz
         return customization
 
     # Extract customization costs from new system columns
-    setup_fee = clean_price(row.get('Customization Setup Fee', '')) or 0.0
-    per_unit = clean_price(row.get('Customization Cost per Unit', '')) or 0.0
+    # Use backward compatibility helper to support both old and new column names
+    setup_fee_raw = get_column_value(row, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')
+    per_unit_raw = get_column_value(row, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')
+    setup_fee = clean_price(setup_fee_raw) or 0.0
+    per_unit = clean_price(per_unit_raw) or 0.0
 
     # Get customization minimum from row if not provided
     if customization_minimum is None:

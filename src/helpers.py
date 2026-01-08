@@ -125,13 +125,14 @@ def round_to_nearest_fifty_cents(price, enabled=True):
 
 # ========== ORDER CALCULATIONS ==========
 
-def calculate_moq(unit_price):
+def calculate_moq(unit_price, product_data=None):
     """
-    Calculate Minimum Order Quantity based on $1,000 minimum order value.
-    Formula: MOQ = ceil(1000 / Unit Price)
+    Calculate Minimum Order Quantity.
+    Uses MOQ from spreadsheet if available, otherwise calculates based on $1,000 minimum.
 
     Args:
         unit_price (float): Price per unit
+        product_data (dict): Product row data (optional)
 
     Returns:
         int: Minimum order quantity, or None if invalid unit price
@@ -144,6 +145,18 @@ def calculate_moq(unit_price):
         >>> calculate_moq(0)
         None
     """
+    # Check for MOQ in spreadsheet first
+    if product_data is not None:
+        spreadsheet_moq = get_column_value(product_data, 'MOQ', None, None)
+        if spreadsheet_moq:
+            try:
+                moq_value = int(float(str(spreadsheet_moq)))
+                if moq_value > 0:
+                    return moq_value
+            except (ValueError, TypeError):
+                pass
+
+    # Fallback to calculated MOQ based on $1000 minimum
     if unit_price <= 0:
         return None
     return math.ceil(1000 / unit_price)
@@ -369,6 +382,33 @@ def parse_tariff_rate(tariff_string):
 
 # ========== TARIFF CALCULATIONS ==========
 
+def get_tariff_rate(product_data, base_cost=None):
+    """
+    Get tariff rate from product data, handling both percentage and dollar formats.
+
+    Args:
+        product_data: Product row data
+        base_cost: Base product cost (needed to convert dollar amount to percentage)
+
+    Returns:
+        float: Tariff rate as percentage (e.g., 50.0 for 50%)
+    """
+    # Try percentage format first (preferred)
+    tariff_percent = get_column_value(product_data, 'Tariff Estimate (%)', 'Tariff Rate', '')
+    if tariff_percent:
+        return parse_tariff_rate(tariff_percent)
+
+    # Try dollar format and convert to percentage if base_cost provided
+    tariff_dollar = get_column_value(product_data, 'Tariff Estimate ($)', None, '')
+    if tariff_dollar and base_cost and base_cost > 0:
+        dollar_amount = clean_price(tariff_dollar)
+        if dollar_amount:
+            # Convert dollar amount to percentage
+            return (dollar_amount / base_cost) * 100
+
+    return 0.0
+
+
 def calculate_product_tariff(product_cost_with_markup, tariff_rate_percent):
     """
     Calculate tariff on product cost.
@@ -448,7 +488,7 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
     quoted_price_per_unit = (product_cost_subtotal + markup_amount) / quantity
 
     # Parse tariff info
-    tariff_rate_percent = parse_tariff_rate(product_data.get('Tariff Rate', ''))
+    tariff_rate_percent = get_tariff_rate(product_data, product_cost_subtotal)
     tariff_base = product_cost_subtotal  # Tariff on product cost only (excludes customization)
     tariff_amount = calculate_tariff_func(tariff_base, tariff_rate_percent)
 
@@ -786,7 +826,11 @@ def get_shipping_costs(product_data):
     """
     Extract shipping costs from product data, handling both new and legacy column structures.
 
-    New structure (Real dataset):
+    New canonical structure:
+    - 'PBP Cost: Shipping Cost per Unit': What PBP pays to partner
+    - 'Client Price: Shipping Price per Unit': What client pays
+
+    Old structure (Real dataset):
     - 'Shipping Cost (PBP)': What PBP pays to partner
     - 'Shipping Price (Client)': What client pays
 
@@ -801,6 +845,10 @@ def get_shipping_costs(product_data):
 
     Examples:
         >>> # New structure
+        >>> get_shipping_costs({'PBP Cost: Shipping Cost per Unit': '$10', 'Client Price: Shipping Price per Unit': '$15'})
+        (10.0, 15.0)
+
+        >>> # Old structure
         >>> get_shipping_costs({'Shipping Cost (PBP)': '$10', 'Shipping Price (Client)': '$15'})
         (10.0, 15.0)
 
@@ -812,10 +860,13 @@ def get_shipping_costs(product_data):
         >>> get_shipping_costs({})
         (0.0, 0.0)
     """
-    # Try new column structure first
-    if 'Shipping Cost (PBP)' in product_data and 'Shipping Price (Client)' in product_data:
-        pbp_cost = clean_price(product_data.get('Shipping Cost (PBP)', '')) or 0.0
-        client_price = clean_price(product_data.get('Shipping Price (Client)', '')) or 0.0
+    # Try new canonical column names first, with fallback to old names
+    pbp_cost_raw = get_column_value(product_data, 'PBP Cost: Shipping Cost per Unit', 'Shipping Cost (PBP)', '')
+    client_price_raw = get_column_value(product_data, 'Client Price: Shipping Price per Unit', 'Shipping Price (Client)', '')
+
+    if pbp_cost_raw or client_price_raw:
+        pbp_cost = clean_price(pbp_cost_raw) or 0.0
+        client_price = clean_price(client_price_raw) or 0.0
         return (pbp_cost, client_price)
 
     # Fall back to legacy single column
@@ -852,8 +903,9 @@ def format_shipping_display(product_data):
     """
     pbp_cost, client_price = get_shipping_costs(product_data)
 
-    # Both costs available (new structure)
-    if 'Shipping Cost (PBP)' in product_data and 'Shipping Price (Client)' in product_data:
+    # Both costs available (new or old structure)
+    if (('PBP Cost: Shipping Cost per Unit' in product_data or 'Client Price: Shipping Price per Unit' in product_data) or
+        ('Shipping Cost (PBP)' in product_data and 'Shipping Price (Client)' in product_data)):
         if pbp_cost > 0 or client_price > 0:
             return f"PBP: ${pbp_cost:.2f} | Client: ${client_price:.2f}"
 
@@ -862,6 +914,38 @@ def format_shipping_display(product_data):
         return f"Shipping: ${pbp_cost:.2f}"
 
     return "No shipping data"
+
+
+# ========== COLUMN COMPATIBILITY HELPER ==========
+
+def get_column_value(row, new_column_name, old_column_name=None, default=None):
+    """
+    Get column value with backward compatibility.
+    Tries new column name first, then falls back to old column name if provided.
+
+    Args:
+        row: DataFrame row or dict containing column data
+        new_column_name: New canonical column name to try first
+        old_column_name: Old column name to fall back to (optional)
+        default: Default value if neither column exists
+
+    Returns:
+        Value from column or default
+
+    Examples:
+        >>> get_column_value(row, "Vendor Published MSRP", "MSRP")
+        >>> get_column_value(row, "Client Price: Customization Setup Fee", "Customization Setup Fee", 0.0)
+    """
+    # Try new column name first
+    if new_column_name in row and row[new_column_name] not in [None, '', 'nan']:
+        return row[new_column_name]
+
+    # Fall back to old column name if provided
+    if old_column_name and old_column_name in row and row[old_column_name] not in [None, '', 'nan']:
+        return row[old_column_name]
+
+    # Return default if neither exists
+    return default
 
 
 # ========== SPLIT TOTALS CALCULATIONS ==========
