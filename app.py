@@ -2215,11 +2215,12 @@ except Exception as e:
 # ============================================================
 # TAB STRUCTURE
 # ============================================================
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Proposal Generator",
     "Client Order Form Generator",
     "Order & Client Info",
-    "Execution & Accounting"
+    "Execution & Accounting",
+    "Executive Pricing Tool"
 ])
 
 # ============================================================
@@ -7788,3 +7789,540 @@ with tab4:
         st.subheader("3. Export for Accounting")
         st.caption("Future: QuickBooks export, accounting reports, etc.")
         st.info("Accounting export features will be added in Phase 4")
+
+# ============================================================
+# TAB 5: EXECUTIVE PRICING TOOL
+# ============================================================
+with tab5:
+    st.header("Executive Pricing Tool")
+    st.caption("Experiment with pricing scenarios across all products and import to proposals or orders")
+    st.divider()
+
+    # Check data is loaded
+    if 'df_template' not in st.session_state or st.session_state.df_template is None:
+        st.error("Please load pricing data first. Use the sidebar to select a dataset.")
+        st.stop()
+
+    df_template = st.session_state.df_template
+
+    # ============================================================
+    # SECTION 1: PRICING STRATEGY
+    # ============================================================
+    st.subheader("1. Pricing Strategy")
+    st.caption("Choose how to determine product markups")
+
+    # Initialize session state for pricing options
+    if 'exec_use_msrp' not in st.session_state:
+        st.session_state.exec_use_msrp = True  # Default ON like other tabs
+
+    if 'exec_apply_global_markup' not in st.session_state:
+        st.session_state.exec_apply_global_markup = False  # Default OFF - respect product defaults
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.session_state.exec_use_msrp = st.checkbox(
+            "Use MSRP pricing when available",
+            value=st.session_state.exec_use_msrp,
+            key="exec_use_msrp_checkbox",
+            help="When enabled, products with MSRP will have markup automatically calculated to match MSRP. Products without MSRP will use default markup."
+        )
+
+    with col2:
+        st.session_state.exec_apply_global_markup = st.checkbox(
+            "Override all products with global markup",
+            value=st.session_state.exec_apply_global_markup,
+            key="exec_apply_global_checkbox",
+            help="When checked, ignores product-specific markups and MSRP, using global markup for all products"
+        )
+
+    st.divider()
+
+    # ============================================================
+    # SECTION 2: GLOBAL MARKUP CONTROL
+    # ============================================================
+    st.subheader("2. Global Markup Control")
+
+    if st.session_state.exec_apply_global_markup:
+        st.caption("Set the markup percentage to apply to all products")
+    else:
+        st.caption("Set a default markup for products without MSRP or PBP Standard Markup (currently not applied)")
+
+    # Initialize global markup in session state if not exists
+    if 'exec_global_markup' not in st.session_state:
+        st.session_state.exec_global_markup = 100
+
+    # Show visual indicator when global markup is active
+    if not st.session_state.exec_apply_global_markup:
+        st.info("Global markup is **inactive**. Using product-specific defaults based on pricing strategy above.")
+
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        global_markup_slider = st.slider(
+            "Global Markup Percentage",
+            min_value=0,
+            max_value=200,
+            value=st.session_state.exec_global_markup,
+            step=5,
+            key="exec_markup_slider",
+            disabled=not st.session_state.exec_apply_global_markup,
+            help="This markup will be applied to all products when 'Override all products' is checked"
+        )
+
+    with col2:
+        global_markup_input = st.number_input(
+            "Exact Value",
+            min_value=0,
+            max_value=500,
+            value=global_markup_slider,
+            step=1,
+            key="exec_markup_input",
+            disabled=not st.session_state.exec_apply_global_markup,
+            help="Enter exact markup percentage (can exceed 200%)"
+        )
+
+    # Use the input value as source of truth
+    st.session_state.exec_global_markup = global_markup_input
+
+    st.divider()
+
+    # ============================================================
+    # SECTION 3: PARTNER FILTER
+    # ============================================================
+    st.subheader("3. Filter Products")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Partner filter
+        all_partners = sorted(df_template['Partner'].unique().tolist())
+        selected_partner = st.selectbox(
+            "Filter by Partner",
+            options=["All Partners"] + all_partners,
+            key="exec_partner_filter",
+            help="Show products from a specific partner or all partners"
+        )
+
+    with col2:
+        # Search filter
+        search_query = st.text_input(
+            "Search Products",
+            placeholder="Type to search product names...",
+            key="exec_search_filter",
+            help="Filter products by name"
+        )
+
+    # Apply filters
+    filtered_df = df_template.copy()
+
+    if selected_partner != "All Partners":
+        filtered_df = filtered_df[filtered_df['Partner'] == selected_partner]
+
+    if search_query:
+        filtered_df = filtered_df[
+            filtered_df['Product/Service'].str.contains(search_query, case=False, na=False)
+        ]
+
+    st.caption(f"Showing {len(filtered_df)} of {len(df_template)} products")
+
+    st.divider()
+
+    # ============================================================
+    # SECTION 4: BUILD PRICING TABLE DATA
+    # ============================================================
+    st.subheader("4. Pricing Analysis Table")
+    st.caption("Edit markup percentages or base prices. All prices shown at quantity 100 for comparison.")
+
+    # Add Reset to Defaults button
+    col1, col2, col3 = st.columns([1, 1, 4])
+    with col1:
+        if st.button("Reset All to Defaults", type="secondary", use_container_width=True):
+            # Force a reset by clearing the data editor key
+            if 'exec_pricing_table' in st.session_state:
+                del st.session_state['exec_pricing_table']
+            st.rerun()
+
+    # Build pricing data for each product
+    pricing_data = []
+
+    for idx, row in filtered_df.iterrows():
+        # Get base cost at quantity 100
+        base_cost, tier_range, tier_col = get_unit_price_new_system(row, 100)
+
+        if not base_cost or base_cost <= 0:
+            continue  # Skip products with no valid pricing
+
+        # Calculate default markup based on app's pricing logic
+        if st.session_state.exec_use_msrp:
+            default_markup = calculate_msrp_markup(row.to_dict())
+        else:
+            default_markup = get_default_markup(row.to_dict())
+
+        # Determine which markup to use
+        if st.session_state.exec_apply_global_markup:
+            # User explicitly wants to override all markups
+            markup = st.session_state.exec_global_markup
+        else:
+            # Use app's standard pricing hierarchy
+            markup = default_markup
+
+        # Calculate base client price with markup
+        client_base = base_cost * (1 + markup / 100)
+
+        # Get additional costs - use CLIENT prices for customization (not PBP costs)
+        customization_setup = clean_price(get_column_value(
+            row, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', 0
+        ))
+        customization_per_unit = clean_price(get_column_value(
+            row, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', 0
+        ))
+
+        # Handle None values - convert to 0 if None
+        if customization_setup is None:
+            customization_setup = 0
+        if customization_per_unit is None:
+            customization_per_unit = 0
+
+        shipping_pbp, shipping_client = get_shipping_costs(row)
+
+        # Calculate tariff at quantity 100
+        # First calculate the base for tariff (cost + markup)
+        product_cost_at_100 = base_cost * 100
+        tariff_base = product_cost_at_100 + (product_cost_at_100 * (markup / 100))
+        tariff_rate_percent = get_tariff_rate(row.to_dict(), product_cost_at_100)
+        tariff_total = calculate_product_tariff(tariff_base, tariff_rate_percent)
+        # Convert to per-unit tariff
+        tariff_per_unit = tariff_total / 100 if tariff_total > 0 else 0
+
+        # Build progressive pricing columns (all per-unit)
+        with_custom = client_base + (customization_setup / 100) + customization_per_unit
+        with_shipping = with_custom + shipping_client
+        fully_loaded = with_shipping + tariff_per_unit
+
+        # Get MSRP for comparison
+        msrp = clean_price(get_column_value(row, 'Vendor Published MSRP', 'MSRP', 0))
+
+        # Calculate vs MSRP percentage (if MSRP exists)
+        vs_msrp_pct = None
+        if msrp and msrp > 0:
+            vs_msrp_pct = ((fully_loaded - msrp) / msrp) * 100
+
+        pricing_data.append({
+            'Partner': row['Partner'],
+            'Product': row['Product/Service'],
+            'PBP Cost': base_cost,
+            'Default Markup %': default_markup,  # Show what app would normally use
+            'Markup %': markup,
+            'Base Price': client_base,
+            '+ Custom': with_custom,
+            '+ Shipping': with_shipping,
+            'Fully Loaded': fully_loaded,
+            'MSRP': msrp if msrp and msrp > 0 else None,
+            'vs MSRP %': vs_msrp_pct,
+            '_row_data': row.to_dict(),  # Hidden: store full row for import
+            '_customization_setup': customization_setup,
+            '_customization_per_unit': customization_per_unit,
+            '_shipping': shipping_client,
+            '_tariff': tariff_per_unit
+        })
+
+    if not pricing_data:
+        st.warning("No products with valid pricing found. Please adjust your filters.")
+        st.stop()
+
+    # Create DataFrame for display
+    df_pricing = pd.DataFrame(pricing_data)
+
+    # ============================================================
+    # SECTION 4: EDITABLE DATA EDITOR WITH BIDIRECTIONAL EDITING
+    # ============================================================
+
+    # Configure column settings
+    column_config = {
+        'Partner': st.column_config.TextColumn('Partner', width='medium', disabled=True),
+        'Product': st.column_config.TextColumn('Product', width='large', disabled=True),
+        'PBP Cost': st.column_config.NumberColumn(
+            'PBP Cost',
+            help='Cost to PBP at quantity 100',
+            format='$%.2f',
+            disabled=True
+        ),
+        'Default Markup %': st.column_config.NumberColumn(
+            'Default %',
+            help='App default markup (MSRP or PBP Standard)',
+            format='%.0f%%',
+            disabled=True
+        ),
+        'Markup %': st.column_config.NumberColumn(
+            'Markup %',
+            help='Edit to adjust pricing (0-500%)',
+            min_value=0,
+            max_value=500,
+            step=1,
+            format='%.0f%%'
+        ),
+        'Base Price': st.column_config.NumberColumn(
+            'Base Price',
+            help='Edit to back-calculate markup',
+            format='$%.2f',
+            min_value=0
+        ),
+        '+ Custom': st.column_config.NumberColumn(
+            'w/ Custom',
+            help='Base + customization costs',
+            format='$%.2f',
+            disabled=True
+        ),
+        '+ Shipping': st.column_config.NumberColumn(
+            'w/ Shipping',
+            help='Custom + shipping costs',
+            format='$%.2f',
+            disabled=True
+        ),
+        'Fully Loaded': st.column_config.NumberColumn(
+            'Fully Loaded',
+            help='All costs included (base + custom + shipping + tariff)',
+            format='$%.2f',
+            disabled=True
+        ),
+        'MSRP': st.column_config.NumberColumn(
+            'MSRP',
+            help='Vendor published MSRP',
+            format='$%.2f',
+            disabled=True
+        ),
+        'vs MSRP %': st.column_config.NumberColumn(
+            'vs MSRP',
+            help='How much over/under MSRP (negative = below MSRP)',
+            format='%.1f%%',
+            disabled=True
+        ),
+        '_row_data': None,  # Hidden column
+        '_customization_setup': None,
+        '_customization_per_unit': None,
+        '_shipping': None,
+        '_tariff': None
+    }
+
+    # Display editable table
+    edited_df = st.data_editor(
+        df_pricing,
+        column_config=column_config,
+        hide_index=True,
+        use_container_width=True,
+        key="exec_pricing_table",
+        disabled=['Partner', 'Product', 'PBP Cost', 'Default Markup %', '+ Custom', '+ Shipping', 'Fully Loaded', 'MSRP', 'vs MSRP %']
+    )
+
+    # ============================================================
+    # HANDLE BIDIRECTIONAL EDITING
+    # ============================================================
+    # Detect changes and recalculate dependent columns
+
+    if not edited_df.equals(df_pricing):
+        # Find which rows changed
+        for idx in range(len(edited_df)):
+            old_row = df_pricing.iloc[idx]
+            new_row = edited_df.iloc[idx]
+
+            # Check if markup changed
+            if abs(new_row['Markup %'] - old_row['Markup %']) > 0.01:
+                # Markup changed - recalculate all price columns
+                new_markup = new_row['Markup %']
+                pbp_cost = new_row['PBP Cost']
+
+                new_base_price = pbp_cost * (1 + new_markup / 100)
+                # Handle None values for customization
+                setup_fee = new_row['_customization_setup'] if new_row['_customization_setup'] is not None else 0
+                per_unit = new_row['_customization_per_unit'] if new_row['_customization_per_unit'] is not None else 0
+                shipping = new_row['_shipping'] if new_row['_shipping'] is not None else 0
+                tariff = new_row['_tariff'] if new_row['_tariff'] is not None else 0
+
+                new_with_custom = new_base_price + (setup_fee / 100) + per_unit
+                new_with_shipping = new_with_custom + shipping
+                new_fully_loaded = new_with_shipping + tariff
+
+                # Update the row
+                edited_df.at[idx, 'Base Price'] = new_base_price
+                edited_df.at[idx, '+ Custom'] = new_with_custom
+                edited_df.at[idx, '+ Shipping'] = new_with_shipping
+                edited_df.at[idx, 'Fully Loaded'] = new_fully_loaded
+
+                # Recalculate vs MSRP
+                if new_row['MSRP'] and new_row['MSRP'] > 0:
+                    edited_df.at[idx, 'vs MSRP %'] = ((new_fully_loaded - new_row['MSRP']) / new_row['MSRP']) * 100
+
+            # Check if base price changed
+            elif abs(new_row['Base Price'] - old_row['Base Price']) > 0.01:
+                # Base price changed - back-calculate markup and recalculate other prices
+                new_base_price = new_row['Base Price']
+                pbp_cost = new_row['PBP Cost']
+
+                if pbp_cost > 0:
+                    new_markup = ((new_base_price / pbp_cost) - 1) * 100
+                    new_markup = max(0, new_markup)  # Don't allow negative markup
+
+                    # Handle None values for customization
+                    setup_fee = new_row['_customization_setup'] if new_row['_customization_setup'] is not None else 0
+                    per_unit = new_row['_customization_per_unit'] if new_row['_customization_per_unit'] is not None else 0
+                    shipping = new_row['_shipping'] if new_row['_shipping'] is not None else 0
+                    tariff = new_row['_tariff'] if new_row['_tariff'] is not None else 0
+
+                    new_with_custom = new_base_price + (setup_fee / 100) + per_unit
+                    new_with_shipping = new_with_custom + shipping
+                    new_fully_loaded = new_with_shipping + tariff
+
+                    # Update the row
+                    edited_df.at[idx, 'Markup %'] = new_markup
+                    edited_df.at[idx, '+ Custom'] = new_with_custom
+                    edited_df.at[idx, '+ Shipping'] = new_with_shipping
+                    edited_df.at[idx, 'Fully Loaded'] = new_fully_loaded
+
+                    # Recalculate vs MSRP
+                    if new_row['MSRP'] and new_row['MSRP'] > 0:
+                        edited_df.at[idx, 'vs MSRP %'] = ((new_fully_loaded - new_row['MSRP']) / new_row['MSRP']) * 100
+
+    st.divider()
+
+    # ============================================================
+    # SECTION 5: IMPORT TO PROPOSAL/ORDER
+    # ============================================================
+    st.subheader("5. Import Products")
+    st.caption("Select products to import to your current proposal or order")
+
+    # Product selection with multiselect
+    product_options = [f"{row['Partner']} - {row['Product']}" for _, row in edited_df.iterrows()]
+
+    selected_products = st.multiselect(
+        "Select products to import",
+        options=range(len(edited_df)),
+        format_func=lambda x: product_options[x],
+        key="exec_product_selection",
+        help="Choose one or more products to add to your proposal or order"
+    )
+
+    if selected_products:
+        st.caption(f"{len(selected_products)} product(s) selected")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button(
+                f"Import to Proposal ({len(selected_products)} product{'s' if len(selected_products) != 1 else ''})",
+                type="primary",
+                use_container_width=True,
+                key="exec_import_proposal"
+            ):
+                # Initialize proposal_products if not exists
+                if 'proposal_products' not in st.session_state:
+                    st.session_state.proposal_products = []
+
+                # Add each selected product
+                added_count = 0
+                for idx in selected_products:
+                    row = edited_df.iloc[idx]
+
+                    # Check for duplicates
+                    product_name = row['Product']
+                    is_duplicate = any(
+                        item['product_data']['Product/Service'] == product_name
+                        for item in st.session_state.proposal_products
+                    )
+
+                    if not is_duplicate:
+                        proposal_item = {
+                            'product_data': row['_row_data'],
+                            'markup_percent': row['Markup %']
+                        }
+                        st.session_state.proposal_products.append(proposal_item)
+                        added_count += 1
+
+                if added_count > 0:
+                    st.toast(f"Added {added_count} product{'s' if added_count != 1 else ''} to proposal", icon="✓")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.toast("All selected products already in proposal", icon="ℹ")
+
+        with col2:
+            if st.button(
+                f"Import to Order ({len(selected_products)} product{'s' if len(selected_products) != 1 else ''})",
+                use_container_width=True,
+                key="exec_import_order"
+            ):
+                # Initialize order_items if not exists
+                if 'order_items' not in st.session_state:
+                    st.session_state.order_items = []
+
+                # Add each selected product
+                added_count = 0
+                for idx in selected_products:
+                    row = edited_df.iloc[idx]
+
+                    # Check for duplicates
+                    product_name = row['Product']
+                    is_duplicate = any(
+                        item['product_name'] == product_name
+                        for item in st.session_state.order_items
+                        if not item.get('is_custom', False)
+                    )
+
+                    if not is_duplicate:
+                        # Convert to order item structure
+                        proposal_item = {
+                            'product_data': row['_row_data'],
+                            'markup_percent': row['Markup %']
+                        }
+                        order_item = convert_proposal_to_order(
+                            proposal_item,
+                            get_unit_price_new_system,
+                            calculate_product_tariff
+                        )
+                        st.session_state.order_items.append(order_item)
+                        added_count += 1
+
+                if added_count > 0:
+                    st.toast(f"Added {added_count} product{'s' if added_count != 1 else ''} to order", icon="✓")
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.toast("All selected products already in order", icon="ℹ")
+    else:
+        st.info("Select products above to enable import options")
+
+    st.divider()
+
+    # ============================================================
+    # SECTION 6: CSV EXPORT
+    # ============================================================
+    st.subheader("6. Export Pricing Analysis")
+    st.caption("Download the complete pricing table as CSV for further analysis")
+
+    # Prepare display dataframe (remove hidden columns, include Default Markup)
+    export_df = edited_df[[
+        'Partner', 'Product', 'PBP Cost', 'Default Markup %', 'Markup %', 'Base Price',
+        '+ Custom', '+ Shipping', 'Fully Loaded', 'MSRP', 'vs MSRP %'
+    ]].copy()
+
+    # Format currency columns for export
+    currency_cols = ['PBP Cost', 'Base Price', '+ Custom', '+ Shipping', 'Fully Loaded', 'MSRP']
+    for col in currency_cols:
+        export_df[col] = export_df[col].apply(lambda x: f"${x:.2f}" if pd.notna(x) else "")
+
+    # Format percentage columns
+    export_df['Markup %'] = export_df['Markup %'].apply(lambda x: f"{x:.0f}%" if pd.notna(x) else "")
+    export_df['vs MSRP %'] = export_df['vs MSRP %'].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "")
+
+    csv = export_df.to_csv(index=False)
+
+    st.download_button(
+        label=f"Download Pricing Analysis CSV ({len(export_df)} products)",
+        data=csv,
+        file_name=f"pricing_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+        key="exec_csv_export",
+        use_container_width=True
+    )
+
+    st.caption("CSV includes all pricing data shown in the table above")
