@@ -102,10 +102,10 @@ class Tab5StressTest:
                              "Product name exists")
                 
                 # Test country of origin
-                country = get_column_value(first_product, 'Country of Origin', 'Country of Origin', 'Unknown')
+                country = first_product.get('Country of Origin (Ships From)', 'Unknown')
                 self.log_test(f"Country Data - {product_name}", 
                              country != 'Unknown',
-                             f"Country: {country}")
+                             f"Country (Ships From): {country}")
     
     def test_pricing_calculations(self):
         """Test core pricing calculation functions"""
@@ -202,7 +202,7 @@ class Tab5StressTest:
             tariff_tests += 1
             
             # Check country of origin
-            country = get_column_value(product, 'Country of Origin', 'Country of Origin', 'Unknown')
+            country = product.get('Country of Origin (Ships From)', 'Unknown')
             is_non_usa = country.upper() not in ['USA', 'UNITED STATES', 'US', 'U.S.', 'AMERICA']
             if is_non_usa:
                 non_usa_products += 1

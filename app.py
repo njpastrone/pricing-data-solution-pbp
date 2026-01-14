@@ -770,6 +770,11 @@ with st.sidebar:
                                 st.session_state.proposal_discount_type = proposal_data.get('proposal_discount_type', None)
                                 st.session_state.proposal_discount_percent = proposal_data.get('proposal_discount_percent', 0.0)
                                 st.session_state.proposal_client_budget = proposal_data.get('proposal_client_budget', 0.0)
+                                
+                                # Track loaded proposal info
+                                st.session_state.loaded_proposal_name = proposal['name']
+                                st.session_state.loaded_proposal_date = proposal.get('created_date', 'Unknown')
+                                st.session_state.loaded_proposal_creator = proposal.get('created_by', 'Unknown')
 
                                 st.success(f"Loaded: {proposal['name']}")
                                 st.rerun()
@@ -796,6 +801,11 @@ with st.sidebar:
                                 st.session_state.proposal_discount_type = proposal_data.get('proposal_discount_type', None)
                                 st.session_state.proposal_discount_percent = proposal_data.get('proposal_discount_percent', 0.0)
                                 st.session_state.proposal_client_budget = proposal_data.get('proposal_client_budget', 0.0)
+                                
+                                # Track loaded proposal info
+                                st.session_state.loaded_proposal_name = proposal['name']
+                                st.session_state.loaded_proposal_date = proposal.get('created_date', 'Unknown')
+                                st.session_state.loaded_proposal_creator = proposal.get('created_by', 'Unknown')
 
                                 st.success(f"Loaded: {proposal['name']}")
                                 st.rerun()
@@ -997,6 +1007,10 @@ with st.sidebar:
                 # Clear all session state data
                 st.session_state.proposal_products = []
                 st.session_state.order_items = []
+                # Clear proposal tracking info
+                st.session_state.loaded_proposal_name = None
+                st.session_state.loaded_proposal_date = None
+                st.session_state.loaded_proposal_creator = None
                 st.session_state.client_info = {
                     'is_new_client': True,
                     'company_name': '',
@@ -2172,6 +2186,10 @@ try:
         if st.session_state.get('loaded_dataset') != st.session_state.selected_dataset:
             st.session_state.proposal_products = []
             st.session_state.order_items = []
+            # Clear proposal tracking info
+            st.session_state.loaded_proposal_name = None
+            st.session_state.loaded_proposal_date = None
+            st.session_state.loaded_proposal_creator = None
             st.warning("Dataset changed - cleared existing proposals and orders to prevent data mismatch")
 
     df_template = st.session_state.df_template
@@ -2268,14 +2286,34 @@ with tab1:
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown("**Client Budget**")
-        client_budget = st.number_input(
-            "Max client price per unit ($) - Optional",
-            min_value=0.0,
-            value=st.session_state.proposal_filters.get('client_budget') or 0.0,
-            step=1.0,
-            key="filter_client_budget"
-        )
+        st.markdown("**Client Budget Range (Per Unit)**")
+        
+        # Create two columns for min and max budget
+        budget_col1, budget_col2 = st.columns(2)
+        
+        with budget_col1:
+            min_budget = st.number_input(
+                "Min price ($)",
+                min_value=0.0,
+                value=st.session_state.proposal_filters.get('min_budget', 0.0),
+                step=1.0,
+                key="filter_min_budget",
+                help="Minimum client price per unit"
+            )
+        
+        with budget_col2:
+            max_budget = st.number_input(
+                "Max price ($)",
+                min_value=0.0,
+                value=st.session_state.proposal_filters.get('max_budget', 0.0),
+                step=1.0,
+                key="filter_max_budget",
+                help="Maximum client price per unit"
+            )
+        
+        # Validation warning
+        if min_budget and max_budget and min_budget > 0 and max_budget > 0 and min_budget > max_budget:
+            st.error("⚠️ Min price cannot be greater than Max price")
 
     with col2:
         st.markdown("**Partner/Maker**")
@@ -2288,8 +2326,8 @@ with tab1:
         )
 
     with col3:
-        st.markdown("**Country of Origin**")
-        all_countries = sorted(df_template["Country of Origin"].dropna().unique().tolist())
+        st.markdown("**Country of Origin (Ships From)**")
+        all_countries = sorted(df_template["Country of Origin (Ships From)"].dropna().unique().tolist())
         selected_countries = st.multiselect(
             "Select countries (leave empty for all)",
             options=all_countries,
@@ -2298,7 +2336,8 @@ with tab1:
         )
 
     # Update filters in session state
-    st.session_state.proposal_filters['client_budget'] = client_budget if client_budget > 0 else None
+    st.session_state.proposal_filters['min_budget'] = min_budget if min_budget and min_budget > 0 else 0.0
+    st.session_state.proposal_filters['max_budget'] = max_budget if max_budget and max_budget > 0 else 0.0
     st.session_state.proposal_filters['partners'] = selected_partners
     st.session_state.proposal_filters['countries'] = selected_countries
 
@@ -2309,10 +2348,12 @@ with tab1:
         filtered_df = filtered_df[filtered_df["Partner"].isin(selected_partners)]
 
     if selected_countries:
-        filtered_df = filtered_df[filtered_df["Country of Origin"].isin(selected_countries)]
+        filtered_df = filtered_df[filtered_df["Country of Origin (Ships From)"].isin(selected_countries)]
 
-    # Price filtering based on client price (cost * 2 for 100% markup)
-    if client_budget and client_budget > 0:
+    # Price filtering based on client price range (cost * 2 for 100% markup)
+    # Only apply if valid range (min <= max when both are set)
+    if ((min_budget and min_budget > 0) or (max_budget and max_budget > 0)) and \
+       not (min_budget and max_budget and min_budget > 0 and max_budget > 0 and min_budget > max_budget):
         price_filtered_indices = []
         for idx, row in filtered_df.iterrows():
             # Get cost estimate at quantity 100
@@ -2320,8 +2361,13 @@ with tab1:
             if base_cost:
                 # Calculate client price (100% markup)
                 client_price = base_cost * 2
-                if client_price > client_budget:
+                
+                # Check if price is within range
+                if min_budget and min_budget > 0 and client_price < min_budget:
                     continue
+                if max_budget and max_budget > 0 and client_price > max_budget:
+                    continue
+                    
                 price_filtered_indices.append(idx)
         filtered_df = filtered_df.loc[price_filtered_indices]
 
@@ -2587,7 +2633,7 @@ with tab1:
                         st.rerun()
 
                 # Show additional details inline (no nested expander)
-                st.caption(f"Country: {product_data.get('Country of Origin', 'N/A')} | Tiered Pricing: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
+                st.caption(f"Ships From: {product_data.get('Country of Origin (Ships From)', 'N/A')} | Made In: {product_data.get('Country of Origin (Made In)', 'N/A')} | Tiered: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
 
                 # Show MSRP if available
                 msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', 'MSRP', '')
@@ -2755,6 +2801,10 @@ with tab1:
                     if success:
                         update_last_save_time('proposal')
                         clear_saved_data_cache()  # Clear cache to show new proposal
+                        # Track that this proposal was saved
+                        st.session_state.loaded_proposal_name = proposal_name.strip()
+                        st.session_state.loaded_proposal_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        st.session_state.loaded_proposal_creator = created_by.strip() if created_by else "Current User"
                         st.success(message)
                         st.rerun()  # Rerun to clear form
                     else:
@@ -2772,6 +2822,10 @@ with tab1:
                                 if success2:
                                     update_last_save_time('proposal')
                                     clear_saved_data_cache()  # Clear cache to show new proposal
+                                    # Track that this proposal was saved with new name
+                                    st.session_state.loaded_proposal_name = result
+                                    st.session_state.loaded_proposal_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+                                    st.session_state.loaded_proposal_creator = created_by.strip() if created_by else "Current User"
                                     st.success(message2)
                                     st.rerun()
                         else:
@@ -3171,7 +3225,8 @@ with tab1:
 
                 csv_lines.append(f"=== PRODUCT {idx}: {product_row.get('Product/Service', 'Unknown Product')} ===")
                 csv_lines.append(f"Partner: {product_row.get('Partner', 'N/A')}")
-                csv_lines.append(f"Country of Origin: {product_row.get('Country of Origin', 'N/A')}")
+                csv_lines.append(f"Country of Origin (Made In): {product_row.get('Country of Origin (Made In)', 'N/A')}")
+                csv_lines.append(f"Country of Origin (Ships From): {product_row.get('Country of Origin (Ships From)', 'N/A')}")
                 csv_lines.append("")
 
                 # Calculate MOQ using same logic as UI display
@@ -4598,7 +4653,23 @@ with tab3:
     if len(st.session_state.proposal_products) > 0:
         st.header("Option B: Import Products from Proposal (Tab 1)")
         st.markdown("**Use this if:** You created a proposal in Tab 1 but don't have a completed client order form")
-        st.info(f"{len(st.session_state.proposal_products)} product(s) available from Proposal (Tab 1). Select below to add to order.")
+        
+        # Display proposal source information
+        proposal_info_msg = f"**{len(st.session_state.proposal_products)} product(s) available**"
+        
+        if 'loaded_proposal_name' in st.session_state and st.session_state.loaded_proposal_name:
+            # This is a saved/loaded proposal
+            proposal_info_msg += f" from saved proposal: **'{st.session_state.loaded_proposal_name}'**"
+            if 'loaded_proposal_date' in st.session_state:
+                proposal_info_msg += f"\n\nCreated/Saved: {st.session_state.loaded_proposal_date}"
+            if 'loaded_proposal_creator' in st.session_state and st.session_state.loaded_proposal_creator != 'Unknown':
+                proposal_info_msg += f" | By: {st.session_state.loaded_proposal_creator}"
+        else:
+            # This is an unsaved proposal from current session
+            proposal_info_msg += " from **Current Session Proposal (unsaved)**"
+            proposal_info_msg += "\n\nTip: Save your proposal in Tab 1 to preserve it for future use"
+        
+        st.info(proposal_info_msg)
         st.session_state.using_proposal_data = True
 
         # Import All button at top level
@@ -4780,7 +4851,8 @@ with tab3:
                     'tier_range': tier_range,
                     'tier_column': tier_column,
                     'product_ref': product_data.get('Partner Product SKU/REF', 'N/A'),
-                    'country_of_origin': product_data.get('Country of Origin', 'N/A'),
+                    'country_of_origin_made_in': product_data.get('Country of Origin (Made In)', 'N/A'),
+                    'country_of_origin_ships_from': product_data.get('Country of Origin (Ships From)', 'N/A'),
                     'customization_description': product_data.get('Customization Info', ''),
                     'product_subtotal': base_price * 1,
                     'customization_setup_total': 0.0,
@@ -4814,7 +4886,8 @@ with tab3:
         (df_template["Product/Service"] == selected_product)
     ].iloc[0]
 
-    origin = product_data_preview.get("Country of Origin", "N/A")
+    origin_made = product_data_preview.get("Country of Origin (Made In)", "N/A")
+    origin_ships = product_data_preview.get("Country of Origin (Ships From)", "N/A")
     has_tiers = product_data_preview.get("Pricing Tiers (Y/N)", "N/A")
 
     with st.expander("Show Product Details"):
@@ -4823,7 +4896,8 @@ with tab3:
             st.markdown(f"**Partner:** {product_data_preview['Partner']}")
             st.markdown(f"**Product/Service:** {product_data_preview['Product/Service']}")
         with col2:
-            st.markdown(f"**Country of Origin:** {origin if origin else 'N/A'}")
+            st.markdown(f"**Made In:** {origin_made if origin_made else 'N/A'}")
+            st.markdown(f"**Ships From:** {origin_ships if origin_ships else 'N/A'}")
             st.markdown(f"**Tiered Pricing:** {has_tiers}")
 
         # Show product description if available
@@ -7852,8 +7926,8 @@ with tab5:
     # ============================================================
     st.subheader("1. Add Products")
 
-    # Determine if selector should be expanded
-    expand_selector = st.session_state.get('show_product_selector', len(st.session_state.exec_products) == 0)
+    # Auto-collapse after first product is added
+    expand_selector = len(st.session_state.exec_products) == 0
 
     with st.expander("**Product Selector**", expanded=expand_selector):
         col1, col2, col3 = st.columns([2, 3, 1])
@@ -7896,7 +7970,7 @@ with tab5:
                     existing = any(p['product_name'] == selected_product for p in st.session_state.exec_products)
                     if not existing:
                         # Get country of origin to determine if tariffs should be included
-                        country_of_origin = get_column_value(product_row, 'Country of Origin', 'Country of Origin', 'Unknown')
+                        country_of_origin = product_row.get('Country of Origin (Ships From)', 'Unknown')
                         # Auto-check tariffs for non-USA products
                         include_tariffs_default = country_of_origin.upper() not in ['USA', 'UNITED STATES', 'US', 'U.S.', 'AMERICA', 'UNITED STATES OF AMERICA']
 
@@ -7916,9 +7990,6 @@ with tab5:
                         }
                         st.session_state.exec_products.append(exec_product)
                         st.toast(f"Added {selected_product}")
-                        # Clear the flag after adding
-                        if 'show_product_selector' in st.session_state:
-                            del st.session_state['show_product_selector']
                         # Preserve Tab 5 as active tab
                         preserve_tab_5()
                         st.rerun()
@@ -8133,11 +8204,11 @@ with tab5:
                 st.markdown("##### Tariff Options")
 
                 # Get country of origin first
-                product_country = get_column_value(row, 'Country of Origin', 'Country of Origin', 'Unknown')
+                product_country = row.get('Country of Origin (Ships From)', 'Unknown')
 
                 # Show country and tariff checkbox
                 product['include_tariffs'] = st.checkbox(
-                    f"Include Tariffs (Country of Origin: {product_country})",
+                    f"Include Tariffs (Ships From: {product_country})",
                     value=product.get('include_tariffs', False),
                     key=f"exec_tariff_{idx}",
                     help="Apply tariff costs for this product (auto-checked for non-USA products)"
@@ -8314,7 +8385,7 @@ with tab5:
                         if tariff_per_unit > 0:
                             tariff_total = tariff_per_unit * product['quantity']
                             # Get country for display
-                            product_country = get_column_value(row, 'Country of Origin', 'Country of Origin', 'Unknown')
+                            product_country = row.get('Country of Origin (Ships From)', 'Unknown')
                             breakdown_data.append({
                                 'Item': f"{product['product_name']} - Tariff ({product.get('tariff_rate', 0):.1f}% - {product_country})",
                                 'Qty': product['quantity'],
@@ -8358,13 +8429,75 @@ with tab5:
 
                     st.info(f"**Product Subtotal:** PBP Cost: ${pbp_subtotal:.2f} | Client Price: ${client_subtotal:.2f} | **Margin: ${product_margin:.2f} ({product_margin_pct:.1f}%)**")
 
-        # Add Another Product button at bottom of Section 2
-        st.write("")  # Add some spacing
-        if st.button("➕ Add Another Product", type="secondary", use_container_width=False):
-            # Scroll to top to show the product selector
-            st.session_state.show_product_selector = True
-            preserve_tab_5()
-            st.rerun()
+        st.divider()
+
+        # Quick Add Bar - convenient way to add more products
+        with st.container():
+            st.markdown("#### Quick Add Products")
+            st.caption("Add more products without scrolling back up")
+
+            col1, col2, col3 = st.columns([2, 3, 1])
+
+            with col1:
+                # Partner selector for quick add
+                quick_partner = st.selectbox(
+                    "Partner",
+                    options=sorted(df_template['Partner'].unique().tolist()),
+                    key="exec_quick_partner",
+                    label_visibility="collapsed"
+                )
+
+            with col2:
+                # Product selector for quick add
+                quick_partner_products = df_template[df_template['Partner'] == quick_partner]
+                quick_product_options = quick_partner_products['Product/Service'].tolist()
+
+                if quick_product_options:
+                    quick_product = st.selectbox(
+                        "Product",
+                        options=quick_product_options,
+                        key="exec_quick_product",
+                        label_visibility="collapsed"
+                    )
+                else:
+                    quick_product = None
+                    st.warning("No products for this partner")
+
+            with col3:
+                # Quick add button
+                if st.button("➕ Add", type="primary", use_container_width=True,
+                           disabled=not quick_product, key="exec_quick_add"):
+                    if quick_product:
+                        # Check if already added
+                        existing = any(p['product_name'] == quick_product for p in st.session_state.exec_products)
+                        if not existing:
+                            # Get product data
+                            product_row = quick_partner_products[quick_partner_products['Product/Service'] == quick_product].iloc[0]
+
+                            # Get country of origin for tariff auto-check
+                            country_of_origin = product_row.get('Country of Origin (Ships From)', 'Unknown')
+                            include_tariffs_default = country_of_origin.upper() not in ['USA', 'UNITED STATES', 'US', 'U.S.', 'AMERICA', 'UNITED STATES OF AMERICA']
+
+                            # Create product entry
+                            exec_product = {
+                                'product_name': quick_product,
+                                'partner': quick_partner,
+                                'product_data': product_row.to_dict(),
+                                'quantity': 100,
+                                'markup_percent': 100.0,
+                                'include_customization': False,
+                                'custom_setup_fee': 0.0,
+                                'custom_per_unit': 0.0,
+                                'pbp_setup_fee': 0.0,
+                                'pbp_per_unit_cost': 0.0,
+                                'include_tariffs': include_tariffs_default
+                            }
+                            st.session_state.exec_products.append(exec_product)
+                            st.toast(f"Added {quick_product}")
+                            preserve_tab_5()
+                            st.rerun()
+                        else:
+                            st.warning("Product already added")
 
         st.divider()
     else:
@@ -8536,7 +8669,7 @@ with tab5:
                     qty = product['quantity']
                     tariff_amount = tariff_per_unit * qty
 
-                    country = get_column_value(row, 'Country of Origin', 'Country of Origin', 'Unknown')
+                    country = row.get('Country of Origin (Ships From)', 'Unknown')
                     summary_items.append([
                         f"Tariff: {product['product_name']} ({product.get('tariff_rate', 0):.1f}% - {country})",
                         str(qty),  # Convert to string for consistent column type

@@ -40,7 +40,7 @@ def main():
 
         if test_product is not None:
             # Get country for tariff auto-check
-            country = get_column_value(test_product, 'Country of Origin', 'Country of Origin', 'Unknown')
+            country = test_product.get('Country of Origin (Ships From)', 'Unknown')
             auto_tariff = country.upper() not in ['USA', 'UNITED STATES', 'US', 'U.S.']
 
             product = {
@@ -132,8 +132,8 @@ def main():
                 st.markdown("### Tariff Settings")
 
                 # Show country
-                country = get_column_value(row, 'Country of Origin', 'Country of Origin', 'Unknown')
-                st.info(f"Country of Origin: {country}")
+                country = row.get('Country of Origin (Ships From)', 'Unknown')
+                st.info(f"Country of Origin (Ships From): {country}")
 
                 product['include_tariffs'] = st.checkbox(
                     "Include Tariffs",
@@ -249,7 +249,7 @@ def main():
 
         # Test 2: Tariffs auto-enabled for non-USA
         for product in st.session_state.exec_products:
-            country = get_column_value(product['product_data'], 'Country of Origin', 'Country of Origin', 'Unknown')
+            country = product['product_data'].get('Country of Origin (Ships From)', 'Unknown')
             is_usa = country.upper() in ['USA', 'UNITED STATES', 'US', 'U.S.']
             if (not is_usa and product.get('include_tariffs')) or (is_usa and not product.get('include_tariffs', False)):
                 tests_passed.append(f"✅ Tariff auto-check working for {country}")

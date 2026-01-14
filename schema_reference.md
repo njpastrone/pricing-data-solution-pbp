@@ -44,15 +44,16 @@ This document defines the canonical data schemas for Peace by Piece Internationa
 | 19 | Customization Info | Text | Description of customization options available | |
 | 20 | PBP Standard Markup | Multiplier | Standard markup applied by PBP | Format: decimal (e.g., 2.5) |
 | 21 | Vendor Published MSRP | Currency | Manufacturer's suggested retail price | |
-| 22 | Country of Origin | Text | Country where product is manufactured | |
-| 23 | Marketing Description | Text | Client-facing product description | |
-| 24 | Billing Description | Text | Description used on invoices | |
-| 25 | PBP Cost: Shipping Cost per Unit | Currency | Per-unit shipping cost PBP pays | |
-| 26 | Client Price: Shipping Price per Unit | Currency | Per-unit shipping price charged to client | |
-| 27 | Shipping Details | Text | Additional shipping notes (carrier, timeline, etc.) | |
-| 28 | Tariff Estimate ($) | Currency | Estimated tariff amount in dollars | |
-| 29 | Tariff Estimate (%) | Percentage | Estimated tariff as percentage of cost | Format: decimal (e.g., 10%) |
-| 30 | Tariff Info | Text | Notes on tariff classification or source | |
+| 22 | Country of Origin (Made In) | Text | Country where product is manufactured | |
+| 23 | Country of Origin (Ships From) | Text | Country from where product ships (for tariff calculations) | |
+| 24 | Marketing Description | Text | Client-facing product description | |
+| 25 | Billing Description | Text | Description used on invoices | |
+| 26 | PBP Cost: Shipping Cost per Unit | Currency | Per-unit shipping cost PBP pays | |
+| 27 | Client Price: Shipping Price per Unit | Currency | Per-unit shipping price charged to client | |
+| 28 | Shipping Details | Text | Additional shipping notes (carrier, timeline, etc.) | |
+| 29 | Tariff Estimate ($) | Currency | Estimated tariff amount in dollars | |
+| 30 | Tariff Estimate (%) | Percentage | Estimated tariff as percentage of cost | Format: decimal (e.g., 10%) |
+| 31 | Tariff Info | Text | Notes on tariff classification or source | |
 
 ---
 
@@ -60,6 +61,7 @@ This document defines the canonical data schemas for Peace by Piece Internationa
 
 | Date | Change | Updated By |
 |------|--------|------------|
+| 01/14/2026 | Split "Country of Origin" into two columns: "Country of Origin (Made In)" and "Country of Origin (Ships From)" | |
 | 12/22/2025 | Standardized schema across all three pricing spreadsheets | |
 | 12/22/2025 | Renamed customization and shipping fields to use "PBP Cost:" and "Client Price:" prefixes | |
 | 12/22/2025 | Added MOQ, PBP Standard Markup, Billing Description, Shipping Details, Tariff Estimate (%) to Master Pricing | |

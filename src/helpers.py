@@ -535,7 +535,8 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         'proposal_tier_column': f'T{tier_num}' if tier_num else '',  # Original tier number
 
         # Tariff
-        'country_of_origin': product_data.get('Country of Origin', 'Unknown'),
+        'country_of_origin_made_in': product_data.get('Country of Origin (Made In)', 'Unknown'),
+        'country_of_origin_ships_from': product_data.get('Country of Origin (Ships From)', 'Unknown'),
         'tariff_rate_percent': tariff_rate_percent,
         'tariff_info': product_data.get('Tariff Info', ''),
         'tariff_base': tariff_base,
@@ -946,6 +947,7 @@ def get_column_value(row, new_column_name, old_column_name=None, default=None):
 
     # Return default if neither exists
     return default
+
 
 
 # ========== SPLIT TOTALS CALCULATIONS ==========
