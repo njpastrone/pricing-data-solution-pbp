@@ -26,7 +26,10 @@ This document defines the canonical data schemas for Peace by Piece Internationa
 | 1 | Partner | Text | Partner organization name | Required |
 | 2 | Product/Service | Text | Name of the product or service | Required |
 | 3 | Purchase Description | Text | Detailed description of the purchase item | |
-| 4 | MOQ | Number | Minimum order quantity | Whole number |
+| 4a | MOQ (Partner) | Number | Partner's minimum order quantity | Whole number (renamed from "MOQ") |
+| 4b | MOV (Partner) | Currency | Partner's minimum order value | NEW - dollar amount |
+| 4c | MOQ (PBP) | Number | PBP's minimum order quantity | NEW - whole number |
+| 4d | MOV (PBP) | Currency | PBP's minimum order value | NEW - dollar amount |
 | 5 | Pricing Tiers (Y/N) | Text | Whether tiered pricing applies | Y or N |
 | 6 | Pricing Tiers Info | Text | Description of tier thresholds and structure | Required if Pricing Tiers = Y |
 | 7 | PBP Cost (No Tiers) | Currency | PBP cost when no tiers apply | Use if Pricing Tiers = N |
@@ -51,9 +54,9 @@ This document defines the canonical data schemas for Peace by Piece Internationa
 | 26 | PBP Cost: Shipping Cost per Unit | Currency | Per-unit shipping cost PBP pays | |
 | 27 | Client Price: Shipping Price per Unit | Currency | Per-unit shipping price charged to client | |
 | 28 | Shipping Details | Text | Additional shipping notes (carrier, timeline, etc.) | |
-| 29 | Tariff Estimate ($) | Currency | Estimated tariff amount in dollars | |
-| 30 | Tariff Estimate (%) | Percentage | Estimated tariff as percentage of cost | Format: decimal (e.g., 10%) |
-| 31 | Tariff Info | Text | Notes on tariff classification or source | |
+| 32 | Tariff Estimate ($) | Currency | Estimated tariff amount in dollars | |
+| 33 | Tariff Estimate (%) | Percentage | Estimated tariff as percentage of cost | Format: decimal (e.g., 10%) |
+| 34 | Tariff Info | Text | Notes on tariff classification or source | |
 
 ---
 
@@ -61,6 +64,7 @@ This document defines the canonical data schemas for Peace by Piece Internationa
 
 | Date | Change | Updated By |
 |------|--------|------------|
+| 01/19/2026 | Disaggregated MOQ into 4 columns: MOQ (Partner), MOV (Partner), MOQ (PBP), MOV (PBP). Total columns: 34 (was 31) | |
 | 01/14/2026 | Split "Country of Origin" into two columns: "Country of Origin (Made In)" and "Country of Origin (Ships From)" | |
 | 12/22/2025 | Standardized schema across all three pricing spreadsheets | |
 | 12/22/2025 | Renamed customization and shipping fields to use "PBP Cost:" and "Client Price:" prefixes | |

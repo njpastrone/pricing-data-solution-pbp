@@ -14,15 +14,7 @@ import pandas as pd
 import math
 import re
 import gc  # For memory optimization
-from src.helpers import get_column_value
-
-
-def calculate_moq(estimated_unit_price):
-    """Calculate MOQ based on $1000 minimum order value using ceiling."""
-    if estimated_unit_price <= 0:
-        return 10
-    moq = math.ceil(1000 / estimated_unit_price)
-    return moq
+from src.helpers import get_column_value, calculate_moq
 
 
 def apply_marketing_rounding(price, marketing_rounding_enabled):
@@ -67,8 +59,9 @@ def calculate_proposal_pricing(proposal_item: Dict, get_unit_price_func, marketi
     temp_markup_multiplier = 1 + (markup_percent / 100)
     estimated_unit_price = preliminary_base_price * temp_markup_multiplier
 
-    # Calculate MOQ
-    moq = calculate_moq(estimated_unit_price)
+    # Calculate MOQ (returns dict with moq, breakdown, display_text)
+    moq_result = calculate_moq(estimated_unit_price, product_row)
+    moq = moq_result['moq']
     if moq is None:
         moq = 5
 

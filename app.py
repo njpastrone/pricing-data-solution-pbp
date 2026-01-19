@@ -2582,7 +2582,9 @@ with tab1:
 
                 # Calculate cost and client price for display
                 preliminary_cost, _, _ = get_unit_price_new_system(product_data, 100)
-                estimated_moq = calculate_moq(preliminary_cost * 2, product_data) if preliminary_cost else None
+                moq_result = calculate_moq(preliminary_cost * 2, product_data) if preliminary_cost else None
+                estimated_moq = moq_result['moq'] if moq_result else None
+                moq_display_text = moq_result['display_text'] if moq_result else ""
                 moq_cost, _, _ = get_unit_price_new_system(product_data, estimated_moq) if estimated_moq else (None, None, None)
 
                 # Calculate client price (100% markup)
@@ -2650,7 +2652,7 @@ with tab1:
 
                 # Show estimated prices at MOQ
                 if moq_cost and estimated_moq:
-                    st.caption(f"Est. Cost & Price at MOQ ({estimated_moq} units): ${moq_cost:.2f}/unit cost → ${moq_client_price:.2f}/unit client price (100% markup)")
+                    st.caption(f"Est. Cost & Price at {moq_display_text}: ${moq_cost:.2f}/unit cost → ${moq_client_price:.2f}/unit client price (100% markup)")
 
                 # Show description if available
                 desc = product_data.get("Marketing Description", "")
@@ -3057,8 +3059,10 @@ with tab1:
                     temp_markup_multiplier = 1 + (item['markup_percent'] / 100)
                     estimated_unit_price = preliminary_base_price * temp_markup_multiplier
 
-                    # Calculate MOQ
-                    moq = calculate_moq(estimated_unit_price, product_row)
+                    # Calculate MOQ (returns dict with moq, breakdown, display_text)
+                    moq_result = calculate_moq(estimated_unit_price, product_row)
+                    moq = moq_result['moq'] if moq_result else None
+                    moq_display_text = moq_result['display_text'] if moq_result else ""
                     if moq is None:
                         moq = 5
 
@@ -3176,9 +3180,8 @@ with tab1:
 
                         st.table(proposal_table)
 
-                        # Show MOQ calculation note
-                        moq_total_value = moq * moq_product_price_per_unit
-                        st.caption(f"MOQ calculated based on \\$1,000 minimum order value (MOQ {moq} units = \\${moq_total_value:.2f})")
+                        # Show MOQ breakdown
+                        st.caption(moq_display_text)
 
                         # ALWAYS show customization costs from product data
                         # Get customization costs from the product data
@@ -3237,8 +3240,9 @@ with tab1:
                     temp_markup_multiplier = 1 + (item['markup_percent'] / 100)
                     estimated_unit_price = preliminary_base_price * temp_markup_multiplier
 
-                    # Calculate MOQ
-                    moq = calculate_moq(estimated_unit_price, product_row)
+                    # Calculate MOQ (returns dict with moq, breakdown, display_text)
+                    moq_result = calculate_moq(estimated_unit_price, product_row)
+                    moq = moq_result['moq'] if moq_result else None
                     if moq is None:
                         moq = 5
 

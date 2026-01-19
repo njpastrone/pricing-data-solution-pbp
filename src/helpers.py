@@ -125,41 +125,238 @@ def round_to_nearest_fifty_cents(price, enabled=True):
 
 # ========== ORDER CALCULATIONS ==========
 
+def parse_moq_value(value):
+    """
+    Parse MOQ quantity from spreadsheet (handles strings, floats, integers).
+
+    Args:
+        value: MOQ value from spreadsheet (can be string, float, int, or None)
+
+    Returns:
+        int: Parsed MOQ quantity, or None if invalid/empty
+
+    Examples:
+        >>> parse_moq_value("50")
+        50
+        >>> parse_moq_value(75.0)
+        75
+        >>> parse_moq_value("")
+        None
+        >>> parse_moq_value(None)
+        None
+    """
+    if value is None or value == '' or str(value).strip() == '':
+        return None
+    try:
+        moq_value = int(float(str(value).strip()))
+        return moq_value if moq_value > 0 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def parse_mov_value(value):
+    """
+    Parse MOV (Minimum Order Value) dollar amount from spreadsheet.
+    Reuses clean_price() to handle currency formats.
+
+    Args:
+        value: MOV value from spreadsheet (e.g., "$2000", "2,000.00", 2000)
+
+    Returns:
+        float: Parsed MOV dollar amount, or None if invalid/empty
+
+    Examples:
+        >>> parse_mov_value("$2,000.00")
+        2000.0
+        >>> parse_mov_value("1500")
+        1500.0
+        >>> parse_mov_value("")
+        None
+    """
+    if value is None or value == '' or str(value).strip() == '':
+        return None
+    return clean_price(value)  # Existing function handles currency formats
+
+
+def convert_mov_to_moq(mov_value, unit_price):
+    """
+    Convert MOV (Minimum Order Value in dollars) to MOQ (quantity).
+    Formula: MOQ = ceil(MOV / unit_price)
+
+    Args:
+        mov_value (float): Minimum order value in dollars
+        unit_price (float): Price per unit
+
+    Returns:
+        int: Calculated minimum order quantity, or 0 if invalid inputs
+
+    Examples:
+        >>> convert_mov_to_moq(2000.0, 30.0)
+        67
+        >>> convert_mov_to_moq(1500.0, 25.0)
+        60
+        >>> convert_mov_to_moq(0, 30.0)
+        0
+        >>> convert_mov_to_moq(2000.0, 0)
+        0
+    """
+    if mov_value <= 0 or unit_price <= 0:
+        return 0
+    return math.ceil(mov_value / unit_price)
+
+
 def calculate_moq(unit_price, product_data=None):
     """
-    Calculate Minimum Order Quantity.
-    Uses MOQ from spreadsheet if available, otherwise calculates based on $1,000 minimum.
+    Calculate Minimum Order Quantity with disaggregated MOQ/MOV logic.
+
+    Checks 4 columns in priority order and returns the maximum:
+    1. MOQ (PBP) - PBP's minimum quantity
+    2. MOV (PBP) - PBP's minimum order value (converted to quantity)
+    3. MOQ (Partner) - Partner's minimum quantity
+    4. MOV (Partner) - Partner's minimum order value (converted to quantity)
+
+    If no spreadsheet data, falls back to: ceil(1000 / unit_price)
 
     Args:
         unit_price (float): Price per unit
         product_data (dict): Product row data (optional)
 
     Returns:
-        int: Minimum order quantity, or None if invalid unit price
+        dict: Dictionary with keys:
+            - moq (int): Final calculated MOQ (maximum of all sources)
+            - breakdown (dict): Detailed breakdown of all sources
+            - display_text (str): Rich display text showing all contributing factors
 
     Examples:
-        >>> calculate_moq(50.0)
-        20
-        >>> calculate_moq(75.0)
-        14
-        >>> calculate_moq(0)
-        None
-    """
-    # Check for MOQ in spreadsheet first
-    if product_data is not None:
-        spreadsheet_moq = get_column_value(product_data, 'MOQ', None, None)
-        if spreadsheet_moq:
-            try:
-                moq_value = int(float(str(spreadsheet_moq)))
-                if moq_value > 0:
-                    return moq_value
-            except (ValueError, TypeError):
-                pass
+        >>> # All 4 fields present
+        >>> result = calculate_moq(25.0, {'MOQ (Partner)': 50, 'MOV (Partner)': '1500',
+        ...                                'MOQ (PBP)': 75, 'MOV (PBP)': '2000'})
+        >>> result['moq']
+        80
+        >>> result['breakdown']['source']
+        'MOV (PBP)'
 
-    # Fallback to calculated MOQ based on $1000 minimum
-    if unit_price <= 0:
-        return None
-    return math.ceil(1000 / unit_price)
+        >>> # Only MOQ fields
+        >>> result = calculate_moq(30.0, {'MOQ (Partner)': 50, 'MOQ (PBP)': 75})
+        >>> result['moq']
+        75
+
+        >>> # Fallback calculation
+        >>> result = calculate_moq(50.0)
+        >>> result['moq']
+        20
+    """
+    # Initialize breakdown structure
+    breakdown = {
+        'moq_partner': None,
+        'moq_partner_qty': 0,
+        'mov_partner': None,
+        'mov_partner_qty': 0,
+        'moq_pbp': None,
+        'moq_pbp_qty': 0,
+        'mov_pbp': None,
+        'mov_pbp_qty': 0,
+        'source': 'Calculated (Fallback)',
+        'fallback_used': True
+    }
+
+    # Track all quantities (non-zero values)
+    quantities = []
+    sources = []  # Track which sources contributed
+
+    # Extract and parse all 4 columns if product_data exists
+    if product_data is not None:
+        # 1. MOQ (Partner) - with fallback to old "MOQ" column
+        moq_partner_raw = get_column_value(product_data, 'MOQ (Partner)', 'MOQ', None)
+        moq_partner = parse_moq_value(moq_partner_raw)
+        if moq_partner:
+            breakdown['moq_partner'] = moq_partner
+            breakdown['moq_partner_qty'] = moq_partner
+            quantities.append(moq_partner)
+            sources.append(f"Partner MOQ: {moq_partner}")
+            breakdown['fallback_used'] = False
+
+        # 2. MOV (Partner)
+        mov_partner_raw = get_column_value(product_data, 'MOV (Partner)', None, None)
+        mov_partner = parse_mov_value(mov_partner_raw)
+        if mov_partner and unit_price > 0:
+            mov_partner_qty = convert_mov_to_moq(mov_partner, unit_price)
+            breakdown['mov_partner'] = mov_partner
+            breakdown['mov_partner_qty'] = mov_partner_qty
+            if mov_partner_qty > 0:
+                quantities.append(mov_partner_qty)
+                sources.append(f"Partner MOV: ${mov_partner:,.2f} = {mov_partner_qty} units")
+                breakdown['fallback_used'] = False
+
+        # 3. MOQ (PBP)
+        moq_pbp_raw = get_column_value(product_data, 'MOQ (PBP)', None, None)
+        moq_pbp = parse_moq_value(moq_pbp_raw)
+        if moq_pbp:
+            breakdown['moq_pbp'] = moq_pbp
+            breakdown['moq_pbp_qty'] = moq_pbp
+            quantities.append(moq_pbp)
+            sources.append(f"PBP MOQ: {moq_pbp}")
+            breakdown['fallback_used'] = False
+
+        # 4. MOV (PBP)
+        mov_pbp_raw = get_column_value(product_data, 'MOV (PBP)', None, None)
+        mov_pbp = parse_mov_value(mov_pbp_raw)
+        if mov_pbp and unit_price > 0:
+            mov_pbp_qty = convert_mov_to_moq(mov_pbp, unit_price)
+            breakdown['mov_pbp'] = mov_pbp
+            breakdown['mov_pbp_qty'] = mov_pbp_qty
+            if mov_pbp_qty > 0:
+                quantities.append(mov_pbp_qty)
+                sources.append(f"PBP MOV: ${mov_pbp:,.2f} = {mov_pbp_qty} units")
+                breakdown['fallback_used'] = False
+
+    # Calculate final MOQ
+    if quantities:
+        # Use maximum of all sources
+        final_moq = max(quantities)
+
+        # Determine which source won
+        if breakdown['mov_pbp_qty'] == final_moq and breakdown['mov_pbp_qty'] > 0:
+            breakdown['source'] = 'MOV (PBP)'
+        elif breakdown['moq_pbp_qty'] == final_moq and breakdown['moq_pbp_qty'] > 0:
+            breakdown['source'] = 'MOQ (PBP)'
+        elif breakdown['mov_partner_qty'] == final_moq and breakdown['mov_partner_qty'] > 0:
+            breakdown['source'] = 'MOV (Partner)'
+        elif breakdown['moq_partner_qty'] == final_moq and breakdown['moq_partner_qty'] > 0:
+            breakdown['source'] = 'MOQ (Partner)'
+
+        # Build display text
+        winning_source = None
+        other_sources = []
+
+        for i, qty in enumerate(quantities):
+            if qty == final_moq and winning_source is None:
+                winning_source = sources[i]
+            elif qty != final_moq:
+                other_sources.append(sources[i])
+
+        if other_sources:
+            display_text = f"MOQ: {final_moq} units ({winning_source} | Also: {', '.join(other_sources)})"
+        else:
+            display_text = f"MOQ: {final_moq} units ({winning_source})"
+
+    else:
+        # Fallback to calculated MOQ based on $1000 minimum
+        if unit_price <= 0:
+            # Invalid unit price
+            final_moq = None
+            display_text = "MOQ: Invalid unit price"
+        else:
+            final_moq = math.ceil(1000 / unit_price)
+            display_text = f"MOQ: {final_moq} units (Calculated: $1000 / ${unit_price:.2f})"
+            breakdown['source'] = 'Calculated (Fallback)'
+            breakdown['fallback_used'] = True
+
+    return {
+        'moq': final_moq,
+        'breakdown': breakdown,
+        'display_text': display_text
+    }
 
 
 def calculate_credit_card_fee(total, apply_fee=False, fee_percent=3.0):
