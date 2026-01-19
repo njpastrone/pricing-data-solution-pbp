@@ -339,6 +339,8 @@ See [docs/APP_UPDATE_PLAN.md](docs/APP_UPDATE_PLAN.md) for multi-partner archite
 
 **Debug data:** `streamlit run scripts/investigate_data.py`
 
+**Update schema/data model:** Follow [SCHEMA_UPDATE_PROCESS.md](SCHEMA_UPDATE_PROCESS.md) for systematic process
+
 ---
 
 ## 📝 Development Guidelines

@@ -53,6 +53,7 @@
 
 **Core references (use before starting any work):**
 
+- **[SCHEMA_UPDATE_PROCESS.md](SCHEMA_UPDATE_PROCESS.md)** - Systematic process for updating data model/schema
 - **[docs/planning/PLANNING.md](docs/planning/PLANNING.md)** - Project requirements, architecture decisions, and implementation plans
 - **[docs/planning/METHODOLOGY_LOGIC.md](docs/planning/METHODOLOGY_LOGIC.md)** - Pricing calculations, business rules, and partner-specific methodologies
 - **[docs/planning/RESTRUCTURE_CONTEXT.md](docs/planning/RESTRUCTURE_CONTEXT.md)** - Current data structure from master_pricing_template_10_14
@@ -75,6 +76,28 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 - Follow existing code patterns and conventions in the repository
 - Ensure all changes are well-tested before committing
 - Keep commits focused and atomic
+
+## Schema Update Guidelines
+
+When updating the data model/schema (renaming columns, adding fields, modifying data structure):
+
+1. **ALWAYS follow the systematic process in [SCHEMA_UPDATE_PROCESS.md](SCHEMA_UPDATE_PROCESS.md)**
+2. **Key principle:** Maintain backward compatibility via `get_column_value()` helper
+3. **Required steps:**
+   - Review core documentation for context
+   - Search for ALL references to changed columns
+   - Update `get_column_value()` mappings first
+   - Update schema_reference.md
+   - Test with both old and new spreadsheet formats
+   - Document in CHANGELOG.md
+
+**Quick reference for column changes:**
+- Rename: Add new canonical name to `get_column_value()`, keep old name as fallback
+- Add: Include default value handling for spreadsheets without the column
+- Remove: Keep in fallback list for old data, mark deprecated in docs
+- Type change: Add parsing/conversion logic with format detection
+
+See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
 
 ## Getting Started
 
@@ -287,6 +310,7 @@ pricing-data-solution-pbp/
 ├── requirements.txt            # Python dependencies
 ├── CLAUDE.md                   # This file - project rules & context
 ├── README.md                   # Project overview & quick start
+├── SCHEMA_UPDATE_PROCESS.md    # Systematic process for schema updates
 │
 ├── .streamlit/
 │   └── secrets.toml           # Google credentials (SECRET - never commit locally)
