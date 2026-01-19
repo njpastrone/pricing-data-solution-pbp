@@ -4935,8 +4935,6 @@ with tab3:
         st.write("")
 
         # Iterate through order items and display editable cards
-        items_to_remove = []
-
         for idx, item in enumerate(st.session_state.order_items):
             # Skip custom items for now (they have different structure)
             if item.get('is_custom', False):
@@ -4950,7 +4948,8 @@ with tab3:
                     st.write(f"**Quantity:** {item['quantity']} | **Unit Price:** ${item['total_per_unit']:.2f} | **Total:** ${item['product_total']:.2f}")
                 with col2:
                     if st.button("Remove", key=f"remove_custom_{idx}", type="secondary"):
-                        items_to_remove.append(idx)
+                        st.session_state.order_items.pop(idx)
+                        st.rerun()
                 continue
 
             # Regular product card
@@ -4963,7 +4962,8 @@ with tab3:
                 st.caption(f"Partner: {item['partner']} | Origin: {item.get('country_of_origin', 'N/A')}")
             with col_remove:
                 if st.button("Remove", key=f"remove_product_{idx}", type="secondary"):
-                    items_to_remove.append(idx)
+                    st.session_state.order_items.pop(idx)
+                    st.rerun()
 
             # Get product data for recalculations
             product_data = item['product_data']
@@ -5438,13 +5438,6 @@ with tab3:
                 # Add note if minimum customization quantity is applied
                 if new_include_custom and new_apply_minimum and new_custom_min_qty > new_quantity:
                     st.caption(f"Note: Customization minimum of {new_custom_min_qty} units applied (ordering {new_quantity} product units)")
-
-        # Remove items marked for deletion
-        for idx in sorted(items_to_remove, reverse=True):
-            st.session_state.order_items.pop(idx)
-
-        if items_to_remove:
-            st.rerun()
 
         st.write("---")
 
