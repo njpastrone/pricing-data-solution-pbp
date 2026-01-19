@@ -2,7 +2,6 @@
 
 ## App Notes
 ### Investigate bug where Proposal PPTs do not show updated pricing when user changes prices on app
-###  In Tab 3 Option B; make note of WHICH proposal is being loaded / which proposal we could import from
 ### In Tab 3, if user selected Option B, prices should be imported from proposal, rather than master.
 ### For Customization Add-Ons, need to specify PBP Cost v. Client Prices. 
 ### MAJOR BUG: App goes into a loading loop when trying to Remove items from Order in Tab 3
@@ -22,3 +21,4 @@
 ## Progress
 ### Changed schema from Country of Origin to disaggregated "Country of Origin (Made In)" and "Country of Origin (Ships From)" AND updated app to reflect new schema.
 ### Changed Client Max Price to a Budget Range
+###  In Tab 3 Option B; made note of WHICH proposal is being loaded / which proposal we could import from
