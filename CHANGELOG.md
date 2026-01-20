@@ -6,11 +6,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### 🚧 In Progress (Week 2 Sprint - Jan 2026)
-- Tab 3 Option B variant preservation when importing from proposals
-- Tab 4 variant display in invoice/PO tables
-- Saved proposals/orders variant persistence
 - Customization Add-On feature for product editing
 - Execution form updates (New/Existing checkbox + MM/DD/YY dates)
+- Tab 3 Option A (HTML import): Parse variants from client order forms
 
 ---
 
@@ -41,10 +39,27 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - **Proposal items structure** - Now includes `selected_variant` field (None if no variant selected)
 - **Order items structure** - Now includes `selected_variant` field (None if no variant selected)
 
+### Fixed
+- **Tab 3 Option B:** Variant data now preserved when importing from proposals
+- **Tab 4:** Product names in invoice/PO tables now include variant suffix
+- **CSV exports:** Variants included in all CSV downloads
+- **Saved data:** Proposals and orders automatically save/load variant selections via JSON
+
+### Complete Variant Workflow
+- ✅ Tab 1: Select variant and add to proposal
+- ✅ Save/load proposals with variants (persisted to Google Sheets)
+- ✅ Tab 3 Option B: Import from proposal preserves variants
+- ✅ Tab 3 Option C: Manual selection includes variant selector
+- ✅ Tab 3: Current Order displays product names with variants
+- ✅ Save/load orders with variants (persisted to Google Sheets)
+- ✅ Tab 4: Invoice/PO tables show variants in all 4 tables
+- ✅ HTML/CSV exports include variants in product names
+
 ### Notes
 - Future data migration: Will consolidate variant products into single rows with variant lists
 - App supports BOTH old format (separate product rows) and new format (variants in one row) simultaneously
 - PowerPoint generation already has multi-variant support (v6.13) - will work with new variant format
+- Remaining: Tab 3 Option A (HTML import) variant parsing (future enhancement)
 
 ---
 
