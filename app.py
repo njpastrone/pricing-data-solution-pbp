@@ -5076,6 +5076,143 @@ with tab3:
     st.divider()
 
     # ============================================================
+    # OPTION D: CREATE CUSTOM PRODUCT
+    # ============================================================
+    option_label_d = "Option D" if has_proposal else "Option C"
+    st.header(f"{option_label_d}: Create Custom Product")
+    st.markdown("**Use this if:** You need to add a unique product not in the catalog")
+    st.caption("Create one-off items, executive samples, or products pending catalog addition")
+
+    with st.expander("Create Custom Product", expanded=False):
+        st.caption("Enter basic info - you'll configure quantity, markup, and customization after adding")
+
+        col1, col2, col3 = st.columns([2, 2, 1])
+
+        with col1:
+            custom_product_name = st.text_input(
+                "Product Name*",
+                key="custom_product_name",
+                placeholder="e.g., Custom Gold Engraving"
+            )
+
+        with col2:
+            # Partner selection with "Custom/Other" as first option
+            partner_options = ["Custom/Other"] + sorted(df_template['Partner'].unique().tolist())
+            custom_partner = st.selectbox(
+                "Partner*",
+                options=partner_options,
+                key="custom_partner",
+                help="Select partner for POC tracking, or 'Custom/Other'"
+            )
+
+        with col3:
+            custom_base_cost = st.number_input(
+                "Base Cost/Unit*",
+                min_value=0.01,
+                value=10.00,
+                step=0.50,
+                key="custom_base_cost",
+                format="%.2f",
+                help="What PBP pays per unit"
+            )
+
+        # Add button
+        if st.button("Add to Order", key="add_custom_product_btn", type="primary", use_container_width=True):
+            # Validation
+            if not custom_product_name or len(custom_product_name.strip()) < 3:
+                st.error("Product name is required (min 3 characters)")
+            elif custom_base_cost <= 0:
+                st.error("Base cost must be greater than $0")
+            else:
+                # Create custom product with DEFAULTS (just like catalog products)
+                # User will configure quantity, markup, customization inline after adding
+
+                # Create minimal product_data dict (simulates spreadsheet row)
+                custom_product_data = {
+                    'Product/Service': custom_product_name.strip(),
+                    'Partner': custom_partner,
+                    'Pricing Tiers (Y/N)': 'N',  # Always flat-rate for custom
+                    'PBP Cost (No Tiers)': custom_base_cost,
+                    'PBP Standard Markup': 100.0,  # Default markup
+                    'Country of Origin (Made In)': '',
+                    'Country of Origin (Ships From)': '',
+                    'Vendor Published MSRP': 0,
+                    'Customization Setup Fee': 0,
+                    'Customization Cost per Unit': 0,
+                    'Customization Info': '',
+                    'Marketing Description': '',
+                    'Tariff Estimate (%)': 0,
+                    'MOQ (PBP)': '',
+                    'MOV (PBP)': '',
+                    'MOQ (Partner)': '',
+                    'MOV (Partner)': '',
+                    'Tariff Info': '',
+                    'Purchase Description': '',
+                    'Units per Package': 1,
+                }
+
+                # Use same structure as catalog products
+                base_price = custom_base_cost  # No tiers, so base price = entered cost
+                tier_range = "No Tiers"
+                tier_column = "PBP Cost (No Tiers)"
+                markup = 100.0  # Default markup
+
+                # Create order item with DEFAULTS (same structure as catalog products)
+                new_item = {
+                    'product_name': custom_product_name.strip(),
+                    'partner': custom_partner,
+                    'product_data': custom_product_data,
+                    'quantity': 1,  # DEFAULT - user edits inline
+                    'markup_percent': markup,  # DEFAULT - user edits inline
+                    'selected_variant': None,
+                    'include_customization': False,  # DEFAULT - user enables inline
+                    'customization_setup_fee': 0.0,
+                    'customization_per_unit': 0.0,
+                    'customization_minimum_qty': 0,
+                    'apply_custom_minimum': False,
+                    'include_tariff': False,
+                    'is_custom_product': True,  # FLAG to distinguish from catalog and legacy custom
+                    'source': 'custom',
+                    # Per-product kitting fields
+                    'include_kitting': False,
+                    'kitting_pbp_cost': 0.0,
+                    'kitting_client_price': 0.0,
+                    'kitting_description': ''
+                }
+
+                # Add calculated fields (same as catalog products)
+                new_item.update({
+                    'base_price': base_price,
+                    'tier_range': tier_range,
+                    'tier_column': tier_column,
+                    'product_ref': 'CUSTOM',
+                    'country_of_origin_made_in': '',
+                    'country_of_origin_ships_from': '',
+                    'customization_description': '',
+                    'product_subtotal': base_price * 1,
+                    'customization_setup_total': 0.0,
+                    'customization_unit_total': 0.0,
+                    'subtotal_before_markup': base_price * 1,
+                    'markup_amount': (base_price * 1) * (markup / 100),
+                    'product_total': (base_price * 1) + ((base_price * 1) * (markup / 100)),
+                    'total_per_unit': ((base_price * 1) + ((base_price * 1) * (markup / 100))) / 1,
+                    'tariff_rate_percent': 0.0,
+                    'tariff_amount': 0.0,
+                    'edited_description': ''
+                })
+
+                # Add to order
+                st.session_state.order_items.append(new_item)
+
+                # Set success message for deferred toast (same pattern as Option C)
+                st.session_state.show_add_to_order_success = True
+                st.session_state.add_to_order_product_name = custom_product_name.strip()
+
+                st.rerun()
+
+    st.divider()
+
+    # ============================================================
     # CURRENT ORDER (with inline editing)
     # ============================================================
     st.header("2. Current Order")
@@ -5088,11 +5225,12 @@ with tab3:
 
         # Iterate through order items and display editable cards
         for idx, item in enumerate(st.session_state.order_items):
-            # Skip custom items for now (they have different structure)
-            if item.get('is_custom', False):
+            # Check if this is OLD-STYLE custom line item (before custom product enhancement)
+            if item.get('is_custom', False) and not item.get('is_custom_product', False):
+                # Legacy custom line items - show simplified view
                 st.write("---")
                 st.subheader(f"{item['product_name']}")
-                st.caption(f"Custom Line Item")
+                st.caption(f"Custom Line Item (Legacy)")
 
                 col1, col2 = st.columns([4, 1])
                 with col1:
@@ -5104,7 +5242,7 @@ with tab3:
                         st.rerun()
                 continue
 
-            # Regular product card
+            # Regular product card (INCLUDING new custom products with is_custom_product=True)
             st.write("---")
 
             # Header with product name and remove button
@@ -5117,13 +5255,18 @@ with tab3:
                     item.get('selected_variant')
                 )
                 st.subheader(f"{product_display_name}")
-                st.caption(f"Partner: {item['partner']} | Origin: {item.get('country_of_origin', 'N/A')}")
 
-                # Show price source indicator (pricing snapshot vs. recalculated)
-                if item.get('from_proposal_snapshot'):
-                    st.caption("✓ Pricing preserved from proposal (saved configuration)")
-                elif item.get('source') == 'proposal':
-                    st.caption("⚠️ Pricing recalculated from current spreadsheet")
+                # Show custom product indicator or regular product info
+                if item.get('is_custom_product', False):
+                    st.caption(f"Custom Product | Partner: {item['partner']} | Base Cost: ${item['base_price']:.2f}/unit")
+                else:
+                    st.caption(f"Partner: {item['partner']} | Origin: {item.get('country_of_origin', 'N/A')}")
+
+                    # Show price source indicator (pricing snapshot vs. recalculated) - only for catalog products
+                    if item.get('from_proposal_snapshot'):
+                        st.caption("✓ Pricing preserved from proposal (saved configuration)")
+                    elif item.get('source') == 'proposal':
+                        st.caption("⚠️ Pricing recalculated from current spreadsheet")
             with col_remove:
                 if st.button("Remove", key=f"remove_product_{idx}", type="secondary"):
                     st.session_state.order_items.pop(idx)
@@ -5506,6 +5649,61 @@ with tab3:
                 new_custom_min_qty = 0
                 # Clear add-ons if customization is disabled
                 item['customization_addons'] = []
+
+            # COUNTRY & TARIFF SECTION (only for custom products)
+            if item.get('is_custom_product', False):
+                st.markdown("##### Country & Tariff")
+                st.caption("Set country of origin for tariff estimates and tracking")
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    country_made = st.text_input(
+                        "Made In",
+                        value=item.get('country_of_origin_made_in', ''),
+                        placeholder="e.g., USA, China, India, Vietnam, Mexico",
+                        key=f"custom_made_in_{idx}",
+                        help="Enter country where product is manufactured"
+                    )
+
+                    # Update item if changed
+                    if country_made != item.get('country_of_origin_made_in', ''):
+                        st.session_state.order_items[idx]['country_of_origin_made_in'] = country_made
+                        # Update product_data as well
+                        st.session_state.order_items[idx]['product_data']['Country of Origin (Made In)'] = country_made
+                        # Auto-set ships from to same as made in if not set
+                        if not item.get('country_of_origin_ships_from'):
+                            st.session_state.order_items[idx]['country_of_origin_ships_from'] = country_made
+                            st.session_state.order_items[idx]['product_data']['Country of Origin (Ships From)'] = country_made
+
+                with col2:
+                    country_ships = st.text_input(
+                        "Ships From",
+                        value=item.get('country_of_origin_ships_from', ''),
+                        placeholder="e.g., USA, China, India, Vietnam, Mexico",
+                        key=f"custom_ships_from_{idx}",
+                        help="Enter country where product ships from (affects tariffs)"
+                    )
+
+                    # Update item if changed
+                    if country_ships != item.get('country_of_origin_ships_from', ''):
+                        st.session_state.order_items[idx]['country_of_origin_ships_from'] = country_ships
+                        st.session_state.order_items[idx]['product_data']['Country of Origin (Ships From)'] = country_ships
+
+                # Tariff estimate
+                st.caption("Tariff estimate (optional, for reference)")
+                tariff_pct = st.number_input(
+                    "Tariff Estimate (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=item.get('tariff_rate_percent', 0.0),
+                    step=0.5,
+                    key=f"custom_tariff_{idx}",
+                    format="%.1f",
+                    help="Estimated tariff rate based on country and product type"
+                )
+
+                if tariff_pct != item.get('tariff_rate_percent', 0.0):
+                    st.session_state.order_items[idx]['tariff_rate_percent'] = tariff_pct
 
             # KITTING SECTION (per-product)
             st.markdown("##### Kitting & Packaging")

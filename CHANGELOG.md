@@ -5,6 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- **Custom Product Creation** - Create unique products not in the catalog (Tab 3)
+  - **Quick add form:** 3 fields only (Product Name, Partner, Base Cost/Unit)
+  - **Partner selection:** Choose real partner for POC tracking, or "Custom/Other"
+  - **Inline configuration:** After adding, configure quantity, markup, customization using same controls as catalog products
+  - **Country & Tariff fields:** Set country of origin (Made In / Ships From) and tariff estimate for custom products
+  - **Full integration:** Works with all existing features (discounts, marketing rounding, kitting, etc.)
+  - **Profit visibility:** Base cost + markup % = client price (transparent pricing)
+  - **Invoice integration:** Partner POC auto-populates when real partner selected
+  - **UX consistency:** Matches catalog product add-to-order flow (add quick, configure inline)
+  - **Legacy support:** Old custom line items still work, shown with "(Legacy)" label
+
 ### 🚧 In Progress (Week 2 Sprint - Jan 2026)
 - Customization Add-On feature for product editing
 - Execution form updates (New/Existing checkbox + MM/DD/YY dates)
