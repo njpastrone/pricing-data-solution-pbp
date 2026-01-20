@@ -3876,10 +3876,116 @@ with tab2:
         st.session_state.show_order_form_updated = False
 
     # ============================================================
-    # SECTION 2: CLIENT ORDER FORM
+    # SECTION 2: GENERATE GOOGLE FORM (RECOMMENDED)
     # ============================================================
     st.divider()
-    st.subheader("2. Client Order Form")
+    st.subheader("2. Generate Google Form (Recommended)")
+    st.caption("Pre-fill a Google Form with proposal products and client info, then send link to client")
+
+    # Check if proposal products exist
+    has_proposal_products = len(st.session_state.proposal_products) > 0
+
+    if not has_proposal_products:
+        st.info("💡 **No proposal products found.** Create a proposal in Tab 1 first, then return here to generate a client form.")
+    else:
+        st.success(f"✅ Found {len(st.session_state.proposal_products)} products from your proposal")
+
+        # Import forms helper
+        from src.forms_helper import generate_prefilled_form_url
+
+        # Product selection
+        st.markdown("#### Select Products for Client")
+        st.caption("Choose which products from your proposal to include in the form")
+
+        # Initialize selected products tracking
+        if 'google_form_selected_products' not in st.session_state:
+            st.session_state.google_form_selected_products = []
+
+        selected_products = []
+
+        # Show proposal products with checkboxes
+        for idx, item in enumerate(st.session_state.proposal_products):
+            product_name = item['product_data'].get('Product/Service', '')
+            quantity = item.get('pricing_snapshot', {}).get('quantity', 100)  # Default to 100 from proposal
+
+            col1, col2 = st.columns([4, 1])
+
+            with col1:
+                include = st.checkbox(
+                    f"{product_name}",
+                    value=True,  # Default checked
+                    key=f"google_form_product_{idx}"
+                )
+
+            with col2:
+                qty = st.number_input(
+                    "Qty",
+                    value=quantity,
+                    min_value=1,
+                    key=f"google_form_qty_{idx}",
+                    label_visibility="collapsed"
+                )
+
+            if include:
+                selected_products.append({
+                    'name': product_name,
+                    'quantity': qty,
+                    'customization_notes': ''  # Client can add this in the form
+                })
+
+        if selected_products:
+            st.info(f"📝 **{len(selected_products)} product(s) selected** - these will be pre-filled in the Google Form")
+
+            # Client info (from Section 1)
+            client_info = {
+                'client_type': st.session_state.order_details.get('client_type', 'New'),
+                'company_name': st.session_state.order_details.get('company_name', ''),
+                'contact_name': st.session_state.order_details.get('contact_name', ''),
+                'contact_email': st.session_state.order_details.get('contact_email', ''),
+                'contact_phone': st.session_state.order_details.get('contact_phone', '')
+            }
+
+            # Generate form button
+            st.markdown("#### Generate Pre-Filled Form")
+
+            if st.button("🔗 Generate Google Form URL", type="primary", use_container_width=True):
+                # Generate pre-filled URL
+                form_url = generate_prefilled_form_url(client_info, selected_products)
+                st.session_state.google_form_url = form_url
+                st.session_state.show_google_form_url = True
+
+            # Show generated URL
+            if st.session_state.get('show_google_form_url', False) and st.session_state.get('google_form_url'):
+                st.success("✅ Form URL generated successfully!")
+
+                st.markdown("##### Share This URL with Your Client:")
+
+                # Show URL in text area for easy copying
+                st.text_area(
+                    "Copy this URL:",
+                    value=st.session_state.google_form_url,
+                    height=100,
+                    key="google_form_url_display"
+                )
+
+                # Open in new tab button
+                st.markdown(f'<a href="{st.session_state.google_form_url}" target="_blank" style="text-decoration: none;"><button style="width: 100%; padding: 0.5rem; background-color: #0066cc; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">🌐 Open Form in New Tab (Preview)</button></a>', unsafe_allow_html=True)
+
+                st.info("""
+                **What's Next?**
+                1. Copy the URL above
+                2. Send it to your client (email, Slack, text message, etc.)
+                3. Client opens the form → sees pre-filled info → completes remaining fields → submits
+                4. Go to **Tab 3 → Option A** to import the completed response
+                """)
+        else:
+            st.warning("⚠️ No products selected. Check at least one product to generate a form.")
+
+    # ============================================================
+    # SECTION 3: HTML ORDER FORM (ALTERNATIVE)
+    # ============================================================
+    st.divider()
+    st.subheader("3. HTML Order Form (Alternative)")
 
     st.markdown("""
     Download the HTML form below and paste it into your email to send to clients.
@@ -4199,6 +4305,9 @@ Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
 with tab3:
     st.header("Order & Client Info - Input Order & Client Details")
 
+    # Load data for product matching (needed for Google Form and HTML import)
+    df_template, df_metadata, df_partner_info = load_pricing_data(st.session_state.selected_dataset)
+
     # Show unsaved changes indicator and save status
     col1_status, col2_status = st.columns([1, 1])
     with col1_status:
@@ -4284,21 +4393,25 @@ with tab3:
 
     if has_proposal:
         st.markdown("""
-        There are **3 ways** to build an order in this tab. Choose the option that matches your situation:
+        There are **4 ways** to build an order in this tab. Choose the option that matches your situation:
 
-        **RECOMMENDED:** If you sent a client order form (from Tab 2) and received it back completed → Use **Option A** below
+        **RECOMMENDED:** If you sent a Google Form link (from Tab 2) and client submitted response → Use **Option A** below
 
-        **Alternative:** If you have a proposal (from Tab 1) but no completed client form → Use **Option B** below
+        **Alternative:** If you sent an HTML form (from Tab 2) and received it back completed → Use **Option B** below
 
-        **Fallback:** If starting fresh without a proposal or form → Use **Option C** below
+        **Alternative:** If you have a proposal (from Tab 1) but no completed client form → Use **Option C** below
+
+        **Fallback:** If starting fresh without a proposal or form → Use **Option D** below
         """)
     else:
         st.markdown("""
-        There are **2 ways** to build an order in this tab. Choose the option that matches your situation:
+        There are **3 ways** to build an order in this tab. Choose the option that matches your situation:
 
-        **RECOMMENDED:** If you sent a client order form (from Tab 2) and received it back completed → Use **Option A** below
+        **RECOMMENDED:** If you sent a Google Form link (from Tab 2) and client submitted response → Use **Option A** below
 
-        **Alternative:** If starting fresh without a proposal or form → Use **Option B** below
+        **Alternative:** If you sent an HTML form (from Tab 2) and received it back completed → Use **Option B** below
+
+        **Alternative:** If starting fresh without a proposal or form → Use **Option C** below
 
         **Tip:** If you want to create a proposal first, go back to Tab 1 to build a proposal, then return here to import it.
         """)
@@ -4506,10 +4619,233 @@ with tab3:
     st.divider()
 
     # ============================================================
-    # OPTION A: HTML CLIENT ORDER FORM IMPORT (RECOMMENDED)
+    # OPTION A: GOOGLE FORM RESPONSE IMPORT (RECOMMENDED)
     # ============================================================
-    st.header("Option A: Import Completed Client Order Form (RECOMMENDED)")
-    st.markdown("**Use this if:** You sent a client order form from Tab 2 and received it back completed")
+    st.header("Option A: Import from Google Form Response (RECOMMENDED)")
+    st.markdown("**Use this if:** You sent a Google Form link from Tab 2 and client submitted their response")
+    st.caption("View and import client responses from your Google Form submissions")
+
+    # Import helpers
+    from src.data_loader import connect_to_sheets
+    from src.forms_helper import get_unimported_responses, parse_form_response, mark_response_imported, format_product_summary
+
+    if st.button("🔄 Load Recent Form Responses", key="load_google_form_responses"):
+        with st.spinner("Loading responses from Google Sheets..."):
+            try:
+                gc = connect_to_sheets()
+                df_unimported = get_unimported_responses(gc)
+
+                if df_unimported.empty:
+                    st.info("✅ No new responses found. All responses have been imported.")
+                else:
+                    st.success(f"📝 Found **{len(df_unimported)}** unimported response(s)")
+                    st.session_state.google_form_responses = df_unimported
+                    st.session_state.google_form_gc = gc
+
+            except Exception as e:
+                st.error(f"Error loading responses: {e}")
+                st.session_state.google_form_responses = None
+
+    # Show responses if loaded
+    if st.session_state.get('google_form_responses') is not None:
+        df_responses = st.session_state.google_form_responses
+
+        if not df_responses.empty:
+            st.markdown("#### Available Responses:")
+
+            for idx, row in df_responses.iterrows():
+                # Parse response
+                response_data = parse_form_response(row)
+
+                # Create expander for each response
+                company = response_data['client_info'].get('company_name', 'Unknown Company')
+                timestamp = response_data['metadata'].get('timestamp', 'No timestamp')
+
+                with st.expander(f"📋 {company} - {timestamp}", expanded=False):
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.markdown("**Client Information:**")
+                        st.write(f"- Type: {response_data['client_info'].get('client_type', 'N/A')}")
+                        st.write(f"- Company: {response_data['client_info'].get('company_name', 'N/A')}")
+                        st.write(f"- Contact: {response_data['client_info'].get('contact_name', 'N/A')}")
+                        st.write(f"- Email: {response_data['client_info'].get('contact_email', 'N/A')}")
+
+                    with col2:
+                        st.markdown("**Order Details:**")
+                        st.write(f"- Products: {format_product_summary(response_data['products'])}")
+                        st.write(f"- In-Hands: {response_data['shipping_info'].get('in_hands_date', 'N/A')}")
+                        st.write(f"- Payment: {response_data['payment_info'].get('payment_preference', 'N/A')}")
+
+                    st.markdown("**Products:**")
+                    for product in response_data['products']:
+                        st.write(f"- {product['name']} (Qty: {product['quantity']})")
+                        if product.get('customization_notes'):
+                            st.caption(f"  Custom: {product['customization_notes']}")
+
+                    # Import button
+                    if st.button(f"✅ Import This Response", key=f"import_google_response_{idx}"):
+                        # Import client info
+                        client_type = response_data['client_info'].get('client_type', 'New')
+                        drop_shipping = response_data['shipping_info'].get('drop_shipping', 'No')
+
+                        # Build contacts array from form data
+                        contacts = [{
+                            'name': response_data['client_info'].get('contact_name', ''),
+                            'email': response_data['client_info'].get('contact_email', ''),
+                            'phone': response_data['client_info'].get('contact_phone', ''),
+                            'role': 'Primary Contact'
+                        }]
+
+                        # Parse in-hands date string to date object (Google Forms returns YYYY-MM-DD string)
+                        in_hands_date_str = response_data['shipping_info'].get('in_hands_date', None)
+                        if in_hands_date_str:
+                            try:
+                                in_hands_date = datetime.strptime(in_hands_date_str, '%Y-%m-%d').date()
+                            except (ValueError, AttributeError):
+                                in_hands_date = None
+                        else:
+                            in_hands_date = None
+
+                        st.session_state.client_info = {
+                            'is_new_client': client_type == 'New',
+                            'company_name': response_data['client_info'].get('company_name', ''),
+                            'contacts': contacts,
+                            'client_po': '',
+                            'billing_address': response_data['shipping_info'].get('billing_address', ''),
+                            'shipping_type': 'Drop Shipping' if drop_shipping == 'Yes' else 'Ground',
+                            'shipping_address': response_data['shipping_info'].get('shipping_address', ''),
+                            'payment_timeline': response_data['payment_info'].get('payment_preference', 'Net 30'),
+                            'payment_preference': response_data['payment_info'].get('payment_method', 'Check'),
+                            'client_in_hands_date': in_hands_date,
+                            'order_submitted_by': '',
+                            'order_submitted_date': datetime.now().date(),
+                            'cost_submitted_by': '',
+                            'cost_submitted_date': None
+                        }
+
+                        # Import products (using same logic as HTML import - match to catalog)
+                        from src.pricing_engine import get_unit_price_new_system
+                        from src.helpers import get_tariff_rate, calculate_product_tariff, get_shipping_costs, clean_price, get_column_value
+
+                        products_imported = 0
+                        products_skipped = []
+                        max_pbp_shipping = 0.0
+
+                        for product in response_data['products']:
+                            product_name = product['name']
+
+                            # Match product name to catalog (exact match, case-insensitive)
+                            df_filtered = df_template[df_template['Product/Service'].str.lower().str.strip() == product_name.lower().strip()]
+
+                            if not df_filtered.empty:
+                                product_data = df_filtered.iloc[0].to_dict()
+                                quantity = product['quantity']
+
+                                # Check if this product was in the proposal - if so, use proposal markup
+                                markup_percent = None
+                                for prop_item in st.session_state.proposal_products:
+                                    if prop_item['product_data'].get('Product/Service', '').lower() == product_name.lower():
+                                        markup_percent = prop_item['markup_percent']
+                                        break
+
+                                # If not in proposal, use default markup from spreadsheet
+                                if markup_percent is None:
+                                    markup_percent = get_default_markup(product_data)
+
+                                markup_multiplier = markup_percent / 100.0
+
+                                # Get base price for quantity
+                                base_price_per_unit, tier_info, tier_num = get_unit_price_new_system(product_data, quantity)
+
+                                # Calculate costs with default markup
+                                product_cost_subtotal = base_price_per_unit * quantity
+                                markup_amount = product_cost_subtotal * markup_multiplier
+                                product_total = product_cost_subtotal + markup_amount
+
+                                # Parse tariff
+                                tariff_rate_percent = get_tariff_rate(product_data, product_cost_subtotal)
+                                tariff_base = product_cost_subtotal
+                                tariff_amount = calculate_product_tariff(tariff_base, tariff_rate_percent)
+
+                                # Build order item (matching HTML import structure)
+                                order_item = {
+                                    'product_name': product_data.get('Product/Service', 'Unknown Product'),
+                                    'product_ref': product_data.get('Purchase Description', ''),
+                                    'partner': product_data.get('Partner', 'Unknown Partner'),
+                                    'product_data': product_data,
+                                    'product_data_row': product_data,
+                                    'is_custom': False,
+                                    'quantity': quantity,
+                                    'base_price': base_price_per_unit,
+                                    'tier_range': tier_info if tier_info else '',
+                                    'tier_column': f'T{tier_num}' if tier_num else '',
+                                    'markup_percent': markup_percent,
+                                    'markup_amount': markup_amount,
+                                    'proposal_markup_percent': markup_percent,  # Track original markup for warning system
+                                    'include_customization': False,
+                                    'customization_description': product_data.get('Customization Info', ''),
+                                    'customization_setup_fee': float(clean_price(get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')) or 0.0),
+                                    'customization_per_unit': float(clean_price(get_column_value(product_data, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')) or 0.0),
+                                    'customization_setup_total': 0.0,
+                                    'customization_unit_total': 0.0,
+                                    'apply_custom_minimum': False,
+                                    'customization_minimum_qty': 0,
+                                    'product_subtotal': product_cost_subtotal,
+                                    'subtotal_before_markup': product_cost_subtotal,
+                                    'product_total': product_total,
+                                    'total_per_unit': product_total / quantity,  # Fix: divide by quantity for per-unit price
+                                    'quoted_price_per_unit': (product_cost_subtotal + markup_amount) / quantity,  # Fix: divide by quantity
+                                    'tariff_info': f"{product_data.get('Country', 'N/A')} - {tariff_rate_percent}%" if tariff_rate_percent > 0 else '',
+                                    'tariff_rate_percent': tariff_rate_percent,
+                                    'tariff_base': tariff_base,
+                                    'tariff_amount': tariff_amount,
+                                    'edited_description': '',
+                                    # Per-product kitting fields
+                                    'include_kitting': False,
+                                    'kitting_pbp_cost': 0.0,
+                                    'kitting_client_price': 0.0,
+                                    'kitting_description': ''
+                                }
+
+                                st.session_state.order_items.append(order_item)
+                                products_imported += 1
+
+                                # Track maximum PBP shipping cost
+                                pbp_shipping, _ = get_shipping_costs(product_data)
+                                max_pbp_shipping = max(max_pbp_shipping, pbp_shipping)
+                            else:
+                                products_skipped.append(product_name)
+
+                        # Auto-populate partner shipping with the maximum cost found
+                        if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
+                            st.session_state.partner_shipping = max_pbp_shipping
+
+                        # Mark as imported
+                        gc = st.session_state.google_form_gc
+                        row_index = idx + 2  # +2 because: +1 for header, +1 for 1-indexed
+                        order_id = f"IMPORTED-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+                        mark_response_imported(gc, row_index, order_id)
+
+                        # Show results
+                        if products_imported > 0:
+                            st.toast(f"Imported {products_imported} product(s) from {company}")
+
+                        if products_skipped:
+                            st.warning(f"⚠️ Could not match {len(products_skipped)} product(s): {', '.join(products_skipped)}")
+
+                        st.info("**Next:** Scroll down to Section 2 to configure your order")
+
+                        # Rerun to show imported products in Section 2
+                        st.rerun()
+
+    st.divider()
+
+    # ============================================================
+    # OPTION B: HTML CLIENT ORDER FORM IMPORT (ALTERNATIVE)
+    # ============================================================
+    st.header("Option B: Import from HTML Order Form (Alternative)")
+    st.markdown("**Use this if:** You sent an HTML form from Tab 2 and received it back completed")
 
     with st.expander("Upload Completed Client Order Form", expanded=False):
         st.caption("Upload an HTML order form completed by your client to auto-populate client information.")
@@ -4764,11 +5100,11 @@ with tab3:
     st.divider()
 
     # ============================================================
-    # OPTION B: PROPOSAL PRODUCTS SELECTION (if available)
+    # OPTION C: PROPOSAL PRODUCTS SELECTION (if available)
     # ============================================================
     if len(st.session_state.proposal_products) > 0:
-        st.header("Option B: Import Products from Proposal (Tab 1)")
-        st.markdown("**Use this if:** You created a proposal in Tab 1 but don't have a completed client order form")
+        st.header("Option C: Import Products from Proposal (Tab 1)")
+        st.markdown("**Use this if:** You created a proposal in Tab 1 but don't have a completed client form")
         
         # Display proposal source information
         proposal_info_msg = f"**{len(st.session_state.proposal_products)} product(s) available**"
@@ -4888,7 +5224,7 @@ with tab3:
 
 
     # ============================================================
-    # OPTION C (or B): MANUAL PRODUCT SELECTION
+    # OPTION D (or C): MANUAL PRODUCT SELECTION
     # ============================================================
     # Display success message if a product was just added
     if 'show_add_to_order_success' in st.session_state and st.session_state.show_add_to_order_success:
@@ -4896,7 +5232,7 @@ with tab3:
         st.session_state.show_add_to_order_success = False
 
     # Adjust option label based on whether proposal exists
-    option_label = "Option C" if has_proposal else "Option B"
+    option_label = "Option D" if has_proposal else "Option C"
     st.header(f"{option_label}: Manual Product Selection")
     st.markdown("**Use this if:** You're starting from scratch without a proposal or completed form")
     st.caption("Add products to your order, then configure settings for each product below")

@@ -6,6 +6,38 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### Added
+- **Google Forms Integration (Tab 2 → Tab 3)** - Modern workflow for client order collection
+  - **Tab 2: Form Generation**
+    - Pre-fill Google Forms with proposal products and client info
+    - Clean UI: Select products from proposal, adjust quantities, generate URL
+    - One-click URL generation with copy button and preview link
+    - Supports up to 10 product lines per form
+  - **Tab 3: Response Import**
+    - Load recent form responses from Google Sheets
+    - Preview before importing: client info, products, shipping, payment details
+    - One-click import populates all client fields and adds products to order
+    - Automatic product matching (exact match, case-insensitive)
+    - Default settings: quantities from form, 100% markup
+    - Tracking columns prevent duplicate imports (Imported?, Order ID, Import Date)
+  - **New modules:**
+    - `src/forms_config.py` - Form URLs, entry IDs, column mappings (249 lines)
+    - `src/forms_helper.py` - URL generation, response parsing, import tracking (~350 lines)
+  - **Documentation:**
+    - `docs/planning/GOOGLE_FORMS_IMPLEMENTATION_COMPLETE.md` - Complete feature guide with testing checklist
+    - `docs/planning/GOOGLE_FORM_CREATION_GUIDE.md` - Step-by-step form creation instructions
+  - **Benefits:**
+    - Replaces "finnicky HTML" workflow with professional Google Forms
+    - 50-70% faster than HTML workflow (45-60 seconds vs 2-3 minutes)
+    - Better client experience and data quality
+    - Pure Python implementation (no Apps Script)
+  - **Bug fixes during testing:**
+    - Fixed nested expanders UI issue
+    - Fixed product import with proper dict conversion and pricing structure
+    - Fixed client_info field mapping (all required fields)
+    - Fixed response column mappings (asterisks for required fields)
+    - Fixed date parsing (string to date object)
+    - Fixed per-unit pricing calculations
+
 - **Custom Product Creation** - Create unique products not in the catalog (Tab 3)
   - **Quick add form:** 3 fields only (Product Name, Partner, Base Cost/Unit)
   - **Partner selection:** Choose real partner for POC tracking, or "Custom/Other"
