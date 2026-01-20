@@ -145,13 +145,12 @@ def initialize_complete_order():
     st.session_state.credit_card_fee_percent = 3.0
     st.session_state.custom_payment_terms = 'Payment due upon receipt of goods'  # Testing custom payment terms
 
-    # Set comprehensive order notes (all 5 categories)
+    # Set comprehensive order notes (all 4 categories - updated v7.5.1)
     st.session_state.order_notes = {
-        'kitting_specs': 'Gift box with ribbon, include branded tissue paper',
-        'client_requests': 'Please ensure all items are inspected before shipping',
-        'addon_samples': 'Include 5 sample units for client review',
-        'artwork_attachments': 'Logo file: client_logo_v2.ai, Brand guidelines attached',
-        'general_notes': 'Rush order - expedite processing. Contact Jim for questions.'
+        'internal_pbp_team': 'Rush order - expedite processing. Contact Jim for questions.',
+        'internal_bookkeeping': 'Net 30 terms, send invoice after PO approval. Track against Q1 budget.',
+        'external_partners': 'Gift box with ribbon, include branded tissue paper. Ship to warehouse by 3/15.',
+        'external_clients': 'Dropship directly to client. Please ensure all items are inspected before shipping.'
     }
 
     print("✓ Initialized complete order with all Tab 3 fields")

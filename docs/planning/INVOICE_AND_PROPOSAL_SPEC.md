@@ -275,14 +275,16 @@ partner_contacts = {
 ### order_notes Structure
 
 ```python
+# New 4-category structure (organized by audience)
 order_notes = {
-    'kitting_specs': str,
-    'client_requests': str,
-    'addon_samples': str,
-    'artwork_attachments': str,
-    'general_notes': str
+    'internal_pbp_team': str,      # Internal Notes (For PBP Team)
+    'internal_bookkeeping': str,   # Internal Notes (For Bookkeeping)
+    'external_partners': str,      # External Notes (For Partners/POs)
+    'external_clients': str        # External Notes (For Clients/Invoices)
 }
 ```
+
+**Note:** Structure changed in v7.5.0 from 5 categories to 4 categories organized by audience (internal vs external).
 
 ---
 

@@ -62,6 +62,8 @@ def test_saved_orders():
             'payment_timeline': 'Net 30',
             'payment_preference': 'Check'
         },
+        # Old 2-category structure (for backward compatibility testing)
+        # Will be replaced with fresh 4-category structure on load
         'order_notes': {
             'notes_to_partner': 'Test partner notes',
             'accounting_notes': 'Test accounting notes'

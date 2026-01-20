@@ -12,6 +12,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [7.5.1] - 2026-01-20
+
+### Changed
+- **Order Notes reorganization (Breaking Change)** - Restructured from 5 topic-based categories to 4 audience-based categories
+  - **Old structure (5 categories):** Kitting Specs, Client Requests, Samples Required, Artwork Details, General Notes
+  - **New structure (4 categories):**
+    - Internal Notes (For PBP Team) - Team coordination, workflow notes, internal reminders
+    - Internal Notes (For Bookkeeping) - Accounting, billing, payment tracking
+    - External Notes (For Partners/POs) - Instructions for partners, PO details, shipping requirements
+    - External Notes (For Clients/Invoices) - Client-facing information, special requests, delivery instructions
+  - **UI improvements:**
+    - Tab 3: Clean 2×2 layout (Internal row, External row)
+    - Tab 4: All 4 categories displayed with clear section headers
+    - Better organization by audience (internal vs external)
+  - **Backward compatibility:** Old saved orders with 5-category notes are discarded on load (replaced with fresh 4-category structure)
+  - **Test data only:** All existing saved orders contain test data, so no production data is lost
+
+### Updated
+- **Documentation** - Updated INVOICE_AND_PROPOSAL_SPEC.md with new order_notes structure
+- **Test scripts** - Updated test_tab3_to_tab4_data_flow.py and test_saved_orders.py with new structure
+
+---
+
 ## [7.5.0] - 2026-01-20
 
 ### Added

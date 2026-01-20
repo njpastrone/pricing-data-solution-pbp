@@ -495,14 +495,13 @@ elif len(st.session_state.client_info['contacts']) == 0:
 if 'custom_payment_terms' not in st.session_state:
     st.session_state.custom_payment_terms = ''
 
-# Initialize order notes (5 categories for better organization)
+# Initialize order notes (4 categories organized by audience)
 if 'order_notes' not in st.session_state:
     st.session_state.order_notes = {
-        'kitting_specs': '',      # Kitting/packaging specifications
-        'client_requests': '',    # Special client requests
-        'addon_samples': '',      # Additional samples needed
-        'artwork_attachments': '', # Artwork file references
-        'general_notes': ''       # General/miscellaneous notes
+        'internal_pbp_team': '',      # Internal Notes (For PBP Team)
+        'internal_bookkeeping': '',   # Internal Notes (For Bookkeeping)
+        'external_partners': '',      # External Notes (For Partners/POs)
+        'external_clients': ''        # External Notes (For Clients/Invoices)
     }
 
 # Initialize credit card fee settings
@@ -870,6 +869,15 @@ with st.sidebar:
                                     st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
 
                                 st.session_state.order_items = order_data.get('order_items', [])
+
+                                # Migration: Add kitting fields to old orders that don't have them
+                                for item in st.session_state.order_items:
+                                    if 'include_kitting' not in item:
+                                        item['include_kitting'] = False
+                                        item['kitting_pbp_cost'] = 0.0
+                                        item['kitting_client_price'] = 0.0
+                                        item['kitting_description'] = ''
+
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
@@ -883,19 +891,18 @@ with st.sidebar:
                                 st.session_state.apply_cc_fee = order_data.get('apply_cc_fee', False)
                                 st.session_state.cc_fee_percent = order_data.get('cc_fee_percent', 3.0)
                                 st.session_state.client_info = order_data.get('client_info', st.session_state.client_info)
-                                # Handle both old and new order_notes structures
+                                # Handle old order_notes structures - clean replacement
                                 loaded_notes = order_data.get('order_notes', {})
-                                if 'kitting_specs' in loaded_notes:
-                                    # New 5-category structure
+                                if 'internal_pbp_team' in loaded_notes:
+                                    # New 4-category structure - load normally
                                     st.session_state.order_notes = loaded_notes
                                 else:
-                                    # Old 2-category structure - migrate to new
+                                    # Old structure detected - discard and initialize fresh
                                     st.session_state.order_notes = {
-                                        'kitting_specs': '',
-                                        'client_requests': loaded_notes.get('accounting_notes', ''),
-                                        'addon_samples': '',
-                                        'artwork_attachments': '',
-                                        'general_notes': loaded_notes.get('notes_to_partner', '')
+                                        'internal_pbp_team': '',
+                                        'internal_bookkeeping': '',
+                                        'external_partners': '',
+                                        'external_clients': ''
                                     }
                                 st.session_state.order_confirmed = order_data.get('order_confirmed', False)
 
@@ -919,6 +926,15 @@ with st.sidebar:
                                     st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
 
                                 st.session_state.order_items = order_data.get('order_items', [])
+
+                                # Migration: Add kitting fields to old orders that don't have them
+                                for item in st.session_state.order_items:
+                                    if 'include_kitting' not in item:
+                                        item['include_kitting'] = False
+                                        item['kitting_pbp_cost'] = 0.0
+                                        item['kitting_client_price'] = 0.0
+                                        item['kitting_description'] = ''
+
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
@@ -932,19 +948,18 @@ with st.sidebar:
                                 st.session_state.apply_cc_fee = order_data.get('apply_cc_fee', False)
                                 st.session_state.cc_fee_percent = order_data.get('cc_fee_percent', 3.0)
                                 st.session_state.client_info = order_data.get('client_info', st.session_state.client_info)
-                                # Handle both old and new order_notes structures
+                                # Handle old order_notes structures - clean replacement
                                 loaded_notes = order_data.get('order_notes', {})
-                                if 'kitting_specs' in loaded_notes:
-                                    # New 5-category structure
+                                if 'internal_pbp_team' in loaded_notes:
+                                    # New 4-category structure - load normally
                                     st.session_state.order_notes = loaded_notes
                                 else:
-                                    # Old 2-category structure - migrate to new
+                                    # Old structure detected - discard and initialize fresh
                                     st.session_state.order_notes = {
-                                        'kitting_specs': '',
-                                        'client_requests': loaded_notes.get('accounting_notes', ''),
-                                        'addon_samples': '',
-                                        'artwork_attachments': '',
-                                        'general_notes': loaded_notes.get('notes_to_partner', '')
+                                        'internal_pbp_team': '',
+                                        'internal_bookkeeping': '',
+                                        'external_partners': '',
+                                        'external_clients': ''
                                     }
                                 st.session_state.order_confirmed = order_data.get('order_confirmed', False)
 
@@ -1029,11 +1044,10 @@ with st.sidebar:
                     'cost_submitted_date': None
                 }
                 st.session_state.order_notes = {
-                    'kitting_specs': '',
-                    'client_requests': '',
-                    'addon_samples': '',
-                    'artwork_attachments': '',
-                    'general_notes': ''
+                    'internal_pbp_team': '',
+                    'internal_bookkeeping': '',
+                    'external_partners': '',
+                    'external_clients': ''
                 }
                 st.session_state.order_shipping = 0.0
                 st.session_state.partner_shipping = 0.0
@@ -1748,16 +1762,6 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
             for product in pending_confirmations:
                 st.markdown(f"- {product}")
     else:
-        # DEBUG: Show current proposal state in sidebar
-        with st.sidebar.expander("🔍 DEBUG: Current Proposal State", expanded=False):
-            st.write("Marketing rounding:", st.session_state.get('proposal_marketing_rounding', False))
-            st.write("Discount percent:", st.session_state.get('proposal_discount_percent', 0.0))
-            st.write("Products:")
-            for i, item in enumerate(st.session_state.get('proposal_products', [])):
-                product_name = item['product_data'].get('Product/Service', 'Unknown')
-                markup = item['markup_percent']
-                st.write(f"  {i+1}. {product_name}: {markup}%")
-
         # Ensure all pricing edits are finalized before PowerPoint generation
         if st.session_state.get('proposal_pricing_pending_finalization', False):
             # First detection - clear flag and force rerun to ensure state is persisted
@@ -4355,6 +4359,15 @@ with tab3:
 
                                 # Load order data into session state
                                 st.session_state.order_items = order_data.get('order_items', [])
+
+                                # Migration: Add kitting fields to old orders that don't have them
+                                for item in st.session_state.order_items:
+                                    if 'include_kitting' not in item:
+                                        item['include_kitting'] = False
+                                        item['kitting_pbp_cost'] = 0.0
+                                        item['kitting_client_price'] = 0.0
+                                        item['kitting_description'] = ''
+
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
@@ -4368,19 +4381,18 @@ with tab3:
                                 st.session_state.apply_cc_fee = order_data.get('apply_cc_fee', False)
                                 st.session_state.cc_fee_percent = order_data.get('cc_fee_percent', 3.0)
                                 st.session_state.client_info = order_data.get('client_info', st.session_state.client_info)
-                                # Handle both old and new order_notes structures
+                                # Handle old order_notes structures - clean replacement
                                 loaded_notes = order_data.get('order_notes', {})
-                                if 'kitting_specs' in loaded_notes:
-                                    # New 5-category structure
+                                if 'internal_pbp_team' in loaded_notes:
+                                    # New 4-category structure - load normally
                                     st.session_state.order_notes = loaded_notes
                                 else:
-                                    # Old 2-category structure - migrate to new
+                                    # Old structure detected - discard and initialize fresh
                                     st.session_state.order_notes = {
-                                        'kitting_specs': '',
-                                        'client_requests': loaded_notes.get('accounting_notes', ''),
-                                        'addon_samples': '',
-                                        'artwork_attachments': '',
-                                        'general_notes': loaded_notes.get('notes_to_partner', '')
+                                        'internal_pbp_team': '',
+                                        'internal_bookkeeping': '',
+                                        'external_partners': '',
+                                        'external_clients': ''
                                     }
                                 st.session_state.order_confirmed = order_data.get('order_confirmed', False)
 
@@ -4718,7 +4730,12 @@ with tab3:
                                     'tariff_rate_percent': tariff_rate_percent,
                                     'tariff_base': tariff_base,
                                     'tariff_amount': tariff_amount,
-                                    'edited_description': ''  # Initialize with empty for user to edit later
+                                    'edited_description': '',  # Initialize with empty for user to edit later
+                                    # Per-product kitting fields
+                                    'include_kitting': False,
+                                    'kitting_pbp_cost': 0.0,
+                                    'kitting_client_price': 0.0,
+                                    'kitting_description': ''
                                 }
 
                                 st.session_state.order_items.append(order_item)
@@ -4968,7 +4985,12 @@ with tab3:
                 'customization_minimum_qty': 0,
                 'apply_custom_minimum': False,
                 'include_tariff': False,
-                'is_custom': False
+                'is_custom': False,
+                # Per-product kitting fields
+                'include_kitting': False,
+                'kitting_pbp_cost': 0.0,
+                'kitting_client_price': 0.0,
+                'kitting_description': ''
             }
 
             # Calculate pricing for this item (will be recalculated when edited)
@@ -5485,6 +5507,61 @@ with tab3:
                 # Clear add-ons if customization is disabled
                 item['customization_addons'] = []
 
+            # KITTING SECTION (per-product)
+            st.markdown("##### Kitting & Packaging")
+            st.caption("Add costs for repackaging, special boxes, or product-specific assembly")
+
+            # Checkbox to enable kitting for this product
+            kitting_enabled = st.checkbox(
+                "Include kitting costs for this product",
+                value=item.get('include_kitting', False),
+                key=f"prod_kitting_enabled_{idx}",
+                help="Add costs for repackaging, special boxes, or product-specific assembly"
+            )
+
+            if kitting_enabled:
+                col_kit1, col_kit2 = st.columns(2)
+
+                with col_kit1:
+                    kitting_pbp = st.number_input(
+                        "Kitting Cost (PBP) ($)",
+                        min_value=0.0,
+                        value=item.get('kitting_pbp_cost', 0.0),
+                        step=5.0,
+                        key=f"prod_kitting_pbp_{idx}",
+                        help="What PBP pays for this product's kitting"
+                    )
+
+                with col_kit2:
+                    kitting_client = st.number_input(
+                        "Kitting Price (Client) ($)",
+                        min_value=0.0,
+                        value=item.get('kitting_client_price', 0.0),
+                        step=5.0,
+                        key=f"prod_kitting_client_{idx}",
+                        help="What client pays for this product's kitting"
+                    )
+
+                # Optional description
+                kitting_desc = st.text_input(
+                    "Description (Optional)",
+                    value=item.get('kitting_description', ''),
+                    key=f"prod_kitting_desc_{idx}",
+                    placeholder="e.g., Premium gift box, Repackaging"
+                )
+
+                # Update order item
+                st.session_state.order_items[idx]['include_kitting'] = True
+                st.session_state.order_items[idx]['kitting_pbp_cost'] = kitting_pbp
+                st.session_state.order_items[idx]['kitting_client_price'] = kitting_client
+                st.session_state.order_items[idx]['kitting_description'] = kitting_desc
+            else:
+                # Reset kitting if unchecked
+                st.session_state.order_items[idx]['include_kitting'] = False
+                st.session_state.order_items[idx]['kitting_pbp_cost'] = 0.0
+                st.session_state.order_items[idx]['kitting_client_price'] = 0.0
+                st.session_state.order_items[idx]['kitting_description'] = ''
+
             # RECALCULATE PRICING
             # Get base price for new quantity
             base_price, tier_range, tier_column = get_unit_price_new_system(product_data, new_quantity)
@@ -5623,6 +5700,22 @@ with tab3:
                         )
                     )
 
+                # Per-product kitting (if applicable)
+                kitting_pbp = item.get('kitting_pbp_cost', 0.0)
+                kitting_client = item.get('kitting_client_price', 0.0)
+                if item.get('include_kitting', False) and (kitting_pbp > 0 or kitting_client > 0):
+                    kitting_desc = item.get('kitting_description', 'Kitting')
+                    breakdown_data.append(
+                        format_pricing_breakdown_row(
+                            f"Kitting: {kitting_desc}",
+                            "one-time",
+                            kitting_pbp,  # PBP per unit (same as total for one-time)
+                            kitting_pbp,  # PBP total
+                            kitting_client,  # Client per unit (same as total for one-time)
+                            kitting_client  # Client total
+                        )
+                    )
+
                 # Create DataFrame with new column structure
                 breakdown_df = pd.DataFrame(
                     breakdown_data,
@@ -5630,9 +5723,11 @@ with tab3:
                 )
                 st.table(breakdown_df)
 
-                # Show totals summary
-                total_pbp_cost = product_pbp_cost + partner_customization_setup_total + partner_customization_unit_total
-                total_client_price = product_total
+                # Show totals summary (include kitting if present)
+                kitting_pbp = item.get('kitting_pbp_cost', 0.0) if item.get('include_kitting', False) else 0.0
+                kitting_client = item.get('kitting_client_price', 0.0) if item.get('include_kitting', False) else 0.0
+                total_pbp_cost = product_pbp_cost + partner_customization_setup_total + partner_customization_unit_total + kitting_pbp
+                total_client_price = product_total + kitting_client
 
                 st.caption(f"**Totals:** PBP Cost: ${total_pbp_cost:.2f} | Client Price: ${total_client_price:.2f} | Margin: ${total_client_price - total_pbp_cost:.2f}")
 
@@ -5866,8 +5961,8 @@ Rates default to current estimates but can be adjusted as needed.
 
         # Kitting & Gift Set Pricing
         st.divider()
-        st.subheader("Kitting & Gift Set Pricing")
-        st.caption("Add costs for gift boxes, custom packaging, or product assembly")
+        st.subheader("Kitting & Gift Set Pricing (Sale-wide)")
+        st.caption("Add costs for gift boxes or packaging that apply to the entire order. For product-specific kitting, see product settings above.")
 
         col1_kitting, col2_kitting = st.columns(2)
 
@@ -5961,7 +6056,12 @@ Rates default to current estimates but can be adjusted as needed.
                             'tariff_info': '',
                             'tariff_base': 0.0,
                             'tariff_amount': 0.0,
-                            'edited_description': ''  # Empty for custom items, they use custom_description
+                            'edited_description': '',  # Empty for custom items, they use custom_description
+                            # Per-product kitting fields
+                            'include_kitting': False,
+                            'kitting_pbp_cost': 0.0,
+                            'kitting_client_price': 0.0,
+                            'kitting_description': ''
                         }
 
                         st.session_state.order_items.append(custom_item)
@@ -5972,85 +6072,71 @@ Rates default to current estimates but can be adjusted as needed.
             st.write(f"**Order Notes** ({filled_notes_count} filled)")
             st.caption("Add important details about this order")
 
-    # Order Notes Section - Always visible text areas in 2-column layout
+    # Order Notes Section - Always visible text areas in 2x2 layout organized by audience
     st.divider()
     st.subheader("Order Notes")
-    st.caption("Capture all important details about this order. These notes will appear in purchase orders and invoices.")
+    st.caption("Organize notes by audience: Internal (stays within PBP) vs External (shared with partners/clients).")
 
-    # First row - 3 fields
-    notes_col1, notes_col2, notes_col3 = st.columns(3)
+    # First row - 2 internal fields
+    notes_col1, notes_col2 = st.columns(2)
 
     with notes_col1:
-        kitting_value = st.session_state.order_notes.get('kitting_specs', '')
-        st.session_state.order_notes['kitting_specs'] = st.text_area(
-            "Kitting Specifications",
-            value=kitting_value,
-            placeholder="Box size, packaging requirements, assembly instructions...",
-            height=100,
-            key="kitting_specs_input",
-            help="Details about gift sets, packaging, and assembly"
+        internal_team_value = st.session_state.order_notes.get('internal_pbp_team', '')
+        st.session_state.order_notes['internal_pbp_team'] = st.text_area(
+            "Internal Notes (For PBP Team)",
+            value=internal_team_value,
+            placeholder="Rush order - coordinate with warehouse. Contact Jim for priority handling.",
+            height=120,
+            key="internal_pbp_team_input",
+            help="Team coordination, workflow notes, internal reminders"
         )
-        if kitting_value:
-            word_count = len(kitting_value.split())
+        if internal_team_value:
+            word_count = len(internal_team_value.split())
             st.caption(f"{word_count} words")
 
     with notes_col2:
-        client_value = st.session_state.order_notes.get('client_requests', '')
-        st.session_state.order_notes['client_requests'] = st.text_area(
-            "Client Requests",
-            value=client_value,
-            placeholder="Rush delivery, special handling, specific requirements...",
-            height=100,
-            key="client_requests_input",
-            help="Special requests or requirements from the client"
+        internal_bookkeeping_value = st.session_state.order_notes.get('internal_bookkeeping', '')
+        st.session_state.order_notes['internal_bookkeeping'] = st.text_area(
+            "Internal Notes (For Bookkeeping)",
+            value=internal_bookkeeping_value,
+            placeholder="Net 30 terms, send invoice after PO approval. Track against Q1 budget.",
+            height=120,
+            key="internal_bookkeeping_input",
+            help="Accounting, billing, payment tracking"
         )
-        if client_value:
-            word_count = len(client_value.split())
+        if internal_bookkeeping_value:
+            word_count = len(internal_bookkeeping_value.split())
             st.caption(f"{word_count} words")
+
+    # Second row - 2 external fields
+    notes_col3, notes_col4 = st.columns(2)
 
     with notes_col3:
-        samples_value = st.session_state.order_notes.get('addon_samples', '')
-        st.session_state.order_notes['addon_samples'] = st.text_area(
-            "Samples Required",
-            value=samples_value,
-            placeholder="Executive samples, approval samples, extra units...",
-            height=100,
-            key="addon_samples_input",
-            help="Sample products needed for this order"
+        external_partners_value = st.session_state.order_notes.get('external_partners', '')
+        st.session_state.order_notes['external_partners'] = st.text_area(
+            "External Notes (For Partners/POs)",
+            value=external_partners_value,
+            placeholder="Kitting required: gift box with ribbon. Include branded tissue paper. Ship to warehouse by 3/15.",
+            height=120,
+            key="external_partners_input",
+            help="Instructions for partners, PO details, shipping requirements"
         )
-        if samples_value:
-            word_count = len(samples_value.split())
+        if external_partners_value:
+            word_count = len(external_partners_value.split())
             st.caption(f"{word_count} words")
-
-    # Second row - 2 fields
-    notes_col4, notes_col5 = st.columns(2)
 
     with notes_col4:
-        artwork_value = st.session_state.order_notes.get('artwork_attachments', '')
-        st.session_state.order_notes['artwork_attachments'] = st.text_area(
-            "Artwork Details",
-            value=artwork_value,
-            placeholder="Logo files, design specifications, brand guidelines, file names...",
-            height=100,
-            key="artwork_attachments_input",
-            help="Logo placement, design requirements, branding information"
+        external_clients_value = st.session_state.order_notes.get('external_clients', '')
+        st.session_state.order_notes['external_clients'] = st.text_area(
+            "External Notes (For Clients/Invoices)",
+            value=external_clients_value,
+            placeholder="Dropship directly to client. Include care instructions card with each unit.",
+            height=120,
+            key="external_clients_input",
+            help="Client-facing information, special requests, delivery instructions"
         )
-        if artwork_value:
-            word_count = len(artwork_value.split())
-            st.caption(f"{word_count} words")
-
-    with notes_col5:
-        general_value = st.session_state.order_notes.get('general_notes', '')
-        st.session_state.order_notes['general_notes'] = st.text_area(
-            "General Notes",
-            value=general_value,
-            placeholder="Any other important information about this order...",
-            height=100,
-            key="general_notes_input",
-            help="Catch-all for any other notes or details"
-        )
-        if general_value:
-            word_count = len(general_value.split())
+        if external_clients_value:
+            word_count = len(external_clients_value.split())
             st.caption(f"{word_count} words")
 
     # Use session state values for calculations
@@ -6100,9 +6186,25 @@ Rates default to current estimates but can be adjusted as needed.
         # Get sales tax amount
         sales_tax = st.session_state.sales_tax
 
-        # Get kitting costs
-        kitting_pbp = st.session_state.kitting_pbp_cost
-        kitting_client = st.session_state.kitting_client_price
+        # Calculate total kitting: global + per-product
+        global_kitting_pbp = st.session_state.kitting_pbp_cost
+        global_kitting_client = st.session_state.kitting_client_price
+
+        # Sum per-product kitting
+        per_product_kitting_pbp = 0.0
+        per_product_kitting_client = 0.0
+        for item in st.session_state.order_items:
+            if item.get('include_kitting', False):
+                per_product_kitting_pbp += item.get('kitting_pbp_cost', 0.0)
+                per_product_kitting_client += item.get('kitting_client_price', 0.0)
+
+        # Total kitting = global + per-product
+        total_kitting_pbp = global_kitting_pbp + per_product_kitting_pbp
+        total_kitting_client = global_kitting_client + per_product_kitting_client
+
+        # Get kitting costs (for backward compatibility with variable names below)
+        kitting_pbp = total_kitting_pbp
+        kitting_client = total_kitting_client
 
         # Calculate base total before CC fee
         total_before_cc = subtotal_after_discount + shipping + sales_tax + kitting_client + tariff
@@ -6144,11 +6246,23 @@ Rates default to current estimates but can be adjusted as needed.
             # Regular product: show base product with product name
             product_pbp_cost = item.get('product_subtotal', 0)
             product_client_price = product_pbp_cost + item.get('markup_amount', 0)
+
+            # Add per-product kitting if included
+            kitting_note = ""
+            if item.get('include_kitting', False):
+                kitting_pbp = item.get('kitting_pbp_cost', 0.0)
+                kitting_client = item.get('kitting_client_price', 0.0)
+                product_pbp_cost += kitting_pbp
+                product_client_price += kitting_client
+                if kitting_client > 0:
+                    kitting_desc = item.get('kitting_description', 'kitting')
+                    kitting_note = f" (includes ${kitting_client:.2f} {kitting_desc})"
+
             product_pbp_per_unit = product_pbp_cost / item['quantity'] if item['quantity'] > 0 else 0
             product_client_per_unit = product_client_price / item['quantity'] if item['quantity'] > 0 else 0
 
             summary_items.append([
-                f"Base Product: {item['product_name']}",
+                f"Base Product: {item['product_name']}{kitting_note}",
                 item['quantity'],
                 f"${product_pbp_per_unit:.2f}",
                 f"${product_pbp_cost:.2f}",
@@ -6238,9 +6352,9 @@ Rates default to current estimates but can be adjusted as needed.
         if sales_tax > 0:
             summary_items.append(["Sales Tax (Estimated)", "", "", "", "", f"${sales_tax:.2f}"])
 
-        # Kitting/Gift Set Assembly (show if either cost > 0)
-        if kitting_pbp > 0 or kitting_client > 0:
-            summary_items.append(["Kitting/Gift Set Assembly", "", "", f"${kitting_pbp:.2f}", "", f"${kitting_client:.2f}"])
+        # Kitting/Gift Set Assembly (Sale-wide) - only show if global kitting > 0
+        if global_kitting_pbp > 0 or global_kitting_client > 0:
+            summary_items.append(["Kitting/Gift Set Assembly (Sale-wide)", "", "", f"${global_kitting_pbp:.2f}", "", f"${global_kitting_client:.2f}"])
 
         # Add tariff for each product (if > 0)
         for item in st.session_state.order_items:
@@ -7341,51 +7455,42 @@ with tab4:
                 )
 
                 if show_notes_form:
-                    st.caption("Add specific details for this order")
+                    st.caption("Add specific details for this order (organized by audience)")
 
-                    st.session_state.order_notes['kitting_specs'] = st.text_area(
-                        "Kitting Specifications",
-                        value=st.session_state.order_notes.get('kitting_specs', ''),
-                        placeholder="Box size, packaging requirements...",
+                    st.session_state.order_notes['internal_pbp_team'] = st.text_area(
+                        "Internal Notes (For PBP Team)",
+                        value=st.session_state.order_notes.get('internal_pbp_team', ''),
+                        placeholder="Rush order - coordinate with warehouse. Contact Jim for priority handling.",
                         height=70,
-                        key="tab3_kitting_specs",
-                        help="Details about how products should be kitted/packaged"
+                        key="tab3_internal_pbp_team",
+                        help="Team coordination, workflow notes, internal reminders"
                     )
 
-                    st.session_state.order_notes['client_requests'] = st.text_area(
-                        "Client Requests",
-                        value=st.session_state.order_notes.get('client_requests', ''),
-                        placeholder="Rush delivery, special handling...",
+                    st.session_state.order_notes['internal_bookkeeping'] = st.text_area(
+                        "Internal Notes (For Bookkeeping)",
+                        value=st.session_state.order_notes.get('internal_bookkeeping', ''),
+                        placeholder="Net 30 terms, send invoice after PO approval. Track against Q1 budget.",
                         height=70,
-                        key="tab3_client_requests",
-                        help="Special requests from the client"
+                        key="tab3_internal_bookkeeping",
+                        help="Accounting, billing, payment tracking"
                     )
 
-                    st.session_state.order_notes['addon_samples'] = st.text_area(
-                        "Add-on Samples",
-                        value=st.session_state.order_notes.get('addon_samples', ''),
-                        placeholder="Extra units, samples for approval...",
+                    st.session_state.order_notes['external_partners'] = st.text_area(
+                        "External Notes (For Partners/POs)",
+                        value=st.session_state.order_notes.get('external_partners', ''),
+                        placeholder="Kitting required: gift box with ribbon. Include branded tissue paper. Ship to warehouse by 3/15.",
                         height=70,
-                        key="tab3_addon_samples",
-                        help="Additional samples to include with order"
+                        key="tab3_external_partners",
+                        help="Instructions for partners, PO details, shipping requirements"
                     )
 
-                    st.session_state.order_notes['artwork_attachments'] = st.text_area(
-                        "Artwork Attachments",
-                        value=st.session_state.order_notes.get('artwork_attachments', ''),
-                        placeholder="logo_final.ai, label_design_v3.pdf...",
+                    st.session_state.order_notes['external_clients'] = st.text_area(
+                        "External Notes (For Clients/Invoices)",
+                        value=st.session_state.order_notes.get('external_clients', ''),
+                        placeholder="Dropship directly to client. Include care instructions card with each unit.",
                         height=70,
-                        key="tab3_artwork_attachments",
-                        help="List of artwork files attached to this order"
-                    )
-
-                    st.session_state.order_notes['general_notes'] = st.text_area(
-                        "General Notes",
-                        value=st.session_state.order_notes.get('general_notes', ''),
-                        placeholder="Any other important details...",
-                        height=70,
-                        key="tab3_general_notes",
-                        help="Catch-all for any other notes or details"
+                        key="tab3_external_clients",
+                        help="Client-facing information, special requests, delivery instructions"
                     )
 
         st.divider()
@@ -7606,6 +7711,17 @@ with tab4:
                 sell_price_total = product_subtotal + markup_amount
                 sell_price_per_unit = sell_price_total / qty if qty > 0 else 0
 
+                # Add per-product kitting if included
+                if item.get('include_kitting', False):
+                    kitting_pbp = item.get('kitting_pbp_cost', 0.0)
+                    kitting_client = item.get('kitting_client_price', 0.0)
+                    partner_cost_total += kitting_pbp
+                    sell_price_total += kitting_client
+
+                    # Append kitting note to specs
+                    kitting_desc = item.get('kitting_description', 'Kitting')
+                    items_specs += f" | {kitting_desc}: +${kitting_client:.2f}"
+
                 # Add base product line
                 invoice_line_items.append({
                     'PARTNER': partner,
@@ -7734,12 +7850,12 @@ with tab4:
                 'TOTAL SELL PRICE': f"${client_shipping_price:.2f}"
             })
 
-        # Add kitting line item (show partner cost vs. client price)
+        # Add kitting line item for sale-wide kitting only (per-product kitting is merged into product rows)
         kitting_pbp_cost = st.session_state.get('kitting_pbp_cost', 0)
         kitting_client_price = st.session_state.get('kitting_client_price', 0)
         if kitting_pbp_cost > 0 or kitting_client_price > 0:
             invoice_line_items.append({
-                'PARTNER': 'Kitting',
+                'PARTNER': 'Kitting (Sale-wide)',
                 'ITEMS + SPECS': 'Gift Set Assembly & Packaging',
                 'QTY': 1,
                 'IN-HANDS from Partner': 'N/A',
@@ -7807,18 +7923,16 @@ with tab4:
 
         order_notes = st.session_state.order_notes
 
-        # Display notes if any are filled
+        # Display all 4 categories with clear section headers
         notes_content = []
-        if order_notes.get('kitting_specs'):
-            notes_content.append(f"**Kitting Specifications:**\n{order_notes['kitting_specs']}")
-        if order_notes.get('client_requests'):
-            notes_content.append(f"**Client Requests:**\n{order_notes['client_requests']}")
-        if order_notes.get('addon_samples'):
-            notes_content.append(f"**Samples Required:**\n{order_notes['addon_samples']}")
-        if order_notes.get('artwork_attachments'):
-            notes_content.append(f"**Artwork Details:**\n{order_notes['artwork_attachments']}")
-        if order_notes.get('general_notes'):
-            notes_content.append(f"**General Notes:**\n{order_notes['general_notes']}")
+        if order_notes.get('internal_pbp_team'):
+            notes_content.append(f"**Internal Notes (For PBP Team):**\n{order_notes['internal_pbp_team']}")
+        if order_notes.get('internal_bookkeeping'):
+            notes_content.append(f"**Internal Notes (For Bookkeeping):**\n{order_notes['internal_bookkeeping']}")
+        if order_notes.get('external_partners'):
+            notes_content.append(f"**External Notes (For Partners/POs):**\n{order_notes['external_partners']}")
+        if order_notes.get('external_clients'):
+            notes_content.append(f"**External Notes (For Clients/Invoices):**\n{order_notes['external_clients']}")
 
         if notes_content:
             for note in notes_content:
