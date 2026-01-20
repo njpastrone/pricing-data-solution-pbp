@@ -1146,6 +1146,94 @@ def get_column_value(row, new_column_name, old_column_name=None, default=None):
     return default
 
 
+# ========== PRODUCT VARIANT HELPERS ==========
+
+def has_variants(product_data):
+    """
+    Check if a product has variants (different colors, flavors, sizes, etc.).
+
+    Args:
+        product_data: DataFrame row or dict containing product information
+
+    Returns:
+        bool: True if product has variants (Has Variants (Y/N) = Y), False otherwise
+
+    Examples:
+        >>> has_variants({'Has Variants (Y/N)': 'Y'})
+        True
+        >>> has_variants({'Has Variants (Y/N)': 'N'})
+        False
+        >>> has_variants({})  # Missing column defaults to N
+        False
+    """
+    has_var = get_column_value(product_data, 'Has Variants (Y/N)', None, 'N')
+    return str(has_var).strip().upper() == 'Y'
+
+
+def parse_variant_types(product_data):
+    """
+    Parse variant types from format (x, y, z) into list ['x', 'y', 'z'].
+    Handles comma-separated values inside parentheses.
+
+    Args:
+        product_data: DataFrame row or dict containing product information
+
+    Returns:
+        list: List of variant type strings, empty list if no variants
+
+    Examples:
+        >>> parse_variant_types({'Variant Type': '(Hot, Elderberry, Rosemary, Creamed)'})
+        ['Hot', 'Elderberry', 'Rosemary', 'Creamed']
+        >>> parse_variant_types({'Variant Type': '(4oz, 8oz, 12oz)'})
+        ['4oz', '8oz', '12oz']
+        >>> parse_variant_types({'Variant Type': ''})
+        []
+        >>> parse_variant_types({})
+        []
+    """
+    variant_str = get_column_value(product_data, 'Variant Type', None, '')
+    if not variant_str:
+        return []
+
+    # Convert to string and strip whitespace
+    variant_str = str(variant_str).strip()
+    if not variant_str:
+        return []
+
+    # Remove parentheses if present
+    if variant_str.startswith('(') and variant_str.endswith(')'):
+        variant_str = variant_str[1:-1]
+
+    # Split by comma and clean each variant
+    variants = [v.strip() for v in variant_str.split(',')]
+
+    # Remove empty strings
+    return [v for v in variants if v]
+
+
+def format_product_with_variant(product_name, variant):
+    """
+    Format product name with variant suffix: 'Product/Service - Variant'.
+
+    Args:
+        product_name (str): Base product name
+        variant (str): Variant type (e.g., 'Hot', '4oz', 'Blue')
+
+    Returns:
+        str: Formatted product name with variant, or base name if no variant
+
+    Examples:
+        >>> format_product_with_variant('9oz Honey', 'Hot')
+        '9oz Honey - Hot'
+        >>> format_product_with_variant('9oz Honey', None)
+        '9oz Honey'
+        >>> format_product_with_variant('9oz Honey', '')
+        '9oz Honey'
+    """
+    if variant:
+        return f"{product_name} - {variant}"
+    return product_name
+
 
 # ========== SPLIT TOTALS CALCULATIONS ==========
 

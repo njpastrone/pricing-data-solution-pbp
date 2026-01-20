@@ -6,7 +6,7 @@
 ### Future: Need option to create an entirely custom product
 ### Under Kitting Costs, need to show whether it's a cost per unit or for the order wholistically.
 ### Need to organize notes into 3 categories: Internal notes, client notes, and partner notes
-### Add column for product type (flavor, color, etc) and update app logic. User has to be able to select.
+### Add column for product type (flavor, color, etc) and update app logic. User has to be able to select. Also add 'customizable?' column
 
 
 ## Other Notes

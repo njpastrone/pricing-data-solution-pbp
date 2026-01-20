@@ -2612,6 +2612,23 @@ with tab1:
                         st.markdown("—")
 
                 with col5:
+                    # Check if product has variants
+                    from src.helpers import has_variants, parse_variant_types
+                    product_has_variants = has_variants(product_data)
+                    variant_types = parse_variant_types(product_data) if product_has_variants else []
+
+                    # Variant selector (if product has variants)
+                    selected_variant = None
+                    if product_has_variants and variant_types:
+                        selected_variant = st.selectbox(
+                            "Select variant:",
+                            options=[''] + variant_types,  # Empty option first
+                            key=f"variant_{idx}",
+                            label_visibility="collapsed"
+                        )
+                        if not selected_variant:
+                            st.caption("⚠️ Variant recommended")
+
                     # Add button - adds product to proposal with MSRP or 100% markup
                     if st.button("Add to Proposal", key=f"add_{idx}", use_container_width=True, type="primary"):
                         # Determine markup: use MSRP if enabled, otherwise default from spreadsheet
@@ -2622,13 +2639,18 @@ with tab1:
 
                         proposal_item = {
                             'product_data': product_data.to_dict(),
-                            'markup_percent': markup
+                            'markup_percent': markup,
+                            'selected_variant': selected_variant if selected_variant else None
                         }
                         st.session_state.proposal_products.append(proposal_item)
 
-                        # Set success message
+                        # Set success message (include variant in product name if applicable)
+                        from src.helpers import format_product_with_variant
                         st.session_state.show_success_message = True
-                        st.session_state.success_product_name = product_data['Product/Service']
+                        st.session_state.success_product_name = format_product_with_variant(
+                            product_data['Product/Service'],
+                            selected_variant
+                        )
 
                         # Keep catalog expanded after adding product
                         st.session_state.keep_catalog_expanded = True
@@ -2961,7 +2983,13 @@ with tab1:
             col1, col2, col3, col4, col5, col6 = st.columns([3, 1.2, 1.2, 1.2, 1.2, 0.8])
 
             with col1:
-                st.markdown(f"{product_data['Product/Service']}")
+                # Display product name with variant (if applicable)
+                from src.helpers import format_product_with_variant
+                product_display_name = format_product_with_variant(
+                    product_data['Product/Service'],
+                    item.get('selected_variant')
+                )
+                st.markdown(f"{product_display_name}")
                 st.caption(f"Partner: {product_data['Partner']}")
 
             with col2:
@@ -4798,6 +4826,29 @@ with tab3:
             available_products = df_template[df_template["Partner"] == selected_partner]["Product/Service"].unique().tolist()
             selected_product = st.selectbox("Select Product/Service", available_products, key="add_product_select")
 
+    # Check if selected product has variants
+    from src.helpers import has_variants, parse_variant_types
+    selected_product_data = df_template[
+        (df_template["Partner"] == selected_partner) &
+        (df_template["Product/Service"] == selected_product)
+    ].iloc[0] if selected_product else None
+
+    product_has_variants = has_variants(selected_product_data) if selected_product_data is not None else False
+    variant_types = parse_variant_types(selected_product_data) if product_has_variants else []
+
+    # Variant selector (if product has variants)
+    selected_variant_manual = None
+    if product_has_variants and variant_types:
+        col_var = st.columns([2, 1, 1])[0]  # Match layout
+        with col_var:
+            selected_variant_manual = st.selectbox(
+                "Select Variant:",
+                options=[''] + variant_types,  # Empty option first
+                key="manual_variant_select"
+            )
+            if not selected_variant_manual:
+                st.caption("⚠️ Variant recommended but not required")
+
     with col2:
         st.write("")  # Spacing
         st.session_state.order_use_msrp = st.checkbox(
@@ -4836,6 +4887,7 @@ with tab3:
                 'product_data': product_data.to_dict(),
                 'quantity': 1,
                 'markup_percent': markup,
+                'selected_variant': selected_variant_manual if selected_variant_manual else None,
                 'include_customization': False,
                 'customization_setup_fee': float(default_setup_fee),
                 'customization_per_unit': float(default_per_unit),
@@ -4877,9 +4929,13 @@ with tab3:
                 if pbp_shipping_cost > 0 and st.session_state.partner_shipping == 0:
                     st.session_state.partner_shipping = pbp_shipping_cost
 
-                # Set success message for deferred toast
+                # Set success message for deferred toast (include variant if applicable)
+                from src.helpers import format_product_with_variant
                 st.session_state.show_add_to_order_success = True
-                st.session_state.add_to_order_product_name = product_data.get('Product/Service', 'product')
+                st.session_state.add_to_order_product_name = format_product_with_variant(
+                    product_data.get('Product/Service', 'product'),
+                    selected_variant_manual
+                )
                 st.rerun()
             else:
                 st.error("Could not determine pricing for this product")
@@ -4958,7 +5014,13 @@ with tab3:
             # Header with product name and remove button
             col_header, col_remove = st.columns([5, 1])
             with col_header:
-                st.subheader(f"{item['product_name']}")
+                # Display product name with variant (if applicable)
+                from src.helpers import format_product_with_variant
+                product_display_name = format_product_with_variant(
+                    item['product_name'],
+                    item.get('selected_variant')
+                )
+                st.subheader(f"{product_display_name}")
                 st.caption(f"Partner: {item['partner']} | Origin: {item.get('country_of_origin', 'N/A')}")
             with col_remove:
                 if st.button("Remove", key=f"remove_product_{idx}", type="secondary"):

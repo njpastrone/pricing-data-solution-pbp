@@ -6,9 +6,45 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### 🚧 In Progress (Week 2 Sprint - Jan 2026)
-- Tab 3 Option B toast notification
-- Execution form updates (New/Existing checkbox + MM/DD/YY dates)
+- Tab 3 Option B variant preservation when importing from proposals
+- Tab 4 variant display in invoice/PO tables
+- Saved proposals/orders variant persistence
 - Customization Add-On feature for product editing
+- Execution form updates (New/Existing checkbox + MM/DD/YY dates)
+
+---
+
+## [7.5.0] - 2026-01-20
+
+### Added
+- **Product Variant Support** - Full schema update to support product variants (colors, flavors, sizes, etc.)
+  - Added 2 new columns to schema: "Has Variants (Y/N)" and "Variant Type" (36 total columns, was 34)
+  - **Tab 1 (Proposal Generator):**
+    - Variant selector dropdown appears for products with variants
+    - Warning shown if variant not selected (but still allows add)
+    - Displays products as "Product/Service - Variant" format throughout
+  - **Tab 3 (Order & Client Info):**
+    - Manual product selection (Option C) includes variant selector
+    - Current Order display shows product names with variant suffix
+    - Variant data stored with each order item
+  - **New helper functions in src/helpers.py:**
+    - `has_variants()` - Checks if product has variants (Y/N flag)
+    - `parse_variant_types()` - Parses variant list from "(x, y, z)" format
+    - `format_product_with_variant()` - Formats display name as "Product - Variant"
+- **Schema documentation updated** - Added variant columns to schema_reference.md with format examples
+- **Backward compatibility** - Works with spreadsheets that don't have variant columns (defaults to N)
+
+### Changed
+- **Product display format** - All product names now show variant when applicable: "9oz Honey - Hot"
+- **Variant consolidation support** - Products with same pricing can be consolidated into single row with variant list
+  - Example: Instead of 4 separate rows (9oz Hot Honey, 9oz Elderberry Honey, etc.), use 1 row with Variant Type = "(Hot, Elderberry, Rosemary, Creamed)"
+- **Proposal items structure** - Now includes `selected_variant` field (None if no variant selected)
+- **Order items structure** - Now includes `selected_variant` field (None if no variant selected)
+
+### Notes
+- Future data migration: Will consolidate variant products into single rows with variant lists
+- App supports BOTH old format (separate product rows) and new format (variants in one row) simultaneously
+- PowerPoint generation already has multi-variant support (v6.13) - will work with new variant format
 
 ---
 

@@ -57,6 +57,8 @@ This document defines the canonical data schemas for Peace by Piece Internationa
 | 32 | Tariff Estimate ($) | Currency | Estimated tariff amount in dollars | |
 | 33 | Tariff Estimate (%) | Percentage | Estimated tariff as percentage of cost | Format: decimal (e.g., 10%) |
 | 34 | Tariff Info | Text | Notes on tariff classification or source | |
+| 35 | Has Variants (Y/N) | Text | Whether product has variants (colors, flavors, sizes, etc.) | Y or N, default N if blank |
+| 36 | Variant Type | Text | Available variant options for this product | Format: (x, y, z) - comma-separated in parentheses |
 
 ---
 
@@ -64,6 +66,7 @@ This document defines the canonical data schemas for Peace by Piece Internationa
 
 | Date | Change | Updated By |
 |------|--------|------------|
+| 01/20/2026 | Added "Has Variants (Y/N)" and "Variant Type" columns for product variant support. Total columns: 36 (was 34) | |
 | 01/19/2026 | Disaggregated MOQ into 4 columns: MOQ (Partner), MOV (Partner), MOQ (PBP), MOV (PBP). Total columns: 34 (was 31) | |
 | 01/14/2026 | Split "Country of Origin" into two columns: "Country of Origin (Made In)" and "Country of Origin (Ships From)" | |
 | 12/22/2025 | Standardized schema across all three pricing spreadsheets | |
@@ -81,3 +84,7 @@ This document defines the canonical data schemas for Peace by Piece Internationa
 ## Notes
 
 - Date format standard: MM/DD/YYYY
+- **Variant Type Format:** List variant options in parentheses, comma-separated: `(Hot, Elderberry, Rosemary, Creamed)`
+- **Product Consolidation:** Products with identical pricing can be consolidated into one row with variants instead of separate rows per variant
+- **Example:** Instead of 4 rows (9oz Hot Honey, 9oz Elderberry Honey, 9oz Rosemary Honey, 9oz Creamed Honey), use 1 row: Product = "9oz Honey", Variant Type = "(Hot, Elderberry, Rosemary, Creamed)"
+- **Display Format:** App displays products with variants as "Product/Service - Variant" (e.g., "9oz Honey - Hot")
