@@ -54,10 +54,6 @@ def calculate_proposal_pricing(proposal_item: Dict, get_unit_price_func, marketi
     product_row = pd.Series(proposal_item['product_data'])
     markup_percent = proposal_item['markup_percent']
 
-    # DEBUG: Verify markup values are being passed correctly
-    product_name = proposal_item['product_data'].get('Product/Service', 'Unknown')
-    print(f"🔍 DEBUG: Product '{product_name}' - Using markup {markup_percent}%")
-
     # Calculate MOQ using standard preliminary quantity (100 units)
     preliminary_base_price, _, _ = get_unit_price_func(product_row, 100)
 

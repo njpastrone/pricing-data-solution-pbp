@@ -766,6 +766,12 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         'partner_msrp_per_unit': proposal_item.get('msrp_value', 0.0) if proposal_item.get('show_msrp', False) else 0.0,
         'show_msrp_comparison': proposal_item.get('show_msrp', False),
 
+        # Per-product kitting fields
+        'include_kitting': False,
+        'kitting_pbp_cost': 0.0,
+        'kitting_client_price': 0.0,
+        'kitting_description': '',
+
         # Metadata
         'minimum_qty': '',  # Not in new structure
         'source': 'proposal',  # Track that this came from proposal
