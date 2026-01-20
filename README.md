@@ -3,15 +3,16 @@
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
 **Current Status:** ✅ **IN PRODUCTION** - https://pricing-data-solution-pbp.onrender.com
-**Version:** 7.3.0 - Active Development (Week 2 Sprint)
-**Development Sprint:** 16 of 19 features complete (84%)
+**Version:** 7.6.0-dev - Google Forms Integration Complete
+**Development Sprint:** 17 of 19 features complete (89%)
 **Data Status:** Partial partner data loaded (collecting remaining partners)
 
-## 📋 Active Development
-- **Current Focus:** Week 2 Sprint - New Feature Implementation
+## 📋 Recent Development
+- **Latest Feature:** Google Forms Integration - Modern client order collection workflow
+- **Status:** Complete and production-ready ✅
 - **Active Tasks:** [ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md)
 - **Requirements:** [docs/meetings/STAKEHOLDER_MEETING_NOTES.md](docs/meetings/STAKEHOLDER_MEETING_NOTES.md)
-- **Week 2 Progress:** 3 of 6 features complete (Tab 3 pricing, terminology, directory cleanup)
+- **New Modules:** `src/forms_config.py` + `src/forms_helper.py` (~600 lines)
 
 ---
 
@@ -55,7 +56,10 @@ pricing-data-solution-pbp/
 │   │   ├── PLANNING.md        # Project requirements & goals
 │   │   ├── RESTRUCTURE_CONTEXT.md # Data structure reference
 │   │   ├── METHODOLOGY_LOGIC.md   # Pricing calculations & business rules
-│   │   └── INVOICE_AND_PROPOSAL_SPEC.md # Invoice/PO format
+│   │   ├── INVOICE_AND_PROPOSAL_SPEC.md # Invoice/PO format
+│   │   ├── GOOGLE_FORMS_IMPLEMENTATION_COMPLETE.md # Google Forms guide (v7.6)
+│   │   ├── GOOGLE_FORM_CREATION_GUIDE.md # Form creation steps (v7.6)
+│   │   └── GOOGLE_FORMS_PREFILLED_WORKFLOW.md # Workflow analysis (v7.6)
 │   ├── powerpoint/            # PowerPoint automation documentation
 │   │   ├── PHASE_2_COMPLETION_SUMMARY.md # Production-ready summary
 │   │   └── PHASE_1_COMPLETION_SUMMARY.md # Technical deep dive
@@ -74,7 +78,7 @@ pricing-data-solution-pbp/
 │   ├── SESSION_STATE_AUDIT.md # Session state management
 │   └── CODE_SIMPLIFICATION_AGENT.md # Code cleanup process
 │
-├── src/                        # Modular code (10 modules, ~4,918 lines)
+├── src/                        # Modular code (12 modules, ~5,518 lines)
 │   ├── data_loader.py         # Google Sheets data loading
 │   ├── helpers.py             # Utility functions
 │   ├── pricing_engine.py      # Pricing calculations
@@ -84,7 +88,9 @@ pricing-data-solution-pbp/
 │   ├── match_manager.py       # Manual match storage (JSON)
 │   ├── match_memory.py        # Confirmed match storage (Google Sheets)
 │   ├── proposal_manager.py    # Save/load/delete proposals
-│   └── order_manager.py       # Save/load/delete orders
+│   ├── order_manager.py       # Save/load/delete orders
+│   ├── forms_config.py        # Google Forms configuration (NEW v7.6)
+│   └── forms_helper.py        # Google Forms URL generation & import (NEW v7.6)
 │
 ├── scripts/                    # Utility scripts (organized, 26 files)
 │   ├── core/                  # Essential core functionality (2 files)
@@ -128,19 +134,25 @@ pricing-data-solution-pbp/
 - **CSV Downloads:** Export proposal tables
 
 #### Tab 2: Client Order Form Generator
-- **Order Details:** Pre-fill client information (type, company, contact, email)
-- **Form Template Customization:** Edit any template text with dropdown selector
-  - 8 customizable fields (instructions, dropshipping, placeholders, options)
-  - Real-time updates to generated form
-- **Professional HTML Forms:** Email-ready order forms with styled tables
-- **Multiple Formats:** Download as HTML, TXT, or CSV
+- **Section 1: Client Information** - Pre-fill client details (type, company, contact, email, phone)
+- **Section 2: Generate Google Form (NEW! RECOMMENDED)** - Modern workflow
+  - **Pre-filled URL Generation:** Populate form with proposal products and client info
+  - **Product Selection:** Choose up to 10 products from proposal, adjust quantities
+  - **One-Click Generation:** Copy URL and send to client
+  - **Client Experience:** Professional Google Form → Auto-saves to Google Sheets
+  - **Benefits:** 50-70% faster than HTML, better UX, automatic tracking
+- **Section 3: HTML Order Form (Alternative)** - Legacy workflow
+  - **Form Template Customization:** Edit any template text with dropdown selector
+  - **Professional HTML Forms:** Email-ready order forms with styled tables
+  - **Multiple Formats:** Download as HTML, TXT, or CSV
 
 #### Tab 3: Order & Client Info (main workflow)
 - **Saved Orders:** Save and load orders across sessions (cloud-persistent)
-- **3 Entry Points:**
-  - Option A: Import completed HTML order forms (recommended)
-  - Option B: Import products from Tab 1 proposals
-  - Option C: Manual product selection with MSRP pricing
+- **4 Entry Points:**
+  - Option A: Import Google Form responses (NEW! RECOMMENDED) - Load from Google Sheets
+  - Option B: Import completed HTML order forms (alternative)
+  - Option C: Import products from Tab 1 proposals
+  - Option D: Manual product selection with MSRP pricing
 - **Multi-Product Ordering:** Add multiple products with add-to-cart pattern
 - **Per-Product Markup:** Configure individual markup percentages
 - **Tiered & Flat-Rate Pricing:** Flexible pricing models per product
