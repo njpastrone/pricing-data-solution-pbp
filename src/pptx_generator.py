@@ -46,8 +46,17 @@ def calculate_proposal_pricing(proposal_item: Dict, get_unit_price_func, marketi
 
     Returns dict with: moq, moq_price_per_unit, client_price, delivery_time, customization_setup_fee, customization_per_unit
     """
+    # Use settings snapshot if available (for consistency)
+    if 'settings_snapshot' in proposal_item:
+        marketing_rounding = proposal_item['settings_snapshot']['marketing_rounding']
+        discount_percent = proposal_item['settings_snapshot']['discount_percent']
+
     product_row = pd.Series(proposal_item['product_data'])
     markup_percent = proposal_item['markup_percent']
+
+    # DEBUG: Verify markup values are being passed correctly
+    product_name = proposal_item['product_data'].get('Product/Service', 'Unknown')
+    print(f"🔍 DEBUG: Product '{product_name}' - Using markup {markup_percent}%")
 
     # Calculate MOQ using standard preliminary quantity (100 units)
     preliminary_base_price, _, _ = get_unit_price_func(product_row, 100)

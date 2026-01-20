@@ -1748,6 +1748,23 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
             for product in pending_confirmations:
                 st.markdown(f"- {product}")
     else:
+        # DEBUG: Show current proposal state in sidebar
+        with st.sidebar.expander("🔍 DEBUG: Current Proposal State", expanded=False):
+            st.write("Marketing rounding:", st.session_state.get('proposal_marketing_rounding', False))
+            st.write("Discount percent:", st.session_state.get('proposal_discount_percent', 0.0))
+            st.write("Products:")
+            for i, item in enumerate(st.session_state.get('proposal_products', [])):
+                product_name = item['product_data'].get('Product/Service', 'Unknown')
+                markup = item['markup_percent']
+                st.write(f"  {i+1}. {product_name}: {markup}%")
+
+        # Ensure all pricing edits are finalized before PowerPoint generation
+        if st.session_state.get('proposal_pricing_pending_finalization', False):
+            # First detection - clear flag and force rerun to ensure state is persisted
+            st.session_state.proposal_pricing_pending_finalization = False
+            st.info("⏳ Finalizing pricing changes...")
+            st.rerun()
+
         # Build final confirmed matches dict
         confirmed_matches = {}
 
@@ -1808,8 +1825,8 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                         pricing_data = calculate_proposal_pricing(
                             proposal_item,
                             get_unit_price_new_system,
-                            st.session_state.get('marketing_rounding', False),
-                            st.session_state.get('discount_percent', 0)
+                            st.session_state.get('proposal_marketing_rounding', False),
+                            st.session_state.get('proposal_discount_percent', 0.0)
                         )
                         if pricing_data:
                             pricing_data_list.append(pricing_data)
@@ -2442,6 +2459,7 @@ with tab1:
                 if new_count_all > 0:
                     if st.button(f"Add All {new_count_all}", type="secondary", use_container_width=True, key="add_all_products_button"):
                         # Add all new products to proposal with MSRP or 100% markup
+                        from src.helpers import calculate_pricing_snapshot
                         for product_row in new_products_all:
                             # Determine markup: use MSRP if enabled, otherwise default from spreadsheet
                             if st.session_state.proposal_use_msrp:
@@ -2449,9 +2467,20 @@ with tab1:
                             else:
                                 markup = get_default_markup(product_row.to_dict())
 
+                            # Calculate pricing snapshot to preserve pricing when importing to orders
+                            pricing_snapshot = calculate_pricing_snapshot(
+                                product_row,
+                                markup,
+                                quantity=100,  # Default for MOQ calculation
+                                discount_percent=st.session_state.get('proposal_discount_percent', 0.0),
+                                marketing_rounding=st.session_state.proposal_marketing_rounding,
+                                fifty_cent_rounding=st.session_state.proposal_fifty_cent_rounding
+                            )
+
                             proposal_item = {
                                 'product_data': product_row.to_dict(),
-                                'markup_percent': markup
+                                'markup_percent': markup,
+                                'pricing_snapshot': pricing_snapshot
                             }
                             st.session_state.proposal_products.append(proposal_item)
 
@@ -2507,6 +2536,7 @@ with tab1:
                     if new_count > 0:
                         if st.button(f"Add {new_count} Products", type="primary", use_container_width=True, key="bulk_add_button"):
                             # Add all new products to proposal with MSRP or 100% markup
+                            from src.helpers import calculate_pricing_snapshot
                             for product_row in new_products:
                                 # Determine markup: use MSRP if enabled, otherwise default from spreadsheet
                                 if st.session_state.proposal_use_msrp:
@@ -2514,9 +2544,20 @@ with tab1:
                                 else:
                                     markup = get_default_markup(product_row.to_dict())
 
+                                # Calculate pricing snapshot to preserve pricing when importing to orders
+                                pricing_snapshot = calculate_pricing_snapshot(
+                                    product_row,
+                                    markup,
+                                    quantity=100,  # Default for MOQ calculation
+                                    discount_percent=st.session_state.get('proposal_discount_percent', 0.0),
+                                    marketing_rounding=st.session_state.proposal_marketing_rounding,
+                                    fifty_cent_rounding=st.session_state.proposal_fifty_cent_rounding
+                                )
+
                                 proposal_item = {
                                     'product_data': product_row.to_dict(),
-                                    'markup_percent': markup
+                                    'markup_percent': markup,
+                                    'pricing_snapshot': pricing_snapshot
                                 }
                                 st.session_state.proposal_products.append(proposal_item)
 
@@ -2637,10 +2678,22 @@ with tab1:
                         else:
                             markup = get_default_markup(product_data.to_dict())
 
+                        # Calculate pricing snapshot to preserve pricing when importing to orders
+                        from src.helpers import calculate_pricing_snapshot
+                        pricing_snapshot = calculate_pricing_snapshot(
+                            product_data,
+                            markup,
+                            quantity=100,  # Default for MOQ calculation
+                            discount_percent=st.session_state.get('proposal_discount_percent', 0.0),
+                            marketing_rounding=st.session_state.proposal_marketing_rounding,
+                            fifty_cent_rounding=st.session_state.proposal_fifty_cent_rounding
+                        )
+
                         proposal_item = {
                             'product_data': product_data.to_dict(),
                             'markup_percent': markup,
-                            'selected_variant': selected_variant if selected_variant else None
+                            'selected_variant': selected_variant if selected_variant else None,
+                            'pricing_snapshot': pricing_snapshot
                         }
                         st.session_state.proposal_products.append(proposal_item)
 
@@ -3014,6 +3067,13 @@ with tab1:
                     st.session_state.proposal_products[idx]['markup_percent'] = new_markup
                     # Set flag to prevent circular updates
                     st.session_state[f'updating_from_markup_{idx}'] = True
+                    # Mark that pricing state has pending changes
+                    st.session_state.proposal_pricing_pending_finalization = True
+                    # Store current settings with this product
+                    st.session_state.proposal_products[idx]['settings_snapshot'] = {
+                        'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
+                        'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                    }
 
             with col4:
                 # Editable client price field
@@ -3039,6 +3099,13 @@ with tab1:
                             # Calculate new markup from the price
                             new_markup_calc = calculate_markup_from_price(base_cost, new_price)
                             st.session_state.proposal_products[idx]['markup_percent'] = new_markup_calc
+                            # Mark that pricing state has pending changes
+                            st.session_state.proposal_pricing_pending_finalization = True
+                            # Store current settings with this product
+                            st.session_state.proposal_products[idx]['settings_snapshot'] = {
+                                'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
+                                'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                            }
                             st.rerun()
                 else:
                     st.markdown("—")
@@ -5029,6 +5096,12 @@ with tab3:
                 )
                 st.subheader(f"{product_display_name}")
                 st.caption(f"Partner: {item['partner']} | Origin: {item.get('country_of_origin', 'N/A')}")
+
+                # Show price source indicator (pricing snapshot vs. recalculated)
+                if item.get('from_proposal_snapshot'):
+                    st.caption("✓ Pricing preserved from proposal (saved configuration)")
+                elif item.get('source') == 'proposal':
+                    st.caption("⚠️ Pricing recalculated from current spreadsheet")
             with col_remove:
                 if st.button("Remove", key=f"remove_product_{idx}", type="secondary"):
                     st.session_state.order_items.pop(idx)
