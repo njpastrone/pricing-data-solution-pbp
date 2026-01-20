@@ -4747,8 +4747,15 @@ with tab3:
                 col1, col2 = st.columns([4, 1])
 
                 with col1:
+                    # Display product name with variant (if applicable)
+                    from src.helpers import format_product_with_variant
+                    product_display_name = format_product_with_variant(
+                        product_data.get('Product/Service', 'Unknown Product'),
+                        prop_item.get('selected_variant')
+                    )
+
                     is_selected = st.checkbox(
-                        f"{product_data.get('Product/Service', 'Unknown Product')} - {product_data.get('Partner', 'N/A')}",
+                        f"{product_display_name} - {product_data.get('Partner', 'N/A')}",
                         key=f"select_proposal_{idx}"
                     )
 
@@ -7492,7 +7499,13 @@ with tab4:
             else:
                 # Regular product
                 partner = item['partner']
-                product_name = item['product_name']
+
+                # Display product name with variant (if applicable)
+                from src.helpers import format_product_with_variant
+                product_name = format_product_with_variant(
+                    item['product_name'],
+                    item.get('selected_variant')
+                )
 
                 # Use edited description if available, otherwise use product name
                 edited_desc = item.get('edited_description', '')

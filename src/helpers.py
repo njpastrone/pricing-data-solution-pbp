@@ -657,12 +657,34 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
     """
     product_data = proposal_item.get('product_data', {})
 
-    # PRESERVE: Quantity and markup from proposal
-    quantity = proposal_item.get('quantity', 1)
-    markup_percent = proposal_item.get('markup_percent', 100.0)
+    # Check for pricing snapshot (new feature for preserved pricing)
+    pricing_snapshot = proposal_item.get('pricing_snapshot')
 
-    # Get base price for this quantity
-    base_price_per_unit, tier_info, tier_num = get_unit_price_func(product_data, quantity)
+    if pricing_snapshot:
+        # USE PRESERVED PRICING from proposal snapshot
+        quantity = pricing_snapshot['quantity']
+        markup_percent = proposal_item['markup_percent']
+        base_price_per_unit = pricing_snapshot['base_price_per_unit']
+        tier_info = pricing_snapshot['tier_range']
+        tier_num_str = pricing_snapshot['tier_column']
+        # Extract tier number from string (e.g., "T3" -> 3)
+        if tier_num_str and tier_num_str.startswith('T'):
+            try:
+                tier_num = int(tier_num_str[1:])
+            except (ValueError, IndexError):
+                tier_num = None
+        else:
+            tier_num = None
+        selected_variant = proposal_item.get('selected_variant', None)
+        from_snapshot = True
+    else:
+        # FALLBACK: Recalculate from spreadsheet (old behavior for backward compatibility)
+        quantity = proposal_item.get('quantity', 1)
+        markup_percent = proposal_item.get('markup_percent', 100.0)
+        selected_variant = proposal_item.get('selected_variant', None)
+        # Get base price for this quantity
+        base_price_per_unit, tier_info, tier_num = get_unit_price_func(product_data, quantity)
+        from_snapshot = False
 
     # RESET: Customization settings to defaults (user will configure in order)
     customization_setup_total = 0.0
@@ -693,6 +715,7 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
     order_item = {
         # Product identification
         'product_name': product_data.get('Product/Service', 'Unknown Product'),
+        'selected_variant': selected_variant,  # PRESERVE variant from proposal
         'product_ref': product_data.get('Purchase Description', ''),
         'partner': product_data.get('Partner', 'Unknown Partner'),
         'product_data': product_data,  # Store full product row for inline editing
@@ -746,6 +769,7 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         # Metadata
         'minimum_qty': '',  # Not in new structure
         'source': 'proposal',  # Track that this came from proposal
+        'from_proposal_snapshot': from_snapshot,  # Track price source (snapshot vs. recalculated)
 
         # Order fulfillment (to be filled in Tab 2 if needed)
         'partner_in_hands_date': '',
@@ -757,6 +781,132 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
     }
 
     return order_item
+
+
+def calculate_pricing_snapshot(product_data, markup_percent, quantity=100, discount_percent=0.0,
+                               marketing_rounding=True, fifty_cent_rounding=True, get_unit_price_func=None):
+    """
+    Calculate and return pricing snapshot when adding products to proposals.
+
+    This captures all pricing decisions at the moment of proposal creation,
+    ensuring that when imported to orders, we use the exact pricing configured in Tab 1.
+
+    Args:
+        product_data (dict or pd.Series): Product row data from spreadsheet
+        markup_percent (float): Markup percentage to apply (e.g., 100.0 for 100%)
+        quantity (int): Preliminary quantity for MOQ calculation (default: 100)
+        discount_percent (float): Discount percentage to apply (default: 0.0)
+        marketing_rounding (bool): Whether to apply charm pricing (default: True)
+        fifty_cent_rounding (bool): Whether to apply $0.50 rounding (default: True)
+        get_unit_price_func (callable): Function to get unit price (default: None, will import)
+
+    Returns:
+        dict: Pricing snapshot with keys:
+            - quantity (int): Quantity used for MOQ calculation
+            - moq (int): Calculated MOQ
+            - base_price_per_unit (float): PBP cost at MOQ quantity
+            - tier_range (str): Tier range (e.g., "51-100" or "No Tiers")
+            - tier_column (str): Tier column (e.g., "T3" or "")
+            - client_price_per_unit (float): Final price shown in proposal table (with markup, discount, rounding)
+            - discount_percent (float): Discount applied
+            - calculated_at (str): ISO timestamp
+
+    Example:
+        >>> from datetime import datetime
+        >>> snapshot = calculate_pricing_snapshot(
+        ...     product_data={'Product/Service': 'Test Product', 'Partner': 'Test Partner'},
+        ...     markup_percent=100.0,
+        ...     quantity=100,
+        ...     discount_percent=5.0,
+        ...     marketing_rounding=True,
+        ...     fifty_cent_rounding=True
+        ... )
+        >>> snapshot['moq']
+        5
+        >>> snapshot['tier_range']
+        '1-50'
+    """
+    from datetime import datetime
+    import pandas as pd
+
+    # Import get_unit_price_new_system if not provided
+    if get_unit_price_func is None:
+        from src.pricing_engine import get_unit_price_new_system
+        get_unit_price_func = get_unit_price_new_system
+
+    # Convert to Series if dict
+    if isinstance(product_data, dict):
+        product_row = pd.Series(product_data)
+    else:
+        product_row = product_data
+
+    # Step 1: Calculate MOQ using standard preliminary quantity
+    preliminary_base_price, _, _ = get_unit_price_func(product_row, quantity)
+
+    if preliminary_base_price is None:
+        # Fallback to safe defaults if price lookup fails
+        return {
+            'quantity': quantity,
+            'moq': 5,
+            'base_price_per_unit': 0.0,
+            'tier_range': 'Unknown',
+            'tier_column': '',
+            'client_price_per_unit': 0.0,
+            'discount_percent': discount_percent,
+            'calculated_at': datetime.now().isoformat()
+        }
+
+    # Estimate total per-unit price with markup
+    temp_markup_multiplier = 1 + (markup_percent / 100)
+    estimated_unit_price = preliminary_base_price * temp_markup_multiplier
+
+    # Calculate MOQ
+    moq_result = calculate_moq(estimated_unit_price, product_row)
+    moq = moq_result['moq']
+    if moq is None:
+        moq = 5  # Fallback default
+
+    # Step 2: Get actual base price for MOQ quantity
+    moq_base_price, moq_tier_range, moq_tier_num = get_unit_price_func(product_row, moq)
+
+    if moq_base_price is None:
+        # Fallback if price lookup fails
+        moq_base_price = preliminary_base_price
+        moq_tier_range = 'Unknown'
+        moq_tier_num = None
+
+    # Step 3: Calculate product price WITHOUT customization
+    moq_product_cost = moq_base_price * moq
+    moq_markup_amount = moq_product_cost * (markup_percent / 100)
+    moq_product_only_total = moq_product_cost + moq_markup_amount
+    moq_product_price_per_unit = moq_product_only_total / moq
+
+    # Step 4: Apply marketing rounding if enabled
+    if marketing_rounding:
+        moq_product_price_per_unit = apply_marketing_rounding(moq_product_price_per_unit, True)
+
+    # Apply fifty-cent rounding if enabled
+    if fifty_cent_rounding:
+        moq_product_price_per_unit = round_to_nearest_fifty_cents(moq_product_price_per_unit, True)
+
+    # Step 5: Calculate client price at MOQ (with discount)
+    client_price = moq_product_price_per_unit
+    if discount_percent > 0:
+        client_price = moq_product_price_per_unit * (1 - discount_percent / 100)
+
+    # Build snapshot dictionary
+    snapshot = {
+        'quantity': moq,  # Store the MOQ as the quantity (this is what was calculated)
+        'moq': moq,
+        'base_price_per_unit': moq_base_price,
+        'tier_range': moq_tier_range if moq_tier_range else 'No Tiers',
+        'tier_column': f'T{moq_tier_num}' if moq_tier_num else '',
+        'client_price_per_unit': client_price,
+        'discount_percent': discount_percent,
+        'calculated_at': datetime.now().isoformat()
+    }
+
+    return snapshot
 
 
 # ========== HTML FORM PARSING ==========
