@@ -14,7 +14,7 @@ import pandas as pd
 import math
 import re
 import gc  # For memory optimization
-from src.helpers import get_column_value, calculate_moq
+from src.helpers import get_column_value, calculate_moq, round_to_nearest_fifty_cents
 
 
 def apply_marketing_rounding(price, marketing_rounding_enabled):
@@ -47,9 +47,14 @@ def calculate_proposal_pricing(proposal_item: Dict, get_unit_price_func, marketi
     Returns dict with: moq, moq_price_per_unit, client_price, delivery_time, customization_setup_fee, customization_per_unit
     """
     # Use settings snapshot if available (for consistency)
+    fifty_cent_rounding = False  # Default value
     if 'settings_snapshot' in proposal_item:
+        fifty_cent_rounding = proposal_item['settings_snapshot'].get('fifty_cent_rounding', False)
         marketing_rounding = proposal_item['settings_snapshot']['marketing_rounding']
         discount_percent = proposal_item['settings_snapshot']['discount_percent']
+        print(f"DEBUG calculate_proposal_pricing: Using settings_snapshot - fifty_cent_rounding={fifty_cent_rounding}, marketing_rounding={marketing_rounding}, discount={discount_percent}")
+    else:
+        print(f"DEBUG calculate_proposal_pricing: No settings_snapshot found, using defaults - fifty_cent_rounding={fifty_cent_rounding}, marketing_rounding={marketing_rounding}, discount={discount_percent}")
 
     product_row = pd.Series(proposal_item['product_data'])
     markup_percent = proposal_item['markup_percent']
@@ -82,9 +87,18 @@ def calculate_proposal_pricing(proposal_item: Dict, get_unit_price_func, marketi
     moq_product_only_total = moq_product_cost + moq_markup_amount
     moq_product_price_per_unit = moq_product_only_total / moq
 
-    # Apply marketing rounding if enabled
+    # Apply $0.50 rounding if enabled (first)
+    unrounded_moq_price = moq_product_price_per_unit
+    if fifty_cent_rounding:
+        moq_product_price_per_unit = round_to_nearest_fifty_cents(moq_product_price_per_unit, True)
+        print(f"DEBUG: Applied $0.50 rounding to MOQ price: ${unrounded_moq_price:.2f} → ${moq_product_price_per_unit:.2f}")
+
+    # Apply marketing rounding if enabled (second, after $0.50 rounding)
     if marketing_rounding:
+        before_marketing = moq_product_price_per_unit
         moq_product_price_per_unit = apply_marketing_rounding(moq_product_price_per_unit, True)
+        if before_marketing != moq_product_price_per_unit:
+            print(f"DEBUG: Applied marketing rounding to MOQ price: ${before_marketing:.2f} → ${moq_product_price_per_unit:.2f}")
 
     # Calculate client price at MOQ (with discount)
     client_price = moq_product_price_per_unit
@@ -98,7 +112,11 @@ def calculate_proposal_pricing(proposal_item: Dict, get_unit_price_func, marketi
     price_at_100_total = price_at_100_cost + price_at_100_markup
     price_at_100_per_unit = price_at_100_total / 100
 
-    # Apply marketing rounding if enabled
+    # Apply $0.50 rounding if enabled (first)
+    if fifty_cent_rounding:
+        price_at_100_per_unit = round_to_nearest_fifty_cents(price_at_100_per_unit, True)
+
+    # Apply marketing rounding if enabled (second, after $0.50 rounding)
     if marketing_rounding:
         price_at_100_per_unit = apply_marketing_rounding(price_at_100_per_unit, True)
 
@@ -985,7 +1003,8 @@ def create_complete_proposal_presentation(
     discount_percent: float = 0.0,
     impact_slide_overrides: Optional[Dict[str, Dict]] = None,
     variant_groups: Optional[Dict[str, List[str]]] = None,
-    variant_grouping_prefs: Optional[Dict[str, str]] = None
+    variant_grouping_prefs: Optional[Dict[str, str]] = None,
+    fifty_cent_rounding: bool = False
 ) -> Presentation:
     """
     Create complete presentation with intro, products, impact, and outro slides.

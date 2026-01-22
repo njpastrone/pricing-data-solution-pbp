@@ -2068,6 +2068,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     progress_container.info(f"Step 1/5: Loading templates...")
 
                     # Get proposal settings
+                    fifty_cent_rounding = st.session_state.get('proposal_fifty_cent_rounding', False)
                     marketing_rounding = st.session_state.get('proposal_marketing_rounding', False)
                     discount_percent = st.session_state.get('proposal_discount_percent', 0.0)
 
@@ -2108,7 +2109,8 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                         discount_percent,
                         impact_slide_overrides if impact_slide_overrides else None,
                         variant_groups_for_generation,
-                        variant_prefs_for_generation
+                        variant_prefs_for_generation,
+                        fifty_cent_rounding
                     )
 
                     progress_container.info(f"Step 3/4: Adding outro slides (4 slides)...")
@@ -2501,7 +2503,12 @@ with tab1:
                                 'pricing_method': pricing_result['method_used'],
                                 'pricing_notes': pricing_result.get('pricing_notes', ''),
                                 'manual_override': False,
-                                'validation_warning': pricing_result.get('validation_warning', None)
+                                'validation_warning': pricing_result.get('validation_warning', None),
+                                'settings_snapshot': {
+                                    'fifty_cent_rounding': st.session_state.get('proposal_fifty_cent_rounding', False),
+                                    'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
+                                    'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                                }
                             }
                             st.session_state.proposal_products.append(proposal_item)
 
@@ -2594,7 +2601,12 @@ with tab1:
                                     'pricing_method': pricing_result['method_used'],
                                     'pricing_notes': pricing_result.get('pricing_notes', ''),
                                     'manual_override': False,
-                                    'validation_warning': pricing_result.get('validation_warning', None)
+                                    'validation_warning': pricing_result.get('validation_warning', None),
+                                    'settings_snapshot': {
+                                        'fifty_cent_rounding': st.session_state.get('proposal_fifty_cent_rounding', False),
+                                        'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
+                                        'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                                    }
                                 }
                                 st.session_state.proposal_products.append(proposal_item)
 
@@ -2746,7 +2758,12 @@ with tab1:
                             'pricing_method': pricing_result['method_used'],
                             'pricing_notes': pricing_result.get('pricing_notes', ''),
                             'manual_override': False,
-                            'validation_warning': pricing_result.get('validation_warning', None)
+                            'validation_warning': pricing_result.get('validation_warning', None),
+                            'settings_snapshot': {
+                                'fifty_cent_rounding': st.session_state.get('proposal_fifty_cent_rounding', False),
+                                'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
+                                'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                            }
                         }
                         st.session_state.proposal_products.append(proposal_item)
 
@@ -3052,20 +3069,22 @@ with tab1:
         st.markdown("### Products in Proposal")
 
         # Table header
-        header_col1, header_col2, header_col3, header_col4, header_col5, header_col6, header_col7 = st.columns([3, 1.2, 1.2, 1.2, 1.2, 1.0, 0.8])
+        header_col1, header_col2, header_col3, header_col4, header_col5, header_col6, header_col7, header_col8 = st.columns([3, 1.2, 1.2, 1.5, 1.2, 1.2, 1.0, 0.8])
         with header_col1:
             st.markdown("**Product**")
         with header_col2:
             st.markdown("**PBP Cost**")
         with header_col3:
-            st.markdown("**Markup %**")
+            st.markdown("**Vendor MSRP**")
         with header_col4:
-            st.markdown("**Client Price**")
+            st.markdown("**Pricing Method**")
         with header_col5:
-            st.markdown("**MSRP**")
+            st.markdown("**PBP MSRP**")
         with header_col6:
-            st.markdown("**Override**")
+            st.markdown("**Markup %**")
         with header_col7:
+            st.markdown("**Override**")
+        with header_col8:
             st.markdown("**Remove**")
 
         st.divider()
@@ -3093,6 +3112,7 @@ with tab1:
                 client_price = pricing_result['pbp_msrp'] if pricing_result else None
 
             # Apply rounding if client price calculated
+            unrounded_price = client_price  # Store unrounded price for comparison
             if client_price:
                 # Apply $0.50 rounding if enabled
                 client_price = round_to_nearest_fifty_cents(
@@ -3106,7 +3126,7 @@ with tab1:
                     st.session_state.proposal_marketing_rounding
                 )
 
-            col1, col2, col3, col4, col5, col6, col7 = st.columns([3, 1.2, 1.2, 1.2, 1.2, 1.0, 0.8])
+            col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([3, 1.2, 1.2, 1.5, 1.2, 1.2, 1.0, 0.8])
 
             with col1:
                 # Display product name with variant (if applicable)
@@ -3118,12 +3138,6 @@ with tab1:
                 st.markdown(f"{product_display_name}")
                 st.caption(f"Partner: {product_data['Partner']}")
 
-                # Show pricing method indicator if not manually overridden
-                pricing_method = item.get('pricing_method', 'Standard markup')
-                manual_override = item.get('manual_override', False)
-                if not manual_override and pricing_method:
-                    st.caption(f"Method: {pricing_method}")
-
             with col2:
                 # Show PBP cost
                 if base_cost:
@@ -3132,6 +3146,68 @@ with tab1:
                     st.markdown("—")
 
             with col3:
+                # Show Vendor MSRP if available
+                msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', 'MSRP', '')
+                msrp = clean_price(msrp_raw)
+                if msrp and msrp > 0:
+                    st.markdown(f"${msrp:.2f}")
+                else:
+                    st.markdown("—")
+
+            with col4:
+                # Show pricing method
+                pricing_method = item.get('pricing_method', 'Standard markup')
+                manual_override = item.get('manual_override', False)
+                if manual_override:
+                    st.markdown("Manual override")
+                elif pricing_method:
+                    st.markdown(f"{pricing_method}")
+                else:
+                    st.markdown("Standard markup")
+
+            with col5:
+                # Editable client price field (PBP MSRP)
+                if base_cost and client_price:
+                    # Check if we're updating from markup to prevent circular updates
+                    if st.session_state.get(f'updating_from_markup_{idx}', False):
+                        # Just display the calculated price, don't create input
+                        st.markdown(f"${client_price:.2f}")
+                        # Show rounding note if price was rounded
+                        if unrounded_price and abs(client_price - unrounded_price) > 0.01:
+                            st.caption(f"Rounded from ${unrounded_price:.2f}")
+                        # Clear the flag
+                        st.session_state[f'updating_from_markup_{idx}'] = False
+                    else:
+                        new_price = st.number_input(
+                            f"Price for {idx}",
+                            min_value=0.01,
+                            value=client_price,
+                            step=1.0,
+                            format="%.2f",
+                            key=f"price_{idx}",
+                            label_visibility="collapsed"
+                        )
+                        # Show rounding note if price was rounded
+                        if unrounded_price and abs(client_price - unrounded_price) > 0.01:
+                            st.caption(f"Rounded from ${unrounded_price:.2f}")
+                        # Update markup if price changed
+                        if abs(new_price - client_price) > 0.01:  # Check if meaningfully different
+                            # Calculate new markup from the price
+                            new_markup_calc = calculate_markup_from_price(base_cost, new_price)
+                            st.session_state.proposal_products[idx]['markup_percent'] = new_markup_calc
+                            # Mark that pricing state has pending changes
+                            st.session_state.proposal_pricing_pending_finalization = True
+                            # Store current settings with this product
+                            st.session_state.proposal_products[idx]['settings_snapshot'] = {
+                                'fifty_cent_rounding': st.session_state.get('proposal_fifty_cent_rounding', False),
+                                'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
+                                'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                            }
+                            st.rerun()
+                else:
+                    st.markdown("—")
+
+            with col6:
                 # Editable markup field
                 new_markup = st.number_input(
                     f"Markup for {idx}",
@@ -3150,55 +3226,12 @@ with tab1:
                     st.session_state.proposal_pricing_pending_finalization = True
                     # Store current settings with this product
                     st.session_state.proposal_products[idx]['settings_snapshot'] = {
+                        'fifty_cent_rounding': st.session_state.get('proposal_fifty_cent_rounding', False),
                         'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
                         'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
                     }
 
-            with col4:
-                # Editable client price field
-                if base_cost and client_price:
-                    # Check if we're updating from markup to prevent circular updates
-                    if st.session_state.get(f'updating_from_markup_{idx}', False):
-                        # Just display the calculated price, don't create input
-                        st.markdown(f"${client_price:.2f}")
-                        # Clear the flag
-                        st.session_state[f'updating_from_markup_{idx}'] = False
-                    else:
-                        new_price = st.number_input(
-                            f"Price for {idx}",
-                            min_value=0.01,
-                            value=client_price,
-                            step=1.0,
-                            format="%.2f",
-                            key=f"price_{idx}",
-                            label_visibility="collapsed"
-                        )
-                        # Update markup if price changed
-                        if abs(new_price - client_price) > 0.01:  # Check if meaningfully different
-                            # Calculate new markup from the price
-                            new_markup_calc = calculate_markup_from_price(base_cost, new_price)
-                            st.session_state.proposal_products[idx]['markup_percent'] = new_markup_calc
-                            # Mark that pricing state has pending changes
-                            st.session_state.proposal_pricing_pending_finalization = True
-                            # Store current settings with this product
-                            st.session_state.proposal_products[idx]['settings_snapshot'] = {
-                                'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
-                                'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
-                            }
-                            st.rerun()
-                else:
-                    st.markdown("—")
-
-            with col5:
-                # Show MSRP if available
-                msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', 'MSRP', '')
-                msrp = clean_price(msrp_raw)
-                if msrp and msrp > 0:
-                    st.markdown(f"${msrp:.2f}")
-                else:
-                    st.markdown("—")
-
-            with col6:
+            with col7:
                 # Manual Override Checkbox
                 manual_override = item.get('manual_override', False)
                 override_checked = st.checkbox(
@@ -3212,7 +3245,7 @@ with tab1:
                     st.session_state.proposal_products[idx]['manual_override'] = override_checked
                     st.rerun()
 
-            with col7:
+            with col8:
                 if st.button("✕", key=f"remove_{idx}", help=f"Remove {product_data['Product/Service']}", use_container_width=True):
                     st.session_state.proposal_products.pop(idx)
                     st.rerun()
@@ -5900,74 +5933,74 @@ with tab3:
             pricing_method = item.get('pricing_method', 'Standard markup')
             manual_override = item.get('manual_override', False)
 
-            # Show pricing method indicator or manual override status
-            if manual_override:
-                st.caption("🔓 **Manual Price Override** - pricing method ignored")
-            else:
-                st.caption(f"💰 **Pricing Method:** {pricing_method}")
-
-            # Manual override checkbox
-            col_override, col_spacer = st.columns([2, 3])
-            with col_override:
-                new_manual_override = st.checkbox(
-                    "Enable Manual Price Override",
-                    value=manual_override,
-                    key=f"manual_override_tab3_{idx}",
-                    help="Check to manually override the pricing method and set custom markup/price"
-                )
-                if new_manual_override != manual_override:
-                    st.session_state.order_items[idx]['manual_override'] = new_manual_override
-                    st.rerun()
-
             # QUANTITY & PRICING SECTION
             st.markdown("##### Quantity & Pricing")
 
-            col_qty, col_markup, col_price = st.columns(3)
+            # Calculate base price for current quantity first
+            new_quantity = item['quantity']  # Default value
+            base_price, tier_range, tier_column = get_unit_price_new_system(product_data, item['quantity'])
 
-            with col_qty:
+            # Table header
+            header_col1, header_col2, header_col3, header_col4, header_col5, header_col6 = st.columns([1.2, 1.2, 1.2, 1.5, 1.5, 1.2])
+            with header_col1:
+                st.markdown("**Quantity**")
+            with header_col2:
+                st.markdown("**PBP Cost**")
+            with header_col3:
+                st.markdown("**Vendor MSRP**")
+            with header_col4:
+                st.markdown("**Pricing Method**")
+            with header_col5:
+                st.markdown("**PBP MSRP (Client Price)**")
+            with header_col6:
+                st.markdown("**Markup %**")
+
+            # Data row
+            col1, col2, col3, col4, col5, col6 = st.columns([1.2, 1.2, 1.2, 1.5, 1.5, 1.2])
+
+            with col1:
                 new_quantity = st.number_input(
-                    "Quantity",
+                    f"Quantity for {idx}",
                     min_value=1,
                     value=item['quantity'],
                     step=1,
                     key=f"prod_qty_{idx}",
-                    help="Number of units to order"
+                    label_visibility="collapsed"
                 )
-
                 # Highlight if quantity is 1 (warning)
                 if new_quantity == 1:
-                    st.warning("Quantity is 1 - did you mean to order more?")
+                    st.caption("⚠️ Qty = 1")
 
-                # Show tier info
-                base_price, tier_range, tier_column = get_unit_price_new_system(product_data, new_quantity)
-                if tier_range == "No Tiers":
-                    st.caption(f"Flat pricing: ${base_price:.2f} per unit")
+                # Recalculate base price if quantity changed
+                if new_quantity != item['quantity']:
+                    base_price, tier_range, tier_column = get_unit_price_new_system(product_data, new_quantity)
+
+            with col2:
+                # Show PBP cost
+                if base_price:
+                    st.markdown(f"${base_price:.2f}")
                 else:
-                    st.caption(f"Using tier: {tier_range} units | ${base_price:.2f}/unit")
+                    st.markdown("—")
 
-            with col_markup:
-                # Check if we're updating from client price to prevent circular updates
-                if st.session_state.get(f'updating_from_price_tab3_{idx}', False):
-                    # Just display the calculated markup, don't create input
-                    st.markdown("**Markup %**")
-                    st.markdown(f"{item['markup_percent']:.1f}%")
-                    st.caption("Your profit margin")
-                    # Clear the flag
-                    st.session_state[f'updating_from_price_tab3_{idx}'] = False
+            with col3:
+                # Show Vendor MSRP if available
+                msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', 'MSRP', '')
+                msrp = clean_price(msrp_raw)
+                if msrp and msrp > 0:
+                    st.markdown(f"${msrp:.2f}")
                 else:
-                    new_markup = st.number_input(
-                        "Markup %",
-                        min_value=-50.0,  # Allow negative markup for below-cost pricing
-                        value=item['markup_percent'],
-                        step=5.0,
-                        key=f"prod_markup_{idx}",
-                        help="Your profit margin. 100% = double the cost (2x)"
-                    )
-                    # Set flag if markup changed to prevent circular updates
-                    if new_markup != item['markup_percent']:
-                        st.session_state[f'updating_from_markup_tab3_{idx}'] = True
+                    st.markdown("—")
 
-            with col_price:
+            with col4:
+                # Show pricing method
+                if manual_override:
+                    st.markdown("Manual override")
+                elif pricing_method:
+                    st.markdown(f"{pricing_method}")
+                else:
+                    st.markdown("Standard markup")
+
+            with col5:
                 # Calculate client price (base + markup, before customization)
                 if base_price:
                     product_subtotal_calc = base_price * new_quantity
@@ -5975,33 +6008,41 @@ with tab3:
                     # Use current markup for calculation
                     current_markup = st.session_state.get(f"prod_markup_{idx}", item['markup_percent'])
                     if not st.session_state.get(f'updating_from_price_tab3_{idx}', False):
-                        current_markup = new_markup if 'new_markup' in locals() else item['markup_percent']
-                    else:
-                        current_markup = item['markup_percent']
+                        current_markup = item['markup_percent']  # Will be updated by markup input below
 
                     markup_amount_calc = product_subtotal_calc * (current_markup / 100)
                     client_price_raw = product_subtotal_calc + markup_amount_calc
-                    client_price_per_unit = client_price_raw / new_quantity
+                    client_price_per_unit_unrounded = client_price_raw / new_quantity
+
+                    # Apply $0.50 rounding if enabled (default: True)
+                    client_price_per_unit = round_to_nearest_fifty_cents(
+                        client_price_per_unit_unrounded,
+                        st.session_state.order_fifty_cent_rounding
+                    )
 
                     # Check if we're updating from markup to prevent circular updates
                     if st.session_state.get(f'updating_from_markup_tab3_{idx}', False):
                         # Just display the calculated price, don't create input
-                        st.markdown("**Client Price/Unit**")
                         st.markdown(f"${client_price_per_unit:.2f}")
-                        st.caption("Before customization")
+                        # Show rounding note if price was rounded
+                        if st.session_state.order_fifty_cent_rounding and abs(client_price_per_unit - client_price_per_unit_unrounded) > 0.01:
+                            st.caption(f"Rounded from ${client_price_per_unit_unrounded:.2f}")
                         # Clear the flag
                         st.session_state[f'updating_from_markup_tab3_{idx}'] = False
                     else:
                         # Editable client price field
                         new_client_price = st.number_input(
-                            "Client Price/Unit",
+                            f"Client Price for {idx}",
                             min_value=0.01,
                             value=client_price_per_unit,
                             step=1.0,
                             format="%.2f",
                             key=f"prod_price_{idx}",
-                            help="Price per unit charged to client (before customization)"
+                            label_visibility="collapsed"
                         )
+                        # Show rounding note if price was rounded
+                        if st.session_state.order_fifty_cent_rounding and abs(client_price_per_unit - client_price_per_unit_unrounded) > 0.01:
+                            st.caption(f"Rounded from ${client_price_per_unit_unrounded:.2f}")
 
                         # Update markup if price changed
                         if abs(new_client_price - client_price_per_unit) > 0.01:  # Check if meaningfully different
@@ -6011,9 +6052,46 @@ with tab3:
                             st.session_state[f'updating_from_price_tab3_{idx}'] = True
                             st.rerun()
                 else:
-                    st.markdown("**Client Price/Unit**")
                     st.markdown("—")
-                    st.caption("No base price")
+
+            with col6:
+                # Check if we're updating from client price to prevent circular updates
+                if st.session_state.get(f'updating_from_price_tab3_{idx}', False):
+                    # Just display the calculated markup, don't create input
+                    st.markdown(f"{item['markup_percent']:.1f}%")
+                    # Clear the flag
+                    st.session_state[f'updating_from_price_tab3_{idx}'] = False
+                else:
+                    new_markup = st.number_input(
+                        f"Markup for {idx}",
+                        min_value=-50.0,  # Allow negative markup for below-cost pricing
+                        value=item['markup_percent'],
+                        step=5.0,
+                        key=f"prod_markup_{idx}",
+                        label_visibility="collapsed"
+                    )
+                    # Set flag if markup changed to prevent circular updates
+                    if new_markup != item['markup_percent']:
+                        st.session_state[f'updating_from_markup_tab3_{idx}'] = True
+
+            st.divider()
+
+            # Show tier info below table
+            if tier_range != "No Tiers":
+                st.caption(f"Using tier: {tier_range} | ${base_price:.2f}/unit")
+            else:
+                st.caption(f"Flat pricing: ${base_price:.2f}/unit")
+
+            # Manual override checkbox
+            new_manual_override = st.checkbox(
+                "Enable Manual Price Override",
+                value=manual_override,
+                key=f"manual_override_tab3_{idx}",
+                help="Check to manually override the pricing method and set custom markup/price"
+            )
+            if new_manual_override != manual_override:
+                st.session_state.order_items[idx]['manual_override'] = new_manual_override
+                st.rerun()
 
             # Show quoted price warning if this came from a proposal and price changed
             if base_price:
@@ -6510,8 +6588,16 @@ with tab3:
 
                 # Base product row - include product name in description
                 product_pbp_cost = product_subtotal
-                product_client_price = product_subtotal + markup_amount
                 client_per_unit = (product_subtotal + markup_amount) / new_quantity if new_quantity > 0 else 0
+
+                # Apply $0.50 rounding to client per unit price (default: True)
+                client_per_unit = round_to_nearest_fifty_cents(
+                    client_per_unit,
+                    st.session_state.order_fifty_cent_rounding
+                )
+
+                # Recalculate total based on rounded per-unit price
+                product_client_price = client_per_unit * new_quantity
 
                 breakdown_data.append(
                     format_pricing_breakdown_row(

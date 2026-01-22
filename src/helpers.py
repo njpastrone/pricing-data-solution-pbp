@@ -703,8 +703,13 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
     # Calculate per-unit total
     total_per_unit = product_total / quantity
 
-    # Store quoted price (product + markup, before customization) for comparison in Tab 2
-    quoted_price_per_unit = (product_cost_subtotal + markup_amount) / quantity
+    # Store quoted price (product + markup, before customization) for comparison in Tab 3
+    # Use the actual price from pricing snapshot if available (includes rounding)
+    if pricing_snapshot and 'client_price_per_unit' in pricing_snapshot:
+        quoted_price_per_unit = pricing_snapshot['client_price_per_unit']
+    else:
+        # Fallback: calculate from base values (unrounded)
+        quoted_price_per_unit = (product_cost_subtotal + markup_amount) / quantity
 
     # Parse tariff info
     tariff_rate_percent = get_tariff_rate(product_data, product_cost_subtotal)
