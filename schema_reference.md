@@ -4,6 +4,18 @@ Last Updated: January 8, 2026
 
 ---
 
+## 🚨 SCHEMA TRANSITION IN PROGRESS - January 2026 🚨
+
+**Status:** Transitioning from 33-column schema (documented below) to new 44-column schema
+
+**Transition Details:** See `schema_update_jan_2026/MASTER_TRACKING.md` for complete context
+
+**Note:** This document reflects the OLD SCHEMA (33 columns). During the transition, both old and new schemas are referenced. Do not delete this documentation until the transition is complete and verified.
+
+**New Schema:** See `schema_update_jan_2026/MASTER_TRACKING.md` for the 44-column schema definition
+
+---
+
 ## Overview
 
 This document defines the canonical data schemas for Peace by Piece International's data system. All spreadsheets and future database tables should conform to these definitions.

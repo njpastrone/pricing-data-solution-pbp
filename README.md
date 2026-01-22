@@ -7,12 +7,39 @@ A Python/Streamlit application for creating proposals, managing orders, and gene
 **Development Sprint:** 17 of 19 features complete (89%)
 **Data Status:** Partial partner data loaded (collecting remaining partners)
 
+---
+
+## 🚨 SCHEMA TRANSITION IN PROGRESS (January 2026)
+
+**MAJOR BREAKING CHANGES UNDERWAY**
+
+We are currently implementing a major schema overhaul that will affect pricing calculations across the entire application.
+
+**Status:** Discussion phase complete - Ready for Phase 1 implementation
+**Impact:** Core pricing engine, all tabs, backward compatibility
+**Workspace:** `schema_update_jan_2026/` - All planning and implementation guides
+
+**Tracking Documents:**
+- **[schema_update_jan_2026/MASTER_TRACKING.md](schema_update_jan_2026/MASTER_TRACKING.md)** - Primary tracking document
+- **[schema_update_jan_2026/PHASE1_PRICING_ENGINE_GUIDE.md](schema_update_jan_2026/PHASE1_PRICING_ENGINE_GUIDE.md)** - Current phase guide
+- **[schema_update_jan_2026/RESUME_PROMPTS.md](schema_update_jan_2026/RESUME_PROMPTS.md)** - Prompts to resume work
+
+**Key Changes:**
+- Complete pricing logic overhaul (3 new pricing methods)
+- Cost basis system (Per Item vs Per Package)
+- 11 new calculated/governance fields
+- Description field reorganization
+
+**⚠️ Do not start new feature work until schema transition is complete.**
+
+---
+
 ## 📋 Recent Development
-- **Latest Feature:** Google Forms Integration - Modern client order collection workflow
-- **Status:** Complete and production-ready ✅
-- **Active Tasks:** [ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md)
-- **Requirements:** [docs/meetings/STAKEHOLDER_MEETING_NOTES.md](docs/meetings/STAKEHOLDER_MEETING_NOTES.md)
-- **New Modules:** `src/forms_config.py` + `src/forms_helper.py` (~600 lines)
+- **Current Focus:** Schema transition - pricing logic overhaul
+- **Tracking:** [docs/SCHEMA_TRANSITION_JAN2026.md](docs/SCHEMA_TRANSITION_JAN2026.md)
+- **Previous Feature:** Google Forms Integration - Complete and production-ready ✅
+- **Active Tasks:** Schema transition checklist (see tracking doc)
+- **Requirements:** [schema_reference.md](schema_reference.md) - Updated schema (44 columns)
 
 ---
 
@@ -52,6 +79,7 @@ pricing-data-solution-pbp/
 │   └── secrets.toml           # Google service account credentials (SECRET)
 │
 ├── docs/                       # Documentation (organized by topic)
+│   ├── SCHEMA_TRANSITION_JAN2026.md # 🚨 PRIMARY TRACKING DOC - Schema transition (ACTIVE)
 │   ├── planning/              # Core project documentation
 │   │   ├── PLANNING.md        # Project requirements & goals
 │   │   ├── RESTRUCTURE_CONTEXT.md # Data structure reference

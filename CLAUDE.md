@@ -19,18 +19,33 @@
 
 ---
 
-## 🔥 ACTIVE DEVELOPMENT STATUS - December 2025 🔥
+## 🔥 ACTIVE DEVELOPMENT STATUS - January 2026 🔥
 
-**Current Focus:** Week 2 Sprint - New Feature Implementation
-- **Meeting Date:** November 30, 2025
-- **Status:** 16 of 19 features complete (84%)
-- **Priority:** Completing Week 2 Sprint features (3 of 6 done)
+**Current Focus:** 🚨 MAJOR SCHEMA TRANSITION - Pricing Logic Overhaul
+- **Start Date:** January 22, 2026
+- **Status:** Discussion phase - planning major changes to pricing system
+- **Priority:** Schema transition must be completed before any new feature work
+
+### 🚨 SCHEMA TRANSITION IN PROGRESS 🚨
+**READ THIS FIRST:** **[schema_update_jan_2026/MASTER_TRACKING.md](schema_update_jan_2026/MASTER_TRACKING.md)** - Complete schema transition tracking document
+
+**Key Changes:**
+- Complete pricing logic overhaul (3 new pricing methods)
+- Cost basis system (Per Item vs Per Package)
+- Tier 1 = No Tiers consolidation
+- Description field reorganization
+- 11 new calculated/governance fields
+
+**Impact:** Core pricing calculations, UI updates across all tabs, backward compatibility considerations
+
+**Schema Transition Workspace:** All planning and implementation guides are in `schema_update_jan_2026/` folder
 
 ### Active Development Documents (READ THESE FIRST):
-1. **[ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md)** - Current task list with implementation details
-2. **[CHANGELOG.md](CHANGELOG.md)** - Comprehensive project history and version tracking
-3. **[STAKEHOLDER_MEETING_NOTES.md](docs/meetings/STAKEHOLDER_MEETING_NOTES.md)** - Organized requirements from Nov 30 meeting
-4. **[RAW_MEETING_NOTES_113024.md](docs/meetings/RAW_MEETING_NOTES_113024.md)** - Original meeting notes (do not edit)
+1. **[schema_update_jan_2026/MASTER_TRACKING.md](schema_update_jan_2026/MASTER_TRACKING.md)** - **PRIMARY TRACKING DOCUMENT**
+2. **[schema_update_jan_2026/PHASE1_PRICING_ENGINE_GUIDE.md](schema_update_jan_2026/PHASE1_PRICING_ENGINE_GUIDE.md)** - Current phase implementation guide
+3. **[schema_update_jan_2026/RESUME_PROMPTS.md](schema_update_jan_2026/RESUME_PROMPTS.md)** - Perfect prompts to resume work at any phase
+4. **[schema_reference.md](schema_reference.md)** - Updated schema definition (44 columns)
+5. **[SCHEMA_UPDATE_PROCESS.md](SCHEMA_UPDATE_PROCESS.md)** - Systematic process for schema updates
 
 ### Development Workflow:
 1. Start with ACTIVE_DEVELOPMENT_TODO.md for current tasks
@@ -79,17 +94,24 @@ This is the pricing-data-solution-pbp project - a Python/Streamlit application f
 
 ## Schema Update Guidelines
 
+**🚨 MAJOR SCHEMA TRANSITION IN PROGRESS (January 2026) 🚨**
+
+We are currently undergoing a major schema overhaul. All schema-related work MUST reference:
+- **[docs/SCHEMA_TRANSITION_JAN2026.md](docs/SCHEMA_TRANSITION_JAN2026.md)** - Primary tracking document for current transition
+
 When updating the data model/schema (renaming columns, adding fields, modifying data structure):
 
 1. **ALWAYS follow the systematic process in [SCHEMA_UPDATE_PROCESS.md](SCHEMA_UPDATE_PROCESS.md)**
-2. **Key principle:** Maintain backward compatibility via `get_column_value()` helper
-3. **Required steps:**
+2. **ALWAYS update [docs/SCHEMA_TRANSITION_JAN2026.md](docs/SCHEMA_TRANSITION_JAN2026.md)** with progress
+3. **Key principle:** Maintain backward compatibility via `get_column_value()` helper
+4. **Required steps:**
    - Review core documentation for context
    - Search for ALL references to changed columns
    - Update `get_column_value()` mappings first
    - Update schema_reference.md
    - Test with both old and new spreadsheet formats
    - Document in CHANGELOG.md
+   - Update SCHEMA_TRANSITION_JAN2026.md checklist
 
 **Quick reference for column changes:**
 - Rename: Add new canonical name to `get_column_value()`, keep old name as fallback

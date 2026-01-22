@@ -732,6 +732,12 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         'markup_percent': markup_percent,
         'markup_amount': markup_amount,
 
+        # Phase 3: Pricing fields (preserve from proposal if available, else defaults)
+        'pricing_method': proposal_item.get('pricing_method', 'Standard markup'),
+        'pricing_notes': proposal_item.get('pricing_notes', ''),
+        'validation_warning': proposal_item.get('validation_warning', None),
+        'manual_override': proposal_item.get('manual_override', False),
+
         # Customization (RESET to defaults - user will configure in order)
         # Pull default costs from spreadsheet but leave customization disabled
         'include_customization': False,
@@ -1366,38 +1372,56 @@ def get_column_value(row, new_column_name, old_column_name=None, default=None):
         mapping = schema_mappings[new_column_name]
 
         # Try new column name first
-        if new_column_name in row and row[new_column_name] not in [None, '', 'nan', pd.NA]:
+        if new_column_name in row:
             value = row[new_column_name]
-            # For string fields, strip whitespace
-            if isinstance(value, str):
-                value = value.strip()
-                if value:  # Non-empty string
+            # Check if value is not None, empty, or NA
+            if not pd.isna(value) and value not in [None, '']:
+                # For string fields, strip whitespace
+                if isinstance(value, str):
+                    value = value.strip()
+                    if value and value.lower() != 'nan':  # Non-empty string
+                        return value
+                else:  # Non-string, non-None value
                     return value
-            elif value is not None:  # Non-string, non-None value
-                return value
 
         # Try fallback columns in order
         for fallback_col in mapping['fallbacks']:
-            if fallback_col in row and row[fallback_col] not in [None, '', 'nan', pd.NA]:
+            if fallback_col in row:
                 value = row[fallback_col]
-                if isinstance(value, str):
-                    value = value.strip()
-                    if value:
+                # Check if value is not None, empty, or NA
+                if not pd.isna(value) and value not in [None, '']:
+                    if isinstance(value, str):
+                        value = value.strip()
+                        if value and value.lower() != 'nan':
+                            return value
+                    else:
                         return value
-                elif value is not None:
-                    return value
 
         # Return schema-specific default
         return mapping['default']
 
     # Standard behavior for non-mapped fields
     # Try new column name first
-    if new_column_name in row and row[new_column_name] not in [None, '', 'nan']:
-        return row[new_column_name]
+    if new_column_name in row:
+        value = row[new_column_name]
+        if not pd.isna(value) and value not in [None, '']:
+            if isinstance(value, str):
+                value = value.strip()
+                if value and value.lower() != 'nan':
+                    return value
+            else:
+                return value
 
     # Fall back to old column name if provided
-    if old_column_name and old_column_name in row and row[old_column_name] not in [None, '', 'nan']:
-        return row[old_column_name]
+    if old_column_name and old_column_name in row:
+        value = row[old_column_name]
+        if not pd.isna(value) and value not in [None, '']:
+            if isinstance(value, str):
+                value = value.strip()
+                if value and value.lower() != 'nan':
+                    return value
+            else:
+                return value
 
     # Return default if neither exists
     return default
@@ -1485,9 +1509,20 @@ def get_shipping_addon_percent(product_data):
     """
     addon = get_column_value(product_data, 'Shipping Add-On % (of Cost)', None, 0.0)
 
-    # Ensure it's a float
+    # Handle percentage string (e.g., "15%" -> 15.0)
+    if addon is None or addon == '':
+        return 0.0
+
+    # Convert to string and clean
+    addon_str = str(addon).strip()
+
+    # Remove % symbol if present
+    if addon_str.endswith('%'):
+        addon_str = addon_str[:-1].strip()
+
+    # Convert to float
     try:
-        return float(addon) if addon is not None else 0.0
+        return float(addon_str)
     except (ValueError, TypeError):
         return 0.0
 

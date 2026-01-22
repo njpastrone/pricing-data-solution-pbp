@@ -8,7 +8,7 @@ This module handles all Google Sheets integration:
 - Data frame processing and cleanup
 
 The module loads data from 3 sheets:
-1. Data: Partner-product pricing data (header at row 6)
+1. Data: Partner-product pricing data (header at row 7)
 2. Metadata: Deliverable field definitions (header at row 2)
 3. Partner-Specific Info: Partner configuration (header at row 2)
 """
@@ -131,8 +131,8 @@ def load_pricing_data(dataset='demo'):
 
     Data Structure:
         Data Sheet:
-            - Header at row 6 (index 5)
-            - Data starts at row 7 (index 6)
+            - Header at row 7 (index 6)
+            - Data starts at row 8 (index 7)
             - First column may be empty (skipped)
             - Filters out rows with empty Partner column
 
@@ -170,13 +170,13 @@ def load_pricing_data(dataset='demo'):
     spreadsheet = gc.open_by_url(spreadsheet_url)
 
     # ========== LOAD DATA SHEET ==========
-    # Header at row 6 (index 5), data starts at row 7 (index 6)
+    # Header at row 7 (index 6), data starts at row 8 (index 7)
     template_sheet = spreadsheet.worksheet("Data")
     template_values = template_sheet.get_all_values()
 
-    # Row 6 has headers, but first column is empty - skip it
-    raw_headers = template_values[5]
-    raw_data = template_values[6:]
+    # Row 7 has headers, first column is empty - skip it
+    raw_headers = template_values[6]
+    raw_data = template_values[7:]
 
     # Find first non-empty column index
     first_col_idx = 0

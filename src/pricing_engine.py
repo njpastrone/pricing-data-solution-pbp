@@ -422,7 +422,8 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
 
     if pricing_logic == "MSRP + % of cost":
         # Method 1: MSRP + shipping add-on
-        vendor_msrp = get_column_value(product_data, 'Vendor Published MSRP', None, None)
+        vendor_msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', None, None)
+        vendor_msrp = clean_price(vendor_msrp_raw) if vendor_msrp_raw else 0.0
 
         if vendor_msrp is None or vendor_msrp == 0:
             # Fallback: No MSRP available, use Standard markup
@@ -444,7 +445,8 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
 
     if pricing_logic == "MSRP capped – ship absorbed":
         # Method 2: MSRP exactly
-        vendor_msrp = get_column_value(product_data, 'Vendor Published MSRP', None, None)
+        vendor_msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', None, None)
+        vendor_msrp = clean_price(vendor_msrp_raw) if vendor_msrp_raw else 0.0
 
         if vendor_msrp is None or vendor_msrp == 0:
             # Fallback: No MSRP available, use Standard markup

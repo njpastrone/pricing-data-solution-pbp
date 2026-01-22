@@ -45,6 +45,7 @@ from src.pricing_engine import (
     determine_tier_number,
     get_unit_price_new_system,
     get_price_for_quantity,
+    calculate_pbp_msrp,
     calculate_additional_costs,
     calculate_customization_costs,
     calculate_product_quote,
@@ -2462,14 +2463,26 @@ with tab1:
             with col_button:
                 if new_count_all > 0:
                     if st.button(f"Add All {new_count_all}", type="secondary", use_container_width=True, key="add_all_products_button"):
-                        # Add all new products to proposal with MSRP or 100% markup
+                        # Add all new products to proposal with new pricing logic
                         from src.helpers import calculate_pricing_snapshot
                         for product_row in new_products_all:
-                            # Determine markup: use MSRP if enabled, otherwise default from spreadsheet
+                            # Use new pricing calculation
+                            pricing_result = calculate_pbp_msrp(product_row.to_dict(), quantity=100)
+
+                            # Determine markup based on pricing method
                             if st.session_state.proposal_use_msrp:
-                                markup = calculate_msrp_markup(product_row.to_dict())
+                                # Use pricing method from spreadsheet
+                                base_cost = pricing_result['calculation_details']['per_item_cost']
+                                pbp_msrp = pricing_result['pbp_msrp']
+
+                                if base_cost and base_cost > 0:
+                                    # Calculate markup to match PBP MSRP
+                                    markup = ((pbp_msrp / base_cost) - 1) * 100
+                                else:
+                                    markup = 100.0
                             else:
-                                markup = get_default_markup(product_row.to_dict())
+                                # Use default 100% markup
+                                markup = 100.0
 
                             # Calculate pricing snapshot to preserve pricing when importing to orders
                             pricing_snapshot = calculate_pricing_snapshot(
@@ -2484,7 +2497,11 @@ with tab1:
                             proposal_item = {
                                 'product_data': product_row.to_dict(),
                                 'markup_percent': markup,
-                                'pricing_snapshot': pricing_snapshot
+                                'pricing_snapshot': pricing_snapshot,
+                                'pricing_method': pricing_result['method_used'],
+                                'pricing_notes': pricing_result.get('pricing_notes', ''),
+                                'manual_override': False,
+                                'validation_warning': pricing_result.get('validation_warning', None)
                             }
                             st.session_state.proposal_products.append(proposal_item)
 
@@ -2539,14 +2556,26 @@ with tab1:
                 with col2:
                     if new_count > 0:
                         if st.button(f"Add {new_count} Products", type="primary", use_container_width=True, key="bulk_add_button"):
-                            # Add all new products to proposal with MSRP or 100% markup
+                            # Add all new products to proposal with new pricing logic
                             from src.helpers import calculate_pricing_snapshot
                             for product_row in new_products:
-                                # Determine markup: use MSRP if enabled, otherwise default from spreadsheet
+                                # Use new pricing calculation
+                                pricing_result = calculate_pbp_msrp(product_row.to_dict(), quantity=100)
+
+                                # Determine markup based on pricing method
                                 if st.session_state.proposal_use_msrp:
-                                    markup = calculate_msrp_markup(product_row.to_dict())
+                                    # Use pricing method from spreadsheet
+                                    base_cost = pricing_result['calculation_details']['per_item_cost']
+                                    pbp_msrp = pricing_result['pbp_msrp']
+
+                                    if base_cost and base_cost > 0:
+                                        # Calculate markup to match PBP MSRP
+                                        markup = ((pbp_msrp / base_cost) - 1) * 100
+                                    else:
+                                        markup = 100.0
                                 else:
-                                    markup = get_default_markup(product_row.to_dict())
+                                    # Use default 100% markup
+                                    markup = 100.0
 
                                 # Calculate pricing snapshot to preserve pricing when importing to orders
                                 pricing_snapshot = calculate_pricing_snapshot(
@@ -2561,7 +2590,11 @@ with tab1:
                                 proposal_item = {
                                     'product_data': product_row.to_dict(),
                                     'markup_percent': markup,
-                                    'pricing_snapshot': pricing_snapshot
+                                    'pricing_snapshot': pricing_snapshot,
+                                    'pricing_method': pricing_result['method_used'],
+                                    'pricing_notes': pricing_result.get('pricing_notes', ''),
+                                    'manual_override': False,
+                                    'validation_warning': pricing_result.get('validation_warning', None)
                                 }
                                 st.session_state.proposal_products.append(proposal_item)
 
@@ -2674,13 +2707,25 @@ with tab1:
                         if not selected_variant:
                             st.caption("⚠️ Variant recommended")
 
-                    # Add button - adds product to proposal with MSRP or 100% markup
+                    # Add button - adds product to proposal with new pricing logic
                     if st.button("Add to Proposal", key=f"add_{idx}", use_container_width=True, type="primary"):
-                        # Determine markup: use MSRP if enabled, otherwise default from spreadsheet
+                        # Use new pricing calculation (quantity 100 for reference)
+                        pricing_result = calculate_pbp_msrp(product_data.to_dict(), quantity=100)
+
+                        # Determine markup based on pricing method
                         if st.session_state.proposal_use_msrp:
-                            markup = calculate_msrp_markup(product_data.to_dict())
+                            # Use pricing method from spreadsheet
+                            per_item_cost = pricing_result['calculation_details']['per_item_cost']
+                            pbp_msrp = pricing_result['pbp_msrp']
+
+                            if per_item_cost and per_item_cost > 0:
+                                # Calculate markup to match PBP MSRP
+                                markup = ((pbp_msrp / per_item_cost) - 1) * 100
+                            else:
+                                markup = 100.0
                         else:
-                            markup = get_default_markup(product_data.to_dict())
+                            # Use default 100% markup
+                            markup = 100.0
 
                         # Calculate pricing snapshot to preserve pricing when importing to orders
                         from src.helpers import calculate_pricing_snapshot
@@ -2697,7 +2742,11 @@ with tab1:
                             'product_data': product_data.to_dict(),
                             'markup_percent': markup,
                             'selected_variant': selected_variant if selected_variant else None,
-                            'pricing_snapshot': pricing_snapshot
+                            'pricing_snapshot': pricing_snapshot,
+                            'pricing_method': pricing_result['method_used'],
+                            'pricing_notes': pricing_result.get('pricing_notes', ''),
+                            'manual_override': False,
+                            'validation_warning': pricing_result.get('validation_warning', None)
                         }
                         st.session_state.proposal_products.append(proposal_item)
 
@@ -2716,13 +2765,20 @@ with tab1:
                 # Show additional details inline (no nested expander)
                 st.caption(f"Ships From: {product_data.get('Country of Origin (Ships From)', 'N/A')} | Made In: {product_data.get('Country of Origin (Made In)', 'N/A')} | Tiered: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
 
+                # Show pricing method and cost basis (new schema fields)
+                pricing_logic = get_column_value(product_data, 'pricing_logic', None)
+                cost_basis = get_column_value(product_data, 'cost_basis', 'Per Item')
+
+                pricing_method_display = pricing_logic if pricing_logic else "Standard markup"
+                st.caption(f"Pricing Method: {pricing_method_display} | Cost Basis: {cost_basis}")
+
                 # Show MSRP if available
                 msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', 'MSRP', '')
                 if msrp_raw and str(msrp_raw).strip() and str(msrp_raw).strip() not in ['nan', '', '0', '0.0']:
                     from src.helpers import clean_price
                     msrp_value = clean_price(msrp_raw)
                     if msrp_value and msrp_value > 0:
-                        st.caption(f"Manufacturer's Suggested Retail Price (MSRP): ${msrp_value:.2f}/unit")
+                        st.caption(f"Vendor MSRP: ${msrp_value:.2f}/unit")
 
                 # Show shipping costs
                 shipping_display = format_shipping_display(product_data)
@@ -2996,7 +3052,7 @@ with tab1:
         st.markdown("### Products in Proposal")
 
         # Table header
-        header_col1, header_col2, header_col3, header_col4, header_col5, header_col6 = st.columns([3, 1.2, 1.2, 1.2, 1.2, 0.8])
+        header_col1, header_col2, header_col3, header_col4, header_col5, header_col6, header_col7 = st.columns([3, 1.2, 1.2, 1.2, 1.2, 1.0, 0.8])
         with header_col1:
             st.markdown("**Product**")
         with header_col2:
@@ -3008,6 +3064,8 @@ with tab1:
         with header_col5:
             st.markdown("**MSRP**")
         with header_col6:
+            st.markdown("**Override**")
+        with header_col7:
             st.markdown("**Remove**")
 
         st.divider()
@@ -3019,10 +3077,23 @@ with tab1:
             # Calculate PBP cost and client price at quantity 100 for display
             base_cost, _, _ = get_unit_price_new_system(product_data, 100)
 
-            if base_cost:
-                # Calculate client price with markup
-                client_price = base_cost * (1 + item['markup_percent'] / 100)
+            # Calculate client price using new pricing logic
+            manual_override = item.get('manual_override', False)
+            pricing_method = item.get('pricing_method', 'Standard markup')
 
+            if manual_override:
+                # Manual override: use simple markup calculation
+                if base_cost:
+                    client_price = base_cost * (1 + item['markup_percent'] / 100)
+                else:
+                    client_price = None
+            else:
+                # Use pricing method from product
+                pricing_result = calculate_pbp_msrp(product_data, 100)
+                client_price = pricing_result['pbp_msrp'] if pricing_result else None
+
+            # Apply rounding if client price calculated
+            if client_price:
                 # Apply $0.50 rounding if enabled
                 client_price = round_to_nearest_fifty_cents(
                     client_price,
@@ -3034,10 +3105,8 @@ with tab1:
                     client_price,
                     st.session_state.proposal_marketing_rounding
                 )
-            else:
-                client_price = None
 
-            col1, col2, col3, col4, col5, col6 = st.columns([3, 1.2, 1.2, 1.2, 1.2, 0.8])
+            col1, col2, col3, col4, col5, col6, col7 = st.columns([3, 1.2, 1.2, 1.2, 1.2, 1.0, 0.8])
 
             with col1:
                 # Display product name with variant (if applicable)
@@ -3048,6 +3117,12 @@ with tab1:
                 )
                 st.markdown(f"{product_display_name}")
                 st.caption(f"Partner: {product_data['Partner']}")
+
+                # Show pricing method indicator if not manually overridden
+                pricing_method = item.get('pricing_method', 'Standard markup')
+                manual_override = item.get('manual_override', False)
+                if not manual_override and pricing_method:
+                    st.caption(f"Method: {pricing_method}")
 
             with col2:
                 # Show PBP cost
@@ -3124,11 +3199,69 @@ with tab1:
                     st.markdown("—")
 
             with col6:
+                # Manual Override Checkbox
+                manual_override = item.get('manual_override', False)
+                override_checked = st.checkbox(
+                    "Override",
+                    value=manual_override,
+                    key=f"override_{idx}",
+                    help="Check to manually override pricing method",
+                    label_visibility="collapsed"
+                )
+                if override_checked != manual_override:
+                    st.session_state.proposal_products[idx]['manual_override'] = override_checked
+                    st.rerun()
+
+            with col7:
                 if st.button("✕", key=f"remove_{idx}", help=f"Remove {product_data['Product/Service']}", use_container_width=True):
                     st.session_state.proposal_products.pop(idx)
                     st.rerun()
 
             st.divider()
+
+        # ============================================================
+        # PRICING NOTES DISPLAY (Expandable)
+        # ============================================================
+        # Collect all products with pricing notes (and no manual override)
+        products_with_notes = [
+            item for item in st.session_state.proposal_products
+            if item.get('pricing_notes') and not item.get('manual_override', False)
+        ]
+
+        if products_with_notes:
+            with st.expander(f"Pricing Information ({len(products_with_notes)} product{'s' if len(products_with_notes) != 1 else ''})", expanded=False):
+                for item in products_with_notes:
+                    from src.helpers import format_product_with_variant
+                    product_display_name = format_product_with_variant(
+                        item['product_data']['Product/Service'],
+                        item.get('selected_variant')
+                    )
+                    st.write(f"**{product_display_name}**")
+                    st.caption(item['pricing_notes'])
+                    st.write("")  # Spacing
+
+        # ============================================================
+        # VALIDATION WARNINGS DISPLAY (Expandable)
+        # ============================================================
+        # Collect products with validation warnings (and no manual override)
+        products_with_warnings = [
+            item for item in st.session_state.proposal_products
+            if item.get('validation_warning') and not item.get('manual_override', False)
+        ]
+
+        if products_with_warnings:
+            st.warning(f"{len(products_with_warnings)} product{'s' if len(products_with_warnings) != 1 else ''} {'have' if len(products_with_warnings) != 1 else 'has'} pricing discrepancies")
+
+            with st.expander("View Validation Details", expanded=False):
+                for item in products_with_warnings:
+                    from src.helpers import format_product_with_variant
+                    product_display_name = format_product_with_variant(
+                        item['product_data']['Product/Service'],
+                        item.get('selected_variant')
+                    )
+                    st.write(f"**{product_display_name}**")
+                    st.caption(item['validation_warning'])
+                    st.write("")  # Spacing
 
     # ============================================================
     # SECTION 3: GENERATE PROPOSAL TABLES
@@ -3169,11 +3302,21 @@ with tab1:
                     moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
 
                     if moq_base_price is not None:
-                        # Calculate product price WITHOUT customization (for main table)
-                        moq_product_cost = moq_base_price * moq
-                        moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
-                        moq_product_only_total = moq_product_cost + moq_markup_amount
-                        moq_product_price_per_unit = moq_product_only_total / moq
+                        # Use new pricing calculation (respects manual override if set)
+                        if item.get('manual_override', False):
+                            # Manual override: use stored markup percentage
+                            moq_product_cost = moq_base_price * moq
+                            moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
+                            moq_product_only_total = moq_product_cost + moq_markup_amount
+                            moq_product_price_per_unit = moq_product_only_total / moq
+                        else:
+                            # Use pricing method from spreadsheet
+                            pricing_result = calculate_pbp_msrp(
+                                product_row,
+                                quantity=moq,
+                                user_markup_override=None
+                            )
+                            moq_product_price_per_unit = pricing_result['pbp_msrp']
 
                         # Apply $0.50 rounding if enabled
                         moq_product_price_per_unit = round_to_nearest_fifty_cents(
@@ -3208,11 +3351,21 @@ with tab1:
                                 budget_qty_base_price, _, _ = get_unit_price_new_system(product_row, potential_quantity)
 
                                 if budget_qty_base_price is not None:
-                                    # Calculate price at higher quantity with markup
-                                    budget_qty_product_cost = budget_qty_base_price * potential_quantity
-                                    budget_qty_markup_amount = budget_qty_product_cost * (item['markup_percent'] / 100)
-                                    budget_qty_product_only_total = budget_qty_product_cost + budget_qty_markup_amount
-                                    budget_qty_price_per_unit = budget_qty_product_only_total / potential_quantity
+                                    # Use new pricing calculation (respects manual override if set)
+                                    if item.get('manual_override', False):
+                                        # Manual override: use stored markup percentage
+                                        budget_qty_product_cost = budget_qty_base_price * potential_quantity
+                                        budget_qty_markup_amount = budget_qty_product_cost * (item['markup_percent'] / 100)
+                                        budget_qty_product_only_total = budget_qty_product_cost + budget_qty_markup_amount
+                                        budget_qty_price_per_unit = budget_qty_product_only_total / potential_quantity
+                                    else:
+                                        # Use pricing method from spreadsheet
+                                        pricing_result = calculate_pbp_msrp(
+                                            product_row,
+                                            quantity=potential_quantity,
+                                            user_markup_override=None
+                                        )
+                                        budget_qty_price_per_unit = pricing_result['pbp_msrp']
 
                                     # Apply $0.50 rounding if enabled
                                     budget_qty_price_per_unit = round_to_nearest_fifty_cents(
@@ -3349,11 +3502,21 @@ with tab1:
                     moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
 
                     if moq_base_price is not None:
-                        # Calculate product price WITHOUT customization (for main table)
-                        moq_product_cost = moq_base_price * moq
-                        moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
-                        moq_product_only_total = moq_product_cost + moq_markup_amount
-                        moq_product_price_per_unit = moq_product_only_total / moq
+                        # Use new pricing calculation (respects manual override if set)
+                        if item.get('manual_override', False):
+                            # Manual override: use stored markup percentage
+                            moq_product_cost = moq_base_price * moq
+                            moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
+                            moq_product_only_total = moq_product_cost + moq_markup_amount
+                            moq_product_price_per_unit = moq_product_only_total / moq
+                        else:
+                            # Use pricing method from spreadsheet
+                            pricing_result = calculate_pbp_msrp(
+                                product_row,
+                                quantity=moq,
+                                user_markup_override=None
+                            )
+                            moq_product_price_per_unit = pricing_result['pbp_msrp']
 
                         # Apply $0.50 rounding if enabled
                         moq_product_price_per_unit = round_to_nearest_fifty_cents(
@@ -3387,11 +3550,21 @@ with tab1:
                                 budget_qty_base_price, _, _ = get_unit_price_new_system(product_row, potential_quantity)
 
                                 if budget_qty_base_price is not None:
-                                    # Calculate price at higher quantity with markup
-                                    budget_qty_product_cost = budget_qty_base_price * potential_quantity
-                                    budget_qty_markup_amount = budget_qty_product_cost * (item['markup_percent'] / 100)
-                                    budget_qty_product_only_total = budget_qty_product_cost + budget_qty_markup_amount
-                                    budget_qty_price_per_unit = budget_qty_product_only_total / potential_quantity
+                                    # Use new pricing calculation (respects manual override if set)
+                                    if item.get('manual_override', False):
+                                        # Manual override: use stored markup percentage
+                                        budget_qty_product_cost = budget_qty_base_price * potential_quantity
+                                        budget_qty_markup_amount = budget_qty_product_cost * (item['markup_percent'] / 100)
+                                        budget_qty_product_only_total = budget_qty_product_cost + budget_qty_markup_amount
+                                        budget_qty_price_per_unit = budget_qty_product_only_total / potential_quantity
+                                    else:
+                                        # Use pricing method from spreadsheet
+                                        pricing_result = calculate_pbp_msrp(
+                                            product_row,
+                                            quantity=potential_quantity,
+                                            user_markup_override=None
+                                        )
+                                        budget_qty_price_per_unit = pricing_result['pbp_msrp']
 
                                     # Apply $0.50 rounding if enabled
                                     budget_qty_price_per_unit = round_to_nearest_fifty_cents(
@@ -4308,6 +4481,17 @@ with tab3:
     # Load data for product matching (needed for Google Form and HTML import)
     df_template, df_metadata, df_partner_info = load_pricing_data(st.session_state.selected_dataset)
 
+    # MIGRATION: Add Phase 3 fields to old order items (backward compatibility)
+    for item in st.session_state.order_items:
+        if 'pricing_method' not in item:
+            item['pricing_method'] = 'Standard markup'
+        if 'pricing_notes' not in item:
+            item['pricing_notes'] = ''
+        if 'manual_override' not in item:
+            item['manual_override'] = False
+        if 'validation_warning' not in item:
+            item['validation_warning'] = None
+
     # Show unsaved changes indicator and save status
     col1_status, col2_status = st.columns([1, 1])
     with col1_status:
@@ -4724,8 +4908,8 @@ with tab3:
                             'cost_submitted_date': None
                         }
 
-                        # Import products (using same logic as HTML import - match to catalog)
-                        from src.pricing_engine import get_unit_price_new_system
+                        # Import products (using new pricing logic from Phase 1)
+                        from src.pricing_engine import get_unit_price_new_system, calculate_pbp_msrp
                         from src.helpers import get_tariff_rate, calculate_product_tariff, get_shipping_costs, clean_price, get_column_value
 
                         products_imported = 0
@@ -4749,16 +4933,39 @@ with tab3:
                                         markup_percent = prop_item['markup_percent']
                                         break
 
-                                # If not in proposal, use default markup from spreadsheet
-                                if markup_percent is None:
-                                    markup_percent = get_default_markup(product_data)
+                                # Calculate pricing using new system (Phase 3)
+                                pricing_result = calculate_pbp_msrp(product_data, quantity, user_markup_override=markup_percent)
+
+                                # Extract pricing method and notes
+                                pricing_method = pricing_result['method_used']
+                                pricing_notes = get_column_value(product_data, 'Pricing Notes', '', '')
+
+                                # Generate validation warning if mismatch
+                                validation_warning = None
+                                if pricing_result['validation_status'] == 'mismatch':
+                                    spreadsheet_val = pricing_result['spreadsheet_msrp']
+                                    calculated_val = pricing_result['pbp_msrp']
+                                    validation_warning = f"Price mismatch: Spreadsheet=${spreadsheet_val:.2f} | Calculated=${calculated_val:.2f}"
+
+                                # Determine markup based on pricing method
+                                if pricing_method == "Standard markup":
+                                    # Use markup from calculation or default
+                                    markup_percent = pricing_result['calculation_details'].get('markup_percent', 100.0)
+                                else:
+                                    # MSRP-based method - calculate implied markup
+                                    base_cost = pricing_result['calculation_details']['per_item_cost']
+                                    pbp_msrp = pricing_result['pbp_msrp']
+                                    if base_cost > 0:
+                                        markup_percent = ((pbp_msrp / base_cost) - 1) * 100
+                                    else:
+                                        markup_percent = 100.0
 
                                 markup_multiplier = markup_percent / 100.0
 
                                 # Get base price for quantity
                                 base_price_per_unit, tier_info, tier_num = get_unit_price_new_system(product_data, quantity)
 
-                                # Calculate costs with default markup
+                                # Calculate costs with calculated markup
                                 product_cost_subtotal = base_price_per_unit * quantity
                                 markup_amount = product_cost_subtotal * markup_multiplier
                                 product_total = product_cost_subtotal + markup_amount
@@ -4768,7 +4975,7 @@ with tab3:
                                 tariff_base = product_cost_subtotal
                                 tariff_amount = calculate_product_tariff(tariff_base, tariff_rate_percent)
 
-                                # Build order item (matching HTML import structure)
+                                # Build order item (matching HTML import structure + Phase 3 new fields)
                                 order_item = {
                                     'product_name': product_data.get('Product/Service', 'Unknown Product'),
                                     'product_ref': product_data.get('Purchase Description', ''),
@@ -4783,6 +4990,11 @@ with tab3:
                                     'markup_percent': markup_percent,
                                     'markup_amount': markup_amount,
                                     'proposal_markup_percent': markup_percent,  # Track original markup for warning system
+                                    # Phase 3: New pricing fields
+                                    'pricing_method': pricing_method,
+                                    'pricing_notes': pricing_notes,
+                                    'validation_warning': validation_warning,
+                                    'manual_override': False,
                                     'include_customization': False,
                                     'customization_description': product_data.get('Customization Info', ''),
                                     'customization_setup_fee': float(clean_price(get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')) or 0.0),
@@ -5015,19 +5227,44 @@ with tab3:
                     # Add selected button
                     if len(selected_product_indices) > 0:
                         if st.button(f"Add {len(selected_product_indices)} Selected Product(s) to Order", type="primary", use_container_width=True, key="add_form_products_btn"):
-                            # Add products to order
+                            # Add products to order (using new pricing logic from Phase 3)
                             max_pbp_shipping = 0.0
                             for idx in selected_product_indices:
                                 match = matched_products[idx]
                                 product_data = match['product_data']
 
-                                # Create order item with default settings (quantity 1, 100% markup)
+                                # Calculate pricing using new system (Phase 3)
+                                pricing_result = calculate_pbp_msrp(product_data, quantity=1)
+
+                                # Extract pricing method and notes
+                                pricing_method = pricing_result['method_used']
+                                pricing_notes = get_column_value(product_data, 'Pricing Notes', '', '')
+
+                                # Generate validation warning if mismatch
+                                validation_warning = None
+                                if pricing_result['validation_status'] == 'mismatch':
+                                    spreadsheet_val = pricing_result['spreadsheet_msrp']
+                                    calculated_val = pricing_result['pbp_msrp']
+                                    validation_warning = f"Price mismatch: Spreadsheet=${spreadsheet_val:.2f} | Calculated=${calculated_val:.2f}"
+
+                                # Determine markup based on pricing method
+                                if pricing_method == "Standard markup":
+                                    markup_percent = pricing_result['calculation_details'].get('markup_percent', 100.0)
+                                else:
+                                    # MSRP-based method - calculate implied markup
+                                    base_cost = pricing_result['calculation_details']['per_item_cost']
+                                    pbp_msrp = pricing_result['pbp_msrp']
+                                    if base_cost > 0:
+                                        markup_percent = ((pbp_msrp / base_cost) - 1) * 100
+                                    else:
+                                        markup_percent = 100.0
+
                                 # Get base price for quantity 1
                                 base_price_per_unit, tier_info, tier_num = get_unit_price_new_system(product_data, 1)
 
                                 # Calculate costs
                                 product_cost_subtotal = base_price_per_unit * 1
-                                markup_amount = product_cost_subtotal * 1.0  # 100% markup
+                                markup_amount = product_cost_subtotal * (markup_percent / 100.0)
                                 product_total = product_cost_subtotal + markup_amount
 
                                 # Parse tariff
@@ -5035,7 +5272,7 @@ with tab3:
                                 tariff_base = product_cost_subtotal
                                 tariff_amount = calculate_product_tariff(tariff_base, tariff_rate_percent)
 
-                                # Build order item
+                                # Build order item (with Phase 3 new fields)
                                 order_item = {
                                     'product_name': product_data.get('Product/Service', 'Unknown Product'),
                                     'product_ref': product_data.get('Purchase Description', ''),
@@ -5047,8 +5284,13 @@ with tab3:
                                     'base_price': base_price_per_unit,
                                     'tier_range': tier_info if tier_info else '',
                                     'tier_column': f'T{tier_num}' if tier_num else '',
-                                    'markup_percent': get_default_markup(product_data),
+                                    'markup_percent': markup_percent,
                                     'markup_amount': markup_amount,
+                                    # Phase 3: New pricing fields
+                                    'pricing_method': pricing_method,
+                                    'pricing_notes': pricing_notes,
+                                    'validation_warning': validation_warning,
+                                    'manual_override': False,
                                     'include_customization': False,
                                     'customization_description': product_data.get('Customization Info', ''),
                                     'customization_setup_fee': float(clean_price(get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')) or 0.0),
@@ -5301,11 +5543,44 @@ with tab3:
             default_setup_fee = clean_price(default_setup_fee_raw) or 0.0
             default_per_unit = clean_price(default_per_unit_raw) or 0.0
 
-            # Determine markup: use MSRP if enabled, otherwise default from spreadsheet
-            if st.session_state.order_use_msrp:
-                markup = calculate_msrp_markup(product_data.to_dict())
+            # Calculate pricing using new system (Phase 3)
+            from src.pricing_engine import calculate_pbp_msrp
+
+            # Determine if using MSRP pricing
+            use_msrp = st.session_state.order_use_msrp
+
+            # Get pricing result
+            pricing_result = calculate_pbp_msrp(product_data.to_dict(), quantity=1)
+
+            # Extract pricing method and notes
+            pricing_method = pricing_result['method_used']
+            pricing_notes = get_column_value(product_data, 'Pricing Notes', '', '')
+
+            # Generate validation warning if mismatch
+            validation_warning = None
+            if pricing_result['validation_status'] == 'mismatch':
+                spreadsheet_val = pricing_result['spreadsheet_msrp']
+                calculated_val = pricing_result['pbp_msrp']
+                validation_warning = f"Price mismatch: Spreadsheet=${spreadsheet_val:.2f} | Calculated=${calculated_val:.2f}"
+
+            # Determine markup based on pricing method
+            if use_msrp:
+                if pricing_method == "Standard markup":
+                    markup = pricing_result['calculation_details'].get('markup_percent', 100.0)
+                else:
+                    # MSRP-based method - calculate implied markup
+                    base_cost = pricing_result['calculation_details']['per_item_cost']
+                    pbp_msrp = pricing_result['pbp_msrp']
+                    if base_cost > 0:
+                        markup = ((pbp_msrp / base_cost) - 1) * 100
+                    else:
+                        markup = 100.0
             else:
+                # User unchecked MSRP - use standard markup
                 markup = get_default_markup(product_data.to_dict())
+
+            # Manual override: if user unchecked MSRP, treat as manual override
+            manual_override = not use_msrp
 
             # Add product with defaults
             new_item = {
@@ -5315,6 +5590,11 @@ with tab3:
                 'quantity': 1,
                 'markup_percent': markup,
                 'selected_variant': selected_variant_manual if selected_variant_manual else None,
+                # Phase 3: New pricing fields
+                'pricing_method': pricing_method,
+                'pricing_notes': pricing_notes,
+                'validation_warning': validation_warning,
+                'manual_override': manual_override,
                 'include_customization': False,
                 'customization_setup_fee': float(default_setup_fee),
                 'customization_per_unit': float(default_per_unit),
@@ -5493,7 +5773,7 @@ with tab3:
                 tier_column = "PBP Cost (No Tiers)"
                 markup = 100.0  # Default markup
 
-                # Create order item with DEFAULTS (same structure as catalog products)
+                # Create order item with DEFAULTS (same structure as catalog products + Phase 3 fields)
                 new_item = {
                     'product_name': custom_product_name.strip(),
                     'partner': custom_partner,
@@ -5501,6 +5781,11 @@ with tab3:
                     'quantity': 1,  # DEFAULT - user edits inline
                     'markup_percent': markup,  # DEFAULT - user edits inline
                     'selected_variant': None,
+                    # Phase 3: New pricing fields (custom products use Standard markup)
+                    'pricing_method': 'Standard markup',
+                    'pricing_notes': '',
+                    'validation_warning': None,
+                    'manual_override': False,
                     'include_customization': False,  # DEFAULT - user enables inline
                     'customization_setup_fee': 0.0,
                     'customization_per_unit': 0.0,
@@ -5610,6 +5895,29 @@ with tab3:
 
             # Get product data for recalculations
             product_data = item['product_data']
+
+            # PRICING METHOD & MANUAL OVERRIDE (Phase 3)
+            pricing_method = item.get('pricing_method', 'Standard markup')
+            manual_override = item.get('manual_override', False)
+
+            # Show pricing method indicator or manual override status
+            if manual_override:
+                st.caption("🔓 **Manual Price Override** - pricing method ignored")
+            else:
+                st.caption(f"💰 **Pricing Method:** {pricing_method}")
+
+            # Manual override checkbox
+            col_override, col_spacer = st.columns([2, 3])
+            with col_override:
+                new_manual_override = st.checkbox(
+                    "Enable Manual Price Override",
+                    value=manual_override,
+                    key=f"manual_override_tab3_{idx}",
+                    help="Check to manually override the pricing method and set custom markup/price"
+                )
+                if new_manual_override != manual_override:
+                    st.session_state.order_items[idx]['manual_override'] = new_manual_override
+                    st.rerun()
 
             # QUANTITY & PRICING SECTION
             st.markdown("##### Quantity & Pricing")
@@ -5743,6 +6051,18 @@ with tab3:
                 else:
                     # Product added manually (not from proposal)
                     st.caption("Quoted price: Unknown (product added manually)")
+
+            # VALIDATION WARNING (Phase 3) - Only show if not manually overridden
+            validation_warning = item.get('validation_warning', None)
+            if validation_warning and not manual_override:
+                st.warning(f"⚠️ **Pricing Validation:** {validation_warning}")
+                st.caption("The calculated price doesn't match the spreadsheet value. Enable manual override if this is intentional.")
+
+            # PRICING NOTES (Phase 3) - Only show if notes exist and not manually overridden
+            pricing_notes = item.get('pricing_notes', '')
+            if pricing_notes and pricing_notes.strip() and not manual_override:
+                with st.expander("ℹ️ Pricing Information", expanded=False):
+                    st.caption(pricing_notes)
 
             # CUSTOMIZATION SECTION (always available)
             customization_info = product_data.get("Customization Info", "")
@@ -6281,6 +6601,43 @@ with tab3:
         if st.button("Clear Entire Order", type="secondary"):
             st.session_state.order_items = []
             st.rerun()
+
+        # PRICING SUMMARY (Phase 3) - Show all products with notes or warnings
+        st.write("---")
+        st.markdown("##### Pricing Summary")
+
+        # Collect items with pricing notes (excluding manually overridden)
+        items_with_notes = [
+            item for item in st.session_state.order_items
+            if item.get('pricing_notes') and item.get('pricing_notes').strip() and not item.get('manual_override', False)
+        ]
+
+        # Collect items with validation warnings (excluding manually overridden)
+        items_with_warnings = [
+            item for item in st.session_state.order_items
+            if item.get('validation_warning') and not item.get('manual_override', False)
+        ]
+
+        # Show pricing notes if any
+        if items_with_notes:
+            with st.expander(f"ℹ️ Pricing Information ({len(items_with_notes)} product{'s' if len(items_with_notes) > 1 else ''})", expanded=False):
+                for item in items_with_notes:
+                    from src.helpers import format_product_with_variant
+                    product_display = format_product_with_variant(item['product_name'], item.get('selected_variant'))
+                    st.markdown(f"**{product_display}**")
+                    st.caption(item['pricing_notes'])
+                    st.write("")  # Spacing
+
+        # Show validation warnings if any
+        if items_with_warnings:
+            st.warning(f"⚠️ {len(items_with_warnings)} product{'s' if len(items_with_warnings) > 1 else ''} {'have' if len(items_with_warnings) > 1 else 'has'} pricing discrepancies")
+            with st.expander("View Validation Details", expanded=False):
+                for item in items_with_warnings:
+                    from src.helpers import format_product_with_variant
+                    product_display = format_product_with_variant(item['product_name'], item.get('selected_variant'))
+                    st.markdown(f"**{product_display}**")
+                    st.caption(item['validation_warning'])
+                    st.write("")  # Spacing
 
     # ============================================================
     # ORDER SETTINGS
@@ -8175,6 +8532,53 @@ with tab4:
         st.divider()
 
         # ============================================================
+        # DESCRIPTION HELPER FUNCTIONS
+        # ============================================================
+        def get_description_for_invoice(product_data, product_name):
+            """
+            Get product description for client-facing invoices.
+
+            Hierarchy:
+            1. Billing Description (to Client)
+            2. Marketing Description (Website)
+            3. Product/Service Name
+            """
+            # Try Billing Description first
+            billing_desc = get_column_value(product_data, 'billing_description', None)
+            if billing_desc and str(billing_desc).strip() and str(billing_desc).strip().lower() != 'nan':
+                return str(billing_desc).strip()
+
+            # Fallback to Marketing Description
+            marketing_desc = get_column_value(product_data, 'marketing_description', None)
+            if marketing_desc and str(marketing_desc).strip() and str(marketing_desc).strip().lower() != 'nan':
+                return str(marketing_desc).strip()
+
+            # Final fallback to product name
+            return product_name
+
+        def get_description_for_po(product_data, product_name):
+            """
+            Get product description for partner purchase orders.
+
+            Hierarchy:
+            1. Purchase Description (to Partner)
+            2. Billing Description (to Client)
+            3. Product/Service Name
+            """
+            # Try Purchase Description first
+            purchase_desc = get_column_value(product_data, 'purchase_description', None)
+            if purchase_desc and str(purchase_desc).strip() and str(purchase_desc).strip().lower() != 'nan':
+                return str(purchase_desc).strip()
+
+            # Fallback to Billing Description
+            billing_desc = get_column_value(product_data, 'billing_description', None)
+            if billing_desc and str(billing_desc).strip() and str(billing_desc).strip().lower() != 'nan':
+                return str(billing_desc).strip()
+
+            # Final fallback to product name
+            return product_name
+
+        # ============================================================
         # TABLE 4: INVOICE AND PURCHASE ORDER ITEM DETAILS
         # ============================================================
         st.markdown("#### 4. Invoice and Purchase Order Item Details")
@@ -8190,16 +8594,18 @@ with tab4:
             # Check if custom item
             if item.get('is_custom', False):
                 partner = "Custom"
-                items_specs = item.get('custom_description', 'Custom line item')
+                custom_desc = item.get('custom_description', 'Custom line item')
                 partner_in_hands = "N/A"
                 qty = item['quantity']
                 cost_per_unit = item.get('total_per_unit', 0)
                 cost_total = item.get('product_total', 0)
                 cost_verified = "N/A"
 
+                # Custom items use same description for both invoice and PO
                 invoice_line_items.append({
                     'PARTNER': partner,
-                    'ITEMS + SPECS': items_specs,
+                    'DESCRIPTION (Invoice)': custom_desc,
+                    'DESCRIPTION (PO)': custom_desc,
                     'QTY': qty,
                     'IN-HANDS from Partner': partner_in_hands,
                     'COST/UNIT': f"${cost_per_unit:.2f}",
@@ -8219,31 +8625,75 @@ with tab4:
                     item.get('selected_variant')
                 )
 
-                # Use edited description if available, otherwise use product name
+                # Get product data from catalog for description lookup
+                product_ref = item.get('product_ref', item['product_name'])
+                try:
+                    if hasattr(st.session_state, 'df_template') and st.session_state.df_template is not None:
+                        product_match = st.session_state.df_template[
+                            (st.session_state.df_template['Product/Service'] == product_ref) &
+                            (st.session_state.df_template['Partner'] == partner)
+                        ]
+                        if not product_match.empty:
+                            product_data = product_match.iloc[0]
+                        else:
+                            product_data = None
+                    else:
+                        product_data = None
+                except Exception:
+                    product_data = None
+
+                # Get descriptions using helper functions
+                if product_data is not None:
+                    invoice_desc = get_description_for_invoice(product_data, product_name)
+                    po_desc = get_description_for_po(product_data, product_name)
+                else:
+                    # Fallback if product data not found
+                    invoice_desc = product_name
+                    po_desc = product_name
+
+                # Use edited description if available (overrides spreadsheet descriptions for both invoice and PO)
                 edited_desc = item.get('edited_description', '')
                 if edited_desc:
-                    items_specs = edited_desc
-                else:
-                    product_specs = item.get('product_specs', item.get('tier_range', ''))
-                    items_specs = f"{product_name}\n{product_specs}"
+                    invoice_desc = edited_desc
+                    po_desc = edited_desc
+
                 qty = item['quantity']
 
                 partner_in_hands = item.get('partner_in_hands_date', 'TBD')
                 if partner_in_hands and partner_in_hands != 'TBD':
                     partner_in_hands = str(partner_in_hands)
 
-                # Partner cost (before markup)
-                partner_cost_per_unit = item.get('partner_cost_per_unit', item.get('base_price', 0))
-                partner_cost_total = item.get('product_subtotal', 0)  # base_price * quantity
+                # Calculate pricing using new system if product data available
+                if product_data is not None:
+                    try:
+                        # Use calculate_pbp_msrp for consistent pricing
+                        user_markup_override = item.get('markup_percent') if item.get('manual_override') else None
+                        pricing_result = calculate_pbp_msrp(
+                            product_data.to_dict(),
+                            quantity=qty,
+                            user_markup_override=user_markup_override
+                        )
+                        partner_cost_per_unit = pricing_result['calculation_details']['base_cost']
+                        sell_price_per_unit = pricing_result['pbp_msrp']
+                    except Exception:
+                        # Fallback to stored values if calculation fails
+                        partner_cost_per_unit = item.get('partner_cost_per_unit', item.get('base_price', 0))
+                        product_subtotal = item.get('product_subtotal', 0)
+                        markup_amount = item.get('markup_amount', 0)
+                        sell_price_total = product_subtotal + markup_amount
+                        sell_price_per_unit = sell_price_total / qty if qty > 0 else 0
+                else:
+                    # Use stored values if product data not available
+                    partner_cost_per_unit = item.get('partner_cost_per_unit', item.get('base_price', 0))
+                    product_subtotal = item.get('product_subtotal', 0)
+                    markup_amount = item.get('markup_amount', 0)
+                    sell_price_total = product_subtotal + markup_amount
+                    sell_price_per_unit = sell_price_total / qty if qty > 0 else 0
+
+                partner_cost_total = partner_cost_per_unit * qty
+                sell_price_total = sell_price_per_unit * qty
 
                 cost_verified = item.get('cost_verified', 'Pending')
-
-                # Sell price for base product ONLY (product + markup, NO customization)
-                # This prevents double counting since customization is shown as separate line items
-                product_subtotal = item.get('product_subtotal', 0)
-                markup_amount = item.get('markup_amount', 0)
-                sell_price_total = product_subtotal + markup_amount
-                sell_price_per_unit = sell_price_total / qty if qty > 0 else 0
 
                 # Add per-product kitting if included
                 if item.get('include_kitting', False):
@@ -8252,14 +8702,15 @@ with tab4:
                     partner_cost_total += kitting_pbp
                     sell_price_total += kitting_client
 
-                    # Append kitting note to specs
+                    # Append kitting note to invoice description only (client-facing)
                     kitting_desc = item.get('kitting_description', 'Kitting')
-                    items_specs += f" | {kitting_desc}: +${kitting_client:.2f}"
+                    invoice_desc += f" | {kitting_desc}: +${kitting_client:.2f}"
 
                 # Add base product line
                 invoice_line_items.append({
                     'PARTNER': partner,
-                    'ITEMS + SPECS': items_specs,
+                    'DESCRIPTION (Invoice)': invoice_desc,
+                    'DESCRIPTION (PO)': po_desc,
                     'QTY': qty,
                     'IN-HANDS from Partner': partner_in_hands,
                     'COST/UNIT': f"${partner_cost_per_unit:.2f}",
@@ -8285,9 +8736,13 @@ with tab4:
 
                     # Setup fee line item (show partner cost vs. client price)
                     if customization_setup > 0 or partner_customization_setup > 0:
+                        invoice_customization_desc = f"  └ Setup Fee: {customization_desc}"
+                        po_customization_desc = f"  └ Setup: {customization_desc}"
+
                         invoice_line_items.append({
                             'PARTNER': partner,
-                            'ITEMS + SPECS': f"  └ Setup Fee: {customization_desc}",
+                            'DESCRIPTION (Invoice)': invoice_customization_desc,
+                            'DESCRIPTION (PO)': po_customization_desc,
                             'QTY': 1,
                             'IN-HANDS from Partner': partner_in_hands,
                             'COST/UNIT': f"${partner_customization_setup:.2f}",
@@ -8299,9 +8754,13 @@ with tab4:
 
                     # Per-unit customization line item (show partner cost vs. client price)
                     if customization_unit_total > 0 or partner_customization_unit_total > 0:
+                        invoice_per_unit_desc = f"  └ Customization (per unit): {customization_desc}"
+                        po_per_unit_desc = f"  └ Per Unit Customization: {customization_desc}"
+
                         invoice_line_items.append({
                             'PARTNER': partner,
-                            'ITEMS + SPECS': f"  └ Customization: {customization_desc}",
+                            'DESCRIPTION (Invoice)': invoice_per_unit_desc,
+                            'DESCRIPTION (PO)': po_per_unit_desc,
                             'QTY': qty,
                             'IN-HANDS from Partner': partner_in_hands,
                             'COST/UNIT': f"${partner_customization_per_unit:.2f}",
@@ -8322,9 +8781,13 @@ with tab4:
 
                             # Add-on setup fee line item (if applicable)
                             if addon_partner_setup > 0 or addon_client_setup > 0:
+                                invoice_addon_setup_desc = f"  └ Add-On Setup: {addon['name']}"
+                                po_addon_setup_desc = f"  └ Add-On Setup: {addon['name']}"
+
                                 invoice_line_items.append({
                                     'PARTNER': partner,
-                                    'ITEMS + SPECS': f"  └ Add-On Setup: {addon['name']}",
+                                    'DESCRIPTION (Invoice)': invoice_addon_setup_desc,
+                                    'DESCRIPTION (PO)': po_addon_setup_desc,
                                     'QTY': 1,
                                     'IN-HANDS from Partner': partner_in_hands,
                                     'COST/UNIT': f"${addon_partner_setup:.2f}",
@@ -8338,9 +8801,13 @@ with tab4:
                             if addon_partner_perunit > 0 or addon_client_perunit > 0:
                                 addon_partner_total = addon_partner_perunit * qty
                                 addon_client_total = addon_client_perunit * qty
+                                invoice_addon_desc = f"  └ Add-On (per unit): {addon['name']}"
+                                po_addon_desc = f"  └ Add-On: {addon['name']}"
+
                                 invoice_line_items.append({
                                     'PARTNER': partner,
-                                    'ITEMS + SPECS': f"  └ Add-On: {addon['name']}",
+                                    'DESCRIPTION (Invoice)': invoice_addon_desc,
+                                    'DESCRIPTION (PO)': po_addon_desc,
                                     'QTY': qty,
                                     'IN-HANDS from Partner': partner_in_hands,
                                     'COST/UNIT': f"${addon_partner_perunit:.2f}",
@@ -8355,10 +8822,15 @@ with tab4:
                     tariff_amount_total = item.get('tariff_amount', 0)
                     tariff_rate = item.get('tariff_rate_percent', 0)
                     tariff_per_unit = tariff_amount_total / qty if qty > 0 else 0
+                    country = item.get('country_of_origin', 'Unknown')
+
+                    invoice_tariff_desc = f"  └ Tariff ({country}, {tariff_rate:.1f}%)"
+                    po_tariff_desc = f"  └ Tariff ({tariff_rate:.1f}%)"
 
                     invoice_line_items.append({
                         'PARTNER': partner,
-                        'ITEMS + SPECS': f"  └ Tariff ({tariff_rate}%)",
+                        'DESCRIPTION (Invoice)': invoice_tariff_desc,
+                        'DESCRIPTION (PO)': po_tariff_desc,
                         'QTY': qty,
                         'IN-HANDS from Partner': "N/A",
                         'COST/UNIT': f"${tariff_per_unit:.2f}",
@@ -8374,7 +8846,8 @@ with tab4:
         if partner_shipping_cost > 0 or client_shipping_price > 0:
             invoice_line_items.append({
                 'PARTNER': 'Shipping',
-                'ITEMS + SPECS': 'Shipping',
+                'DESCRIPTION (Invoice)': 'Shipping to Client',
+                'DESCRIPTION (PO)': 'Shipping from Partner',
                 'QTY': 1,
                 'IN-HANDS from Partner': 'N/A',
                 'COST/UNIT': f"${partner_shipping_cost:.2f}",
@@ -8390,7 +8863,8 @@ with tab4:
         if kitting_pbp_cost > 0 or kitting_client_price > 0:
             invoice_line_items.append({
                 'PARTNER': 'Kitting (Sale-wide)',
-                'ITEMS + SPECS': 'Gift Set Assembly & Packaging',
+                'DESCRIPTION (Invoice)': 'Gift Set Assembly & Packaging',
+                'DESCRIPTION (PO)': 'Kitting & Assembly Services',
                 'QTY': 1,
                 'IN-HANDS from Partner': 'N/A',
                 'COST/UNIT': f"${kitting_pbp_cost:.2f}",
@@ -8408,7 +8882,8 @@ with tab4:
             hide_index=True,
             column_config={
                 "PARTNER": st.column_config.TextColumn("PARTNER", width="small"),
-                "ITEMS + SPECS": st.column_config.TextColumn("ITEMS + SPECS", width="large"),
+                "DESCRIPTION (Invoice)": st.column_config.TextColumn("DESCRIPTION (Invoice)", width="medium"),
+                "DESCRIPTION (PO)": st.column_config.TextColumn("DESCRIPTION (PO)", width="medium"),
                 "QTY": st.column_config.NumberColumn("QTY", width="small"),
                 "IN-HANDS from Partner": st.column_config.TextColumn("IN-HANDS from Partner", width="small"),
                 "COST/UNIT": st.column_config.TextColumn("COST/UNIT", width="small"),
@@ -8491,7 +8966,8 @@ with tab4:
         for total_item in totals_data:
             total_row = pd.DataFrame([{
                 'PARTNER': '',
-                'ITEMS + SPECS': total_item[0],
+                'DESCRIPTION (Invoice)': total_item[0],
+                'DESCRIPTION (PO)': '',
                 'QTY': '',
                 'IN-HANDS from Partner': '',
                 'COST/UNIT': '',
@@ -8505,7 +8981,8 @@ with tab4:
         # Add notes section
         notes_row = pd.DataFrame([{
             'PARTNER': '',
-            'ITEMS + SPECS': '',
+            'DESCRIPTION (Invoice)': '',
+            'DESCRIPTION (PO)': '',
             'QTY': '',
             'IN-HANDS from Partner': '',
             'COST/UNIT': '',
@@ -8521,7 +8998,8 @@ with tab4:
             for note in notes_content:
                 notes_row = pd.DataFrame([{
                     'PARTNER': '',
-                    'ITEMS + SPECS': note.replace('**', '').replace('\n', ' '),
+                    'DESCRIPTION (Invoice)': note.replace('**', '').replace('\n', ' '),
+                    'DESCRIPTION (PO)': '',
                     'QTY': '',
                     'IN-HANDS from Partner': '',
                     'COST/UNIT': '',
@@ -8645,7 +9123,8 @@ with tab4:
     <table>
         <tr>
             <th>Partner</th>
-            <th>Items + Specs</th>
+            <th>Description (Invoice)</th>
+            <th>Description (PO)</th>
             <th>Qty</th>
             <th>In-Hands from Partner</th>
             <th>Cost/Unit</th>
@@ -8660,7 +9139,8 @@ with tab4:
             html_invoice += f"""
         <tr>
             <td>{line_item['PARTNER']}</td>
-            <td>{line_item['ITEMS + SPECS'].replace(chr(10), '<br>')}</td>
+            <td>{line_item['DESCRIPTION (Invoice)'].replace(chr(10), '<br>')}</td>
+            <td>{line_item['DESCRIPTION (PO)'].replace(chr(10), '<br>')}</td>
             <td style="text-align: center;">{line_item['QTY']}</td>
             <td>{line_item['IN-HANDS from Partner']}</td>
             <td style="text-align: right;">{line_item['COST/UNIT']}</td>
