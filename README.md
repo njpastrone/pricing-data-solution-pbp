@@ -3,43 +3,37 @@
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
 **Current Status:** ✅ **IN PRODUCTION** - https://pricing-data-solution-pbp.onrender.com
-**Version:** 7.6.0-dev - Google Forms Integration Complete
-**Development Sprint:** 17 of 19 features complete (89%)
+**Version:** 8.0.0 - Major Schema Transition Complete
+**Last Updated:** 2026-01-22
 **Data Status:** Partial partner data loaded (collecting remaining partners)
 
 ---
 
-## 🚨 SCHEMA TRANSITION IN PROGRESS (January 2026)
+## 🎉 Major Update: Schema Transition Complete (v8.0.0)
 
-**MAJOR BREAKING CHANGES UNDERWAY**
+**Status:** ✅ Complete - All 6 implementation phases finished and tested
+**Release Date:** January 22, 2026
 
-We are currently implementing a major schema overhaul that will affect pricing calculations across the entire application.
+**What Changed:**
+- Complete pricing engine rewrite with 3 sophisticated pricing methods
+- Schema expanded from 33 to 44 columns (+11 new fields)
+- Hybrid validation system (calculated vs spreadsheet comparison)
+- Manual override flexibility for all pricing methods
+- Clean description hierarchies for invoices, POs, and proposals
+- Full testing and documentation complete
 
-**Status:** Discussion phase complete - Ready for Phase 1 implementation
-**Impact:** Core pricing engine, all tabs, backward compatibility
-**Workspace:** `schema_update_jan_2026/` - All planning and implementation guides
+**Pricing Methods Now Supported:**
+1. **"MSRP + % of cost"** - Vendor MSRP plus shipping recovery (47.1% of products)
+2. **"MSRP capped – ship absorbed"** - Vendor MSRP exactly (37.3% of products)
+3. **"Standard markup"** - Traditional cost × markup (15.7% of products)
 
-**Tracking Documents:**
-- **[schema_update_jan_2026/MASTER_TRACKING.md](schema_update_jan_2026/MASTER_TRACKING.md)** - Primary tracking document
-- **[schema_update_jan_2026/PHASE1_PRICING_ENGINE_GUIDE.md](schema_update_jan_2026/PHASE1_PRICING_ENGINE_GUIDE.md)** - Current phase guide
-- **[schema_update_jan_2026/RESUME_PROMPTS.md](schema_update_jan_2026/RESUME_PROMPTS.md)** - Prompts to resume work
+**Documentation:**
+- Complete transition tracking: [schema_update_jan_2026/MASTER_TRACKING.md](schema_update_jan_2026/MASTER_TRACKING.md)
+- New pricing methodology: [docs/planning/METHODOLOGY_LOGIC.md](docs/planning/METHODOLOGY_LOGIC.md)
+- Updated schema reference: [schema_reference.md](schema_reference.md) (44 columns)
+- Full changelog: [CHANGELOG.md](CHANGELOG.md#800---2026-01-22)
 
-**Key Changes:**
-- Complete pricing logic overhaul (3 new pricing methods)
-- Cost basis system (Per Item vs Per Package)
-- 11 new calculated/governance fields
-- Description field reorganization
-
-**⚠️ Do not start new feature work until schema transition is complete.**
-
----
-
-## 📋 Recent Development
-- **Current Focus:** Schema transition - pricing logic overhaul
-- **Tracking:** [docs/SCHEMA_TRANSITION_JAN2026.md](docs/SCHEMA_TRANSITION_JAN2026.md)
-- **Previous Feature:** Google Forms Integration - Complete and production-ready ✅
-- **Active Tasks:** Schema transition checklist (see tracking doc)
-- **Requirements:** [schema_reference.md](schema_reference.md) - Updated schema (44 columns)
+**Previous Feature:** Google Forms Integration (v7.6.0) - Complete and production-ready ✅
 
 ---
 
@@ -225,31 +219,48 @@ Where:
 
 **Datasets:** Switchable between Demo and Real data (sidebar selector)
 - **Demo:** `master_pricing_template_10_14` (testing data - 19 products, 4 partners)
-- **Real:** `master_pricing` (production data - 133 products, 4 partners)
+- **Real:** `master_pricing` (production data - 51 products, 4 partners, **44 columns**)
+
+**Schema:** 44 columns (updated January 2026 - v8.0.0)
+- Complete schema documentation: [schema_reference.md](schema_reference.md)
+- Transition documentation: [schema_update_jan_2026/MASTER_TRACKING.md](schema_update_jan_2026/MASTER_TRACKING.md)
 
 **Structure:** 3-sheet workbook
-- **Data** (header at row 6): Partner-product pricing data
+- **Data** (header at row 6/7): Partner-product pricing data
 - **Metadata** (header at row 2): Deliverable field definitions
 - **Partner-Specific Info** (header at row 2): Partner configuration reference
 
-**Key Fields (Updated Schema - Jan 2026):**
-- Partner, Product/Service, Purchase Description
-- **MOQ** (new): Minimum order quantity from partner
-- Pricing Tiers (Y/N) flag, Pricing Tiers Info
-- PBP Cost columns (No Tiers, Tier 1-6)
-- **Units per Package**: For multi-unit products (e.g., 6-pack)
-- **Client Price: Customization Setup Fee** (renamed from "Customization Setup Fee")
-- **Client Price: Customization Cost per Unit** (renamed from "Customization Cost per Unit")
-- **PBP Standard Markup** (new): Default markup multiplier (e.g., 2.0 = 100% markup)
-- **Vendor Published MSRP** (renamed from "MSRP")
-- Country of Origin, Marketing Description, Billing Description
-- **PBP Cost: Shipping Cost per Unit** (renamed from "Shipping Cost (PBP)")
-- **Client Price: Shipping Price per Unit** (renamed from "Shipping Price (Client)")
-- **Tariff Estimate ($)** and **Tariff Estimate (%)** (dual format support)
+**New Pricing System (v8.0.0):**
+- **Three Pricing Methods:**
+  1. **"MSRP + % of cost"** - Vendor MSRP plus shipping recovery (Vendor MSRP + Shipping Add-On % × cost)
+  2. **"MSRP capped – ship absorbed"** - Vendor MSRP exactly, shipping absorbed
+  3. **"Standard markup"** - Traditional cost × (1 + markup%), with diagnostic support or 100% default
+- **Cost Basis System:** Explicit "Per Item" vs "Per Package" normalization
+- **Hybrid Validation:** App calculates prices and compares against spreadsheet values
+- **Manual Override:** All pricing methods can be manually overridden by users
+- **Calculated Fields:**
+  - `PBP Cost (Per-Unit, No Tiers, Calculated)` - Normalized per-item cost
+  - `PBP MSRP (Per-Unit, No Tiers, Calculated)` - **AUTHORITATIVE PRICE**
+  - `Vendor Markup (Calculated)` - Diagnostic vendor markup %
+  - `PBP Markup (Calculated)` - Diagnostic PBP markup %
 
-**Backward Compatibility:** App supports both old and new column names automatically.
+**Key Schema Changes:**
+- **Pricing Logic** (#23): Defines pricing method (3 allowed values)
+- **Cost Basis** (#20): "Per Item" or "Per Package" declaration
+- **Shipping Add-On %** (#24): Percentage for MSRP + % method
+- **Pricing Notes** (#25): Method assumptions and exceptions
+- **Billing Description** (#6): Client-facing invoice description (NEW)
+- **Purchase Description** (#5): Partner-facing PO description (renamed)
+- **Marketing Description** (#7): Website/proposal description (renamed)
+- **PBP Cost (No Tiers/Tier 1)** (#14): Consolidated base cost column
+- **Data Collection Notes** (#44): Data quality and governance (NEW)
 
-See [schema_reference.md](schema_reference.md) for complete schema documentation.
+**Backward Compatibility:**
+- `get_column_value()` helper supports old and new column names seamlessly
+- Empty fields handled gracefully with sensible defaults
+- Old spreadsheets still work (fallback to old column names)
+
+See [docs/planning/METHODOLOGY_LOGIC.md](docs/planning/METHODOLOGY_LOGIC.md) for complete pricing methodology documentation.
 
 ---
 

@@ -34,6 +34,261 @@ Where:
 
 ---
 
+## 💰 Pricing Methodology (Schema Update Jan 2026)
+
+As of January 2026, the pricing system supports three distinct pricing methods, defined by the "Pricing Logic" column in the Google Sheets data.
+
+### Overview
+
+Each product specifies its pricing method, which determines how PBP MSRP is calculated:
+
+1. **"MSRP + % of cost"** - Add shipping recovery to vendor MSRP
+2. **"MSRP capped – ship absorbed"** - Use vendor MSRP exactly
+3. **"Standard markup"** - Traditional cost-based markup
+
+Users can override any pricing method with manual pricing using the "Manual Override" checkbox.
+
+---
+
+### Method 1: MSRP + % of cost
+
+**Use Case:** Products where PBP wants to match vendor MSRP but recover shipping costs separately.
+
+**Formula:**
+```
+PBP MSRP = Vendor Published MSRP + (Shipping Add-On % × Per-Item Cost)
+```
+
+**Example:**
+- Vendor Published MSRP: $10.00
+- Shipping Add-On %: 15%
+- Per-Item Cost: $5.00
+- **Calculation:** $10.00 + (0.15 × $5.00) = $10.75
+- **Result:** PBP MSRP = $10.75
+
+**Required Fields:**
+- `Vendor Published MSRP` (must have value)
+- `Shipping Add-On (%)` (defaults to 0% if empty)
+- `Pricing Logic` = "MSRP + % of cost"
+
+**Cost Basis:**
+- Per-Item Cost is always normalized using Cost Basis field
+- If Cost Basis = "Per Package", divides by Units per Package
+
+**Validation:**
+- Compares calculated PBP MSRP against spreadsheet `PBP Calculated MSRP`
+- Warning appears if discrepancy > $0.10
+- User can check "Manual Override" to ignore warning
+
+**Pricing Notes:**
+```
+Using "MSRP + % of cost" method: Vendor MSRP ($10.00) + 15.0% shipping recovery ($0.75) = $10.75
+```
+
+---
+
+### Method 2: MSRP capped – ship absorbed
+
+**Use Case:** Products where PBP matches vendor MSRP exactly, absorbing all shipping costs.
+
+**Formula:**
+```
+PBP MSRP = Vendor Published MSRP (exactly)
+```
+
+**Example:**
+- Vendor Published MSRP: $12.00
+- Per-Item Cost: $6.00
+- Shipping costs: (absorbed, not added to price)
+- **Result:** PBP MSRP = $12.00
+
+**Required Fields:**
+- `Vendor Published MSRP` (must have value)
+- `Pricing Logic` = "MSRP capped – ship absorbed"
+
+**Markup Calculation:**
+- Markup % = ((MSRP / Cost) - 1) × 100
+- Example: ((12.00 / 6.00) - 1) × 100 = 100% markup
+
+**Validation:**
+- Compares calculated MSRP against spreadsheet value
+- Should match exactly (since no calculations involved)
+
+**Pricing Notes:**
+```
+Using "MSRP capped – ship absorbed" method: Vendor MSRP = $12.00 (shipping absorbed)
+```
+
+---
+
+### Method 3: Standard markup
+
+**Use Case:** Products without MSRP, or when traditional markup pricing is preferred.
+
+**Formula:**
+```
+PBP MSRP = Per-Item Cost × (1 + Markup %)
+```
+
+**Markup Source (in priority order):**
+1. User manual override (if "Manual Override" checked)
+2. Diagnostic Markup from spreadsheet (if available)
+3. PBP Standard Markup from spreadsheet (if available)
+4. 100% default markup
+
+**Example:**
+- Per-Item Cost: $8.00
+- Diagnostic Markup: 75%
+- **Calculation:** $8.00 × (1 + 0.75) = $14.00
+- **Result:** PBP MSRP = $14.00
+
+**Required Fields:**
+- `Pricing Logic` = "Standard markup" (or empty/null)
+- Markup % determined from available fields
+
+**Cost Basis:**
+- Same normalization as other methods (Per Item vs Per Package)
+
+**Validation:**
+- Compares calculated price against spreadsheet value
+- Uses diagnostic markup from spreadsheet for comparison
+
+**Pricing Notes:**
+```
+Using "Standard markup" method: Cost ($8.00) × 75% markup = $14.00
+```
+
+---
+
+### Cost Basis Normalization
+
+All pricing methods normalize costs to per-item basis for accurate calculations.
+
+**Cost Basis Field:** Specifies whether spreadsheet cost is "Per Item" or "Per Package"
+
+**Per Item (Default):**
+```
+Per-Item Cost = PBP Cost (as-is)
+```
+
+**Per Package:**
+```
+Per-Item Cost = PBP Cost ÷ Units per Package
+```
+
+**Example:**
+- PBP Cost: $48.00
+- Cost Basis: "Per Package"
+- Units per Package: 6
+- **Calculation:** $48.00 ÷ 6 = $8.00
+- **Result:** Per-Item Cost = $8.00
+
+**Edge Cases:**
+- Units per Package = 0 or missing → defaults to 1
+- Cost Basis empty → defaults to "Per Item"
+
+---
+
+### Manual Override
+
+**Purpose:** Allow users to override any pricing method with custom pricing.
+
+**How it Works:**
+1. User checks "Manual Override" checkbox
+2. User edits markup % to desired value
+3. Pricing calculation uses user's markup instead of method
+4. Pricing notes and validation warnings are hidden
+
+**Example:**
+- Product has "MSRP + % of cost" method
+- Calculated markup: 50%
+- User checks override and sets markup to 65%
+- PBP MSRP recalculated with 65% markup
+- Method-specific pricing notes hidden
+
+**Use Cases:**
+- Custom pricing for special clients
+- Promotions or discounts
+- Override when validation warnings appear
+- Flexibility for unusual pricing scenarios
+
+---
+
+### Validation and Quality Assurance
+
+**Hybrid Validation Approach:**
+1. Read spreadsheet calculated values (`PBP Calculated MSRP`, `Diagnostic Markup`)
+2. Calculate independently using pricing method
+3. Compare calculated vs spreadsheet values
+4. Display warning if discrepancy > $0.10 or 2%
+
+**Validation Warnings:**
+- Appear in expandable section below product tables
+- Show both calculated and spreadsheet values
+- Non-blocking (users can proceed)
+- Hidden when Manual Override is checked
+
+**Example Warning:**
+```
+Price discrepancy: Calculated $10.75 vs Spreadsheet $10.50 (difference: $0.25)
+```
+
+**Quality Benefits:**
+- Catches spreadsheet formula errors
+- Alerts to data entry mistakes
+- Provides transparency into pricing
+- Maintains data integrity
+
+---
+
+### Empty Field Handling
+
+**Default Values:**
+- `Pricing Logic` empty → "Standard markup"
+- `PBP Standard Markup` empty → 100%
+- `Shipping Add-On (%)` empty → 0%
+- `Cost Basis` empty → "Per Item"
+- `Units per Package` empty → 1
+
+**Philosophy:** Graceful defaults allow app to function even with incomplete data.
+
+---
+
+### Integration with Existing Features
+
+**Discounts:**
+- Non-profit discount (5% preset) or custom discount
+- Applied AFTER pricing method calculation
+- Example: PBP MSRP $10.00 → 5% discount → Client Price $9.50
+
+**Marketing Rounding:**
+- Charm pricing enabled/disabled per proposal
+- Example: $60.00 → $59.00 (when divisible by 10)
+- Applied AFTER discount
+
+**$0.50 Rounding:**
+- Round to nearest $0.50 enabled/disabled per proposal
+- Example: $10.68 → $10.50
+- Applied BEFORE marketing rounding
+- Default: enabled
+
+**Customization Costs:**
+- Setup fees and per-unit costs are pass-through
+- Markup applies to base product price only
+- Example: Product $10 + Setup $50 + Per-Unit $2 = Total varies by quantity
+
+**Tariffs:**
+- Calculated separately from base pricing
+- Added to total cost
+- Pass-through to client (no markup)
+
+**Tiered Pricing:**
+- Pricing method applies at each tier
+- Different costs at different quantities
+- Same method used across all tiers for consistency
+
+---
+
 ## 🏭 Partner-Specific Methodologies
 
 ### Partner: Jaggery (Historical Reference)
