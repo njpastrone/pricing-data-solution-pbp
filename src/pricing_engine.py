@@ -44,12 +44,11 @@ def determine_tier_number(quantity, tier_info_string, has_tiers):
 
 def get_unit_price_new_system(row, quantity):
     """
-    Get correct unit price based on new tier logic from master_pricing_template_10_14.
+    Get correct unit price based on tier logic.
     Handles both tiered and non-tiered pricing.
 
+    Updated January 2026: Now uses consolidated "PBP Cost (No Tiers/Tier 1)" column.
     Automatically normalizes cost to per-unit basis using "Units Per Package" column.
-    For example, if partner charges $60 for a 6-pack and Units Per Package = 6,
-    this returns $10 per unit.
 
     Args:
         row: DataFrame row containing product data
@@ -65,8 +64,11 @@ def get_unit_price_new_system(row, quantity):
     has_tiers = str(row.get('Pricing Tiers (Y/N)', '')).strip().upper()
 
     if has_tiers != 'Y':
-        # Use flat rate
-        flat_price = clean_price(row.get('PBP Cost (No Tiers)', ''))
+        # Use consolidated column for flat rate
+        # Try new schema name first, fall back to old name for backward compatibility
+        flat_price = get_column_value(row, 'PBP Cost (No Tiers/Tier 1)', 'PBP Cost (No Tiers)', None)
+        flat_price = clean_price(flat_price) if flat_price is not None else None
+
         if flat_price is not None:
             # Normalize to per-unit cost
             units_per_package = row.get('Units per Package', 1)
@@ -78,7 +80,7 @@ def get_unit_price_new_system(row, quantity):
 
             if units_per_package > 0:
                 flat_price = flat_price / units_per_package
-            return flat_price, "No Tiers", "PBP Cost (No Tiers)"
+            return flat_price, "No Tiers", "PBP Cost (No Tiers/Tier 1)"
         else:
             return None, None, None
 
@@ -89,8 +91,15 @@ def get_unit_price_new_system(row, quantity):
     if tier_num is None:
         return None, None, None
 
-    tier_col = f'PBP Cost: Tier {tier_num}'
-    price = clean_price(row.get(tier_col, ''))
+    # Use consolidated column for Tier 1
+    if tier_num == 1:
+        tier_col_name = 'PBP Cost (No Tiers/Tier 1)'
+        price = get_column_value(row, 'PBP Cost (No Tiers/Tier 1)', 'PBP Cost: Tier 1', None)
+        price = clean_price(price) if price is not None else None
+    else:
+        # Use tier-specific columns for Tier 2-6
+        tier_col_name = f'PBP Cost: Tier {tier_num}'
+        price = clean_price(row.get(tier_col_name, ''))
 
     if price is not None:
         # Normalize to per-unit cost
@@ -112,7 +121,7 @@ def get_unit_price_new_system(row, quantity):
                 tier_range = f"{min_qty}+"
             else:
                 tier_range = f"{min_qty}-{max_qty}"
-            return price, tier_range, tier_col
+            return price, tier_range, tier_col_name
 
     return None, None, None
 
@@ -342,6 +351,292 @@ def calculate_product_quote(row, quantity, markup_percent, include_customization
     quote['total'] = total
 
     return quote
+
+
+def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
+    """
+    Calculate PBP MSRP using one of three pricing methods.
+    Part of January 2026 schema transition.
+
+    Pricing Methods:
+    1. "MSRP + % of cost" - Add shipping recovery to vendor MSRP
+    2. "MSRP capped – ship absorbed" - Use vendor MSRP exactly
+    3. "Standard markup" - Traditional cost × (1 + markup%)
+
+    Args:
+        product_data: Product row from spreadsheet
+        quantity: Order quantity
+        user_markup_override: Optional user override for markup % (Standard markup only)
+
+    Returns:
+        dict: {
+            'pbp_msrp': float,              # Final calculated price
+            'method_used': str,             # Which pricing method was used
+            'calculation_details': dict,     # Breakdown of calculation
+            'spreadsheet_msrp': float,      # MSRP from spreadsheet (for comparison)
+            'validation_status': str        # 'match', 'mismatch', or 'no_spreadsheet_value'
+        }
+
+    Example:
+        >>> result = calculate_pbp_msrp(product_data, quantity=100)
+        >>> result['pbp_msrp']
+        11.00
+        >>> result['method_used']
+        'MSRP + % of cost'
+    """
+    from src.helpers import (
+        get_pricing_logic,
+        get_shipping_addon_percent,
+        get_column_value,
+        normalize_cost_to_per_item
+    )
+
+    # Step 1: Get base cost for quantity (from existing get_unit_price_new_system)
+    base_cost, tier_info, tier_num = get_unit_price_new_system(product_data, quantity)
+
+    if base_cost is None:
+        # Cannot calculate price without cost
+        return {
+            'pbp_msrp': 0.0,
+            'method_used': 'Error',
+            'calculation_details': {'error': 'Could not determine base cost'},
+            'spreadsheet_msrp': None,
+            'validation_status': 'error'
+        }
+
+    # Step 2: Normalize cost to per-item basis
+    per_item_cost = normalize_cost_to_per_item(product_data, base_cost)
+
+    # Step 3: Get pricing logic method
+    pricing_logic = get_pricing_logic(product_data)
+
+    # Step 4: Calculate based on method
+    calculation_details = {
+        'per_item_cost': per_item_cost,
+        'quantity': quantity,
+        'tier_info': tier_info
+    }
+
+    pbp_msrp = None
+    method_used = pricing_logic
+
+    if pricing_logic == "MSRP + % of cost":
+        # Method 1: MSRP + shipping add-on
+        vendor_msrp = get_column_value(product_data, 'Vendor Published MSRP', None, None)
+
+        if vendor_msrp is None or vendor_msrp == 0:
+            # Fallback: No MSRP available, use Standard markup
+            print(f"⚠️ Warning: No MSRP available for '{product_data.get('Product/Service', 'Unknown')}' - using Standard markup instead")
+            pricing_logic = "Standard markup"
+            # Will fall through to Standard markup logic
+        else:
+            shipping_addon_pct = get_shipping_addon_percent(product_data)
+            shipping_addon_amount = (shipping_addon_pct / 100) * per_item_cost
+            pbp_msrp = vendor_msrp + shipping_addon_amount
+
+            calculation_details.update({
+                'vendor_msrp': vendor_msrp,
+                'shipping_addon_pct': shipping_addon_pct,
+                'shipping_addon_amount': shipping_addon_amount
+            })
+
+            method_used = "MSRP + % of cost"
+
+    if pricing_logic == "MSRP capped – ship absorbed":
+        # Method 2: MSRP exactly
+        vendor_msrp = get_column_value(product_data, 'Vendor Published MSRP', None, None)
+
+        if vendor_msrp is None or vendor_msrp == 0:
+            # Fallback: No MSRP available, use Standard markup
+            print(f"⚠️ Warning: No MSRP available for '{product_data.get('Product/Service', 'Unknown')}' - using Standard markup instead")
+            pricing_logic = "Standard markup"
+            # Will fall through to Standard markup logic
+        else:
+            pbp_msrp = vendor_msrp
+
+            calculation_details.update({
+                'vendor_msrp': vendor_msrp,
+                'shipping_absorbed': True
+            })
+
+            method_used = "MSRP capped – ship absorbed"
+
+    if pricing_logic == "Standard markup" or pbp_msrp is None:
+        # Method 3: Traditional markup
+        if user_markup_override is not None:
+            markup_percent = user_markup_override
+        else:
+            # Default to 100% markup (cost × 2.0)
+            markup_percent = 100.0
+
+        pbp_msrp = per_item_cost * (1 + markup_percent / 100)
+
+        calculation_details.update({
+            'markup_percent': markup_percent,
+            'markup_amount': per_item_cost * (markup_percent / 100)
+        })
+
+        method_used = "Standard markup"
+
+    # Step 5: Get spreadsheet calculated MSRP for validation
+    spreadsheet_msrp = get_column_value(product_data, 'PBP MSRP (Per-Unit, No Tiers, Calculated)', None, None)
+
+    # Convert to float if needed
+    if spreadsheet_msrp is not None:
+        try:
+            spreadsheet_msrp = float(spreadsheet_msrp)
+        except (ValueError, TypeError):
+            spreadsheet_msrp = None
+
+    # Step 6: Validate against spreadsheet
+    if spreadsheet_msrp is not None:
+        # Compare with epsilon tolerance
+        if abs(pbp_msrp - spreadsheet_msrp) < 0.01:
+            validation_status = 'match'
+        else:
+            validation_status = 'mismatch'
+            print(f"⚠️ Validation: Price mismatch for '{product_data.get('Product/Service', 'Unknown')}'")
+            print(f"   Spreadsheet: ${spreadsheet_msrp:.2f} | Calculated: ${pbp_msrp:.2f}")
+    else:
+        validation_status = 'no_spreadsheet_value'
+
+    return {
+        'pbp_msrp': pbp_msrp,
+        'method_used': method_used,
+        'calculation_details': calculation_details,
+        'spreadsheet_msrp': spreadsheet_msrp,
+        'validation_status': validation_status
+    }
+
+
+def calculate_vendor_markup(product_data, per_item_cost):
+    """
+    Calculate vendor's implied markup percentage.
+    Part of January 2026 schema transition - diagnostic field.
+
+    Formula: ((Vendor MSRP / per-item cost) - 1) × 100
+
+    Args:
+        product_data: Product row from spreadsheet
+        per_item_cost: Normalized per-item cost
+
+    Returns:
+        dict: {
+            'vendor_markup_pct': float or None,
+            'spreadsheet_value': float or None,
+            'validation_status': str
+        }
+
+    Example:
+        >>> calculate_vendor_markup(product_data, 4.0)
+        {'vendor_markup_pct': 150.0, 'spreadsheet_value': 150.0, 'validation_status': 'match'}
+    """
+    from src.helpers import get_column_value
+
+    vendor_msrp = get_column_value(product_data, 'Vendor Published MSRP', None, None)
+
+    # Convert to float if needed
+    if vendor_msrp is not None:
+        try:
+            vendor_msrp = float(vendor_msrp)
+        except (ValueError, TypeError):
+            vendor_msrp = None
+
+    if vendor_msrp is None or vendor_msrp == 0 or per_item_cost == 0:
+        return {
+            'vendor_markup_pct': None,
+            'spreadsheet_value': None,
+            'validation_status': 'no_msrp'
+        }
+
+    # Calculate markup
+    vendor_markup_pct = ((vendor_msrp / per_item_cost) - 1) * 100
+
+    # Get spreadsheet value for comparison
+    spreadsheet_value = get_column_value(product_data, 'Vendor Markup (No Tiers, Calculated)', None, None)
+
+    # Convert to float if needed
+    if spreadsheet_value is not None:
+        try:
+            spreadsheet_value = float(spreadsheet_value)
+        except (ValueError, TypeError):
+            spreadsheet_value = None
+
+    # Validate
+    if spreadsheet_value is not None:
+        if abs(vendor_markup_pct - spreadsheet_value) < 0.5:  # 0.5% tolerance
+            validation_status = 'match'
+        else:
+            validation_status = 'mismatch'
+    else:
+        validation_status = 'no_spreadsheet_value'
+
+    return {
+        'vendor_markup_pct': vendor_markup_pct,
+        'spreadsheet_value': spreadsheet_value,
+        'validation_status': validation_status
+    }
+
+
+def calculate_pbp_markup(pbp_msrp, per_item_cost, product_data):
+    """
+    Calculate PBP's final markup percentage.
+    Part of January 2026 schema transition - diagnostic field.
+
+    Formula: ((PBP MSRP / per-item cost) - 1) × 100
+
+    Args:
+        pbp_msrp: PBP's calculated MSRP
+        per_item_cost: Normalized per-item cost
+        product_data: Product row from spreadsheet
+
+    Returns:
+        dict: {
+            'pbp_markup_pct': float,
+            'spreadsheet_value': float or None,
+            'validation_status': str
+        }
+
+    Example:
+        >>> calculate_pbp_markup(11.0, 4.0, product_data)
+        {'pbp_markup_pct': 175.0, 'spreadsheet_value': 175.0, 'validation_status': 'match'}
+    """
+    from src.helpers import get_column_value
+
+    if per_item_cost == 0:
+        return {
+            'pbp_markup_pct': 0.0,
+            'spreadsheet_value': None,
+            'validation_status': 'invalid_cost'
+        }
+
+    # Calculate markup
+    pbp_markup_pct = ((pbp_msrp / per_item_cost) - 1) * 100
+
+    # Get spreadsheet value for comparison
+    spreadsheet_value = get_column_value(product_data, 'PBP Markup (Vendor+Add-On, No Tiers)', None, None)
+
+    # Convert to float if needed
+    if spreadsheet_value is not None:
+        try:
+            spreadsheet_value = float(spreadsheet_value)
+        except (ValueError, TypeError):
+            spreadsheet_value = None
+
+    # Validate
+    if spreadsheet_value is not None:
+        if abs(pbp_markup_pct - spreadsheet_value) < 0.5:  # 0.5% tolerance
+            validation_status = 'match'
+        else:
+            validation_status = 'mismatch'
+    else:
+        validation_status = 'no_spreadsheet_value'
+
+    return {
+        'pbp_markup_pct': pbp_markup_pct,
+        'spreadsheet_value': spreadsheet_value,
+        'validation_status': validation_status
+    }
 
 
 def calculate_order_total(order_items, shipping=0.0, order_tariff=0.0,

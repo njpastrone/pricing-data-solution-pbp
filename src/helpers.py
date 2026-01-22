@@ -1274,8 +1274,12 @@ def format_shipping_display(product_data):
 
 def get_column_value(row, new_column_name, old_column_name=None, default=None):
     """
-    Get column value with backward compatibility.
-    Tries new column name first, then falls back to old column name if provided.
+    Get column value with backward compatibility and schema-aware defaults.
+
+    Updated for January 2026 schema transition. Handles:
+    - New canonical column names with old name fallbacks
+    - Empty cell defaults for specific fields
+    - Multi-level fallback chains for description fields
 
     Args:
         row: DataFrame row or dict containing column data
@@ -1289,7 +1293,104 @@ def get_column_value(row, new_column_name, old_column_name=None, default=None):
     Examples:
         >>> get_column_value(row, "Vendor Published MSRP", "MSRP")
         >>> get_column_value(row, "Client Price: Customization Setup Fee", "Customization Setup Fee", 0.0)
+        >>> get_column_value(row, "Pricing Logic", None, "Standard markup")
     """
+    # Define special mappings for new schema fields (Jan 2026)
+    # These fields have specific default values or fallback chains
+    schema_mappings = {
+        # Pricing fields with defaults
+        'Pricing Logic': {
+            'fallbacks': [],
+            'default': 'Standard markup'
+        },
+        'Cost Basis (Per Item/Per Package)': {
+            'fallbacks': [],
+            'default': 'Per Item'
+        },
+        'Shipping Add-On % (of Cost)': {
+            'fallbacks': [],
+            'default': 0.0
+        },
+
+        # Consolidated tier column
+        'PBP Cost (No Tiers/Tier 1)': {
+            'fallbacks': ['PBP Cost (No Tiers)', 'PBP Cost: Tier 1'],
+            'default': 0.0
+        },
+
+        # Description fields with fallback chains
+        'Purchase Description (to Partner)': {
+            'fallbacks': ['Purchase Description', 'Product/Service'],
+            'default': ''
+        },
+        'Billing Description (to Client)': {
+            'fallbacks': ['Marketing Description (Website)', 'Marketing Description', 'Product/Service'],
+            'default': ''
+        },
+        'Marketing Description (Website)': {
+            'fallbacks': ['Marketing Description', 'Billing Description (to Client)', 'Product/Service'],
+            'default': ''
+        },
+
+        # Calculated fields (optional, for validation)
+        'Vendor Markup (No Tiers, Calculated)': {
+            'fallbacks': [],
+            'default': None
+        },
+        'PBP Markup (Vendor+Add-On, No Tiers)': {
+            'fallbacks': [],
+            'default': None
+        },
+        'PBP MSRP (Per-Unit, No Tiers, Calculated)': {
+            'fallbacks': [],
+            'default': None
+        },
+        'PBP MSRP (Website)': {
+            'fallbacks': [],
+            'default': None
+        },
+
+        # Governance fields
+        'Pricing Notes': {
+            'fallbacks': [],
+            'default': ''
+        },
+        'Data Collection Notes': {
+            'fallbacks': [],
+            'default': ''
+        }
+    }
+
+    # Check if this is a schema-mapped field
+    if new_column_name in schema_mappings:
+        mapping = schema_mappings[new_column_name]
+
+        # Try new column name first
+        if new_column_name in row and row[new_column_name] not in [None, '', 'nan', pd.NA]:
+            value = row[new_column_name]
+            # For string fields, strip whitespace
+            if isinstance(value, str):
+                value = value.strip()
+                if value:  # Non-empty string
+                    return value
+            elif value is not None:  # Non-string, non-None value
+                return value
+
+        # Try fallback columns in order
+        for fallback_col in mapping['fallbacks']:
+            if fallback_col in row and row[fallback_col] not in [None, '', 'nan', pd.NA]:
+                value = row[fallback_col]
+                if isinstance(value, str):
+                    value = value.strip()
+                    if value:
+                        return value
+                elif value is not None:
+                    return value
+
+        # Return schema-specific default
+        return mapping['default']
+
+    # Standard behavior for non-mapped fields
     # Try new column name first
     if new_column_name in row and row[new_column_name] not in [None, '', 'nan']:
         return row[new_column_name]
@@ -1300,6 +1401,95 @@ def get_column_value(row, new_column_name, old_column_name=None, default=None):
 
     # Return default if neither exists
     return default
+
+
+# ========== COST BASIS NORMALIZATION (JAN 2026 SCHEMA) ==========
+
+def normalize_cost_to_per_item(product_data, base_cost):
+    """
+    Normalize cost to per-item basis using Cost Basis field.
+    Part of January 2026 schema transition.
+
+    Args:
+        product_data: Product row from spreadsheet
+        base_cost: Base cost from tier or no-tier column
+
+    Returns:
+        float: Per-item cost
+
+    Examples:
+        >>> # Per Item basis (no normalization)
+        >>> normalize_cost_to_per_item({'Cost Basis (Per Item/Per Package)': 'Per Item'}, 10.0)
+        10.0
+
+        >>> # Per Package basis (normalize)
+        >>> normalize_cost_to_per_item({
+        ...     'Cost Basis (Per Item/Per Package)': 'Per Package',
+        ...     'Units per Package': 6
+        ... }, 48.0)
+        8.0  # 48 / 6 = 8 per item
+    """
+    # Get cost basis (default to "Per Item" if empty)
+    cost_basis = get_column_value(product_data, 'Cost Basis (Per Item/Per Package)', None, 'Per Item')
+
+    if cost_basis == "Per Package":
+        # Get units per package (required if Per Package)
+        units_per_package = product_data.get('Units per Package', 1)
+
+        # Convert to float if string (Google Sheets may return as string)
+        try:
+            units_per_package = float(units_per_package) if units_per_package else 1
+        except (ValueError, TypeError):
+            units_per_package = 1
+
+        # Validate
+        if units_per_package <= 0:
+            print(f"⚠️ Warning: Invalid Units per Package ({units_per_package}) for {product_data.get('Product/Service', 'Unknown')}. Using 1.")
+            units_per_package = 1
+
+        # Normalize: divide package cost by units
+        per_item_cost = base_cost / units_per_package
+        return per_item_cost
+
+    else:  # "Per Item" or empty
+        # Already per-item, no normalization needed
+        return base_cost
+
+
+def get_pricing_logic(product_data):
+    """
+    Get pricing logic method for product.
+    Part of January 2026 schema transition.
+
+    Returns:
+        str: One of "MSRP + % of cost", "MSRP capped – ship absorbed", "Standard markup"
+
+    Example:
+        >>> get_pricing_logic(product_data)
+        'MSRP + % of cost'
+    """
+    return get_column_value(product_data, 'Pricing Logic', None, 'Standard markup')
+
+
+def get_shipping_addon_percent(product_data):
+    """
+    Get shipping add-on percentage for MSRP-based pricing.
+    Part of January 2026 schema transition.
+
+    Returns:
+        float: Percentage (0-100)
+
+    Example:
+        >>> get_shipping_addon_percent(product_data)
+        25.0  # 25% of cost
+    """
+    addon = get_column_value(product_data, 'Shipping Add-On % (of Cost)', None, 0.0)
+
+    # Ensure it's a float
+    try:
+        return float(addon) if addon is not None else 0.0
+    except (ValueError, TypeError):
+        return 0.0
 
 
 # ========== PRODUCT VARIANT HELPERS ==========
