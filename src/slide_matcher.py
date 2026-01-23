@@ -239,11 +239,11 @@ class SlideMatchResult:
 
     def __repr__(self):
         if self.match_source == 'confirmed':
-            source_indicator = "💾"  # Disk/save icon for confirmed matches
+            source_indicator = "[Confirmed]"
         elif self.match_source == 'manual':
-            source_indicator = "🎯"  # Target for manual overrides
+            source_indicator = "[Manual]"
         else:
-            source_indicator = "🤖"  # Robot for automatic matching
+            source_indicator = "[Auto]"
         return f"SlideMatchResult({source_indicator} {self.match_type}, {self.confidence}%, {self.gs_product_name} → {self.pptx_product_name})"
 
 

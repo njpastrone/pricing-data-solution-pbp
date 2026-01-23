@@ -320,7 +320,6 @@ def clear_saved_data_cache():
 # ============================================================
 st.set_page_config(
     page_title="PBP Order Management",
-    page_icon="🕊️",  # Peace dove icon
     layout="wide",
     initial_sidebar_state="auto"
 )
@@ -630,31 +629,25 @@ if 'last_order_save_time' not in st.session_state:
 with st.sidebar:
     st.markdown("## Instructions & Tools")
 
-    # Section 0: Data Source Selector
+    # Section 0: Data Source Information
     st.markdown("### Data Source")
 
-    # Initialize dataset selection in session state
+    # Initialize dataset selection in session state (always use 'real')
     if 'selected_dataset' not in st.session_state:
         st.session_state.selected_dataset = 'real'
 
-    selected_dataset = st.radio(
-        "Select pricing dataset:",
-        options=['demo', 'real'],
-        format_func=lambda x: DATASET_CONFIGS[x]['name'].replace('Demo Data (', '').replace('Real Pricing Data (', '').replace(')', ''),
-        key='selected_dataset',
-        help="Demo: Testing data from master_pricing_template_10_14\nReal: Production data from master_pricing"
-    )
+    # Display consolidated data source information
+    # Check if data is loaded (from current or previous run)
+    if 'df_template' in st.session_state and st.session_state.df_template is not None:
+        # Calculate from current data in session state
+        unique_products = len(st.session_state.df_template)
+        unique_partners = len(st.session_state.df_template['Partner'].unique())
+        active_dataset_name = DATASET_CONFIGS[st.session_state.selected_dataset]['name']
 
-    # Show visual indicator of active dataset
-    if selected_dataset == 'real':
-        # Check if real dataset is ready
-        if DATASET_CONFIGS['real'].get('status') == 'in_progress':
-            st.error("Real pricing data is not yet ready. Please use Demo Data.")
-            st.caption(DATASET_CONFIGS['real'].get('notes', 'Dataset structure needs to be completed.'))
-        else:
-            st.warning("Using REAL production data")
+        st.info(f"**{active_dataset_name}**")
+        st.caption(f"{unique_products} products from {unique_partners} partners")
     else:
-        st.info("Using demo/testing data")
+        st.info("Loading data...")
 
     st.markdown("---")
 
@@ -1811,7 +1804,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
         # Show variant confirmation UI if variants detected
         if variant_groups:
             st.markdown("---")
-            st.subheader("⚠️ Multi-Variant Products Detected")
+            st.subheader("Multi-Variant Products Detected")
             st.info(
                 "Multiple products matched to the same PowerPoint slide. "
                 "These are typically size/flavor variants."
@@ -1874,7 +1867,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     # Warning if multiple partners
                     if len(partners) > 1:
                         st.warning(
-                            f"⚠️ These products are from different partners: {', '.join(partners)}. "
+                            f"These products are from different partners: {', '.join(partners)}. "
                             "Creating separate slides is recommended."
                         )
 
@@ -2220,24 +2213,6 @@ try:
     df_metadata = st.session_state.df_metadata
     df_partner_info = st.session_state.df_partner_info
 
-    # Count unique partner-product combinations
-    unique_products = len(df_template)
-    unique_partners = len(df_template['Partner'].unique())
-
-    # Get active dataset name
-    active_dataset_name = DATASET_CONFIGS[st.session_state.selected_dataset]['name']
-
-    st.success(f"Loaded {unique_products} products from {unique_partners} partners ({active_dataset_name})")
-
-    # Status message for proposals and orders
-    num_proposals = len(st.session_state.proposal_products)
-    num_orders = len(st.session_state.order_items)
-
-    proposal_status = f"{num_proposals} product{'s' if num_proposals != 1 else ''}" if num_proposals > 0 else "Empty"
-    order_status = f"{num_orders} product{'s' if num_orders != 1 else ''}" if num_orders > 0 else "Empty"
-
-    st.info(f"Proposals: {proposal_status} | Orders: {order_status}")
-
 except Exception as e:
     error_msg = str(e)
 
@@ -2337,7 +2312,7 @@ with tab1:
         
         # Validation warning
         if min_budget and max_budget and min_budget > 0 and max_budget > 0 and min_budget > max_budget:
-            st.error("⚠️ Min price cannot be greater than Max price")
+            st.error("Min price cannot be greater than Max price")
 
     with col2:
         st.markdown("**Partner/Maker**")
@@ -2660,7 +2635,7 @@ with tab1:
             with header_col3:
                 st.markdown("**Cost/Unit**")
             with header_col4:
-                st.markdown("**Price/Unit (100% markup)**")
+                st.markdown("**PBP MSRP**")
             with header_col5:
                 st.markdown("**Actions**")
 
@@ -2670,15 +2645,32 @@ with tab1:
             for idx, row in filtered_df.iterrows():
                 product_data = row
 
-                # Calculate cost and client price for display
+                # Calculate cost and client price for display using new pricing logic
                 preliminary_cost, _, _ = get_unit_price_new_system(product_data, 100)
-                moq_result = calculate_moq(preliminary_cost * 2, product_data) if preliminary_cost else None
+
+                # Use new pricing engine to get PBP MSRP
+                pricing_result = calculate_pbp_msrp(product_data.to_dict(), quantity=100)
+                pbp_msrp = pricing_result['pbp_msrp']
+
+                # Calculate MOQ based on PBP MSRP (not hardcoded 100% markup)
+                moq_result = calculate_moq(pbp_msrp, product_data) if pbp_msrp else None
                 estimated_moq = moq_result['moq'] if moq_result else None
                 moq_display_text = moq_result['display_text'] if moq_result else ""
                 moq_cost, _, _ = get_unit_price_new_system(product_data, estimated_moq) if estimated_moq else (None, None, None)
 
-                # Calculate client price (100% markup)
-                moq_client_price = moq_cost * 2 if moq_cost else None
+                # Get PBP MSRP at MOQ quantity (for accurate pricing)
+                if estimated_moq:
+                    moq_pricing_result = calculate_pbp_msrp(product_data.to_dict(), quantity=estimated_moq)
+                    moq_client_price = moq_pricing_result['pbp_msrp']
+
+                    # Calculate actual markup percentage being used
+                    if moq_cost and moq_cost > 0:
+                        actual_markup = ((moq_client_price / moq_cost) - 1) * 100
+                    else:
+                        actual_markup = 0.0
+                else:
+                    moq_client_price = None
+                    actual_markup = 0.0
 
                 # Compact row with all essential info
                 col1, col2, col3, col4, col5 = st.columns([3, 1.5, 1, 1.2, 1.5])
@@ -2710,14 +2702,19 @@ with tab1:
                     # Variant selector (if product has variants)
                     selected_variant = None
                     if product_has_variants and variant_types:
+                        # Callback to keep catalog expanded when variant is selected
+                        def on_variant_change():
+                            st.session_state.keep_catalog_expanded = True
+
                         selected_variant = st.selectbox(
                             "Select variant:",
                             options=[''] + variant_types,  # Empty option first
                             key=f"variant_{idx}",
-                            label_visibility="collapsed"
+                            label_visibility="collapsed",
+                            on_change=on_variant_change
                         )
                         if not selected_variant:
-                            st.caption("⚠️ Variant recommended")
+                            st.caption("Variant recommended")
 
                     # Add button - adds product to proposal with new pricing logic
                     if st.button("Add to Proposal", key=f"add_{idx}", use_container_width=True, type="primary"):
@@ -2803,8 +2800,8 @@ with tab1:
                     st.caption(f"Shipping: {shipping_display}")
 
                 # Show estimated prices at MOQ
-                if moq_cost and estimated_moq:
-                    st.caption(f"Est. Cost & Price at {moq_display_text}: ${moq_cost:.2f}/unit cost → ${moq_client_price:.2f}/unit client price (100% markup)")
+                if moq_cost and estimated_moq and moq_client_price:
+                    st.caption(f"Est. Cost & Price at {moq_display_text}: ${moq_cost:.2f}/unit cost → ${moq_client_price:.2f}/unit client price ({actual_markup:.0f}% markup)")
 
                 # Show description if available
                 desc = product_data.get("Marketing Description", "")
@@ -4092,9 +4089,9 @@ with tab2:
     has_proposal_products = len(st.session_state.proposal_products) > 0
 
     if not has_proposal_products:
-        st.info("💡 **No proposal products found.** Create a proposal in Tab 1 first, then return here to generate a client form.")
+        st.info("**No proposal products found.** Create a proposal in Tab 1 first, then return here to generate a client form.")
     else:
-        st.success(f"✅ Found {len(st.session_state.proposal_products)} products from your proposal")
+        st.success(f"Found {len(st.session_state.proposal_products)} products from your proposal")
 
         # Import forms helper
         from src.forms_helper import generate_prefilled_form_url
@@ -4140,7 +4137,7 @@ with tab2:
                 })
 
         if selected_products:
-            st.info(f"📝 **{len(selected_products)} product(s) selected** - these will be pre-filled in the Google Form")
+            st.info(f"**{len(selected_products)} product(s) selected** - these will be pre-filled in the Google Form")
 
             # Client info (from Section 1)
             client_info = {
@@ -4162,7 +4159,7 @@ with tab2:
 
             # Show generated URL
             if st.session_state.get('show_google_form_url', False) and st.session_state.get('google_form_url'):
-                st.success("✅ Form URL generated successfully!")
+                st.success("Form URL generated successfully!")
 
                 st.markdown("##### Share This URL with Your Client:")
 
@@ -4185,7 +4182,7 @@ with tab2:
                 4. Go to **Tab 3 → Option A** to import the completed response
                 """)
         else:
-            st.warning("⚠️ No products selected. Check at least one product to generate a form.")
+            st.warning("No products selected. Check at least one product to generate a form.")
 
     # ============================================================
     # SECTION 3: HTML ORDER FORM (ALTERNATIVE)
@@ -4853,9 +4850,9 @@ with tab3:
                 df_unimported = get_unimported_responses(gc)
 
                 if df_unimported.empty:
-                    st.info("✅ No new responses found. All responses have been imported.")
+                    st.info("No new responses found. All responses have been imported.")
                 else:
-                    st.success(f"📝 Found **{len(df_unimported)}** unimported response(s)")
+                    st.success(f"Found **{len(df_unimported)}** unimported response(s)")
                     st.session_state.google_form_responses = df_unimported
                     st.session_state.google_form_gc = gc
 
@@ -4901,7 +4898,7 @@ with tab3:
                             st.caption(f"  Custom: {product['customization_notes']}")
 
                     # Import button
-                    if st.button(f"✅ Import This Response", key=f"import_google_response_{idx}"):
+                    if st.button(f"Import This Response", key=f"import_google_response_{idx}"):
                         # Import client info
                         client_type = response_data['client_info'].get('client_type', 'New')
                         drop_shipping = response_data['shipping_info'].get('drop_shipping', 'No')
@@ -5077,7 +5074,7 @@ with tab3:
                             st.toast(f"Imported {products_imported} product(s) from {company}")
 
                         if products_skipped:
-                            st.warning(f"⚠️ Could not match {len(products_skipped)} product(s): {', '.join(products_skipped)}")
+                            st.warning(f"Could not match {len(products_skipped)} product(s): {', '.join(products_skipped)}")
 
                         st.info("**Next:** Scroll down to Section 2 to configure your order")
 
@@ -5549,7 +5546,7 @@ with tab3:
                 key="manual_variant_select"
             )
             if not selected_variant_manual:
-                st.caption("⚠️ Variant recommended but not required")
+                st.caption("Variant recommended but not required")
 
     with col2:
         st.write("")  # Spacing
@@ -5920,7 +5917,7 @@ with tab3:
                     if item.get('from_proposal_snapshot'):
                         st.caption("✓ Pricing preserved from proposal (saved configuration)")
                     elif item.get('source') == 'proposal':
-                        st.caption("⚠️ Pricing recalculated from current spreadsheet")
+                        st.caption("Pricing recalculated from current spreadsheet")
             with col_remove:
                 if st.button("Remove", key=f"remove_product_{idx}", type="secondary"):
                     st.session_state.order_items.pop(idx)
@@ -5969,7 +5966,7 @@ with tab3:
                 )
                 # Highlight if quantity is 1 (warning)
                 if new_quantity == 1:
-                    st.caption("⚠️ Qty = 1")
+                    st.caption("WARNING: Qty = 1")
 
                 # Recalculate base price if quantity changed
                 if new_quantity != item['quantity']:
@@ -6133,7 +6130,7 @@ with tab3:
             # VALIDATION WARNING (Phase 3) - Only show if not manually overridden
             validation_warning = item.get('validation_warning', None)
             if validation_warning and not manual_override:
-                st.warning(f"⚠️ **Pricing Validation:** {validation_warning}")
+                st.warning(f"**Pricing Validation:** {validation_warning}")
                 st.caption("The calculated price doesn't match the spreadsheet value. Enable manual override if this is intentional.")
 
             # PRICING NOTES (Phase 3) - Only show if notes exist and not manually overridden
@@ -6294,7 +6291,7 @@ with tab3:
                                 )
                             with remove_col:
                                 st.write("")  # Spacing
-                                if st.button("❌", key=f"remove_addon_{idx}_{addon_idx}"):
+                                if st.button("Remove", key=f"remove_addon_{idx}_{addon_idx}"):
                                     addons_to_remove.append(addon_idx)
 
                             # Client Pricing Section
@@ -6716,7 +6713,7 @@ with tab3:
 
         # Show validation warnings if any
         if items_with_warnings:
-            st.warning(f"⚠️ {len(items_with_warnings)} product{'s' if len(items_with_warnings) > 1 else ''} {'have' if len(items_with_warnings) > 1 else 'has'} pricing discrepancies")
+            st.warning(f"{len(items_with_warnings)} product{'s' if len(items_with_warnings) > 1 else ''} {'have' if len(items_with_warnings) > 1 else 'has'} pricing discrepancies")
             with st.expander("View Validation Details", expanded=False):
                 for item in items_with_warnings:
                     from src.helpers import format_product_with_variant

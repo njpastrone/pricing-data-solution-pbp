@@ -427,7 +427,7 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
 
         if vendor_msrp is None or vendor_msrp == 0:
             # Fallback: No MSRP available, use Standard markup
-            print(f"⚠️ Warning: No MSRP available for '{product_data.get('Product/Service', 'Unknown')}' - using Standard markup instead")
+            print(f"Warning: No MSRP available for '{product_data.get('Product/Service', 'Unknown')}' - using Standard markup instead")
             pricing_logic = "Standard markup"
             # Will fall through to Standard markup logic
         else:
@@ -450,7 +450,7 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
 
         if vendor_msrp is None or vendor_msrp == 0:
             # Fallback: No MSRP available, use Standard markup
-            print(f"⚠️ Warning: No MSRP available for '{product_data.get('Product/Service', 'Unknown')}' - using Standard markup instead")
+            print(f"Warning: No MSRP available for '{product_data.get('Product/Service', 'Unknown')}' - using Standard markup instead")
             pricing_logic = "Standard markup"
             # Will fall through to Standard markup logic
         else:
@@ -497,7 +497,7 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
             validation_status = 'match'
         else:
             validation_status = 'mismatch'
-            print(f"⚠️ Validation: Price mismatch for '{product_data.get('Product/Service', 'Unknown')}'")
+            print(f"Validation: Price mismatch for '{product_data.get('Product/Service', 'Unknown')}'")
             print(f"   Spreadsheet: ${spreadsheet_msrp:.2f} | Calculated: ${pbp_msrp:.2f}")
     else:
         validation_status = 'no_spreadsheet_value'

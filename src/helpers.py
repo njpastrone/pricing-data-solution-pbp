@@ -1470,7 +1470,7 @@ def normalize_cost_to_per_item(product_data, base_cost):
 
         # Validate
         if units_per_package <= 0:
-            print(f"⚠️ Warning: Invalid Units per Package ({units_per_package}) for {product_data.get('Product/Service', 'Unknown')}. Using 1.")
+            print(f"Warning: Invalid Units per Package ({units_per_package}) for {product_data.get('Product/Service', 'Unknown')}. Using 1.")
             units_per_package = 1
 
         # Normalize: divide package cost by units
