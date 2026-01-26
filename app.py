@@ -671,57 +671,7 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # Section 1: Progress Indicator
-    st.markdown("### Workflow Progress")
-
-    # Determine completion status for each tab
-    has_proposals = len(st.session_state.proposal_products) > 0
-    has_order = len(st.session_state.order_items) > 0
-    has_client_info = st.session_state.client_info.get('company_name', '').strip() != ''
-    order_confirmed = st.session_state.get('order_confirmed', False)
-
-    # Tab 1: Proposals
-    tab1_status = "[X]" if has_proposals else "[ ]"
-    tab1_color = "green" if has_proposals else "gray"
-    st.markdown(f":{tab1_color}[{tab1_status}] **Tab 1:** Proposals ({len(st.session_state.proposal_products)} products)")
-
-    # Tab 2: Order Forms (always available)
-    tab2_status = "[X]"
-    tab2_color = "green"
-    st.markdown(f":{tab2_color}[{tab2_status}] **Tab 2:** Client Order Forms (always available)")
-
-    # Tab 3: Order & Client Info
-    tab3_complete = has_order and has_client_info and order_confirmed
-    tab3_status = "[X]" if tab3_complete else "[ ]"
-    tab3_color = "green" if tab3_complete else "gray"
-
-    # Debug info to show what's missing
-    if not tab3_complete:
-        missing = []
-        if not has_order:
-            missing.append("no order")
-        if not has_client_info:
-            missing.append("no client info")
-        if not order_confirmed:
-            missing.append("not confirmed")
-        debug_text = f" ({', '.join(missing)})" if missing else ""
-    else:
-        debug_text = ""
-
-    st.markdown(f":{tab3_color}[{tab3_status}] **Tab 3:** Order & Client ({len(st.session_state.order_items)} products){debug_text}")
-
-    # Tab 4: Invoice/PO ready indicator
-    tab4_ready = has_order and has_client_info
-    tab4_status = "[X]" if tab4_ready else "[ ]"
-    tab4_color = "green" if tab4_ready else "gray"
-    tab4_label = "Ready" if tab4_ready else "Not ready"
-    st.markdown(f":{tab4_color}[{tab4_status}] **Tab 4:** Invoice/PO ({tab4_label})")
-
-    st.caption("Complete Tab 3 to generate Invoice/PO in Tab 4")
-
-    st.markdown("---")
-
-    # Section 2: Saved Work Management
+    # Saved Work Management
     st.markdown("### Saved Work")
 
     # Add refresh button if data seems stale
