@@ -623,6 +623,30 @@ if 'last_proposal_save_time' not in st.session_state:
 if 'last_order_save_time' not in st.session_state:
     st.session_state.last_order_save_time = None
 
+# Initialize dataset selection (always use 'real')
+if 'selected_dataset' not in st.session_state:
+    st.session_state.selected_dataset = 'real'
+
+# ============================================================
+# DATA LOADING (before sidebar to ensure data is available)
+# ============================================================
+# Load data if not already loaded or if dataset changed
+need_reload = (
+    'df_template' not in st.session_state or
+    st.session_state.get('loaded_dataset') != st.session_state.selected_dataset
+)
+
+if need_reload:
+    df_template, df_metadata, df_partner_info = load_pricing_data(st.session_state.selected_dataset)
+    st.session_state.df_template = df_template
+    st.session_state.df_metadata = df_metadata
+    st.session_state.df_partner_info = df_partner_info
+    st.session_state.data_loaded_at = datetime.now()
+    st.session_state.loaded_dataset = st.session_state.selected_dataset
+
+    # Extract and store partner contacts
+    st.session_state.partner_contacts = extract_partner_contacts(df_partner_info)
+
 # ============================================================
 # SIDEBAR - APP INFORMATION
 # ============================================================
@@ -631,10 +655,6 @@ with st.sidebar:
 
     # Section 0: Data Source Information
     st.markdown("### Data Source")
-
-    # Initialize dataset selection in session state (always use 'real')
-    if 'selected_dataset' not in st.session_state:
-        st.session_state.selected_dataset = 'real'
 
     # Display consolidated data source information
     # Check if data is loaded (from current or previous run)
@@ -2173,42 +2193,10 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
     return None
 
 # ============================================================
-# DATA LOADING
+# DATA LOADING (Tab 1)
 # ============================================================
+# Data is now loaded before sidebar, so just retrieve from session state
 try:
-    # Check if we need to reload data (first load or dataset changed)
-    need_reload = (
-        'df_template' not in st.session_state or
-        st.session_state.get('loaded_dataset') != st.session_state.selected_dataset
-    )
-
-    if need_reload:
-        df_template, df_metadata, df_partner_info = load_pricing_data(st.session_state.selected_dataset)
-        st.session_state.df_template = df_template
-        st.session_state.df_metadata = df_metadata
-        st.session_state.df_partner_info = df_partner_info
-        st.session_state.data_loaded_at = datetime.now()
-        st.session_state.loaded_dataset = st.session_state.selected_dataset
-
-        # Extract and store partner contacts
-        st.session_state.partner_contacts = extract_partner_contacts(df_partner_info)
-
-        # Debug: Log partner contacts info
-        if st.session_state.partner_contacts:
-            st.sidebar.info(f"Loaded {len(st.session_state.partner_contacts)} partner POCs")
-        else:
-            st.sidebar.warning("No partner POCs found in Partner-Specific Info sheet")
-
-        # Clear proposal and order data when switching datasets (prevents data mismatch)
-        if st.session_state.get('loaded_dataset') != st.session_state.selected_dataset:
-            st.session_state.proposal_products = []
-            st.session_state.order_items = []
-            # Clear proposal tracking info
-            st.session_state.loaded_proposal_name = None
-            st.session_state.loaded_proposal_date = None
-            st.session_state.loaded_proposal_creator = None
-            st.warning("Dataset changed - cleared existing proposals and orders to prevent data mismatch")
-
     df_template = st.session_state.df_template
     df_metadata = st.session_state.df_metadata
     df_partner_info = st.session_state.df_partner_info
