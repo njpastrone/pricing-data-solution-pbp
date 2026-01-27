@@ -669,6 +669,12 @@ with st.sidebar:
     else:
         st.info("Loading data...")
 
+    # Session Status
+    proposal_count = len(st.session_state.get('proposal_items', []))
+    order_count = len(st.session_state.get('order_items', []))
+
+    st.caption(f"**Proposal:** {proposal_count} items | **Order:** {order_count} items")
+
     st.markdown("---")
 
     # Saved Work Management
@@ -2380,54 +2386,72 @@ with tab1:
                     if st.button(f"Add All {new_count_all}", type="secondary", use_container_width=True, key="add_all_products_button"):
                         # Add all new products to proposal with new pricing logic
                         from src.helpers import calculate_pricing_snapshot
+                        added_count = 0
+                        failed_products = []
+
                         for product_row in new_products_all:
-                            # Use new pricing calculation
-                            pricing_result = calculate_pbp_msrp(product_row.to_dict(), quantity=100)
+                            try:
+                                # Use new pricing calculation
+                                pricing_result = calculate_pbp_msrp(product_row.to_dict(), quantity=100)
 
-                            # Determine markup based on pricing method
-                            if st.session_state.proposal_use_msrp:
-                                # Use pricing method from spreadsheet
-                                base_cost = pricing_result['calculation_details']['per_item_cost']
-                                pbp_msrp = pricing_result['pbp_msrp']
+                                # Determine markup based on pricing method
+                                if st.session_state.proposal_use_msrp:
+                                    # Use pricing method from spreadsheet
+                                    base_cost = pricing_result['calculation_details']['per_item_cost']
+                                    pbp_msrp = pricing_result['pbp_msrp']
 
-                                if base_cost and base_cost > 0:
-                                    # Calculate markup to match PBP MSRP
-                                    markup = ((pbp_msrp / base_cost) - 1) * 100
+                                    if base_cost and base_cost > 0:
+                                        # Calculate markup to match PBP MSRP
+                                        markup = ((pbp_msrp / base_cost) - 1) * 100
+                                    else:
+                                        markup = 100.0
                                 else:
+                                    # Use default 100% markup
                                     markup = 100.0
-                            else:
-                                # Use default 100% markup
-                                markup = 100.0
 
-                            # Calculate pricing snapshot to preserve pricing when importing to orders
-                            pricing_snapshot = calculate_pricing_snapshot(
-                                product_row,
-                                markup,
-                                quantity=100,  # Default for MOQ calculation
-                                discount_percent=st.session_state.get('proposal_discount_percent', 0.0),
-                                marketing_rounding=st.session_state.proposal_marketing_rounding,
-                                fifty_cent_rounding=st.session_state.proposal_fifty_cent_rounding
-                            )
+                                # Calculate pricing snapshot to preserve pricing when importing to orders
+                                pricing_snapshot = calculate_pricing_snapshot(
+                                    product_row,
+                                    markup,
+                                    quantity=100,  # Default for MOQ calculation
+                                    discount_percent=st.session_state.get('proposal_discount_percent', 0.0),
+                                    marketing_rounding=st.session_state.proposal_marketing_rounding,
+                                    fifty_cent_rounding=st.session_state.proposal_fifty_cent_rounding
+                                )
 
-                            proposal_item = {
-                                'product_data': product_row.to_dict(),
-                                'markup_percent': markup,
-                                'pricing_snapshot': pricing_snapshot,
-                                'pricing_method': pricing_result['method_used'],
-                                'pricing_notes': pricing_result.get('pricing_notes', ''),
-                                'manual_override': False,
-                                'validation_warning': pricing_result.get('validation_warning', None),
-                                'settings_snapshot': {
-                                    'fifty_cent_rounding': st.session_state.get('proposal_fifty_cent_rounding', False),
-                                    'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
-                                    'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                                proposal_item = {
+                                    'product_data': product_row.to_dict(),
+                                    'markup_percent': markup,
+                                    'pricing_snapshot': pricing_snapshot,
+                                    'pricing_method': pricing_result['method_used'],
+                                    'pricing_notes': pricing_result.get('pricing_notes', ''),
+                                    'manual_override': False,
+                                    'validation_warning': pricing_result.get('validation_warning', None),
+                                    'settings_snapshot': {
+                                        'fifty_cent_rounding': st.session_state.get('proposal_fifty_cent_rounding', False),
+                                        'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
+                                        'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                                    }
                                 }
-                            }
-                            st.session_state.proposal_products.append(proposal_item)
+                                st.session_state.proposal_products.append(proposal_item)
+                                added_count += 1
+
+                            except (KeyError, TypeError, ValueError) as e:
+                                # Track products that failed due to missing pricing data
+                                product_name = product_row.get('Product/Service', 'Unknown Product')
+                                failed_products.append(product_name)
 
                         # Set success message
-                        st.session_state.show_bulk_success_message = True
-                        st.session_state.bulk_success_message = f"Added **all {new_count_all} filtered products** to proposal!"
+                        if added_count > 0:
+                            st.session_state.show_bulk_success_message = True
+                            st.session_state.bulk_success_message = f"Added **{added_count} filtered products** to proposal!"
+
+                        # Show warning for failed products
+                        if failed_products:
+                            st.warning(f"Failed to add {len(failed_products)} product(s): Missing pricing data in master spreadsheet")
+                            with st.expander("See failed products"):
+                                for product_name in failed_products:
+                                    st.caption(f"- {product_name}")
 
                         # Keep catalog expanded after bulk add
                         st.session_state.keep_catalog_expanded = True
@@ -2478,55 +2502,73 @@ with tab1:
                         if st.button(f"Add {new_count} Products", type="primary", use_container_width=True, key="bulk_add_button"):
                             # Add all new products to proposal with new pricing logic
                             from src.helpers import calculate_pricing_snapshot
+                            added_count = 0
+                            failed_products = []
+
                             for product_row in new_products:
-                                # Use new pricing calculation
-                                pricing_result = calculate_pbp_msrp(product_row.to_dict(), quantity=100)
+                                try:
+                                    # Use new pricing calculation
+                                    pricing_result = calculate_pbp_msrp(product_row.to_dict(), quantity=100)
 
-                                # Determine markup based on pricing method
-                                if st.session_state.proposal_use_msrp:
-                                    # Use pricing method from spreadsheet
-                                    base_cost = pricing_result['calculation_details']['per_item_cost']
-                                    pbp_msrp = pricing_result['pbp_msrp']
+                                    # Determine markup based on pricing method
+                                    if st.session_state.proposal_use_msrp:
+                                        # Use pricing method from spreadsheet
+                                        base_cost = pricing_result['calculation_details']['per_item_cost']
+                                        pbp_msrp = pricing_result['pbp_msrp']
 
-                                    if base_cost and base_cost > 0:
-                                        # Calculate markup to match PBP MSRP
-                                        markup = ((pbp_msrp / base_cost) - 1) * 100
+                                        if base_cost and base_cost > 0:
+                                            # Calculate markup to match PBP MSRP
+                                            markup = ((pbp_msrp / base_cost) - 1) * 100
+                                        else:
+                                            markup = 100.0
                                     else:
+                                        # Use default 100% markup
                                         markup = 100.0
-                                else:
-                                    # Use default 100% markup
-                                    markup = 100.0
 
-                                # Calculate pricing snapshot to preserve pricing when importing to orders
-                                pricing_snapshot = calculate_pricing_snapshot(
-                                    product_row,
-                                    markup,
-                                    quantity=100,  # Default for MOQ calculation
-                                    discount_percent=st.session_state.get('proposal_discount_percent', 0.0),
-                                    marketing_rounding=st.session_state.proposal_marketing_rounding,
-                                    fifty_cent_rounding=st.session_state.proposal_fifty_cent_rounding
-                                )
+                                    # Calculate pricing snapshot to preserve pricing when importing to orders
+                                    pricing_snapshot = calculate_pricing_snapshot(
+                                        product_row,
+                                        markup,
+                                        quantity=100,  # Default for MOQ calculation
+                                        discount_percent=st.session_state.get('proposal_discount_percent', 0.0),
+                                        marketing_rounding=st.session_state.proposal_marketing_rounding,
+                                        fifty_cent_rounding=st.session_state.proposal_fifty_cent_rounding
+                                    )
 
-                                proposal_item = {
-                                    'product_data': product_row.to_dict(),
-                                    'markup_percent': markup,
-                                    'pricing_snapshot': pricing_snapshot,
-                                    'pricing_method': pricing_result['method_used'],
-                                    'pricing_notes': pricing_result.get('pricing_notes', ''),
-                                    'manual_override': False,
-                                    'validation_warning': pricing_result.get('validation_warning', None),
-                                    'settings_snapshot': {
-                                        'fifty_cent_rounding': st.session_state.get('proposal_fifty_cent_rounding', False),
-                                        'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
-                                        'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                                    proposal_item = {
+                                        'product_data': product_row.to_dict(),
+                                        'markup_percent': markup,
+                                        'pricing_snapshot': pricing_snapshot,
+                                        'pricing_method': pricing_result['method_used'],
+                                        'pricing_notes': pricing_result.get('pricing_notes', ''),
+                                        'manual_override': False,
+                                        'validation_warning': pricing_result.get('validation_warning', None),
+                                        'settings_snapshot': {
+                                            'fifty_cent_rounding': st.session_state.get('proposal_fifty_cent_rounding', False),
+                                            'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
+                                            'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                                        }
                                     }
-                                }
-                                st.session_state.proposal_products.append(proposal_item)
+                                    st.session_state.proposal_products.append(proposal_item)
+                                    added_count += 1
+
+                                except (KeyError, TypeError, ValueError) as e:
+                                    # Track products that failed due to missing pricing data
+                                    product_name = product_row.get('Product/Service', 'Unknown Product')
+                                    failed_products.append(product_name)
 
                             # Set success message
                             partner_names = ', '.join(bulk_partners)
-                            st.session_state.show_bulk_success_message = True
-                            st.session_state.bulk_success_message = f"Added **{new_count} products** from {partner_names} to proposal!"
+                            if added_count > 0:
+                                st.session_state.show_bulk_success_message = True
+                                st.session_state.bulk_success_message = f"Added **{added_count} products** from {partner_names} to proposal!"
+
+                            # Show warning for failed products
+                            if failed_products:
+                                st.warning(f"Failed to add {len(failed_products)} product(s): Missing pricing data in master spreadsheet")
+                                with st.expander("See failed products"):
+                                    for product_name in failed_products:
+                                        st.caption(f"- {product_name}")
 
                             # Keep catalog expanded after bulk add
                             st.session_state.keep_catalog_expanded = True
@@ -2632,87 +2674,72 @@ with tab1:
                         st.markdown("—")
 
                 with col5:
-                    # Check if product has variants
-                    from src.helpers import has_variants, parse_variant_types
-                    product_has_variants = has_variants(product_data)
-                    variant_types = parse_variant_types(product_data) if product_has_variants else []
-
-                    # Variant selector (if product has variants)
-                    selected_variant = None
-                    if product_has_variants and variant_types:
-                        # Callback to keep catalog expanded when variant is selected
-                        def on_variant_change():
-                            st.session_state.keep_catalog_expanded = True
-
-                        selected_variant = st.selectbox(
-                            "Select variant:",
-                            options=[''] + variant_types,  # Empty option first
-                            key=f"variant_{idx}",
-                            label_visibility="collapsed",
-                            on_change=on_variant_change
-                        )
-                        if not selected_variant:
-                            st.caption("Variant recommended")
-
                     # Add button - adds product to proposal with new pricing logic
                     if st.button("Add to Proposal", key=f"add_{idx}", use_container_width=True, type="primary"):
-                        # Use new pricing calculation (quantity 100 for reference)
-                        pricing_result = calculate_pbp_msrp(product_data.to_dict(), quantity=100)
+                        try:
+                            # Use new pricing calculation (quantity 100 for reference)
+                            pricing_result = calculate_pbp_msrp(product_data.to_dict(), quantity=100)
 
-                        # Determine markup based on pricing method
-                        if st.session_state.proposal_use_msrp:
-                            # Use pricing method from spreadsheet
-                            per_item_cost = pricing_result['calculation_details']['per_item_cost']
-                            pbp_msrp = pricing_result['pbp_msrp']
+                            # Determine markup based on pricing method
+                            if st.session_state.proposal_use_msrp:
+                                # Use pricing method from spreadsheet
+                                per_item_cost = pricing_result['calculation_details']['per_item_cost']
+                                pbp_msrp = pricing_result['pbp_msrp']
 
-                            if per_item_cost and per_item_cost > 0:
-                                # Calculate markup to match PBP MSRP
-                                markup = ((pbp_msrp / per_item_cost) - 1) * 100
+                                if per_item_cost and per_item_cost > 0:
+                                    # Calculate markup to match PBP MSRP
+                                    markup = ((pbp_msrp / per_item_cost) - 1) * 100
+                                else:
+                                    markup = 100.0
                             else:
+                                # Use default 100% markup
                                 markup = 100.0
-                        else:
-                            # Use default 100% markup
-                            markup = 100.0
 
-                        # Calculate pricing snapshot to preserve pricing when importing to orders
-                        from src.helpers import calculate_pricing_snapshot
-                        pricing_snapshot = calculate_pricing_snapshot(
-                            product_data,
-                            markup,
-                            quantity=100,  # Default for MOQ calculation
-                            discount_percent=st.session_state.get('proposal_discount_percent', 0.0),
-                            marketing_rounding=st.session_state.proposal_marketing_rounding,
-                            fifty_cent_rounding=st.session_state.proposal_fifty_cent_rounding
-                        )
+                            # Calculate pricing snapshot to preserve pricing when importing to orders
+                            from src.helpers import calculate_pricing_snapshot
+                            pricing_snapshot = calculate_pricing_snapshot(
+                                product_data,
+                                markup,
+                                quantity=100,  # Default for MOQ calculation
+                                discount_percent=st.session_state.get('proposal_discount_percent', 0.0),
+                                marketing_rounding=st.session_state.proposal_marketing_rounding,
+                                fifty_cent_rounding=st.session_state.proposal_fifty_cent_rounding
+                            )
 
-                        proposal_item = {
-                            'product_data': product_data.to_dict(),
-                            'markup_percent': markup,
-                            'selected_variant': selected_variant if selected_variant else None,
-                            'pricing_snapshot': pricing_snapshot,
-                            'pricing_method': pricing_result['method_used'],
-                            'pricing_notes': pricing_result.get('pricing_notes', ''),
-                            'manual_override': False,
-                            'validation_warning': pricing_result.get('validation_warning', None),
-                            'settings_snapshot': {
-                                'fifty_cent_rounding': st.session_state.get('proposal_fifty_cent_rounding', False),
-                                'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
-                                'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                            proposal_item = {
+                                'product_data': product_data.to_dict(),
+                                'markup_percent': markup,
+                                'pricing_snapshot': pricing_snapshot,
+                                'pricing_method': pricing_result['method_used'],
+                                'pricing_notes': pricing_result.get('pricing_notes', ''),
+                                'manual_override': False,
+                                'validation_warning': pricing_result.get('validation_warning', None),
+                                'settings_snapshot': {
+                                    'fifty_cent_rounding': st.session_state.get('proposal_fifty_cent_rounding', False),
+                                    'marketing_rounding': st.session_state.get('proposal_marketing_rounding', False),
+                                    'discount_percent': st.session_state.get('proposal_discount_percent', 0.0)
+                                }
                             }
-                        }
-                        st.session_state.proposal_products.append(proposal_item)
+                            st.session_state.proposal_products.append(proposal_item)
 
-                        # Set success message (include variant in product name if applicable)
-                        from src.helpers import format_product_with_variant
-                        st.session_state.show_success_message = True
-                        st.session_state.success_product_name = format_product_with_variant(
-                            product_data['Product/Service'],
-                            selected_variant
-                        )
+                            # Set success message
+                            st.session_state.show_success_message = True
+                            st.session_state.success_product_name = product_data['Product/Service']
 
-                        # Keep catalog expanded after adding product
-                        st.session_state.keep_catalog_expanded = True
-                        st.rerun()
+                            # Keep catalog expanded after adding product
+                            st.session_state.keep_catalog_expanded = True
+                            st.rerun()
+
+                        except (KeyError, TypeError, ValueError) as e:
+                            # Handle missing pricing data gracefully
+                            product_name = product_data.get('Product/Service', 'Unknown Product')
+                            st.error(f"Failed to add '{product_name}' to proposal: Please add pricing data to master spreadsheet.")
+                            st.caption(f"Missing data: {str(e)}")
+                        except Exception as e:
+                            # Catch any other unexpected errors
+                            product_name = product_data.get('Product/Service', 'Unknown Product')
+                            st.error(f"Failed to add '{product_name}' to proposal: {str(e)}")
+                            st.caption("Please contact support if this error persists.")
 
                 # Show additional details inline (no nested expander)
                 st.caption(f"Ships From: {product_data.get('Country of Origin (Ships From)', 'N/A')} | Made In: {product_data.get('Country of Origin (Made In)', 'N/A')} | Tiered: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
@@ -3064,12 +3091,8 @@ with tab1:
             col1, col2, col3, col4, col5, col6, col7, col8 = st.columns([3, 1.2, 1.2, 1.5, 1.2, 1.2, 1.0, 0.8])
 
             with col1:
-                # Display product name with variant (if applicable)
-                from src.helpers import format_product_with_variant
-                product_display_name = format_product_with_variant(
-                    product_data['Product/Service'],
-                    item.get('selected_variant')
-                )
+                # Display product name
+                product_display_name = product_data['Product/Service']
                 st.markdown(f"{product_display_name}")
                 st.caption(f"Partner: {product_data['Partner']}")
 
@@ -3199,11 +3222,7 @@ with tab1:
         if products_with_notes:
             with st.expander(f"Pricing Information ({len(products_with_notes)} product{'s' if len(products_with_notes) != 1 else ''})", expanded=False):
                 for item in products_with_notes:
-                    from src.helpers import format_product_with_variant
-                    product_display_name = format_product_with_variant(
-                        item['product_data']['Product/Service'],
-                        item.get('selected_variant')
-                    )
+                    product_display_name = item['product_data']['Product/Service']
                     st.write(f"**{product_display_name}**")
                     st.caption(item['pricing_notes'])
                     st.write("")  # Spacing
@@ -3222,11 +3241,7 @@ with tab1:
 
             with st.expander("View Validation Details", expanded=False):
                 for item in products_with_warnings:
-                    from src.helpers import format_product_with_variant
-                    product_display_name = format_product_with_variant(
-                        item['product_data']['Product/Service'],
-                        item.get('selected_variant')
-                    )
+                    product_display_name = item['product_data']['Product/Service']
                     st.write(f"**{product_display_name}**")
                     st.caption(item['validation_warning'])
                     st.write("")  # Spacing
