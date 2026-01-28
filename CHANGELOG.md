@@ -5,6 +5,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- **Volume Order Discount (5%):** New discount option available in Tab 1 (Proposal Generator) and Tab 3 (Order & Client Info)
+  - Provides clear distinction between non-profit discounts and volume-based discounts
+  - Four discount options now available: None, Non-profit (5%), Volume Order (5%), Custom
+  - Better tracking and reporting with distinct labels in order summaries
+  - Works identically to Non-profit discount (5% applied to products, not customization)
+  - Backward compatible with existing saved proposals and orders
+  - Display updates in proposal tables show "5% Volume Order discount" label
+  - "Discount Quoted to Client" warning in Tab 3 shows Volume Order discount when applicable
+
 ---
 
 ## [8.0.0] - 2026-01-22

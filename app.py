@@ -2976,14 +2976,18 @@ with tab1:
             # Discount options
             discount_type = st.selectbox(
                 "Client Discount",
-                options=["None", "Non-profit (5%)", "Custom"],
+                options=["None", "Non-profit (5%)", "Volume Order (5%)", "Custom"],
                 index=0 if not st.session_state.get('proposal_discount_type') else
-                      (1 if st.session_state.get('proposal_discount_type') == 'Non-profit' else 2),
+                      (1 if st.session_state.get('proposal_discount_type') == 'Non-profit' else
+                       (2 if st.session_state.get('proposal_discount_type') == 'Volume Order' else 3)),
                 key="proposal_discount_type_select"
             )
 
             if discount_type == "Non-profit (5%)":
                 st.session_state.proposal_discount_type = 'Non-profit'
+                st.session_state.proposal_discount_percent = 5.0
+            elif discount_type == "Volume Order (5%)":
+                st.session_state.proposal_discount_type = 'Volume Order'
                 st.session_state.proposal_discount_percent = 5.0
             elif discount_type == "Custom":
                 st.session_state.proposal_discount_type = 'Custom'
@@ -3396,6 +3400,8 @@ with tab1:
                                 discount_type = st.session_state.get('proposal_discount_type')
                                 if discount_type == 'Non-profit':
                                     notes.append("5% Non-profit discount")
+                                elif discount_type == 'Volume Order':
+                                    notes.append("5% Volume Order discount")
                                 else:
                                     notes.append(f"{discount_percent:.1f}% discount")
                             client_price_header = f"Client Price ({', '.join(notes)})"
@@ -3595,6 +3601,8 @@ with tab1:
                                 discount_type = st.session_state.get('proposal_discount_type')
                                 if discount_type == 'Non-profit':
                                     notes.append("5% Non-profit discount")
+                                elif discount_type == 'Volume Order':
+                                    notes.append("5% Volume Order discount")
                                 else:
                                     notes.append(f"{discount_percent:.1f}% discount")
                             client_price_header = f"Client Price ({', '.join(notes)})"
@@ -6794,10 +6802,14 @@ Rates default to current estimates but can be adjusted as needed.
 
         with col1:
             # Discount as dropdown (like in Proposals tab)
-            discount_options = ["None", "Non-profit (5%)", "Custom"]
+            discount_options = ["None", "Non-profit (5%)", "Volume Order (5%)", "Custom"]
             current_discount = "None"
             if st.session_state.order_discount_type == "preset":
-                current_discount = "Non-profit (5%)"
+                # Check the preset value to determine which option
+                if "Non-profit" in st.session_state.order_discount_preset:
+                    current_discount = "Non-profit (5%)"
+                elif "Volume Order" in st.session_state.order_discount_preset:
+                    current_discount = "Volume Order (5%)"
             elif st.session_state.order_discount_type == "custom":
                 current_discount = "Custom"
 
@@ -6814,6 +6826,8 @@ Rates default to current estimates but can be adjusted as needed.
 
             if proposal_discount_type == 'Non-profit':
                 st.caption("Discount Quoted to Client: Non-profit Discount (5%)")
+            elif proposal_discount_type == 'Volume Order':
+                st.caption("Discount Quoted to Client: Volume Order Discount (5%)")
             elif proposal_discount_type == 'Custom' and proposal_discount_percent > 0:
                 st.caption(f"Discount Quoted to Client: Custom ({proposal_discount_percent}%)")
             else:
@@ -6823,6 +6837,11 @@ Rates default to current estimates but can be adjusted as needed.
             if discount_selection == "Non-profit (5%)":
                 st.session_state.order_discount_type = "preset"
                 st.session_state.order_discount_preset = "Non-profit Discount (5%)"
+                st.session_state.order_discount_custom_value = 0.0
+                st.session_state.order_discount_custom_desc = ""
+            elif discount_selection == "Volume Order (5%)":
+                st.session_state.order_discount_type = "preset"
+                st.session_state.order_discount_preset = "Volume Order Discount (5%)"
                 st.session_state.order_discount_custom_value = 0.0
                 st.session_state.order_discount_custom_desc = ""
             elif discount_selection == "Custom":
@@ -8181,10 +8200,14 @@ with tab4:
 
             with col1:
                 # Discount as dropdown
-                discount_options = ["None", "Non-profit (5%)", "Custom"]
+                discount_options = ["None", "Non-profit (5%)", "Volume Order (5%)", "Custom"]
                 current_discount = "None"
                 if st.session_state.order_discount_type == "preset":
-                    current_discount = "Non-profit (5%)"
+                    # Check the preset value to determine which option
+                    if "Non-profit" in st.session_state.order_discount_preset:
+                        current_discount = "Non-profit (5%)"
+                    elif "Volume Order" in st.session_state.order_discount_preset:
+                        current_discount = "Volume Order (5%)"
                 elif st.session_state.order_discount_type == "custom":
                     current_discount = "Custom"
 
@@ -8199,6 +8222,11 @@ with tab4:
                 if discount_selection == "Non-profit (5%)":
                     st.session_state.order_discount_type = "preset"
                     st.session_state.order_discount_preset = "Non-profit Discount (5%)"
+                    st.session_state.order_discount_custom_value = 0.0
+                    st.session_state.order_discount_custom_desc = ""
+                elif discount_selection == "Volume Order (5%)":
+                    st.session_state.order_discount_type = "preset"
+                    st.session_state.order_discount_preset = "Volume Order Discount (5%)"
                     st.session_state.order_discount_custom_value = 0.0
                     st.session_state.order_discount_custom_desc = ""
                 elif discount_selection == "Custom":
