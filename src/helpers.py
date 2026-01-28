@@ -1311,11 +1311,15 @@ def get_column_value(row, new_column_name, old_column_name=None, default=None):
             'fallbacks': [],
             'default': 'Standard markup'
         },
-        'Cost Basis (Per Item/Per Package)': {
-            'fallbacks': [],
+        'Cost Basis (Per Item/Per Case)': {
+            'fallbacks': ['Cost Basis (Per Item/Per Package)'],  # Backward compatibility
             'default': 'Per Item'
         },
         'Shipping Add-On % (of Cost)': {
+            'fallbacks': [],
+            'default': 0.0
+        },
+        'Other Add-On % (of Cost)': {
             'fallbacks': [],
             'default': 0.0
         },
@@ -1435,6 +1439,7 @@ def normalize_cost_to_per_item(product_data, base_cost):
     """
     Normalize cost to per-item basis using Cost Basis field.
     Part of January 2026 schema transition.
+    Updated January 2026: "Package" → "Case" terminology.
 
     Args:
         product_data: Product row from spreadsheet
@@ -1445,36 +1450,37 @@ def normalize_cost_to_per_item(product_data, base_cost):
 
     Examples:
         >>> # Per Item basis (no normalization)
-        >>> normalize_cost_to_per_item({'Cost Basis (Per Item/Per Package)': 'Per Item'}, 10.0)
+        >>> normalize_cost_to_per_item({'Cost Basis (Per Item/Per Case)': 'Per Item'}, 10.0)
         10.0
 
-        >>> # Per Package basis (normalize)
+        >>> # Per Case basis (normalize)
         >>> normalize_cost_to_per_item({
-        ...     'Cost Basis (Per Item/Per Package)': 'Per Package',
-        ...     'Units per Package': 6
+        ...     'Cost Basis (Per Item/Per Case)': 'Per Case',
+        ...     'Units per Case': 6
         ... }, 48.0)
         8.0  # 48 / 6 = 8 per item
     """
     # Get cost basis (default to "Per Item" if empty)
-    cost_basis = get_column_value(product_data, 'Cost Basis (Per Item/Per Package)', None, 'Per Item')
+    cost_basis = get_column_value(product_data, 'Cost Basis (Per Item/Per Case)', None, 'Per Item')
 
-    if cost_basis == "Per Package":
-        # Get units per package (required if Per Package)
-        units_per_package = product_data.get('Units per Package', 1)
+    if cost_basis == "Per Case" or cost_basis == "Per Package":
+        # Get units per case (required if Per Case)
+        # Fallback to old "Units per Package" for backward compatibility
+        units_per_case = get_column_value(product_data, 'Units per Case', 'Units per Package', 1)
 
         # Convert to float if string (Google Sheets may return as string)
         try:
-            units_per_package = float(units_per_package) if units_per_package else 1
+            units_per_case = float(units_per_case) if units_per_case else 1
         except (ValueError, TypeError):
-            units_per_package = 1
+            units_per_case = 1
 
         # Validate
-        if units_per_package <= 0:
-            print(f"Warning: Invalid Units per Package ({units_per_package}) for {product_data.get('Product/Service', 'Unknown')}. Using 1.")
-            units_per_package = 1
+        if units_per_case <= 0:
+            print(f"Warning: Invalid Units per Case ({units_per_case}) for {product_data.get('Product/Service', 'Unknown')}. Using 1.")
+            units_per_case = 1
 
-        # Normalize: divide package cost by units
-        per_item_cost = base_cost / units_per_package
+        # Normalize: divide case cost by units
+        per_item_cost = base_cost / units_per_case
         return per_item_cost
 
     else:  # "Per Item" or empty
@@ -1512,6 +1518,38 @@ def get_shipping_addon_percent(product_data):
     addon = get_column_value(product_data, 'Shipping Add-On % (of Cost)', None, 0.0)
 
     # Handle percentage string (e.g., "15%" -> 15.0)
+    if addon is None or addon == '':
+        return 0.0
+
+    # Convert to string and clean
+    addon_str = str(addon).strip()
+
+    # Remove % symbol if present
+    if addon_str.endswith('%'):
+        addon_str = addon_str[:-1].strip()
+
+    # Convert to float
+    try:
+        return float(addon_str)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def get_other_addon_percent(product_data):
+    """
+    Get other add-on percentage for MSRP-based pricing.
+    Part of January 2026 schema update.
+
+    Returns:
+        float: Percentage (0-100)
+
+    Example:
+        >>> get_other_addon_percent(product_data)
+        10.0  # 10% of cost
+    """
+    addon = get_column_value(product_data, 'Other Add-On % (of Cost)', None, 0.0)
+
+    # Handle percentage string (e.g., "10%" -> 10.0)
     if addon is None or addon == '':
         return 0.0
 

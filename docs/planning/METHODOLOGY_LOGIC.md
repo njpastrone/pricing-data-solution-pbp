@@ -36,15 +36,18 @@ Where:
 
 ## 💰 Pricing Methodology (Schema Update Jan 2026)
 
-As of January 2026, the pricing system supports three distinct pricing methods, defined by the "Pricing Logic" column in the Google Sheets data.
+As of January 2026, the pricing system supports four distinct pricing methods, defined by the "Pricing Logic" column in the Google Sheets data.
+
+**Updated January 28, 2026:** Added "Other Add-On %" field and fourth pricing method. Both add-ons are now summed in MSRP-based pricing calculations.
 
 ### Overview
 
 Each product specifies its pricing method, which determines how PBP MSRP is calculated:
 
-1. **"MSRP + % of cost"** - Add shipping recovery to vendor MSRP
-2. **"MSRP capped – ship absorbed"** - Use vendor MSRP exactly
-3. **"Standard markup"** - Traditional cost-based markup
+1. **"MSRP + % of cost"** - Add shipping and/or other add-ons to vendor MSRP
+2. **"MSRP + Other Add-On % (of Cost)"** - Add shipping and/or other add-ons to vendor MSRP (same calculation as Method 1)
+3. **"MSRP capped – ship absorbed"** - Use vendor MSRP exactly
+4. **"Standard markup"** - Traditional cost-based markup
 
 Users can override any pricing method with manual pricing using the "Manual Override" checkbox.
 
@@ -52,28 +55,30 @@ Users can override any pricing method with manual pricing using the "Manual Over
 
 ### Method 1: MSRP + % of cost
 
-**Use Case:** Products where PBP wants to match vendor MSRP but recover shipping costs separately.
+**Use Case:** Products where PBP wants to match vendor MSRP but recover shipping and/or other costs separately.
 
-**Formula:**
+**Formula (Updated Jan 2026):**
 ```
-PBP MSRP = Vendor Published MSRP + (Shipping Add-On % × Per-Item Cost)
+PBP MSRP = Vendor Published MSRP + ((Shipping Add-On % + Other Add-On %) × Per-Item Cost)
 ```
 
 **Example:**
 - Vendor Published MSRP: $10.00
 - Shipping Add-On %: 15%
+- Other Add-On %: 5%
 - Per-Item Cost: $5.00
-- **Calculation:** $10.00 + (0.15 × $5.00) = $10.75
-- **Result:** PBP MSRP = $10.75
+- **Calculation:** $10.00 + ((0.15 + 0.05) × $5.00) = $10.00 + (0.20 × $5.00) = $11.00
+- **Result:** PBP MSRP = $11.00
 
 **Required Fields:**
 - `Vendor Published MSRP` (must have value)
 - `Shipping Add-On (%)` (defaults to 0% if empty)
+- `Other Add-On (%)` (defaults to 0% if empty)
 - `Pricing Logic` = "MSRP + % of cost"
 
 **Cost Basis:**
 - Per-Item Cost is always normalized using Cost Basis field
-- If Cost Basis = "Per Package", divides by Units per Package
+- If Cost Basis = "Per Case", divides by Units per Case
 
 **Validation:**
 - Compares calculated PBP MSRP against spreadsheet `PBP Calculated MSRP`
@@ -82,7 +87,8 @@ PBP MSRP = Vendor Published MSRP + (Shipping Add-On % × Per-Item Cost)
 
 **Pricing Notes:**
 ```
-Using "MSRP + % of cost" method: Vendor MSRP ($10.00) + 15.0% shipping recovery ($0.75) = $10.75
+Using "MSRP + % of cost" method: Vendor MSRP ($10.00) + 20.0% combined add-on ($1.00) = $11.00
+(Shipping: 15%, Other: 5%)
 ```
 
 ---
@@ -147,7 +153,7 @@ PBP MSRP = Per-Item Cost × (1 + Markup %)
 - Markup % determined from available fields
 
 **Cost Basis:**
-- Same normalization as other methods (Per Item vs Per Package)
+- Same normalization as other methods (Per Item vs Per Case)
 
 **Validation:**
 - Compares calculated price against spreadsheet value
@@ -156,6 +162,47 @@ PBP MSRP = Per-Item Cost × (1 + Markup %)
 **Pricing Notes:**
 ```
 Using "Standard markup" method: Cost ($8.00) × 75% markup = $14.00
+```
+
+---
+
+### Method 4: MSRP + Other Add-On % (of Cost)
+
+**Use Case:** Products where PBP wants to match vendor MSRP but recover non-shipping costs separately (e.g., tariffs, handling fees).
+
+**Formula:**
+```
+PBP MSRP = Vendor Published MSRP + ((Shipping Add-On % + Other Add-On %) × Per-Item Cost)
+```
+
+**Note:** This method uses the exact same calculation as Method 1 ("MSRP + % of cost"). The different method name indicates that Other Add-On % is the primary add-on, but both add-ons are always summed together.
+
+**Example:**
+- Vendor Published MSRP: $12.00
+- Shipping Add-On %: 0% (no shipping recovery)
+- Other Add-On %: 10% (tariff/handling recovery)
+- Per-Item Cost: $6.00
+- **Calculation:** $12.00 + ((0.00 + 0.10) × $6.00) = $12.00 + $0.60 = $12.60
+- **Result:** PBP MSRP = $12.60
+
+**Required Fields:**
+- `Vendor Published MSRP` (must have value)
+- `Shipping Add-On (%)` (defaults to 0% if empty)
+- `Other Add-On (%)` (defaults to 0% if empty)
+- `Pricing Logic` = "MSRP + Other Add-On % (of Cost)"
+
+**Cost Basis:**
+- Per-Item Cost is always normalized using Cost Basis field
+- If Cost Basis = "Per Case", divides by Units per Case
+
+**Validation:**
+- Compares calculated PBP MSRP against spreadsheet `PBP Calculated MSRP`
+- Warning appears if discrepancy > $0.10
+- User can check "Manual Override" to ignore warning
+
+**Pricing Notes:**
+```
+Using "MSRP + Other Add-On % (of Cost)" method: Vendor MSRP ($12.00) + 10.0% other add-on ($0.60) = $12.60
 ```
 
 ---
@@ -171,20 +218,20 @@ All pricing methods normalize costs to per-item basis for accurate calculations.
 Per-Item Cost = PBP Cost (as-is)
 ```
 
-**Per Package:**
+**Per Case:**
 ```
-Per-Item Cost = PBP Cost ÷ Units per Package
+Per-Item Cost = PBP Cost ÷ Units per Case
 ```
 
 **Example:**
 - PBP Cost: $48.00
-- Cost Basis: "Per Package"
-- Units per Package: 6
+- Cost Basis: "Per Case"
+- Units per Case: 6
 - **Calculation:** $48.00 ÷ 6 = $8.00
 - **Result:** Per-Item Cost = $8.00
 
 **Edge Cases:**
-- Units per Package = 0 or missing → defaults to 1
+- Units per Case = 0 or missing → defaults to 1
 - Cost Basis empty → defaults to "Per Item"
 
 ---
