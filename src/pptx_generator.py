@@ -47,12 +47,15 @@ def calculate_proposal_pricing(proposal_item: Dict, get_unit_price_func, marketi
     Returns dict with: moq, moq_price_per_unit, client_price, delivery_time, customization_setup_fee, customization_per_unit
     """
     # Use settings snapshot if available (for consistency)
+    # NOTE: We use the passed discount_percent parameter instead of snapshot value
+    # because discount is a global proposal setting that can be changed after products are added
     fifty_cent_rounding = False  # Default value
     if 'settings_snapshot' in proposal_item:
         fifty_cent_rounding = proposal_item['settings_snapshot'].get('fifty_cent_rounding', False)
         marketing_rounding = proposal_item['settings_snapshot']['marketing_rounding']
-        discount_percent = proposal_item['settings_snapshot']['discount_percent']
-        print(f"DEBUG calculate_proposal_pricing: Using settings_snapshot - fifty_cent_rounding={fifty_cent_rounding}, marketing_rounding={marketing_rounding}, discount={discount_percent}")
+        # DON'T override discount_percent from snapshot - use parameter value
+        # discount_percent = proposal_item['settings_snapshot']['discount_percent']  # REMOVED
+        print(f"DEBUG calculate_proposal_pricing: Using settings_snapshot - fifty_cent_rounding={fifty_cent_rounding}, marketing_rounding={marketing_rounding}, discount={discount_percent} (from parameter)")
     else:
         print(f"DEBUG calculate_proposal_pricing: No settings_snapshot found, using defaults - fifty_cent_rounding={fifty_cent_rounding}, marketing_rounding={marketing_rounding}, discount={discount_percent}")
 

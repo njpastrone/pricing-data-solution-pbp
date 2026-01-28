@@ -16,13 +16,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - "Discount Quoted to Client" warning in Tab 3 shows Volume Order discount when applicable
 
 ### Fixed
-- **PowerPoint Discount Labels:** PowerPoint proposal table headers now correctly display discount type
-  - Fixed issue where PowerPoint tables showed "Price @ Qty 100" instead of discount labels
-  - Now shows "Client Price (5% Non-profit discount)" or "Client Price (5% Volume Order discount)" when applicable
-  - Applies to all table formats: 2×3, 2×4, 3×4, and multi-row variant tables
-  - Updated `update_pricing_table()` to accept `discount_percent` and `discount_type` parameters
-  - Updated all 3 presentation generation functions to pass discount information through
-  - Tab 1 preview tables and PowerPoint exports now match perfectly
+- **PowerPoint Discount Labels & Prices:** PowerPoint proposal tables now correctly display discount labels AND apply discounts to prices
+  - **Issue 1 - Headers:** Fixed headers showing "Price @ Qty 100" instead of discount labels
+    - Now shows "Client Price (5% Non-profit discount)" or "Client Price (5% Volume Order discount)" when applicable
+    - Applies to all table formats: 2×3, 2×4, 3×4, and multi-row variant tables
+    - Updated `update_pricing_table()` to accept `discount_percent` and `discount_type` parameters
+    - Updated all 3 presentation generation functions to pass discount information through
+  - **Issue 2 - Prices:** Fixed prices not being discounted due to settings_snapshot override
+    - Settings snapshot was overriding discount_percent with old value (0%) from when products were added
+    - Now uses current discount setting from parameter instead of snapshot
+    - Discount is treated as global proposal setting (can be changed after adding products)
+    - Rounding settings still use snapshot (per-product configuration)
+  - **Result:** Tab 1 preview tables and PowerPoint exports now match perfectly (headers AND prices)
 
 ---
 
