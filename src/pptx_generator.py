@@ -473,7 +473,7 @@ def copy_slide_with_images(source_prs: Presentation, target_prs: Presentation, s
     return new_slide
 
 
-def update_pricing_table(slide: object, proposal_items, variant_mode: bool = False) -> bool:
+def update_pricing_table(slide: object, proposal_items, variant_mode: bool = False, discount_percent: float = 0.0, discount_type: str = None) -> bool:
     """
     Update pricing table in slide with proposal data.
     Supports both single-product and multi-variant tables.
@@ -483,16 +483,18 @@ def update_pricing_table(slide: object, proposal_items, variant_mode: bool = Fal
         slide: Slide object with table
         proposal_items: Single Dict OR List[Dict] for variants (when variant_mode=True)
         variant_mode: If True, proposal_items is a list of variants
+        discount_percent: Discount percentage applied (default: 0.0)
+        discount_type: Type of discount - 'Non-profit', 'Volume Order', 'Custom', or None (default: None)
 
     Returns:
         True if table was updated, False if no table found
 
     Examples:
         Single product:
-            update_pricing_table(slide, proposal_item, variant_mode=False)
+            update_pricing_table(slide, proposal_item, variant_mode=False, discount_percent=5.0, discount_type='Volume Order')
 
         Multi-variant (2 sizes):
-            update_pricing_table(slide, [item_4oz, item_8oz], variant_mode=True)
+            update_pricing_table(slide, [item_4oz, item_8oz], variant_mode=True, discount_percent=5.0, discount_type='Non-profit')
     """
     # Find table in slide
     table = None
@@ -628,7 +630,17 @@ def update_pricing_table(slide: object, proposal_items, variant_mode: bool = Fal
 
             # Update header for price column (only for first variant/single product)
             if idx == 0 and not variant_mode:
-                update_cell_text_preserve_format(table.cell(0, 1), f"Price Ea\n(@ Qty {moq})")
+                # Generate price header with discount label if applicable
+                price_header = f"Price Ea\n(@ Qty {moq})"
+                if discount_percent > 0 and discount_type:
+                    if discount_type == 'Non-profit':
+                        price_header = f"Client Price\n(5% Non-profit discount)"
+                    elif discount_type == 'Volume Order':
+                        price_header = f"Client Price\n(5% Volume Order discount)"
+                    else:
+                        price_header = f"Client Price\n({discount_percent:.1f}% discount)"
+
+                update_cell_text_preserve_format(table.cell(0, 1), price_header)
 
         elif cols == 4:
             if variant_mode and can_simplify_table:
@@ -656,9 +668,19 @@ def update_pricing_table(slide: object, proposal_items, variant_mode: bool = Fal
 
                 # Update headers (only once)
                 if idx == 0:
+                    # Generate price @ 100 header with discount label if applicable
+                    price_100_header = "Price Ea\n(@ Qty 100)"
+                    if discount_percent > 0 and discount_type:
+                        if discount_type == 'Non-profit':
+                            price_100_header = f"Client Price\n(5% Non-profit discount)"
+                        elif discount_type == 'Volume Order':
+                            price_100_header = f"Client Price\n(5% Volume Order discount)"
+                        else:
+                            price_100_header = f"Client Price\n({discount_percent:.1f}% discount)"
+
                     update_cell_text_preserve_format(table.cell(0, 0), "Variant")
                     update_cell_text_preserve_format(table.cell(0, 1), "Price Ea @ MOQ")
-                    update_cell_text_preserve_format(table.cell(0, 2), "Price Ea\n(@ Qty 100)")
+                    update_cell_text_preserve_format(table.cell(0, 2), price_100_header)
                     update_cell_text_preserve_format(table.cell(0, 3), "Delivery")
 
             else:
@@ -670,9 +692,19 @@ def update_pricing_table(slide: object, proposal_items, variant_mode: bool = Fal
 
                 # Update headers (only once)
                 if idx == 0:
+                    # Generate price @ 100 header with discount label if applicable
+                    price_100_header = f"Price Ea\n(@ Qty 100)"
+                    if discount_percent > 0 and discount_type:
+                        if discount_type == 'Non-profit':
+                            price_100_header = f"Client Price\n(5% Non-profit discount)"
+                        elif discount_type == 'Volume Order':
+                            price_100_header = f"Client Price\n(5% Volume Order discount)"
+                        else:
+                            price_100_header = f"Client Price\n({discount_percent:.1f}% discount)"
+
                     update_cell_text_preserve_format(table.cell(0, 0), "MOQ")
                     update_cell_text_preserve_format(table.cell(0, 1), f"Price Ea\n(@ Qty {moq})")
-                    update_cell_text_preserve_format(table.cell(0, 2), f"Price Ea\n(@ Qty 100)")
+                    update_cell_text_preserve_format(table.cell(0, 2), price_100_header)
                     update_cell_text_preserve_format(table.cell(0, 3), "Delivery")
 
     # Update customization row if it exists (preserve at bottom, don't overwrite)
@@ -733,7 +765,8 @@ def create_proposal_presentation(
     proposal_products: List[Dict],
     get_unit_price_func,
     marketing_rounding: bool = False,
-    discount_percent: float = 0.0
+    discount_percent: float = 0.0,
+    discount_type: str = None
 ) -> Presentation:
     """
     Create new presentation with only confirmed product slides.
@@ -811,7 +844,7 @@ def create_proposal_presentation(
                             )
 
                             if pricing_data:
-                                update_pricing_table(slide, pricing_data)
+                                update_pricing_table(slide, pricing_data, discount_percent=discount_percent, discount_type=discount_type)
                         break
 
     return prs
@@ -824,7 +857,8 @@ def create_proposal_presentation_with_impact(
     impact_slides_by_partner: Dict[str, Dict],
     get_unit_price_func,
     marketing_rounding: bool = False,
-    discount_percent: float = 0.0
+    discount_percent: float = 0.0,
+    discount_type: str = None
 ) -> Presentation:
     """
     Create presentation with product AND impact slides in proper order.
@@ -940,7 +974,7 @@ def create_proposal_presentation_with_impact(
                             )
 
                             if pricing_data:
-                                update_pricing_table(slide, pricing_data)
+                                update_pricing_table(slide, pricing_data, discount_percent=discount_percent, discount_type=discount_type)
                         break
 
     # Note: Outro slides now handled by create_complete_proposal_presentation()
@@ -1004,7 +1038,8 @@ def create_complete_proposal_presentation(
     impact_slide_overrides: Optional[Dict[str, Dict]] = None,
     variant_groups: Optional[Dict[str, List[str]]] = None,
     variant_grouping_prefs: Optional[Dict[str, str]] = None,
-    fifty_cent_rounding: bool = False
+    fifty_cent_rounding: bool = False,
+    discount_type: str = None
 ) -> Presentation:
     """
     Create complete presentation with intro, products, impact, and outro slides.
@@ -1024,6 +1059,7 @@ def create_complete_proposal_presentation(
         get_unit_price_func: Function to calculate unit prices
         marketing_rounding: Whether to apply marketing rounding
         discount_percent: Discount percentage to apply
+        discount_type: Type of discount - 'Non-profit', 'Volume Order', 'Custom', or None
         impact_slide_overrides: Optional dict of {partner: {"slide_index": X, "slide_title": Y}}
                                 If provided, overrides reference table for that partner
         variant_groups: Optional dict of {pptx_slide_name: [gs_product1, gs_product2, ...]}
@@ -1148,7 +1184,7 @@ def create_complete_proposal_presentation(
 
                             if pricing_data:
                                 # Update table with single row (variant_mode=False for simple table)
-                                update_pricing_table(slide, pricing_data, variant_mode=False)
+                                update_pricing_table(slide, pricing_data, variant_mode=False, discount_percent=discount_percent, discount_type=discount_type)
                                 print(f"DEBUG: Created single-row table for {slide_title} (consistent pricing)")
 
                     elif "all variants" in user_choice.lower() or "together" in user_choice.lower():
@@ -1176,7 +1212,7 @@ def create_complete_proposal_presentation(
 
                         # Update table with all variants (variant_mode=True)
                         if pricing_data_list:
-                            update_pricing_table(slide, pricing_data_list, variant_mode=True)
+                            update_pricing_table(slide, pricing_data_list, variant_mode=True, discount_percent=discount_percent, discount_type=discount_type)
                             print(f"DEBUG: Created multi-row table for {slide_title} with {len(pricing_data_list)} variants")
 
                     elif "skip" in user_choice.lower():
@@ -1206,7 +1242,7 @@ def create_complete_proposal_presentation(
                                 )
 
                                 if pricing_data:
-                                    update_pricing_table(slide, pricing_data, variant_mode=False)
+                                    update_pricing_table(slide, pricing_data, variant_mode=False, discount_percent=discount_percent, discount_type=discount_type)
                             break
 
     # Step 5: Add intro/outro slides to END in their original order

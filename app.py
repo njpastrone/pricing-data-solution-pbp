@@ -2040,6 +2040,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     fifty_cent_rounding = st.session_state.get('proposal_fifty_cent_rounding', False)
                     marketing_rounding = st.session_state.get('proposal_marketing_rounding', False)
                     discount_percent = st.session_state.get('proposal_discount_percent', 0.0)
+                    discount_type = st.session_state.get('proposal_discount_type', None)
 
                     # Get selected impact slides (for overrides)
                     # Build impact_slide_overrides dict: {partner: {"slide_index": X, "slide_title": Y}}
@@ -2079,7 +2080,8 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                         impact_slide_overrides if impact_slide_overrides else None,
                         variant_groups_for_generation,
                         variant_prefs_for_generation,
-                        fifty_cent_rounding
+                        fifty_cent_rounding,
+                        discount_type
                     )
 
                     progress_container.info(f"Step 3/4: Adding outro slides (4 slides)...")

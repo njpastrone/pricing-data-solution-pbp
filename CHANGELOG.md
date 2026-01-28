@@ -15,6 +15,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - Display updates in proposal tables show "5% Volume Order discount" label
   - "Discount Quoted to Client" warning in Tab 3 shows Volume Order discount when applicable
 
+### Fixed
+- **PowerPoint Discount Labels:** PowerPoint proposal table headers now correctly display discount type
+  - Fixed issue where PowerPoint tables showed "Price @ Qty 100" instead of discount labels
+  - Now shows "Client Price (5% Non-profit discount)" or "Client Price (5% Volume Order discount)" when applicable
+  - Applies to all table formats: 2×3, 2×4, 3×4, and multi-row variant tables
+  - Updated `update_pricing_table()` to accept `discount_percent` and `discount_type` parameters
+  - Updated all 3 presentation generation functions to pass discount information through
+  - Tab 1 preview tables and PowerPoint exports now match perfectly
+
 ---
 
 ## [8.0.0] - 2026-01-22
