@@ -27,7 +27,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
     - Now uses current discount setting from parameter instead of snapshot
     - Discount is treated as global proposal setting (can be changed after adding products)
     - Rounding settings still use snapshot (per-product configuration)
-  - **Result:** Tab 1 preview tables and PowerPoint exports now match perfectly (headers AND prices)
+  - **Issue 3 - Column Logic:** Fixed both columns showing discounted price instead of comparison view
+    - Problem: Both Column 1 and Column 2 showed prices WITH discount applied
+    - User expectation: Column 1 = undiscounted price, Column 2 = discounted price (show savings)
+    - Solution: When discount > 0, Column 1 now uses `base_price` (undiscounted), Column 2 uses `client_price_at_100` (discounted)
+    - When discount = 0, both columns show regular prices (no change from original behavior)
+    - Applies to both variant tables and single product tables
+  - **Result:** PowerPoint tables now show price comparison correctly (undiscounted vs discounted)
 
 ---
 

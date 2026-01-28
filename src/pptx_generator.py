@@ -665,7 +665,9 @@ def update_pricing_table(slide: object, proposal_items, variant_mode: bool = Fal
                 # FULL LAYOUT: Variant | Price @ MOQ | Price @ Qty 100 | Delivery
                 # Use this when prices differ (tiered pricing OR discount applied)
                 update_cell_text_preserve_format(table.cell(data_row_idx, 0), variant_identifier)
-                update_cell_text_preserve_format(table.cell(data_row_idx, 1), client_price_str)
+                # Column 1: Use undiscounted price when discount is applied (show comparison)
+                col1_price = base_price_str if discount_percent > 0 else client_price_str
+                update_cell_text_preserve_format(table.cell(data_row_idx, 1), col1_price)
                 update_cell_text_preserve_format(table.cell(data_row_idx, 2), client_price_at_100_str)
                 update_cell_text_preserve_format(table.cell(data_row_idx, 3), delivery_time)
 
@@ -689,7 +691,9 @@ def update_pricing_table(slide: object, proposal_items, variant_mode: bool = Fal
             else:
                 # SINGLE PRODUCT MODE: MOQ | Price @ MOQ | Price @ Qty 100 | Delivery
                 update_cell_text_preserve_format(table.cell(data_row_idx, 0), str(moq))
-                update_cell_text_preserve_format(table.cell(data_row_idx, 1), client_price_str)
+                # Column 1: Use undiscounted price when discount is applied (show comparison)
+                col1_price = base_price_str if discount_percent > 0 else client_price_str
+                update_cell_text_preserve_format(table.cell(data_row_idx, 1), col1_price)
                 update_cell_text_preserve_format(table.cell(data_row_idx, 2), client_price_at_100_str)
                 update_cell_text_preserve_format(table.cell(data_row_idx, 3), delivery_time)
 
