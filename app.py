@@ -670,7 +670,7 @@ with st.sidebar:
         st.info("Loading data...")
 
     # Session Status
-    proposal_count = len(st.session_state.get('proposal_items', []))
+    proposal_count = len(st.session_state.get('proposal_products', []))
     order_count = len(st.session_state.get('order_items', []))
 
     st.caption(f"**Proposal:** {proposal_count} items | **Order:** {order_count} items")
