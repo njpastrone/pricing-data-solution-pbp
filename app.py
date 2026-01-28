@@ -4114,7 +4114,7 @@ with tab2:
             # Generate form button
             st.markdown("#### Generate Pre-Filled Form")
 
-            if st.button("🔗 Generate Google Form URL", type="primary", use_container_width=True):
+            if st.button("Generate Google Form URL", type="primary", use_container_width=True):
                 # Generate pre-filled URL
                 form_url = generate_prefilled_form_url(client_info, selected_products)
                 st.session_state.google_form_url = form_url
@@ -4135,7 +4135,7 @@ with tab2:
                 )
 
                 # Open in new tab button
-                st.markdown(f'<a href="{st.session_state.google_form_url}" target="_blank" style="text-decoration: none;"><button style="width: 100%; padding: 0.5rem; background-color: #0066cc; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">🌐 Open Form in New Tab (Preview)</button></a>', unsafe_allow_html=True)
+                st.markdown(f'<a href="{st.session_state.google_form_url}" target="_blank" style="text-decoration: none;"><button style="width: 100%; padding: 0.5rem; background-color: #0066cc; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">Open Form in New Tab (Preview)</button></a>', unsafe_allow_html=True)
 
                 st.info("""
                 **What's Next?**
@@ -4148,296 +4148,300 @@ with tab2:
             st.warning("No products selected. Check at least one product to generate a form.")
 
     # ============================================================
-    # SECTION 3: HTML ORDER FORM (ALTERNATIVE)
+    # SECTION 3: HTML ORDER FORM (LEGACY - HIDDEN BY DEFAULT)
     # ============================================================
     st.divider()
-    st.subheader("3. HTML Order Form (Alternative)")
 
-    st.markdown("""
-    Download the HTML form below and paste it into your email to send to clients.
-    The table will look professional and clients can fill it out directly.
-    """)
-
-    # Generate HTML table
-    # Get order details from session state
-    client_type = st.session_state.order_details.get('client_type', 'New')
-    company_name = st.session_state.order_details.get('company_name', '') or '[Type company name here]'
-    contact_name = st.session_state.order_details.get('contact_name', '') or '[Type your name here]'
-    contact_email = st.session_state.order_details.get('contact_email', '') or '[Type your email here]'
-
-    html_form = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 20px; background-color: #ffffff; }}
-        h2 {{ color: #2c3e50; background-color: #ffffff; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
-        .instructions-box {{ background-color: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 20px 0; color: #000000; }}
-        .instructions-box p {{ margin: 5px 0; color: #000000; }}
-        table {{ border-collapse: collapse; width: 100%; margin: 20px 0; background-color: #ffffff; }}
-        th {{ background-color: #3498db !important; color: #ffffff !important; padding: 12px; text-align: left; font-weight: bold; }}
-        td {{ border: 1px solid #ddd; padding: 10px; background-color: #ffffff; color: #000000; }}
-        td:first-child {{ background-color: #f8f9fa !important; color: #000000 !important; font-weight: 500; width: 35%; vertical-align: top; }}
-        .section-header {{ background-color: #2c3e50 !important; color: #ffffff !important; font-weight: bold; padding: 10px; }}
-        .fill-in {{ background-color: #ffffff !important; color: #7f8c8d !important; min-height: 20px; font-style: italic; }}
-        .product-table {{ margin: 10px 0; }}
-        .product-table td {{ background-color: #ffffff !important; color: #000000 !important; }}
-        .helper-text {{ color: #7f8c8d; font-size: 0.85em; display: block; margin-top: 3px; }}
-        .required {{ color: #e74c3c !important; font-weight: bold; }}
-    </style>
-</head>
-<body>
-    <h2>PEACE BY PIECE CLIENT ORDER FORM</h2>
-
-    <div class="instructions-box">
-        <p><strong>HOW TO FILL OUT THIS FORM:</strong></p>"""
-
-    # Add customizable instructions (one paragraph per line)
-    instructions = st.session_state.form_customizations.get('form_instructions', '').strip()
-    for i, line in enumerate(instructions.split('\n'), 1):
-        if line.strip():
-            html_form += f"""
-        <p>{line.strip()}</p>"""
-
-    html_form += f"""
-    </div>
-
-    <table>
-        <tr>
-            <td colspan="2" class="section-header">CLIENT INFORMATION</td>
-        </tr>
-        <tr>
-            <td>New Client? <span class="required">*</span></td>
-            <td class="fill-in">
-                <span style="display: inline-block; margin-right: 20px;">
-                    [{' X ' if client_type == 'New' else '   '}] Yes
-                </span>
-                <span style="display: inline-block;">
-                    [{' X ' if client_type == 'Existing' else '   '}] No (Existing)
-                </span>
-                <span class="helper-text">Check one box</span>
-            </td>
-        </tr>
-        <tr>
-            <td>Company Name <span class="required">*</span></td>
-            <td class="fill-in">{company_name}</td>
-        </tr>
-        <tr>
-            <td>Contact Name <span class="required">*</span></td>
-            <td class="fill-in">{contact_name}</td>
-        </tr>
-        <tr>
-            <td>Contact Email <span class="required">*</span></td>
-            <td class="fill-in">{contact_email}</td>
-        </tr>
-    </table>
-
-    <table>
-        <tr>
-            <td colspan="2" class="section-header">SHIPPING & DELIVERY</td>
-        </tr>
-        <tr>
-            <td>Drop Shipping? <span class="required">*</span></td>
-            <td class="fill-in">[Delete one: Yes / No]</td>
-        </tr>
-        <tr>
-            <td>Shipping Address<span class="helper-text">(if single location)</span></td>
-            <td class="fill-in">""" + st.session_state.form_customizations.get('shipping_address_placeholder', '[Type full shipping address here, or N/A if drop shipping]') + """</td>
-        </tr>
-        <tr>
-            <td style="font-weight: bold;">Dropshipping Instructions</td>
-            <td style="background-color: #f8f9fa !important; padding: 10px; color: #000000 !important;">""" + st.session_state.form_customizations.get('dropshipping_instructions', '').replace('\n', '<br/>') + """</td>
-        </tr>
-        <tr>
-            <td>Dropshipping Information</td>
-            <td class="fill-in">""" + st.session_state.form_customizations.get('dropshipping_placeholder', '[Input dropshipping info here]') + """</td>
-        </tr>
-        <tr>
-            <td>Billing Address</td>
-            <td class="fill-in">""" + st.session_state.form_customizations.get('billing_address_placeholder', '[Type billing address here, or "Same as shipping"]') + """</td>
-        </tr>
-        <tr>
-            <td>Client In-Hands Date <span class="required">*</span></td>
-            <td class="fill-in">[Type date in format: MM/DD/YYYY]</td>
-        </tr>
-    </table>
-
-    <table>
-        <tr>
-            <td colspan="3" class="section-header">ORDER DETAILS</td>
-        </tr>
-        <tr>
-            <th>Product Name</th>
-            <th>Quantity</th>
-            <th>Customization/Branding Details</th>
-        </tr>"""
-
-    # Add product rows - either from proposal or blank rows
-    customization_placeholder = st.session_state.form_customizations.get('customization_placeholder', '[Describe any customization, logo placement, colors, etc.]')
-    if len(st.session_state.proposal_products) > 0:
-        for prop_item in st.session_state.proposal_products:
-            product_name = prop_item.get('product_data', {}).get('Product/Service', 'Unknown Product')
-            quantity = prop_item.get('quantity', '')
-            # Show placeholder text if quantity is empty
-            quantity_display = quantity if quantity else '<span style="color: #7f8c8d; font-style: italic;">[Input Qty]</span>'
-            html_form += f"""
-        <tr>
-            <td class="product-table">{product_name}</td>
-            <td class="product-table">{quantity_display}</td>
-            <td class="product-table" style="color: #7f8c8d; font-style: italic;">{customization_placeholder}</td>
-        </tr>"""
-    else:
-        # Add 3 blank rows if no products in proposal
-        for i in range(3):
-            html_form += f"""
-        <tr>
-            <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Product name]</td>
-            <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Qty]</td>
-            <td class="product-table" style="color: #7f8c8d; font-style: italic;">{customization_placeholder}</td>
-        </tr>"""
-
-    html_form += """
-    </table>
-
-    <table>
-        <tr>
-            <td colspan="2" class="section-header">IMPACT CARDS</td>
-        </tr>
-        <tr>
-            <td>Impact Card Preference <span class="required">*</span></td>
-            <td class="fill-in">[Delete all except the ONE option you want]<br/><br/>"""
-
-    # Add customizable impact card options
-    impact_options = st.session_state.form_customizations.get('impact_card_options', '')
-    for line in impact_options.split('\n'):
-        if line.strip():
-            html_form += f"""
-                {line.strip()}<br/>"""
-
-    html_form += """
-            </td>
-        </tr>
-    </table>
-
-    <table>
-        <tr>
-            <td colspan="2" class="section-header">PAYMENT</td>
-        </tr>
-        <tr>
-            <td>Payment Preference <span class="required">*</span></td>
-            <td class="fill-in">[Delete all except the ONE option you want]<br/><br/>"""
-
-    # Add customizable payment options
-    payment_options = st.session_state.form_customizations.get('payment_options', '')
-    for line in payment_options.split('\n'):
-        if line.strip():
-            html_form += f"""
-                {line.strip()}<br/>"""
-
-    html_form += """
-            </td>
-        </tr>
-    </table>
-
-</body>
-</html>"""
-
-    # Show preview in expander
-    with st.expander("Preview HTML Form", expanded=False):
-        st.components.v1.html(html_form, height=800, scrolling=True)
-
-    # Download buttons
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.download_button(
-            label="Download HTML Form",
-            data=html_form,
-            file_name=f"client_order_form_{datetime.now().strftime('%Y%m%d')}.html",
-            mime="text/html",
-            key="download_client_form_html",
-            type="primary"
-        )
-
-    with col2:
-        # Keep TXT version for backup
-        client_form_text = """CLIENT ORDER FORM
-
-New Client? [ ] Yes  [ ] No (Existing)
-Company Name: _______________________
-Contact: _______________________
-Contact Email: _______________________
-Drop Shipping? [ ] Y  [ ] N
-Shipping address if one location: _______________________
-Destination breakdown if drop shipping internationally: _______________________
-Billing address: _______________________
-Client In-Hands Date: _______________________
-
-Order Details:
-Product Name | Quantity | Customization/Branding Details
-___________|_________|_____________________________
-___________|_________|_____________________________
-___________|_________|_____________________________
-
-Impact Cards: [ ] Peace by Piece Impact Card  [ ] Custom Impact Card
-              [ ] Custom Message Card  [ ] Send us their own card
-
-Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
-"""
-        st.download_button(
-            label="Download TXT (Backup)",
-            data=client_form_text,
-            file_name="client_order_form.txt",
-            mime="text/plain",
-            key="download_client_form_txt"
-        )
-
-    with col3:
-        # Generate CSV version
-        csv_lines = []
-        csv_lines.append("FIELD,VALUE")
-        csv_lines.append("New Client?,")
-        csv_lines.append("Company Name,")
-        csv_lines.append("Contact Name,")
-        csv_lines.append("Contact Email,")
-        csv_lines.append("Drop Shipping?,")
-        csv_lines.append("Shipping Address,")
-        csv_lines.append("Destination Breakdown,")
-        csv_lines.append("Billing Address,")
-        csv_lines.append("Client In-Hands Date,")
-        csv_lines.append("")
-        csv_lines.append("ORDER DETAILS")
-        csv_lines.append("Product Name,Quantity,Customization Details")
-
-        # Add placeholder rows for each product in proposal
+    with st.expander("**Legacy: HTML Order Form** (Alternative Method)", expanded=False):
+        st.caption("**Note:** This is the older workflow using HTML email forms. The Google Form method above is now recommended. This legacy option is available if needed.")
+    
+        st.markdown("""
+        Download the HTML form below and paste it into your email to send to clients.
+        The table will look professional and clients can fill it out directly.
+        """)
+    
+        # Generate HTML table
+        # Get order details from session state
+        client_type = st.session_state.order_details.get('client_type', 'New')
+        company_name = st.session_state.order_details.get('company_name', '') or '[Type company name here]'
+        contact_name = st.session_state.order_details.get('contact_name', '') or '[Type your name here]'
+        contact_email = st.session_state.order_details.get('contact_email', '') or '[Type your email here]'
+    
+        html_form = f"""<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 20px auto; padding: 20px; background-color: #ffffff; }}
+            h2 {{ color: #2c3e50; background-color: #ffffff; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
+            .instructions-box {{ background-color: #e8f4f8; border-left: 4px solid #3498db; padding: 15px; margin: 20px 0; color: #000000; }}
+            .instructions-box p {{ margin: 5px 0; color: #000000; }}
+            table {{ border-collapse: collapse; width: 100%; margin: 20px 0; background-color: #ffffff; }}
+            th {{ background-color: #3498db !important; color: #ffffff !important; padding: 12px; text-align: left; font-weight: bold; }}
+            td {{ border: 1px solid #ddd; padding: 10px; background-color: #ffffff; color: #000000; }}
+            td:first-child {{ background-color: #f8f9fa !important; color: #000000 !important; font-weight: 500; width: 35%; vertical-align: top; }}
+            .section-header {{ background-color: #2c3e50 !important; color: #ffffff !important; font-weight: bold; padding: 10px; }}
+            .fill-in {{ background-color: #ffffff !important; color: #7f8c8d !important; min-height: 20px; font-style: italic; }}
+            .product-table {{ margin: 10px 0; }}
+            .product-table td {{ background-color: #ffffff !important; color: #000000 !important; }}
+            .helper-text {{ color: #7f8c8d; font-size: 0.85em; display: block; margin-top: 3px; }}
+            .required {{ color: #e74c3c !important; font-weight: bold; }}
+        </style>
+    </head>
+    <body>
+        <h2>PEACE BY PIECE CLIENT ORDER FORM</h2>
+    
+        <div class="instructions-box">
+            <p><strong>HOW TO FILL OUT THIS FORM:</strong></p>"""
+    
+        # Add customizable instructions (one paragraph per line)
+        instructions = st.session_state.form_customizations.get('form_instructions', '').strip()
+        for i, line in enumerate(instructions.split('\n'), 1):
+            if line.strip():
+                html_form += f"""
+            <p>{line.strip()}</p>"""
+    
+        html_form += f"""
+        </div>
+    
+        <table>
+            <tr>
+                <td colspan="2" class="section-header">CLIENT INFORMATION</td>
+            </tr>
+            <tr>
+                <td>New Client? <span class="required">*</span></td>
+                <td class="fill-in">
+                    <span style="display: inline-block; margin-right: 20px;">
+                        [{' X ' if client_type == 'New' else '   '}] Yes
+                    </span>
+                    <span style="display: inline-block;">
+                        [{' X ' if client_type == 'Existing' else '   '}] No (Existing)
+                    </span>
+                    <span class="helper-text">Check one box</span>
+                </td>
+            </tr>
+            <tr>
+                <td>Company Name <span class="required">*</span></td>
+                <td class="fill-in">{company_name}</td>
+            </tr>
+            <tr>
+                <td>Contact Name <span class="required">*</span></td>
+                <td class="fill-in">{contact_name}</td>
+            </tr>
+            <tr>
+                <td>Contact Email <span class="required">*</span></td>
+                <td class="fill-in">{contact_email}</td>
+            </tr>
+        </table>
+    
+        <table>
+            <tr>
+                <td colspan="2" class="section-header">SHIPPING & DELIVERY</td>
+            </tr>
+            <tr>
+                <td>Drop Shipping? <span class="required">*</span></td>
+                <td class="fill-in">[Delete one: Yes / No]</td>
+            </tr>
+            <tr>
+                <td>Shipping Address<span class="helper-text">(if single location)</span></td>
+                <td class="fill-in">""" + st.session_state.form_customizations.get('shipping_address_placeholder', '[Type full shipping address here, or N/A if drop shipping]') + """</td>
+            </tr>
+            <tr>
+                <td style="font-weight: bold;">Dropshipping Instructions</td>
+                <td style="background-color: #f8f9fa !important; padding: 10px; color: #000000 !important;">""" + st.session_state.form_customizations.get('dropshipping_instructions', '').replace('\n', '<br/>') + """</td>
+            </tr>
+            <tr>
+                <td>Dropshipping Information</td>
+                <td class="fill-in">""" + st.session_state.form_customizations.get('dropshipping_placeholder', '[Input dropshipping info here]') + """</td>
+            </tr>
+            <tr>
+                <td>Billing Address</td>
+                <td class="fill-in">""" + st.session_state.form_customizations.get('billing_address_placeholder', '[Type billing address here, or "Same as shipping"]') + """</td>
+            </tr>
+            <tr>
+                <td>Client In-Hands Date <span class="required">*</span></td>
+                <td class="fill-in">[Type date in format: MM/DD/YYYY]</td>
+            </tr>
+        </table>
+    
+        <table>
+            <tr>
+                <td colspan="3" class="section-header">ORDER DETAILS</td>
+            </tr>
+            <tr>
+                <th>Product Name</th>
+                <th>Quantity</th>
+                <th>Customization/Branding Details</th>
+            </tr>"""
+    
+        # Add product rows - either from proposal or blank rows
+        customization_placeholder = st.session_state.form_customizations.get('customization_placeholder', '[Describe any customization, logo placement, colors, etc.]')
         if len(st.session_state.proposal_products) > 0:
             for prop_item in st.session_state.proposal_products:
                 product_name = prop_item.get('product_data', {}).get('Product/Service', 'Unknown Product')
                 quantity = prop_item.get('quantity', '')
-                csv_lines.append(f"{product_name},{quantity},")
+            # Show placeholder text if quantity is empty
+                quantity_display = quantity if quantity else '<span style="color: #7f8c8d; font-style: italic;">[Input Qty]</span>'
+                html_form += f"""
+            <tr>
+                <td class="product-table">{product_name}</td>
+                <td class="product-table">{quantity_display}</td>
+                <td class="product-table" style="color: #7f8c8d; font-style: italic;">{customization_placeholder}</td>
+            </tr>"""
         else:
-            # Add 3 blank rows
+        # Add 3 blank rows if no products in proposal
             for i in range(3):
-                csv_lines.append(",,")
-
-        csv_lines.append("")
-        csv_lines.append("IMPACT CARDS")
-        csv_lines.append("Impact Card Type,")
-        csv_lines.append("")
-        csv_lines.append("PAYMENT")
-        csv_lines.append("Payment Preference,")
-
-        client_form_csv = "\n".join(csv_lines)
-
-        st.download_button(
-            label="Download CSV (Backup)",
-            data=client_form_csv,
-            file_name=f"client_order_form_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv",
-            key="download_client_form_csv"
-        )
-
-    st.info("Tip: Download the HTML form, open it in your browser, then copy the entire page and paste it into your email. It will preserve all formatting!")
+                html_form += f"""
+            <tr>
+                <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Product name]</td>
+                <td class="product-table" style="color: #7f8c8d; font-style: italic;">[Qty]</td>
+                <td class="product-table" style="color: #7f8c8d; font-style: italic;">{customization_placeholder}</td>
+            </tr>"""
+    
+        html_form += """
+        </table>
+    
+        <table>
+            <tr>
+                <td colspan="2" class="section-header">IMPACT CARDS</td>
+            </tr>
+            <tr>
+                <td>Impact Card Preference <span class="required">*</span></td>
+                <td class="fill-in">[Delete all except the ONE option you want]<br/><br/>"""
+    
+        # Add customizable impact card options
+        impact_options = st.session_state.form_customizations.get('impact_card_options', '')
+        for line in impact_options.split('\n'):
+            if line.strip():
+                html_form += f"""
+                    {line.strip()}<br/>"""
+    
+        html_form += """
+                </td>
+            </tr>
+        </table>
+    
+        <table>
+            <tr>
+                <td colspan="2" class="section-header">PAYMENT</td>
+            </tr>
+            <tr>
+                <td>Payment Preference <span class="required">*</span></td>
+                <td class="fill-in">[Delete all except the ONE option you want]<br/><br/>"""
+    
+        # Add customizable payment options
+        payment_options = st.session_state.form_customizations.get('payment_options', '')
+        for line in payment_options.split('\n'):
+            if line.strip():
+                html_form += f"""
+                    {line.strip()}<br/>"""
+    
+        html_form += """
+                </td>
+            </tr>
+        </table>
+    
+    </body>
+    </html>"""
+    
+        # Show preview with checkbox toggle
+        st.markdown("**Preview HTML Form**")
+        show_preview = st.checkbox("Show form preview", key="show_html_preview_tab2")
+        if show_preview:
+            st.components.v1.html(html_form, height=800, scrolling=True)
+    
+        # Download buttons
+        col1, col2, col3 = st.columns(3)
+    
+        with col1:
+            st.download_button(
+                label="Download HTML Form",
+                data=html_form,
+                file_name=f"client_order_form_{datetime.now().strftime('%Y%m%d')}.html",
+                mime="text/html",
+                key="download_client_form_html",
+                type="primary"
+            )
+    
+        with col2:
+        # Keep TXT version for backup
+            client_form_text = """CLIENT ORDER FORM
+    
+    New Client? [ ] Yes  [ ] No (Existing)
+    Company Name: _______________________
+    Contact: _______________________
+    Contact Email: _______________________
+    Drop Shipping? [ ] Y  [ ] N
+    Shipping address if one location: _______________________
+    Destination breakdown if drop shipping internationally: _______________________
+    Billing address: _______________________
+    Client In-Hands Date: _______________________
+    
+    Order Details:
+    Product Name | Quantity | Customization/Branding Details
+    ___________|_________|_____________________________
+    ___________|_________|_____________________________
+    ___________|_________|_____________________________
+    
+    Impact Cards: [ ] Peace by Piece Impact Card  [ ] Custom Impact Card
+                  [ ] Custom Message Card  [ ] Send us their own card
+    
+    Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
+    """
+            st.download_button(
+                label="Download TXT (Backup)",
+                data=client_form_text,
+                file_name="client_order_form.txt",
+                mime="text/plain",
+                key="download_client_form_txt"
+            )
+    
+        with col3:
+        # Generate CSV version
+            csv_lines = []
+            csv_lines.append("FIELD,VALUE")
+            csv_lines.append("New Client?,")
+            csv_lines.append("Company Name,")
+            csv_lines.append("Contact Name,")
+            csv_lines.append("Contact Email,")
+            csv_lines.append("Drop Shipping?,")
+            csv_lines.append("Shipping Address,")
+            csv_lines.append("Destination Breakdown,")
+            csv_lines.append("Billing Address,")
+            csv_lines.append("Client In-Hands Date,")
+            csv_lines.append("")
+            csv_lines.append("ORDER DETAILS")
+            csv_lines.append("Product Name,Quantity,Customization Details")
+    
+        # Add placeholder rows for each product in proposal
+            if len(st.session_state.proposal_products) > 0:
+                for prop_item in st.session_state.proposal_products:
+                    product_name = prop_item.get('product_data', {}).get('Product/Service', 'Unknown Product')
+                    quantity = prop_item.get('quantity', '')
+                    csv_lines.append(f"{product_name},{quantity},")
+            else:
+            # Add 3 blank rows
+                for i in range(3):
+                    csv_lines.append(",,")
+    
+            csv_lines.append("")
+            csv_lines.append("IMPACT CARDS")
+            csv_lines.append("Impact Card Type,")
+            csv_lines.append("")
+            csv_lines.append("PAYMENT")
+            csv_lines.append("Payment Preference,")
+    
+            client_form_csv = "\n".join(csv_lines)
+    
+            st.download_button(
+                label="Download CSV (Backup)",
+                data=client_form_csv,
+                file_name=f"client_order_form_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                key="download_client_form_csv"
+            )
+    
+        st.info("Tip: Download the HTML form, open it in your browser, then copy the entire page and paste it into your email. It will preserve all formatting!")
 
     # ============================================================
     # NEXT STEPS GUIDANCE
@@ -4568,30 +4572,15 @@ with tab3:
     # Determine which options are available
     has_proposal = len(st.session_state.proposal_products) > 0
 
-    if has_proposal:
-        st.markdown("""
-        There are **4 ways** to build an order in this tab. Choose the option that matches your situation:
+    st.markdown("""
+    **Primary Workflow:**
+    1. **Option A:** Import from Google Form Response (recommended - fastest)
+    2. **Option B:** Manually select products and configure order
 
-        **RECOMMENDED:** If you sent a Google Form link (from Tab 2) and client submitted response → Use **Option A** below
-
-        **Alternative:** If you sent an HTML form (from Tab 2) and received it back completed → Use **Option B** below
-
-        **Alternative:** If you have a proposal (from Tab 1) but no completed client form → Use **Option C** below
-
-        **Fallback:** If starting fresh without a proposal or form → Use **Option D** below
-        """)
-    else:
-        st.markdown("""
-        There are **3 ways** to build an order in this tab. Choose the option that matches your situation:
-
-        **RECOMMENDED:** If you sent a Google Form link (from Tab 2) and client submitted response → Use **Option A** below
-
-        **Alternative:** If you sent an HTML form (from Tab 2) and received it back completed → Use **Option B** below
-
-        **Alternative:** If starting fresh without a proposal or form → Use **Option C** below
-
-        **Tip:** If you want to create a proposal first, go back to Tab 1 to build a proposal, then return here to import it.
-        """)
+    **Additional Options:**
+    - **Import from saved proposal** (Tab 1) - Available below if you have a proposal
+    - **Legacy HTML form import** - Hidden in expandable section below
+    """)
     st.divider()
 
     # ============================================================
@@ -4804,23 +4793,25 @@ with tab3:
 
     # Import helpers
     from src.data_loader import connect_to_sheets
-    from src.forms_helper import get_unimported_responses, parse_form_response, mark_response_imported, format_product_summary
+    from src.forms_helper import load_form_responses, parse_form_response, mark_response_imported, format_product_summary
+    from src.forms_config import RESPONSE_COLUMNS
 
-    if st.button("🔄 Load Recent Form Responses", key="load_google_form_responses"):
+    if st.button("Load All Form Responses", key="load_google_form_responses"):
         with st.spinner("Loading responses from Google Sheets..."):
             try:
                 gc = connect_to_sheets()
-                df_unimported = get_unimported_responses(gc)
+                df_all = load_form_responses(gc)
 
-                if df_unimported.empty:
-                    st.info("No new responses found. All responses have been imported.")
+                if df_all.empty:
+                    st.info("No form responses found. Submit a form response to get started.")
                 else:
-                    st.success(f"Found **{len(df_unimported)}** unimported response(s)")
-                    st.session_state.google_form_responses = df_unimported
+                    st.success(f"Found **{len(df_all)}** response(s)")
+                    st.session_state.google_form_responses = df_all
                     st.session_state.google_form_gc = gc
 
             except Exception as e:
                 st.error(f"Error loading responses: {e}")
+                st.caption("**Tip:** Run the diagnostic script to troubleshoot: `streamlit run scripts/investigations/debug_google_form_responses.py`")
                 st.session_state.google_form_responses = None
 
     # Show responses if loaded
@@ -4828,9 +4819,53 @@ with tab3:
         df_responses = st.session_state.google_form_responses
 
         if not df_responses.empty:
-            st.markdown("#### Available Responses:")
+            # Add filter dropdown
+            col1, col2 = st.columns([1, 3])
 
-            for idx, row in df_responses.iterrows():
+            with col1:
+                # Check if Imported? column exists
+                imported_col = RESPONSE_COLUMNS.get('imported', 'Imported?')
+                has_tracking = imported_col in df_responses.columns
+
+                if has_tracking:
+                    filter_option = st.selectbox(
+                        "Filter:",
+                        options=["All", "Not Imported", "Imported"],
+                        key="response_filter"
+                    )
+                else:
+                    st.info("**Note:** Tracking columns not found. Showing all responses.")
+                    filter_option = "All"
+
+            with col2:
+                # Count imported vs not imported
+                if has_tracking:
+                    imported_count = df_responses[df_responses[imported_col].isin(['TRUE', 'true', True])].shape[0]
+                    not_imported_count = len(df_responses) - imported_count
+                    st.caption(f"**Total:** {len(df_responses)} | **Not Imported:** {not_imported_count} | **Imported:** {imported_count}")
+                else:
+                    st.caption(f"**Total Responses:** {len(df_responses)}")
+
+            # Apply filter
+            if has_tracking and filter_option != "All":
+                if filter_option == "Not Imported":
+                    df_filtered = df_responses[~df_responses[imported_col].isin(['TRUE', 'true', True])]
+                else:  # Imported
+                    df_filtered = df_responses[df_responses[imported_col].isin(['TRUE', 'true', True])]
+            else:
+                df_filtered = df_responses
+
+            # Sort by timestamp (most recent first)
+            timestamp_col = RESPONSE_COLUMNS.get('timestamp', 'Timestamp')
+            if timestamp_col in df_filtered.columns:
+                df_filtered = df_filtered.sort_values(by=timestamp_col, ascending=False)
+
+            if df_filtered.empty:
+                st.info(f"No responses match filter: {filter_option}")
+            else:
+                st.markdown(f"#### {filter_option} Responses ({len(df_filtered)}):")
+
+            for idx, row in df_filtered.iterrows():
                 # Parse response
                 response_data = parse_form_response(row)
 
@@ -4838,7 +4873,23 @@ with tab3:
                 company = response_data['client_info'].get('company_name', 'Unknown Company')
                 timestamp = response_data['metadata'].get('timestamp', 'No timestamp')
 
-                with st.expander(f"📋 {company} - {timestamp}", expanded=False):
+                # Check import status
+                is_imported = False
+                order_id = None
+                if has_tracking:
+                    imported_value = response_data['metadata'].get('imported', '')
+                    is_imported = str(imported_value).upper() == 'TRUE'
+                    order_id = response_data['metadata'].get('order_id', '')
+
+                # Add visual indicator
+                if is_imported:
+                    status_icon = "[Imported]"
+                    status_text = f"(Already imported: {order_id})" if order_id else "(Already imported)"
+                else:
+                    status_icon = "[New]"
+                    status_text = "(Not yet imported)"
+
+                with st.expander(f"{status_icon} {company} - {timestamp} {status_text}", expanded=False):
                     col1, col2 = st.columns(2)
 
                     with col1:
@@ -4860,8 +4911,16 @@ with tab3:
                         if product.get('customization_notes'):
                             st.caption(f"  Custom: {product['customization_notes']}")
 
-                    # Import button
-                    if st.button(f"Import This Response", key=f"import_google_response_{idx}"):
+                    # Import button with status-aware label and warning
+                    if is_imported:
+                        st.warning(f"**This response was already imported** ({order_id if order_id else 'previously'}). You can import it again to create a new order.")
+                        button_label = "Re-Import This Response"
+                        button_type = "secondary"
+                    else:
+                        button_label = "Import This Response"
+                        button_type = "primary"
+
+                    if st.button(button_label, key=f"import_google_response_{idx}", type=button_type):
                         # Import client info
                         client_type = response_data['client_info'].get('client_type', 'New')
                         drop_shipping = response_data['shipping_info'].get('drop_shipping', 'No')
@@ -5026,11 +5085,21 @@ with tab3:
                         if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
                             st.session_state.partner_shipping = max_pbp_shipping
 
-                        # Mark as imported
-                        gc = st.session_state.google_form_gc
-                        row_index = idx + 2  # +2 because: +1 for header, +1 for 1-indexed
-                        order_id = f"IMPORTED-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-                        mark_response_imported(gc, row_index, order_id)
+                        # Mark as imported (only if tracking columns exist)
+                        if has_tracking:
+                            gc = st.session_state.google_form_gc
+                            # Find actual row number in original df_responses (not filtered/sorted)
+                            timestamp_col = RESPONSE_COLUMNS.get('timestamp', 'Timestamp')
+                            current_timestamp = response_data['metadata'].get('timestamp', '')
+
+                            # Find matching row in original dataframe
+                            original_row_idx = df_responses[df_responses[timestamp_col] == current_timestamp].index[0]
+                            row_index = original_row_idx + 2  # +2 because: +1 for header, +1 for 1-indexed
+
+                            order_id = f"IMPORTED-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+                            mark_response_imported(gc, row_index, order_id)
+                        else:
+                            st.info("**Note:** Tracking columns not found in response sheet. Import successful but not marked as imported.")
 
                         # Show results
                         if products_imported > 0:
@@ -5047,12 +5116,15 @@ with tab3:
     st.divider()
 
     # ============================================================
-    # OPTION B: HTML CLIENT ORDER FORM IMPORT (ALTERNATIVE)
+    # OPTION B: HTML CLIENT ORDER FORM IMPORT (LEGACY - HIDDEN BY DEFAULT)
     # ============================================================
-    st.header("Option B: Import from HTML Order Form (Alternative)")
-    st.markdown("**Use this if:** You sent an HTML form from Tab 2 and received it back completed")
 
-    with st.expander("Upload Completed Client Order Form", expanded=False):
+    with st.expander("**Legacy: Import from HTML Order Form** (Alternative Method)", expanded=False):
+        st.caption("**Note:** This is the older workflow using HTML email forms. The Google Form import above is now recommended. This legacy option is available if needed.")
+        st.markdown("**Use this if:** You sent an HTML form from Tab 2 and received it back completed")
+
+        st.markdown("---")
+        st.markdown("**Upload Completed Client Order Form**")
         st.caption("Upload an HTML order form completed by your client to auto-populate client information.")
         st.info("This will import client info, shipping, payment details, and order products from the form.")
 
@@ -5073,10 +5145,10 @@ with tab3:
                 st.warning("Parsing warnings:")
                 for error in parsed_data['parse_errors']:
                     st.caption(f"- {error}")
-
-            # Show preview of extracted data
+    
+        # Show preview of extracted data
             st.markdown("**Preview of Extracted Data:**")
-
+    
             preview_data = {
                 "New Client?": "Yes" if parsed_data['client_type'] == 'New' else ("No" if parsed_data['client_type'] == 'Existing' else "[Not filled]"),
                 "Company Name": parsed_data['company_name'] or "[Not filled]",
@@ -5090,50 +5162,50 @@ with tab3:
                 "Impact Card Preference": parsed_data['impact_card_preference'] or "[Not filled]",
                 "Payment Preference": parsed_data['payment_preference'] or "[Not filled]"
             }
-
-            # Display as table
+    
+        # Display as table
             df_preview = pd.DataFrame(list(preview_data.items()), columns=["Field", "Value"])
             st.dataframe(df_preview, use_container_width=True, hide_index=True)
-
-            # Show extracted products
+    
+        # Show extracted products
             if parsed_data['products']:
                 st.markdown(f"**Products Found:** {len(parsed_data['products'])} product(s)")
                 products_df = pd.DataFrame(parsed_data['products'], columns=["Product Name"])
                 st.dataframe(products_df, use_container_width=True, hide_index=True)
             else:
                 st.caption("No products found in order form")
-
-            # Import button
+    
+        # Import button
             st.divider()
             if st.button("Import Client Information", type="primary", use_container_width=True, key="import_client_data_btn_top"):
-                # Apply to session state
+            # Apply to session state
                 st.session_state.client_info['is_new_client'] = (parsed_data['client_type'] == 'New')
                 st.session_state.client_info['company_name'] = parsed_data['company_name']
                 st.session_state.client_info['contact_name'] = parsed_data['contact_name']
                 st.session_state.client_info['contact_email'] = parsed_data['contact_email']
                 st.session_state.client_info['shipping_address'] = parsed_data['shipping_address']
                 st.session_state.client_info['billing_address'] = parsed_data['billing_address']
-
-                # Set shipping type based on drop shipping answer
-                # Default to 'One Location' (show shipping address) unless clearly "Yes" for drop shipping
+    
+            # Set shipping type based on drop shipping answer
+            # Default to 'One Location' (show shipping address) unless clearly "Yes" for drop shipping
                 if parsed_data['drop_shipping'] == 'Yes':
                     st.session_state.client_info['shipping_type'] = 'Drop Shipping'
                 else:
-                    # For "No", empty, or any unclear answer, default to One Location
+                # For "No", empty, or any unclear answer, default to One Location
                     st.session_state.client_info['shipping_type'] = 'One Location'
-
-                # Parse and apply date
+    
+            # Parse and apply date
                 if parsed_data['client_in_hands_date']:
                     try:
                         from datetime import datetime
-                        # Try to parse MM/DD/YYYY format
+                    # Try to parse MM/DD/YYYY format
                         date_obj = datetime.strptime(parsed_data['client_in_hands_date'], '%m/%d/%Y')
                         st.session_state.client_info['client_in_hands_date'] = date_obj.date()
                     except:
-                        # If parsing fails, leave empty and let user enter manually
+                    # If parsing fails, leave empty and let user enter manually
                         st.session_state.client_info['client_in_hands_date'] = None
-
-                # Map payment preference to our dropdown values
+    
+            # Map payment preference to our dropdown values
                 payment_map = {
                     'ACH': 'ACH',
                     'Check': 'Check',
@@ -5141,30 +5213,30 @@ with tab3:
                 }
                 if parsed_data['payment_preference'] in payment_map:
                     st.session_state.client_info['payment_preference'] = payment_map[parsed_data['payment_preference']]
-
+    
                 st.success("Client information imported successfully! Review and edit the fields below as needed.")
                 st.rerun()
-
-            # ============================================================
-            # PRODUCT SELECTION FROM ORDER FORM
-            # ============================================================
+    
+        # ============================================================
+        # PRODUCT SELECTION FROM ORDER FORM
+        # ============================================================
             if parsed_data['products']:
                 st.divider()
                 st.markdown("**Select Products from Order Form:**")
                 st.caption("Products will be matched against the catalog and added with default settings (quantity 1, 100% markup).")
-
-                # Match products against catalog
+    
+            # Match products against catalog
                 matched_products = []
                 unmatched_products = []
-
+    
                 for product_name in parsed_data['products']:
-                    # Try exact match first
+                # Try exact match first
                     exact_match = st.session_state.df_template[
                         st.session_state.df_template['Product/Service'].str.lower() == product_name.lower()
                     ]
-
+    
                     if len(exact_match) > 0:
-                        # Exact match found
+                    # Exact match found
                         product_row = exact_match.iloc[0].to_dict()
                         matched_products.append({
                             'name': product_name,
@@ -5172,13 +5244,13 @@ with tab3:
                             'product_data': product_row
                         })
                     else:
-                        # Try partial match
+                    # Try partial match
                         partial_match = st.session_state.df_template[
                             st.session_state.df_template['Product/Service'].str.contains(product_name, case=False, na=False)
                         ]
-
+    
                         if len(partial_match) > 0:
-                            # Partial match found - use first match
+                        # Partial match found - use first match
                             product_row = partial_match.iloc[0].to_dict()
                             matched_products.append({
                                 'name': product_name,
@@ -5187,85 +5259,85 @@ with tab3:
                                 'product_data': product_row
                             })
                         else:
-                            # No match found
+                        # No match found
                             unmatched_products.append(product_name)
-
-                # Show matched products with checkboxes
+    
+            # Show matched products with checkboxes
                 if matched_products:
                     st.markdown(f"**Matched Products ({len(matched_products)}):**")
-
+    
                     selected_product_indices = []
-
+    
                     for idx, match in enumerate(matched_products):
                         col1, col2 = st.columns([4, 1])
-
+    
                         with col1:
                             is_selected = st.checkbox(
                                 f"{match['name']} ({match['match_type']} match)",
                                 key=f"select_form_product_{idx}",
                                 value=True  # Default to checked
                             )
-
-                            # Show catalog name if different (partial match)
+    
+                        # Show catalog name if different (partial match)
                             if match['match_type'] == 'Partial':
                                 st.caption(f"Catalog: {match['catalog_name']}")
-
-                            # Show partner
+    
+                        # Show partner
                             st.caption(f"Partner: {match['product_data'].get('Partner', 'N/A')}")
-
+    
                         with col2:
                             if is_selected:
                                 selected_product_indices.append(idx)
-
-                    # Add selected button
+    
+                # Add selected button
                     if len(selected_product_indices) > 0:
                         if st.button(f"Add {len(selected_product_indices)} Selected Product(s) to Order", type="primary", use_container_width=True, key="add_form_products_btn"):
-                            # Add products to order (using new pricing logic from Phase 3)
+                        # Add products to order (using new pricing logic from Phase 3)
                             max_pbp_shipping = 0.0
                             for idx in selected_product_indices:
                                 match = matched_products[idx]
                                 product_data = match['product_data']
-
-                                # Calculate pricing using new system (Phase 3)
+    
+                            # Calculate pricing using new system (Phase 3)
                                 pricing_result = calculate_pbp_msrp(product_data, quantity=1)
-
-                                # Extract pricing method and notes
+    
+                            # Extract pricing method and notes
                                 pricing_method = pricing_result['method_used']
                                 pricing_notes = get_column_value(product_data, 'Pricing Notes', '', '')
-
-                                # Generate validation warning if mismatch
+    
+                            # Generate validation warning if mismatch
                                 validation_warning = None
                                 if pricing_result['validation_status'] == 'mismatch':
                                     spreadsheet_val = pricing_result['spreadsheet_msrp']
                                     calculated_val = pricing_result['pbp_msrp']
                                     validation_warning = f"Price mismatch: Spreadsheet=${spreadsheet_val:.2f} | Calculated=${calculated_val:.2f}"
-
-                                # Determine markup based on pricing method
+    
+                            # Determine markup based on pricing method
                                 if pricing_method == "Standard markup":
                                     markup_percent = pricing_result['calculation_details'].get('markup_percent', 100.0)
                                 else:
-                                    # MSRP-based method - calculate implied markup
+                                # MSRP-based method - calculate implied markup
                                     base_cost = pricing_result['calculation_details']['per_item_cost']
                                     pbp_msrp = pricing_result['pbp_msrp']
                                     if base_cost > 0:
                                         markup_percent = ((pbp_msrp / base_cost) - 1) * 100
                                     else:
                                         markup_percent = 100.0
-
-                                # Get base price for quantity 1
+    
+                            # Get base price for quantity 1
                                 base_price_per_unit, tier_info, tier_num = get_unit_price_new_system(product_data, 1)
-
-                                # Calculate costs
+    
+                            # Calculate costs
                                 product_cost_subtotal = base_price_per_unit * 1
                                 markup_amount = product_cost_subtotal * (markup_percent / 100.0)
                                 product_total = product_cost_subtotal + markup_amount
-
-                                # Parse tariff
+    
+                            # Parse tariff
                                 tariff_rate_percent = get_tariff_rate(product_data, product_cost_subtotal)
                                 tariff_base = product_cost_subtotal
                                 tariff_amount = calculate_product_tariff(tariff_base, tariff_rate_percent)
-
-                                # Build order item (with Phase 3 new fields)
+    
+                            # Build order item (with Phase 3 new fields)
                                 order_item = {
                                     'product_name': product_data.get('Product/Service', 'Unknown Product'),
                                     'product_ref': product_data.get('Purchase Description', ''),
@@ -5279,7 +5351,7 @@ with tab3:
                                     'tier_column': f'T{tier_num}' if tier_num else '',
                                     'markup_percent': markup_percent,
                                     'markup_amount': markup_amount,
-                                    # Phase 3: New pricing fields
+                                # Phase 3: New pricing fields
                                     'pricing_method': pricing_method,
                                     'pricing_notes': pricing_notes,
                                     'validation_warning': validation_warning,
@@ -5302,29 +5374,29 @@ with tab3:
                                     'tariff_base': tariff_base,
                                     'tariff_amount': tariff_amount,
                                     'edited_description': '',  # Initialize with empty for user to edit later
-                                    # Per-product kitting fields
+                                # Per-product kitting fields
                                     'include_kitting': False,
                                     'kitting_pbp_cost': 0.0,
                                     'kitting_client_price': 0.0,
                                     'kitting_description': ''
                                 }
-
+    
                                 st.session_state.order_items.append(order_item)
-
-                                # Track maximum PBP shipping cost
+    
+                            # Track maximum PBP shipping cost
                                 pbp_shipping, _ = get_shipping_costs(product_data)
                                 max_pbp_shipping = max(max_pbp_shipping, pbp_shipping)
-
-                            # Auto-populate partner shipping with the maximum cost found
+    
+                        # Auto-populate partner shipping with the maximum cost found
                             if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
                                 st.session_state.partner_shipping = max_pbp_shipping
-
+    
                             st.toast(f"Added {len(selected_product_indices)} product(s) from order form!")
                             st.rerun()
                     else:
                         st.caption("Select at least one product above to add to order.")
-
-                # Show unmatched products
+    
+            # Show unmatched products
                 if unmatched_products:
                     st.divider()
                     st.warning(f"**Not Found in Catalog ({len(unmatched_products)}):**")
@@ -5332,113 +5404,49 @@ with tab3:
                         st.caption(f"- {product_name}")
                     st.caption("These products will not be added. You can add them manually using Option C below.")
 
-    st.divider()
+            st.divider()
 
-    # ============================================================
-    # OPTION C: PROPOSAL PRODUCTS SELECTION (if available)
+        # ============================================================
+    # PROPOSAL PRODUCTS IMPORT (if available)
     # ============================================================
     if len(st.session_state.proposal_products) > 0:
-        st.header("Option C: Import Products from Proposal (Tab 1)")
-        st.markdown("**Use this if:** You created a proposal in Tab 1 but don't have a completed client form")
+        with st.expander("**Import Products from Proposal (Tab 1)**", expanded=False):
+            st.markdown("**Use this if:** You created a proposal in Tab 1 but don't have a completed client form")
+
+            # Display proposal source information
+            proposal_info_msg = f"**{len(st.session_state.proposal_products)} product(s) available**"
         
-        # Display proposal source information
-        proposal_info_msg = f"**{len(st.session_state.proposal_products)} product(s) available**"
+            if 'loaded_proposal_name' in st.session_state and st.session_state.loaded_proposal_name:
+                # This is a saved/loaded proposal
+                proposal_info_msg += f" from saved proposal: **'{st.session_state.loaded_proposal_name}'**"
+                if 'loaded_proposal_date' in st.session_state:
+                    proposal_info_msg += f"\n\nCreated/Saved: {st.session_state.loaded_proposal_date}"
+                if 'loaded_proposal_creator' in st.session_state and st.session_state.loaded_proposal_creator != 'Unknown':
+                    proposal_info_msg += f" | By: {st.session_state.loaded_proposal_creator}"
+            else:
+                # This is an unsaved proposal from current session
+                proposal_info_msg += " from **Current Session Proposal (unsaved)**"
+                proposal_info_msg += "\n\nTip: Save your proposal in Tab 1 to preserve it for future use"
         
-        if 'loaded_proposal_name' in st.session_state and st.session_state.loaded_proposal_name:
-            # This is a saved/loaded proposal
-            proposal_info_msg += f" from saved proposal: **'{st.session_state.loaded_proposal_name}'**"
-            if 'loaded_proposal_date' in st.session_state:
-                proposal_info_msg += f"\n\nCreated/Saved: {st.session_state.loaded_proposal_date}"
-            if 'loaded_proposal_creator' in st.session_state and st.session_state.loaded_proposal_creator != 'Unknown':
-                proposal_info_msg += f" | By: {st.session_state.loaded_proposal_creator}"
-        else:
-            # This is an unsaved proposal from current session
-            proposal_info_msg += " from **Current Session Proposal (unsaved)**"
-            proposal_info_msg += "\n\nTip: Save your proposal in Tab 1 to preserve it for future use"
-        
-        st.info(proposal_info_msg)
-        st.session_state.using_proposal_data = True
+            st.info(proposal_info_msg)
+            st.session_state.using_proposal_data = True
 
-        # Import All button at top level
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button("Import All Products from Proposal", type="primary", use_container_width=True, key="import_all_proposal"):
-                # Import all proposal products to order
-                imported_count = 0
-                max_pbp_shipping = 0.0  # Track maximum shipping cost among all products
+            # Import All button at top level
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button("Import All Products from Proposal", type="primary", use_container_width=True, key="import_all_proposal"):
+                    # Import all proposal products to order
+                    imported_count = 0
+                    max_pbp_shipping = 0.0  # Track maximum shipping cost among all products
 
-                for prop_item in st.session_state.proposal_products:
-                    order_item = convert_proposal_to_order(
-                        prop_item,
-                        get_unit_price_new_system,
-                        calculate_product_tariff
-                    )
-                    st.session_state.order_items.append(order_item)
-                    imported_count += 1
-
-                    # Track maximum PBP shipping cost
-                    pbp_shipping, _ = get_shipping_costs(prop_item.get('product_data', {}))
-                    max_pbp_shipping = max(max_pbp_shipping, pbp_shipping)
-
-                # Auto-populate partner shipping with the maximum cost found
-                if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
-                    st.session_state.partner_shipping = max_pbp_shipping
-
-                st.toast(f"Imported all {imported_count} product(s) from proposal!")
-                st.rerun()
-
-        with col2:
-            st.caption("Or select individually below:")
-
-        with st.expander("Select Individual Products from Proposal", expanded=False):
-            st.markdown("Select specific products from your proposal to add to this order. You can edit quantities and settings after adding.")
-
-            # Build selection checkboxes
-            selected_proposal_indices = []
-
-            for idx, prop_item in enumerate(st.session_state.proposal_products):
-                product_data = prop_item.get('product_data', {})
-
-                col1, col2 = st.columns([4, 1])
-
-                with col1:
-                    # Display product name with variant (if applicable)
-                    from src.helpers import format_product_with_variant
-                    product_display_name = format_product_with_variant(
-                        product_data.get('Product/Service', 'Unknown Product'),
-                        prop_item.get('selected_variant')
-                    )
-
-                    is_selected = st.checkbox(
-                        f"{product_display_name} - {product_data.get('Partner', 'N/A')}",
-                        key=f"select_proposal_{idx}"
-                    )
-
-                    # Show proposal details
-                    st.caption(f"Quantity: {prop_item.get('quantity', 'N/A')} | Markup: {prop_item.get('markup_percent', 0)}%")
-
-                    if prop_item.get('include_customization', False):
-                        setup_fee = prop_item.get('customization_setup_fee', 0)
-                        per_unit = prop_item.get('customization_per_unit', 0)
-                        st.caption(f"Customization: ${setup_fee:.2f} setup + ${per_unit:.2f}/unit")
-
-                with col2:
-                    if is_selected:
-                        selected_proposal_indices.append(idx)
-
-            # Add selected button
-            if len(selected_proposal_indices) > 0:
-                if st.button(f"Add {len(selected_proposal_indices)} Selected Product(s) to Order", type="primary", use_container_width=True):
-                    # Convert and add to order
-                    max_pbp_shipping = 0.0
-                    for idx in selected_proposal_indices:
-                        prop_item = st.session_state.proposal_products[idx]
+                    for prop_item in st.session_state.proposal_products:
                         order_item = convert_proposal_to_order(
                             prop_item,
                             get_unit_price_new_system,
                             calculate_product_tariff
                         )
                         st.session_state.order_items.append(order_item)
+                        imported_count += 1
 
                         # Track maximum PBP shipping cost
                         pbp_shipping, _ = get_shipping_costs(prop_item.get('product_data', {}))
@@ -5448,28 +5456,94 @@ with tab3:
                     if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
                         st.session_state.partner_shipping = max_pbp_shipping
 
-                    st.toast(f"Added {len(selected_proposal_indices)} product(s) to order!")
+                    st.toast(f"Imported all {imported_count} product(s) from proposal!")
                     st.rerun()
-            else:
-                st.caption("Select at least one product above to add to order.")
 
-        st.divider()
+            with col2:
+                st.caption("Or select individually below:")
+
+            st.markdown("---")
+            st.markdown("**Select Individual Products**")
+            show_individual = st.checkbox("Show individual product selection", key="show_individual_proposal_select")
+
+            if show_individual:
+                    st.markdown("Select specific products from your proposal to add to this order. You can edit quantities and settings after adding.")
+
+                    # Build selection checkboxes
+                    selected_proposal_indices = []
+
+                    for idx, prop_item in enumerate(st.session_state.proposal_products):
+                        product_data = prop_item.get('product_data', {})
+
+                        col1, col2 = st.columns([4, 1])
+
+                        with col1:
+                            # Display product name with variant (if applicable)
+                            from src.helpers import format_product_with_variant
+                            product_display_name = format_product_with_variant(
+                                product_data.get('Product/Service', 'Unknown Product'),
+                                prop_item.get('selected_variant')
+                            )
+
+                            is_selected = st.checkbox(
+                                f"{product_display_name} - {product_data.get('Partner', 'N/A')}",
+                                key=f"select_proposal_{idx}"
+                            )
+
+                            # Show proposal details
+                            st.caption(f"Quantity: {prop_item.get('quantity', 'N/A')} | Markup: {prop_item.get('markup_percent', 0)}%")
+
+                            if prop_item.get('include_customization', False):
+                                setup_fee = prop_item.get('customization_setup_fee', 0)
+                                per_unit = prop_item.get('customization_per_unit', 0)
+                                st.caption(f"Customization: ${setup_fee:.2f} setup + ${per_unit:.2f}/unit")
+
+                        with col2:
+                            if is_selected:
+                                selected_proposal_indices.append(idx)
+
+                    # Add selected button
+                    if len(selected_proposal_indices) > 0:
+                        if st.button(f"Add {len(selected_proposal_indices)} Selected Product(s) to Order", type="primary", use_container_width=True):
+                            # Convert and add to order
+                            max_pbp_shipping = 0.0
+                            for idx in selected_proposal_indices:
+                                prop_item = st.session_state.proposal_products[idx]
+                                order_item = convert_proposal_to_order(
+                                    prop_item,
+                                    get_unit_price_new_system,
+                                    calculate_product_tariff
+                                )
+                                st.session_state.order_items.append(order_item)
+
+                                # Track maximum PBP shipping cost
+                                pbp_shipping, _ = get_shipping_costs(prop_item.get('product_data', {}))
+                                max_pbp_shipping = max(max_pbp_shipping, pbp_shipping)
+
+                            # Auto-populate partner shipping with the maximum cost found
+                            if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
+                                st.session_state.partner_shipping = max_pbp_shipping
+
+                            st.toast(f"Added {len(selected_proposal_indices)} product(s) to order!")
+                            st.rerun()
+                    else:
+                        st.caption("Select at least one product above to add to order.")
+
+            st.divider()
     else:
         st.session_state.using_proposal_data = False
 
 
     # ============================================================
-    # OPTION D (or C): MANUAL PRODUCT SELECTION
+    # OPTION B: MANUAL PRODUCT SELECTION
     # ============================================================
     # Display success message if a product was just added
     if 'show_add_to_order_success' in st.session_state and st.session_state.show_add_to_order_success:
         st.toast(f"Added {st.session_state.add_to_order_product_name} to order")
         st.session_state.show_add_to_order_success = False
 
-    # Adjust option label based on whether proposal exists
-    option_label = "Option D" if has_proposal else "Option C"
-    st.header(f"{option_label}: Manual Product Selection")
-    st.markdown("**Use this if:** You're starting from scratch without a proposal or completed form")
+    st.header("Option B: Manual Product Selection")
+    st.markdown("**Use this if:** You're starting from scratch or adding products manually")
     st.caption("Add products to your order, then configure settings for each product below")
 
     # Create dropdowns for filtering
@@ -5685,14 +5759,13 @@ with tab3:
     st.divider()
 
     # ============================================================
-    # OPTION D: CREATE CUSTOM PRODUCT
+    # CREATE CUSTOM PRODUCT (ADVANCED)
     # ============================================================
-    option_label_d = "Option D" if has_proposal else "Option C"
-    st.header(f"{option_label_d}: Create Custom Product")
-    st.markdown("**Use this if:** You need to add a unique product not in the catalog")
-    st.caption("Create one-off items, executive samples, or products pending catalog addition")
+    st.divider()
 
-    with st.expander("Create Custom Product", expanded=False):
+    with st.expander("**Create Custom Product** (Advanced)", expanded=False):
+        st.markdown("**Use this if:** You need to add a unique product not in the catalog")
+        st.caption("Create one-off items, executive samples, or products pending catalog addition")
         st.caption("Enter basic info - you'll configure quantity, markup, and customization after adding")
 
         col1, col2, col3 = st.columns([2, 2, 1])
@@ -6099,7 +6172,7 @@ with tab3:
             # PRICING NOTES (Phase 3) - Only show if notes exist and not manually overridden
             pricing_notes = item.get('pricing_notes', '')
             if pricing_notes and pricing_notes.strip() and not manual_override:
-                with st.expander("ℹ️ Pricing Information", expanded=False):
+                with st.expander("Pricing Information", expanded=False):
                     st.caption(pricing_notes)
 
             # CUSTOMIZATION SECTION (always available)
@@ -6220,7 +6293,7 @@ with tab3:
                         item['customization_addons'] = []
 
                     # Button to add new add-on
-                    if st.button("➕ Add Customization Option", key=f"add_addon_{idx}"):
+                    if st.button("Add Customization Option", key=f"add_addon_{idx}"):
                         item['customization_addons'].append({
                             'name': '',
                             'client_setup_fee': 0.0,
@@ -6666,7 +6739,7 @@ with tab3:
 
         # Show pricing notes if any
         if items_with_notes:
-            with st.expander(f"ℹ️ Pricing Information ({len(items_with_notes)} product{'s' if len(items_with_notes) > 1 else ''})", expanded=False):
+            with st.expander(f"Pricing Information ({len(items_with_notes)} product{'s' if len(items_with_notes) > 1 else ''})", expanded=False):
                 for item in items_with_notes:
                     from src.helpers import format_product_with_variant
                     product_display = format_product_with_variant(item['product_name'], item.get('selected_variant'))
@@ -6790,7 +6863,7 @@ Rates default to current estimates but can be adjusted as needed.
                     # Show tariff info if available
                     tariff_info = item.get('tariff_info', '')
                     if tariff_info and tariff_info.strip():
-                        st.caption(f"ℹ️ {tariff_info}")
+                        st.caption(f"{tariff_info}")
 
                     st.markdown("")  # Spacing
 
@@ -8188,7 +8261,7 @@ with tab4:
                         # Show tariff info if available
                         tariff_info = item.get('tariff_info', '')
                         if tariff_info and tariff_info.strip():
-                            st.caption(f"ℹ️ {tariff_info}")
+                            st.caption(f"{tariff_info}")
 
                         st.markdown("")  # Spacing
 
@@ -9874,7 +9947,7 @@ with tab5:
 
             with col3:
                 # Quick add button
-                if st.button("➕ Add", type="primary", use_container_width=True,
+                if st.button("Add", type="primary", use_container_width=True,
                            disabled=not quick_product, key="exec_quick_add"):
                     if quick_product:
                         # Check if already added

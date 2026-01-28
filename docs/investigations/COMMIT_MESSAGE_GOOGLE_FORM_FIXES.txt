@@ -1,0 +1,50 @@
+FIX: Google Form response loading bugs + UX improvements
+
+This commit fixes two critical issues with the Google Form integration:
+
+Issue 1: Design Limitation - Only showing unimported responses
+- Changed to show ALL responses by default (most recent first)
+- Added filter dropdown: "All" / "Not Imported" / "Imported"
+- Added visual status indicators (📋 for new, ✅ for imported)
+- Allow re-importing responses to create multiple orders
+- Show order ID and warning when re-importing
+
+Issue 2: Row Index Calculation Bug
+- Fixed bug where filtered/sorted DataFrame index didn't match sheet row
+- Now finds actual row by matching timestamp before marking as imported
+- Prevents marking wrong rows in response sheet
+
+Additional Improvements:
+- Graceful handling of missing tracking columns
+- Better error messages with diagnostic tips
+- Show count of imported vs. not imported responses
+- Re-import button changes to secondary style with warning
+
+Files Changed:
+- app.py: Lines 4798-5115 (Option A section)
+  - Import changed: get_unimported_responses → load_form_responses
+  - Added filter dropdown and sorting logic
+  - Fixed row index calculation
+  - Added status indicators and re-import support
+
+Files Added:
+- scripts/investigations/debug_google_form_responses.py
+  - Diagnostic tool to troubleshoot response loading
+  - Shows columns, tracking status, all responses
+- docs/investigations/GOOGLE_FORM_BUGS_FIX_2026_01_28.md
+  - Complete documentation of fixes
+  - Testing checklist
+  - Troubleshooting guide
+
+Testing:
+- Verified filter dropdown works (All/Imported/Not Imported)
+- Verified status indicators show correctly
+- Verified row index calculation with sorted data
+- Verified re-import functionality
+- Verified graceful handling of missing tracking columns
+
+Impact:
+- Users can now see complete form submission history
+- Users can create multiple orders from same response
+- Better visibility and control over form responses
+- More robust error handling and diagnostics

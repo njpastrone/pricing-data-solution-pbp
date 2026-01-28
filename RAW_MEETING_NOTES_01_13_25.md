@@ -1,7 +1,6 @@
 # Meeting Notes from 01/13/2025 meeting with Lauri & Heide
 
 ## App Notes
-### Update app based on new schema
 
 ## Other Notes
 
@@ -17,10 +16,11 @@
 ### For Customization Add-Ons, specified PBP Cost v. Client Prices. 
 ### Made schema-update subagent (call with e.g. "/schema-update rename 'MSRP' to 'Vendor Published MSRP'")
 ### Updated Schema with "Has Variants (Y/N)" and "Variant Type" columns and updated app logic to work with variants.
-### Fixed but where Tab 3 prices were imported from master rather than proposal when using Option B proposal import.
+### Fixed bug where Tab 3 prices were imported from master rather than proposal when using Option B proposal import.
 ### Reorganized notes into internal and external notes for team, bookkeeping, clients, and partners.
 ### Added option for product-specific kitting costs.
 ### Added Create Custom Product feature
 ### Cleaned up product descriptions
-### Created new Spreadsheet with Standard Markup logic; standard markups for each client including whether shipping cost absorbed
+### Created new Spreadsheet with Markup logic; standard markups / pricing logic for each client including whether shipping cost absorbed
+### Updated app based on new schema
 
