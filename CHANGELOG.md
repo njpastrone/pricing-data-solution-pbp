@@ -15,7 +15,49 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - Display updates in proposal tables show "5% Volume Order discount" label
   - "Discount Quoted to Client" warning in Tab 3 shows Volume Order discount when applicable
 
+### Changed
+- **Per-Product Kitting Display:** Kitting now shown as separate line items instead of merged into product rows
+  - **Tab 3 (Order Summary):** Added new "Per-Product Kitting" section after Customization
+    - Each product's kitting shows as separate line with "one-time" quantity
+    - Displays kitting description (e.g., "Premium gift box", "Repackaging")
+    - Shows both PBP cost and client price per line
+    - Includes subtotal row for all per-product kitting
+  - **Tab 4 (Invoice Generation):** Kitting appears as separate line items with indentation
+    - Uses "└" prefix to show hierarchy (product → kitting)
+    - Quantity = 1 (one-time charge)
+    - Separate COST/UNIT and SELL PRICE/UNIT columns
+    - Same format as customization line items
+  - **Product Detail Breakdown:** Kitting totals removed from product summary (shown separately in breakdown table)
+  - **Rationale:** Following customization pattern for consistency and clarity
+  - **Backward Compatible:** No data structure changes, only display logic
+  - **Test Coverage:** All 5 tests passing in `scripts/features/test_per_product_kitting.py`
+
 ### Fixed
+- **Schema Column Name Mismatch (CRITICAL):** Fixed KeyError caused by code using old column names from v7.x schema instead of new v8.x names
+  - **Root Cause:** Google Sheets updated to v8.1.0 schema (Jan 28, 2026) but some code still referenced old column names
+  - **Errors:** `KeyError: "['PBP Cost (No Tiers)'] not in index"` when trying to display or refresh data
+  - **Fixed Columns:**
+    - `PBP Cost (No Tiers)` → `PBP Cost (No Tiers/Tier 1)` (updated in app.py custom products, debug script)
+    - `Units per Package` → `Units per Case` (updated in app.py custom products)
+  - **Files Updated:**
+    - app.py: Custom product creation now uses new schema column names (lines 5872, 5888, 5894)
+    - scripts/debug_refresh_data.py: All display code uses new column names
+  - **Backward Compatibility:** `get_column_value()` helper already had mappings, but direct column access bypassed it
+  - **Impact:** App now works with v8.1.0 schema; refresh button can fetch and display data without errors
+- **"Refresh Data" Button Not Working (CRITICAL):** Fixed sidebar "Refresh Data" button that was returning cached data instead of fetching fresh data from Google Sheets
+  - **Root Cause 1:** Button called `load_pricing_data()` without clearing the 5-minute TTL cache first
+  - **Root Cause 2:** Tab 3 was calling `load_pricing_data()` directly instead of using session state, which re-cached old data immediately after refresh
+  - **Impact:** Users clicking "Refresh Data" got same cached data (no actual refresh unless 5+ minutes had passed)
+  - **Solution 1:** Added `load_pricing_data.clear()` before fetching data to force fresh load (app.py:1145)
+  - **Solution 2:** Changed Tab 3 to use session state data instead of calling `load_pricing_data()` directly (app.py:4501)
+  - **Solution 3:** Added `extract_partner_contacts()` call in refresh button to update partner contacts from fresh data (app.py:1156)
+  - **API Protection:** Added 30-second cooldown between manual refreshes to prevent rate limiting
+    - Cooldown timer displayed to user ("Please wait Xs before refreshing again")
+    - Button disabled during cooldown period
+    - Protects against API rate limit (100 requests/100 seconds)
+    - Each refresh = 3 API calls (Data, Metadata, Partner-Specific Info sheets)
+  - **User Experience:** Button now provides immediate feedback and actually refreshes data as expected across all tabs
+  - **Testing:** All tabs (1-5) now use session state data, ensuring consistency after refresh
 - **PowerPoint Discount Labels & Prices:** PowerPoint proposal tables now correctly display discount labels AND apply discounts to prices
   - **Issue 1 - Headers:** Fixed headers showing "Price @ Qty 100" instead of discount labels
     - Now shows "Client Price (5% Non-profit discount)" or "Client Price (5% Volume Order discount)" when applicable
@@ -34,6 +76,144 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
     - When discount = 0, both columns show regular prices (no change from original behavior)
     - Applies to both variant tables and single product tables
   - **Result:** PowerPoint tables now show price comparison correctly (undiscounted vs discounted)
+
+---
+
+## [8.1.0] - 2026-01-28
+
+### SCHEMA UPDATE: Add-On Expansion & Terminology Update
+
+This release adds support for non-shipping markup add-ons and updates cost basis terminology from "Package" to "Case".
+
+#### 🔥 Schema Changes
+
+**New Column:**
+- **Column 25: "Other Add-On % (of Cost)"** - Captures markup add-ons outside of shipping (e.g., tariffs, handling fees)
+  - Type: Percentage (0-100)
+  - Default: 0.0 if empty
+  - Format: 10 (means 10%)
+  - Used in MSRP-based pricing methods
+
+**Renamed Columns:**
+- **Column 20:** "Cost Basis (Per Item/Per Package)" → "Cost Basis (Per Item/Per Case)"
+- **Column 21:** "Units per Package" → "Units per Case"
+- Backward compatibility maintained in code via `get_column_value()` fallbacks
+
+**Total Columns:** 45 (was 44, +1 field)
+
+#### ✨ New Features
+
+**Fourth Pricing Method:**
+- Added **"MSRP + Other Add-On % (of Cost)"** as allowed value in Pricing Logic column
+- Uses same calculation as "MSRP + % of cost" but indicates Other Add-On % is primary
+- Formula: `PBP MSRP = Vendor MSRP + ((Shipping Add-On % + Other Add-On %) × cost)`
+
+**Enhanced Pricing Calculation:**
+- Both add-ons (Shipping and Other) are now **summed together** in all MSRP-based pricing methods
+- Method 1 ("MSRP + % of cost") updated to include both add-ons
+- Method 4 ("MSRP + Other Add-On % (of Cost)") added with identical calculation
+- Generally only one add-on will have a value, but both can be used simultaneously
+
+#### 🔧 Code Changes
+
+**Core Logic Files:**
+1. **src/helpers.py**
+   - Added `get_other_addon_percent()` function (mirrors `get_shipping_addon_percent()`)
+   - Updated schema_mappings to include "Other Add-On % (of Cost)" with default 0.0
+   - Updated "Cost Basis" mapping to use "Per Case" with "Per Package" fallback
+   - Updated `normalize_cost_to_per_item()` to use "Units per Case" with fallback
+
+2. **src/pricing_engine.py**
+   - Imported `get_other_addon_percent()` function
+   - Updated "MSRP + % of cost" method to sum both add-ons: `(Shipping % + Other %) × cost`
+   - Added new pricing logic case for "MSRP + Other Add-On % (of Cost)"
+   - Updated `get_unit_price_new_system()` to use "Units per Case" terminology
+   - Both methods calculate: `total_addon_pct = shipping_addon_pct + other_addon_pct`
+
+#### 📚 Documentation Updates
+
+**schema_reference.md:**
+- Updated header: v8.1.0, 45 columns
+- Added column 25 definition with description and rules
+- Renamed columns 20-21 with "Case" terminology
+- Renumbered columns 26-45 (shifted by 1)
+- Added v8.1.0 entry to Schema Change Log
+- Added v8.1.0 changes summary section
+
+**docs/planning/METHODOLOGY_LOGIC.md:**
+- Updated overview to mention four pricing methods
+- Updated Method 1 formula and example to show both add-ons
+- Updated Method 3 Cost Basis reference to use "Per Case"
+- Added complete Method 4 section with formula, examples, and validation
+- Updated Cost Basis Normalization section with "Per Case" terminology
+- Added update note: "Updated January 28, 2026"
+
+#### 🔄 Backward Compatibility
+
+**Fully Backward Compatible:**
+- Old "Units per Package" column still works (fallback in `get_column_value()`)
+- Old "Cost Basis (Per Item/Per Package)" values still recognized
+- Products without "Other Add-On %" default to 0.0 (no impact on existing pricing)
+- All existing spreadsheets continue to work without modification
+
+**Migration Path:**
+- Spreadsheets can be updated to new column names at any time
+- Code checks new names first, falls back to old names
+- No breaking changes for existing data
+
+#### 📊 Examples
+
+**Example 1: Both Add-Ons Used**
+```
+Pricing Logic: MSRP + % of cost
+Vendor MSRP: $10.00
+Shipping Add-On %: 15%
+Other Add-On %: 5%
+Per-Item Cost: $5.00
+
+Calculation: $10.00 + ((0.15 + 0.05) × $5.00) = $10.00 + $1.00 = $11.00
+PBP MSRP: $11.00
+```
+
+**Example 2: Only Other Add-On**
+```
+Pricing Logic: MSRP + Other Add-On % (of Cost)
+Vendor MSRP: $12.00
+Shipping Add-On %: 0% (default)
+Other Add-On %: 10%
+Per-Item Cost: $6.00
+
+Calculation: $12.00 + ((0.00 + 0.10) × $6.00) = $12.00 + $0.60 = $12.60
+PBP MSRP: $12.60
+```
+
+**Example 3: Per Case Normalization**
+```
+Cost Basis: Per Case
+PBP Cost: $48.00
+Units per Case: 6
+
+Per-Item Cost: $48.00 ÷ 6 = $8.00
+(Used in all subsequent pricing calculations)
+```
+
+#### ✅ Testing
+
+**Manual Tests Required:**
+- Test product with Shipping Add-On only → should work as before
+- Test product with Other Add-On only → should add Other to MSRP
+- Test product with BOTH add-ons → should sum and add to MSRP
+- Test product with no add-ons → should match vendor MSRP exactly
+- Test "Per Case" cost basis → should normalize correctly
+- Test backward compatibility with old "Package" column names
+
+#### 📝 Files Changed
+
+- `src/helpers.py` - 4 changes (schema mappings, new function, normalize function, case references)
+- `src/pricing_engine.py` - 4 changes (import, Method 1 update, Method 4 addition, case references)
+- `schema_reference.md` - Complete update (column table, changelog, summary)
+- `docs/planning/METHODOLOGY_LOGIC.md` - Complete update (all methods, examples, case references)
+- `CHANGELOG.md` - This entry
 
 ---
 

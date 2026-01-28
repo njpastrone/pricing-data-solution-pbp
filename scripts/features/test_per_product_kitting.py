@@ -146,7 +146,7 @@ def test_migration():
     return True
 
 def test_display_logic():
-    """Test order summary display logic"""
+    """Test order summary display logic - kitting as separate line item"""
     print("\n=== Test 4: Display Logic ===")
 
     # Product with kitting
@@ -161,39 +161,45 @@ def test_display_logic():
         'kitting_description': 'Premium gift box'
     }
 
-    # Calculate display values (simulating Tab 3 order summary)
+    # Calculate display values (simulating NEW Tab 3 order summary - kitting separate)
+    # Product line (WITHOUT kitting)
     product_pbp_cost = item.get('product_subtotal', 0)
     product_client_price = product_pbp_cost + item.get('markup_amount', 0)
 
-    kitting_note = ""
-    if item.get('include_kitting', False):
-        kitting_pbp = item.get('kitting_pbp_cost', 0.0)
-        kitting_client = item.get('kitting_client_price', 0.0)
-        product_pbp_cost += kitting_pbp
-        product_client_price += kitting_client
-        if kitting_client > 0:
-            kitting_desc = item.get('kitting_description', 'kitting')
-            kitting_note = f" (includes ${kitting_client:.2f} {kitting_desc})"
+    product_display_name = f"Base Product: {item['product_name']}"
 
-    display_name = f"Base Product: {item['product_name']}{kitting_note}"
+    # Separate kitting line
+    kitting_pbp = item.get('kitting_pbp_cost', 0.0)
+    kitting_client = item.get('kitting_client_price', 0.0)
+    kitting_desc = item.get('kitting_description', 'Kitting')
+    kitting_display_name = f"{item['product_name']} - {kitting_desc}"
 
-    print(f"Display name: {display_name}")
-    print(f"PBP Cost: ${product_pbp_cost:.2f}")
-    print(f"Client Price: ${product_client_price:.2f}")
+    print(f"Product line: {product_display_name}")
+    print(f"  PBP Cost: ${product_pbp_cost:.2f}")
+    print(f"  Client Price: ${product_client_price:.2f}")
+    print(f"\nKitting line: {kitting_display_name}")
+    print(f"  Quantity: one-time")
+    print(f"  PBP Cost: ${kitting_pbp:.2f}")
+    print(f"  Client Price: ${kitting_client:.2f}")
 
-    assert kitting_note == " (includes $40.00 Premium gift box)", f"Unexpected kitting note: {kitting_note}"
-    assert product_pbp_cost == 525.0, f"Expected $525.00 PBP cost, got ${product_pbp_cost:.2f}"
-    assert product_client_price == 1040.0, f"Expected $1040.00 client price, got ${product_client_price:.2f}"
+    # Verify product line shows WITHOUT kitting
+    assert product_pbp_cost == 500.0, f"Expected $500.00 PBP cost, got ${product_pbp_cost:.2f}"
+    assert product_client_price == 1000.0, f"Expected $1000.00 client price, got ${product_client_price:.2f}"
 
-    print("✓ Display logic correct - kitting merged into product rows")
+    # Verify separate kitting line
+    assert kitting_pbp == 25.0, f"Expected $25.00 kitting PBP, got ${kitting_pbp:.2f}"
+    assert kitting_client == 40.0, f"Expected $40.00 kitting client, got ${kitting_client:.2f}"
+    assert kitting_desc == 'Premium gift box', f"Expected 'Premium gift box', got '{kitting_desc}'"
+
+    print("✓ Display logic correct - kitting shown as separate line item")
 
     return True
 
 def test_invoice_specs():
-    """Test invoice specs generation"""
+    """Test invoice specs generation - kitting as separate line item"""
     print("\n=== Test 5: Invoice Specs ===")
 
-    # Simulate invoice line item generation
+    # Simulate NEW invoice line item generation (kitting separate)
     item = {
         'product_name': 'Coffee Beans',
         'quantity': 100,
@@ -205,28 +211,38 @@ def test_invoice_specs():
         'kitting_description': 'Repackaging'
     }
 
+    # Product line (WITHOUT kitting)
     items_specs = f"{item['product_name']}\nTier 1"
     partner_cost_total = item.get('product_subtotal', 0)
     sell_price_total = partner_cost_total + item.get('markup_amount', 0)
 
-    # Add per-product kitting
+    print(f"Product line:")
+    print(f"  Invoice specs: {items_specs}")
+    print(f"  Partner cost: ${partner_cost_total:.2f}")
+    print(f"  Sell price: ${sell_price_total:.2f}")
+
+    # Separate kitting line item
     if item.get('include_kitting', False):
         kitting_pbp = item.get('kitting_pbp_cost', 0.0)
         kitting_client = item.get('kitting_client_price', 0.0)
-        partner_cost_total += kitting_pbp
-        sell_price_total += kitting_client
         kitting_desc = item.get('kitting_description', 'Kitting')
-        items_specs += f" | {kitting_desc}: +${kitting_client:.2f}"
+        kitting_specs = f"  └ {kitting_desc}"
 
-    print(f"Invoice specs: {items_specs}")
-    print(f"Partner cost total: ${partner_cost_total:.2f}")
-    print(f"Sell price total: ${sell_price_total:.2f}")
+        print(f"\nKitting line:")
+        print(f"  Invoice specs: {kitting_specs}")
+        print(f"  Partner cost: ${kitting_pbp:.2f}")
+        print(f"  Sell price: ${kitting_client:.2f}")
+        print(f"  Quantity: 1 (one-time)")
 
-    assert "| Repackaging: +$15.00" in items_specs, f"Kitting not in specs: {items_specs}"
-    assert partner_cost_total == 860.0, f"Expected $860.00 partner cost, got ${partner_cost_total:.2f}"
-    assert sell_price_total == 1715.0, f"Expected $1715.00 sell price, got ${sell_price_total:.2f}"
+    # Verify product line WITHOUT kitting
+    assert partner_cost_total == 850.0, f"Expected $850.00 partner cost, got ${partner_cost_total:.2f}"
+    assert sell_price_total == 1700.0, f"Expected $1700.00 sell price, got ${sell_price_total:.2f}"
 
-    print("✓ Invoice specs generation correct - kitting appended to specs")
+    # Verify separate kitting line
+    assert item.get('kitting_pbp_cost') == 10.0, "Expected $10.00 kitting PBP cost"
+    assert item.get('kitting_client_price') == 15.0, "Expected $15.00 kitting client price"
+
+    print("✓ Invoice specs generation correct - kitting as separate line item with indentation")
 
     return True
 

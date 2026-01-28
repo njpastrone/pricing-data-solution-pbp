@@ -1128,14 +1128,66 @@ with st.sidebar:
 
         st.caption(f"Last updated: {time_str}")
 
-        if st.button("Refresh Data", use_container_width=True):
-            # Clear cached data and reload from selected dataset
-            df_template, df_metadata, df_partner_info = load_pricing_data(st.session_state.selected_dataset)
-            st.session_state.df_template = df_template
-            st.session_state.df_metadata = df_metadata
-            st.session_state.df_partner_info = df_partner_info
-            st.session_state.data_loaded_at = datetime.now()
-            st.rerun()
+        # Check if we can refresh (30-second cooldown to prevent API rate limiting)
+        last_manual_refresh = st.session_state.get('last_manual_refresh', None)
+        can_refresh = True
+        cooldown_remaining = 0
+
+        if last_manual_refresh:
+            time_since_refresh = (datetime.now() - last_manual_refresh).seconds
+            if time_since_refresh < 30:
+                can_refresh = False
+                cooldown_remaining = 30 - time_since_refresh
+
+        if st.button("Refresh Data", use_container_width=True, disabled=not can_refresh):
+            if can_refresh:
+                # Store old data for comparison
+                old_product_count = len(st.session_state.get('df_template', []))
+                old_first_product = st.session_state.df_template.iloc[0]['Product/Service'] if old_product_count > 0 else 'N/A'
+
+                # Clear the cache to force fresh data from Google Sheets
+                st.info("🔄 Clearing cache...")
+                load_pricing_data.clear()
+
+                # Reload from selected dataset
+                st.info("📥 Fetching fresh data from Google Sheets...")
+                df_template, df_metadata, df_partner_info = load_pricing_data(st.session_state.selected_dataset)
+
+                # Update session state
+                st.session_state.df_template = df_template
+                st.session_state.df_metadata = df_metadata
+                st.session_state.df_partner_info = df_partner_info
+                st.session_state.data_loaded_at = datetime.now()
+                st.session_state.last_manual_refresh = datetime.now()
+
+                # Also update partner contacts from refreshed data
+                st.session_state.partner_contacts = extract_partner_contacts(df_partner_info)
+
+                # Show comparison
+                new_product_count = len(df_template)
+                new_first_product = df_template.iloc[0]['Product/Service'] if new_product_count > 0 else 'N/A'
+
+                st.success(f"✅ Data refreshed! Products: {old_product_count} → {new_product_count}")
+                if old_first_product != new_first_product:
+                    st.warning(f"🔍 First product changed: '{old_first_product}' → '{new_first_product}'")
+
+                st.rerun()
+
+        if not can_refresh:
+            st.caption(f"Please wait {cooldown_remaining}s before refreshing again (API rate limit protection)")
+        else:
+            st.caption("Data auto-refreshes every 5 minutes")
+
+        # Debug: Show current data details
+        with st.expander("🔍 Debug: Current Data Details"):
+            df = st.session_state.df_template
+            st.write(f"**Products loaded:** {len(df)}")
+            st.write(f"**First product:** {df.iloc[0]['Product/Service']}")
+            st.write(f"**Last product:** {df.iloc[-1]['Product/Service']}")
+            st.write(f"**Dataset:** {st.session_state.selected_dataset}")
+            if 'last_manual_refresh' in st.session_state:
+                st.write(f"**Last manual refresh:** {st.session_state.last_manual_refresh.strftime('%H:%M:%S')}")
+            st.caption("If changes aren't showing, run: streamlit run scripts/debug_refresh_data.py")
     else:
         st.caption("Data status: Unknown")
 
@@ -2747,10 +2799,14 @@ with tab1:
                 st.caption(f"Ships From: {product_data.get('Country of Origin (Ships From)', 'N/A')} | Made In: {product_data.get('Country of Origin (Made In)', 'N/A')} | Tiered: {product_data.get('Pricing Tiers (Y/N)', 'N/A')}")
 
                 # Show pricing method and cost basis (new schema fields)
-                pricing_logic = get_column_value(product_data, 'pricing_logic', None)
-                cost_basis = get_column_value(product_data, 'cost_basis', 'Per Item')
+                # Use the actual method from calculate_pbp_msrp result (includes fallback info)
+                if estimated_moq and moq_pricing_result:
+                    pricing_method_display = moq_pricing_result.get('method_used', 'Standard markup')
+                else:
+                    pricing_logic = get_column_value(product_data, 'Pricing Logic', None)
+                    pricing_method_display = pricing_logic if pricing_logic else "Standard markup"
 
-                pricing_method_display = pricing_logic if pricing_logic else "Standard markup"
+                cost_basis = get_column_value(product_data, 'Cost Basis (Per Item/Per Case)', 'Per Item')
                 st.caption(f"Pricing Method: {pricing_method_display} | Cost Basis: {cost_basis}")
 
                 # Show MSRP if available
@@ -4475,8 +4531,11 @@ with tab2:
 with tab3:
     st.header("Order & Client Info - Input Order & Client Details")
 
-    # Load data for product matching (needed for Google Form and HTML import)
-    df_template, df_metadata, df_partner_info = load_pricing_data(st.session_state.selected_dataset)
+    # Use data from session state (already loaded and cached)
+    # This ensures we use the latest data after manual refresh
+    df_template = st.session_state.df_template
+    df_metadata = st.session_state.df_metadata
+    df_partner_info = st.session_state.df_partner_info
 
     # MIGRATION: Add Phase 3 fields to old order items (backward compatibility)
     for item in st.session_state.order_items:
@@ -5814,7 +5873,7 @@ with tab3:
                     'Product/Service': custom_product_name.strip(),
                     'Partner': custom_partner,
                     'Pricing Tiers (Y/N)': 'N',  # Always flat-rate for custom
-                    'PBP Cost (No Tiers)': custom_base_cost,
+                    'PBP Cost (No Tiers/Tier 1)': custom_base_cost,  # Updated schema name
                     'PBP Standard Markup': 100.0,  # Default markup
                     'Country of Origin (Made In)': '',
                     'Country of Origin (Ships From)': '',
@@ -5830,13 +5889,13 @@ with tab3:
                     'MOV (Partner)': '',
                     'Tariff Info': '',
                     'Purchase Description': '',
-                    'Units per Package': 1,
+                    'Units per Case': 1,  # Updated from "Units per Package"
                 }
 
                 # Use same structure as catalog products
                 base_price = custom_base_cost  # No tiers, so base price = entered cost
                 tier_range = "No Tiers"
-                tier_column = "PBP Cost (No Tiers)"
+                tier_column = "PBP Cost (No Tiers/Tier 1)"  # Updated schema name
                 markup = 100.0  # Default markup
 
                 # Create order item with DEFAULTS (same structure as catalog products + Phase 3 fields)
@@ -6696,11 +6755,9 @@ with tab3:
                 )
                 st.table(breakdown_df)
 
-                # Show totals summary (include kitting if present)
-                kitting_pbp = item.get('kitting_pbp_cost', 0.0) if item.get('include_kitting', False) else 0.0
-                kitting_client = item.get('kitting_client_price', 0.0) if item.get('include_kitting', False) else 0.0
-                total_pbp_cost = product_pbp_cost + partner_customization_setup_total + partner_customization_unit_total + kitting_pbp
-                total_client_price = product_total + kitting_client
+                # Show totals summary (kitting shown separately in breakdown, not in totals)
+                total_pbp_cost = product_pbp_cost + partner_customization_setup_total + partner_customization_unit_total
+                total_client_price = product_total
 
                 st.caption(f"**Totals:** PBP Cost: ${total_pbp_cost:.2f} | Client Price: ${total_client_price:.2f} | Margin: ${total_client_price - total_pbp_cost:.2f}")
 
@@ -7264,26 +7321,15 @@ Rates default to current estimates but can be adjusted as needed.
             # Product header
             st.caption(f"**{item['product_name']}**")
 
-            # Regular product: show base product with product name
+            # Regular product: show base product with product name (WITHOUT kitting)
             product_pbp_cost = item.get('product_subtotal', 0)
             product_client_price = product_pbp_cost + item.get('markup_amount', 0)
-
-            # Add per-product kitting if included
-            kitting_note = ""
-            if item.get('include_kitting', False):
-                kitting_pbp = item.get('kitting_pbp_cost', 0.0)
-                kitting_client = item.get('kitting_client_price', 0.0)
-                product_pbp_cost += kitting_pbp
-                product_client_price += kitting_client
-                if kitting_client > 0:
-                    kitting_desc = item.get('kitting_description', 'kitting')
-                    kitting_note = f" (includes ${kitting_client:.2f} {kitting_desc})"
 
             product_pbp_per_unit = product_pbp_cost / item['quantity'] if item['quantity'] > 0 else 0
             product_client_per_unit = product_client_price / item['quantity'] if item['quantity'] > 0 else 0
 
             summary_items.append([
-                f"Base Product: {item['product_name']}{kitting_note}",
+                f"Base Product: {item['product_name']}",
                 item['quantity'],
                 f"${product_pbp_per_unit:.2f}",
                 f"${product_pbp_cost:.2f}",
@@ -7350,6 +7396,41 @@ Rates default to current estimates but can be adjusted as needed.
                 f"**${split_totals['customization_pbp_cost']:.2f}**",
                 "",
                 f"**${split_totals['customization_client_price']:.2f}**"
+            ])
+
+        # SECTION 2.5: Per-Product Kitting (if any)
+        if per_product_kitting_client > 0:
+            summary_items.append(["", "", "", "", "", ""])  # Empty row for spacing
+            st.markdown("##### Per-Product Kitting")
+
+            for item in st.session_state.order_items:
+                if item.get('is_custom', False):
+                    continue
+
+                # Show kitting if present
+                if item.get('include_kitting', False):
+                    kitting_pbp = item.get('kitting_pbp_cost', 0.0)
+                    kitting_client = item.get('kitting_client_price', 0.0)
+                    kitting_desc = item.get('kitting_description', 'Kitting')
+
+                    if kitting_client > 0:
+                        summary_items.append([
+                            f"{item['product_name']} - {kitting_desc}",
+                            "one-time",
+                            f"${kitting_pbp:.2f}",  # Per unit same as total for one-time
+                            f"${kitting_pbp:.2f}",
+                            f"${kitting_client:.2f}",  # Per unit same as total for one-time
+                            f"${kitting_client:.2f}"
+                        ])
+
+            # Per-product kitting subtotal row
+            summary_items.append([
+                "**Per-Product Kitting Subtotal**",
+                "",
+                "",
+                f"**${per_product_kitting_pbp:.2f}**",
+                "",
+                f"**${per_product_kitting_client:.2f}**"
             ])
 
         # SECTION 3: Discounts, Shipping, Tariffs, Fees
@@ -8834,18 +8915,7 @@ with tab4:
 
                 cost_verified = item.get('cost_verified', 'Pending')
 
-                # Add per-product kitting if included
-                if item.get('include_kitting', False):
-                    kitting_pbp = item.get('kitting_pbp_cost', 0.0)
-                    kitting_client = item.get('kitting_client_price', 0.0)
-                    partner_cost_total += kitting_pbp
-                    sell_price_total += kitting_client
-
-                    # Append kitting note to invoice description only (client-facing)
-                    kitting_desc = item.get('kitting_description', 'Kitting')
-                    invoice_desc += f" | {kitting_desc}: +${kitting_client:.2f}"
-
-                # Add base product line
+                # Add base product line (WITHOUT kitting - kitting will be separate line)
                 invoice_line_items.append({
                     'PARTNER': partner,
                     'DESCRIPTION (Invoice)': invoice_desc,
@@ -8858,6 +8928,28 @@ with tab4:
                     'SELL PRICE/UNIT': f"${sell_price_per_unit:.2f}",
                     'TOTAL SELL PRICE': f"${sell_price_total:.2f}"
                 })
+
+                # Add per-product kitting as separate line item if included
+                if item.get('include_kitting', False):
+                    kitting_pbp = item.get('kitting_pbp_cost', 0.0)
+                    kitting_client = item.get('kitting_client_price', 0.0)
+                    kitting_desc = item.get('kitting_description', 'Kitting')
+
+                    invoice_kitting_desc = f"  └ {kitting_desc}"
+                    po_kitting_desc = f"  └ {kitting_desc}"
+
+                    invoice_line_items.append({
+                        'PARTNER': partner,
+                        'DESCRIPTION (Invoice)': invoice_kitting_desc,
+                        'DESCRIPTION (PO)': po_kitting_desc,
+                        'QTY': 1,  # One-time charge
+                        'IN-HANDS from Partner': partner_in_hands,
+                        'COST/UNIT': f"${kitting_pbp:.2f}",
+                        'TOTAL COST': f"${kitting_pbp:.2f}",
+                        'COST VERIFIED?': cost_verified,
+                        'SELL PRICE/UNIT': f"${kitting_client:.2f}",
+                        'TOTAL SELL PRICE': f"${kitting_client:.2f}"
+                    })
 
                 # Add customization line items if present
                 if item.get('include_customization', False):

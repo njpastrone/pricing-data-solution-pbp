@@ -327,9 +327,12 @@ See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
 - **Order Notes:** 5 categories (kitting, client requests, samples, artwork, general)
 - **Detailed Order Summary:** Line-item breakdown showing:
   - Base product cost + markup (separate line per product)
-  - Customization setup fee (if applicable)
-  - Customization per-unit cost (if applicable)
+  - Customization setup fee (if applicable, separate line item)
+  - Customization per-unit cost (if applicable, separate line item)
+  - Per-product kitting (if applicable, separate line item with "one-time" quantity)
   - Products subtotal
+  - Customization subtotal (if applicable)
+  - Per-product kitting subtotal (if applicable)
   - Discount (if applicable)
   - Shipping
   - Tariffs (per product with country & rate)
@@ -348,8 +351,9 @@ See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
   - **Table 4: Invoice and PO Item Details** - Line items with partner, specs, quantity, in-hands date, cost/unit, total cost, sell price/unit, total sell price
 - **Detailed Line Items:** Each product shows:
   - Base product with cost per unit and total cost
-  - Customization setup fee (separate line item)
-  - Customization per-unit costs (separate line item)
+  - Customization setup fee (separate line item with indentation)
+  - Customization per-unit costs (separate line item with indentation)
+  - Per-product kitting (separate line item with indentation, quantity = 1)
   - Tariffs with per-unit breakdown (separate line item showing rate and quantity)
 - **Smart Pricing Display:** Sell price excludes customization to prevent double counting (customization shown separately)
 - **Notes Section:** Displays all order notes (kitting specs, client requests, samples, artwork, general)
@@ -440,7 +444,10 @@ pricing-data-solution-pbp/
 
 ## Common Tasks
 
-- **Refresh pricing data:** Click menu → "Rerun" in the Streamlit app
+- **Refresh pricing data:** Click "Refresh Data" button in sidebar (fetches fresh data from Google Sheets)
+  - 30-second cooldown between refreshes to protect against API rate limits
+  - Alternative: Click menu → "Rerun" to restart app (uses cached data if < 5 minutes old)
+  - Data auto-refreshes every 5 minutes via TTL cache
 - **Update credentials:** Edit `.streamlit/secrets.toml`
 - **Test API connection:** `streamlit run scripts/test_connection.py`
 - **Investigate data structure:** `streamlit run scripts/investigate_jaggery_demo.py` or `python scripts/check_jaggery_demo.py`

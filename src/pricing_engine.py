@@ -48,7 +48,7 @@ def get_unit_price_new_system(row, quantity):
     Handles both tiered and non-tiered pricing.
 
     Updated January 2026: Now uses consolidated "PBP Cost (No Tiers/Tier 1)" column.
-    Automatically normalizes cost to per-unit basis using "Units Per Package" column.
+    Automatically normalizes cost to per-unit basis using "Units per Case" column.
 
     Args:
         row: DataFrame row containing product data
@@ -71,15 +71,15 @@ def get_unit_price_new_system(row, quantity):
 
         if flat_price is not None:
             # Normalize to per-unit cost
-            units_per_package = row.get('Units per Package', 1)
+            units_per_case = get_column_value(row, 'Units per Case', 'Units per Package', 1)
             # Convert to float if string (Google Sheets may return as string)
             try:
-                units_per_package = float(units_per_package) if units_per_package else 1
+                units_per_case = float(units_per_case) if units_per_case else 1
             except (ValueError, TypeError):
-                units_per_package = 1
+                units_per_case = 1
 
-            if units_per_package > 0:
-                flat_price = flat_price / units_per_package
+            if units_per_case > 0:
+                flat_price = flat_price / units_per_case
             return flat_price, "No Tiers", "PBP Cost (No Tiers/Tier 1)"
         else:
             return None, None, None
@@ -103,15 +103,15 @@ def get_unit_price_new_system(row, quantity):
 
     if price is not None:
         # Normalize to per-unit cost
-        units_per_package = row.get('Units per Package', 1)
+        units_per_case = get_column_value(row, 'Units per Case', 'Units per Package', 1)
         # Convert to float if string (Google Sheets may return as string)
         try:
-            units_per_package = float(units_per_package) if units_per_package else 1
+            units_per_case = float(units_per_case) if units_per_case else 1
         except (ValueError, TypeError):
-            units_per_package = 1
+            units_per_case = 1
 
-        if units_per_package > 0:
-            price = price / units_per_package
+        if units_per_case > 0:
+            price = price / units_per_case
 
         # Get tier range for display
         tier_ranges = parse_tier_info(tier_info)
@@ -387,6 +387,7 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
     from src.helpers import (
         get_pricing_logic,
         get_shipping_addon_percent,
+        get_other_addon_percent,
         get_column_value,
         normalize_cost_to_per_item
     )
@@ -408,7 +409,23 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
     per_item_cost = normalize_cost_to_per_item(product_data, base_cost)
 
     # Step 3: Get pricing logic method
-    pricing_logic = get_pricing_logic(product_data)
+    pricing_logic_raw = get_pricing_logic(product_data)
+
+    # Normalize pricing logic to handle variations in spelling/capitalization
+    # Spreadsheet may have: "MSRP + Other Add-On % of cost" or "MSRP + Other Add-On % (of Cost)"
+    pricing_logic_lower = pricing_logic_raw.lower().strip() if pricing_logic_raw else ""
+
+    if "msrp" in pricing_logic_lower and "other add-on" in pricing_logic_lower:
+        pricing_logic = "MSRP + Other Add-On % (of Cost)"
+    elif "msrp" in pricing_logic_lower and "capped" in pricing_logic_lower:
+        pricing_logic = "MSRP capped – ship absorbed"
+    elif "msrp" in pricing_logic_lower and "% of cost" in pricing_logic_lower:
+        pricing_logic = "MSRP + % of cost"
+    elif "standard" in pricing_logic_lower and "markup" in pricing_logic_lower:
+        pricing_logic = "Standard markup"
+    else:
+        # Default to standard markup if unrecognized
+        pricing_logic = "Standard markup"
 
     # Step 4: Calculate based on method
     calculation_details = {
@@ -425,20 +442,39 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
         vendor_msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', None, None)
         vendor_msrp = clean_price(vendor_msrp_raw) if vendor_msrp_raw else 0.0
 
+        # Get both add-ons and sum them (updated Jan 2026)
+        shipping_addon_pct = get_shipping_addon_percent(product_data)
+        other_addon_pct = get_other_addon_percent(product_data)
+        total_addon_pct = shipping_addon_pct + other_addon_pct
+
         if vendor_msrp is None or vendor_msrp == 0:
-            # Fallback: No MSRP available, use Standard markup
-            print(f"Warning: No MSRP available for '{product_data.get('Product/Service', 'Unknown')}' - using Standard markup instead")
-            pricing_logic = "Standard markup"
-            # Will fall through to Standard markup logic
+            # Fallback: No MSRP available, use Standard markup + add-ons
+            # Formula: Cost × (1 + 100% + add-ons) = Cost × (2.0 + add-on%)
+            base_markup_pct = 100.0  # Standard markup
+            total_markup_pct = base_markup_pct + total_addon_pct
+            pbp_msrp = per_item_cost * (1 + total_markup_pct / 100)
+
+            calculation_details.update({
+                'vendor_msrp': None,
+                'fallback_used': True,
+                'base_markup_pct': base_markup_pct,
+                'shipping_addon_pct': shipping_addon_pct,
+                'other_addon_pct': other_addon_pct,
+                'total_markup_pct': total_markup_pct
+            })
+
+            method_used = "Standard markup + Add-Ons (no MSRP)"
         else:
-            shipping_addon_pct = get_shipping_addon_percent(product_data)
-            shipping_addon_amount = (shipping_addon_pct / 100) * per_item_cost
-            pbp_msrp = vendor_msrp + shipping_addon_amount
+            # Calculate combined add-on amount based on MSRP
+            total_addon_amount = (total_addon_pct / 100) * per_item_cost
+            pbp_msrp = vendor_msrp + total_addon_amount
 
             calculation_details.update({
                 'vendor_msrp': vendor_msrp,
                 'shipping_addon_pct': shipping_addon_pct,
-                'shipping_addon_amount': shipping_addon_amount
+                'other_addon_pct': other_addon_pct,
+                'total_addon_pct': total_addon_pct,
+                'total_addon_amount': total_addon_amount
             })
 
             method_used = "MSRP + % of cost"
@@ -462,6 +498,49 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
             })
 
             method_used = "MSRP capped – ship absorbed"
+
+    if pricing_logic == "MSRP + Other Add-On % (of Cost)":
+        # Method 4: MSRP + combined add-ons (primarily Other Add-On)
+        # Note: Uses same formula as "MSRP + % of cost" - sums both add-ons
+        vendor_msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', None, None)
+        vendor_msrp = clean_price(vendor_msrp_raw) if vendor_msrp_raw else 0.0
+
+        # Get both add-ons
+        shipping_addon_pct = get_shipping_addon_percent(product_data)
+        other_addon_pct = get_other_addon_percent(product_data)
+        total_addon_pct = shipping_addon_pct + other_addon_pct
+
+        if vendor_msrp is None or vendor_msrp == 0:
+            # Fallback: No MSRP available, use Standard markup + add-ons
+            # Formula: Cost × (1 + 100% + add-ons) = Cost × (2.0 + add-on%)
+            base_markup_pct = 100.0  # Standard markup
+            total_markup_pct = base_markup_pct + total_addon_pct
+            pbp_msrp = per_item_cost * (1 + total_markup_pct / 100)
+
+            calculation_details.update({
+                'vendor_msrp': None,
+                'fallback_used': True,
+                'base_markup_pct': base_markup_pct,
+                'shipping_addon_pct': shipping_addon_pct,
+                'other_addon_pct': other_addon_pct,
+                'total_markup_pct': total_markup_pct
+            })
+
+            method_used = "Standard markup + Add-Ons (no MSRP)"
+        else:
+            # Calculate combined add-on amount based on MSRP
+            total_addon_amount = (total_addon_pct / 100) * per_item_cost
+            pbp_msrp = vendor_msrp + total_addon_amount
+
+            calculation_details.update({
+                'vendor_msrp': vendor_msrp,
+                'shipping_addon_pct': shipping_addon_pct,
+                'other_addon_pct': other_addon_pct,
+                'total_addon_pct': total_addon_pct,
+                'total_addon_amount': total_addon_amount
+            })
+
+            method_used = "MSRP + Other Add-On % (of Cost)"
 
     if pricing_logic == "Standard markup" or pbp_msrp is None:
         # Method 3: Traditional markup
