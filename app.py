@@ -6988,6 +6988,11 @@ Rates default to current estimates but can be adjusted as needed.
             else:
                 st.caption("Discount Quoted to Client: None")
 
+            # Volume order discount reminder for orders over $10,000
+            order_value = sum(item.get('product_total', 0.0) for item in st.session_state.order_items)
+            if order_value > 10000:
+                st.caption("Order value over $10,000: Volume Order Discount should apply.")
+
             # Update session state based on selection
             if discount_selection == "Non-profit (5%)":
                 st.session_state.order_discount_type = "preset"
