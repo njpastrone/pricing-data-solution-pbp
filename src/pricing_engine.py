@@ -389,7 +389,6 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
         get_shipping_addon_percent,
         get_other_addon_percent,
         get_column_value,
-        normalize_cost_to_per_item
     )
 
     # Step 1: Get base cost for quantity (from existing get_unit_price_new_system)
@@ -405,8 +404,8 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
             'validation_status': 'error'
         }
 
-    # Step 2: Normalize cost to per-item basis
-    per_item_cost = normalize_cost_to_per_item(product_data, base_cost)
+    # Step 2: Use base_cost directly (already normalized by get_unit_price_new_system)
+    per_item_cost = base_cost
 
     # Step 3: Get pricing logic method
     pricing_logic_raw = get_pricing_logic(product_data)
