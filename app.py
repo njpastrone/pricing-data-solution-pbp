@@ -847,6 +847,8 @@ with st.sidebar:
                                         item['kitting_pbp_cost'] = 0.0
                                         item['kitting_client_price'] = 0.0
                                         item['kitting_description'] = ''
+                                    if 'kitting_quantity' not in item:
+                                        item['kitting_quantity'] = 1
 
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
@@ -904,6 +906,8 @@ with st.sidebar:
                                         item['kitting_pbp_cost'] = 0.0
                                         item['kitting_client_price'] = 0.0
                                         item['kitting_description'] = ''
+                                    if 'kitting_quantity' not in item:
+                                        item['kitting_quantity'] = 1
 
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
@@ -4705,6 +4709,8 @@ with tab3:
                                         item['kitting_pbp_cost'] = 0.0
                                         item['kitting_client_price'] = 0.0
                                         item['kitting_description'] = ''
+                                    if 'kitting_quantity' not in item:
+                                        item['kitting_quantity'] = 1
 
                                 st.session_state.order_shipping = order_data.get('order_shipping', 0.0)
                                 st.session_state.partner_shipping = order_data.get('partner_shipping', 0.0)
@@ -5128,7 +5134,8 @@ with tab3:
                                     'include_kitting': False,
                                     'kitting_pbp_cost': 0.0,
                                     'kitting_client_price': 0.0,
-                                    'kitting_description': ''
+                                    'kitting_description': '',
+                                    'kitting_quantity': 1
                                 }
 
                                 st.session_state.order_items.append(order_item)
@@ -5437,9 +5444,10 @@ with tab3:
                                     'include_kitting': False,
                                     'kitting_pbp_cost': 0.0,
                                     'kitting_client_price': 0.0,
-                                    'kitting_description': ''
+                                    'kitting_description': '',
+                                    'kitting_quantity': 1
                                 }
-    
+
                                 st.session_state.order_items.append(order_item)
     
                             # Track maximum PBP shipping cost
@@ -5732,7 +5740,8 @@ with tab3:
                 'include_kitting': False,
                 'kitting_pbp_cost': 0.0,
                 'kitting_client_price': 0.0,
-                'kitting_description': ''
+                'kitting_description': '',
+                'kitting_quantity': 1
             }
 
             # Calculate pricing for this item (will be recalculated when edited)
@@ -5923,7 +5932,8 @@ with tab3:
                     'include_kitting': False,
                     'kitting_pbp_cost': 0.0,
                     'kitting_client_price': 0.0,
-                    'kitting_description': ''
+                    'kitting_description': '',
+                    'kitting_quantity': 1
                 }
 
                 # Add calculated fields (same as catalog products)
@@ -6544,26 +6554,36 @@ with tab3:
             )
 
             if kitting_enabled:
-                col_kit1, col_kit2 = st.columns(2)
+                col_kit1, col_kit2, col_kit3 = st.columns(3)
 
                 with col_kit1:
+                    kitting_qty = st.number_input(
+                        "Kitting Quantity",
+                        min_value=1,
+                        value=item.get('kitting_quantity', 1),
+                        step=1,
+                        key=f"prod_kitting_qty_{idx}",
+                        help="Number of units to kit (default: 1 = one-time cost)"
+                    )
+
+                with col_kit2:
                     kitting_pbp = st.number_input(
                         "Kitting Cost (PBP) ($)",
                         min_value=0.0,
                         value=item.get('kitting_pbp_cost', 0.0),
                         step=5.0,
                         key=f"prod_kitting_pbp_{idx}",
-                        help="What PBP pays for this product's kitting"
+                        help="What PBP pays per unit for kitting"
                     )
 
-                with col_kit2:
+                with col_kit3:
                     kitting_client = st.number_input(
                         "Kitting Price (Client) ($)",
                         min_value=0.0,
                         value=item.get('kitting_client_price', 0.0),
                         step=5.0,
                         key=f"prod_kitting_client_{idx}",
-                        help="What client pays for this product's kitting"
+                        help="What client pays per unit for kitting"
                     )
 
                 # Optional description
@@ -6576,12 +6596,14 @@ with tab3:
 
                 # Update order item
                 st.session_state.order_items[idx]['include_kitting'] = True
+                st.session_state.order_items[idx]['kitting_quantity'] = kitting_qty
                 st.session_state.order_items[idx]['kitting_pbp_cost'] = kitting_pbp
                 st.session_state.order_items[idx]['kitting_client_price'] = kitting_client
                 st.session_state.order_items[idx]['kitting_description'] = kitting_desc
             else:
                 # Reset kitting if unchecked
                 st.session_state.order_items[idx]['include_kitting'] = False
+                st.session_state.order_items[idx]['kitting_quantity'] = 1
                 st.session_state.order_items[idx]['kitting_pbp_cost'] = 0.0
                 st.session_state.order_items[idx]['kitting_client_price'] = 0.0
                 st.session_state.order_items[idx]['kitting_description'] = ''
@@ -6735,16 +6757,17 @@ with tab3:
                 # Per-product kitting (if applicable)
                 kitting_pbp = item.get('kitting_pbp_cost', 0.0)
                 kitting_client = item.get('kitting_client_price', 0.0)
+                kitting_qty = item.get('kitting_quantity', 1)
                 if item.get('include_kitting', False) and (kitting_pbp > 0 or kitting_client > 0):
                     kitting_desc = item.get('kitting_description', 'Kitting')
                     breakdown_data.append(
                         format_pricing_breakdown_row(
                             f"Kitting: {kitting_desc}",
-                            "one-time",
-                            kitting_pbp,  # PBP per unit (same as total for one-time)
-                            kitting_pbp,  # PBP total
-                            kitting_client,  # Client per unit (same as total for one-time)
-                            kitting_client  # Client total
+                            str(kitting_qty),
+                            kitting_pbp,  # PBP per unit
+                            kitting_pbp * kitting_qty,  # PBP total
+                            kitting_client,  # Client per unit
+                            kitting_client * kitting_qty  # Client total
                         )
                     )
 
@@ -7139,7 +7162,8 @@ Rates default to current estimates but can be adjusted as needed.
                             'include_kitting': False,
                             'kitting_pbp_cost': 0.0,
                             'kitting_client_price': 0.0,
-                            'kitting_description': ''
+                            'kitting_description': '',
+                            'kitting_quantity': 1
                         }
 
                         st.session_state.order_items.append(custom_item)
@@ -7268,13 +7292,14 @@ Rates default to current estimates but can be adjusted as needed.
         global_kitting_pbp = st.session_state.kitting_pbp_cost
         global_kitting_client = st.session_state.kitting_client_price
 
-        # Sum per-product kitting
+        # Sum per-product kitting (multiplied by kitting quantity)
         per_product_kitting_pbp = 0.0
         per_product_kitting_client = 0.0
         for item in st.session_state.order_items:
             if item.get('include_kitting', False):
-                per_product_kitting_pbp += item.get('kitting_pbp_cost', 0.0)
-                per_product_kitting_client += item.get('kitting_client_price', 0.0)
+                kitting_qty = item.get('kitting_quantity', 1)
+                per_product_kitting_pbp += item.get('kitting_pbp_cost', 0.0) * kitting_qty
+                per_product_kitting_client += item.get('kitting_client_price', 0.0) * kitting_qty
 
         # Total kitting = global + per-product
         total_kitting_pbp = global_kitting_pbp + per_product_kitting_pbp
@@ -7411,16 +7436,17 @@ Rates default to current estimates but can be adjusted as needed.
                 if item.get('include_kitting', False):
                     kitting_pbp = item.get('kitting_pbp_cost', 0.0)
                     kitting_client = item.get('kitting_client_price', 0.0)
+                    kitting_qty = item.get('kitting_quantity', 1)
                     kitting_desc = item.get('kitting_description', 'Kitting')
 
                     if kitting_client > 0:
                         summary_items.append([
                             f"{item['product_name']} - {kitting_desc}",
-                            "one-time",
-                            f"${kitting_pbp:.2f}",  # Per unit same as total for one-time
+                            str(kitting_qty),
                             f"${kitting_pbp:.2f}",
-                            f"${kitting_client:.2f}",  # Per unit same as total for one-time
-                            f"${kitting_client:.2f}"
+                            f"${kitting_pbp * kitting_qty:.2f}",
+                            f"${kitting_client:.2f}",
+                            f"${kitting_client * kitting_qty:.2f}"
                         ])
 
             # Per-product kitting subtotal row
@@ -8933,6 +8959,7 @@ with tab4:
                 if item.get('include_kitting', False):
                     kitting_pbp = item.get('kitting_pbp_cost', 0.0)
                     kitting_client = item.get('kitting_client_price', 0.0)
+                    kitting_qty = item.get('kitting_quantity', 1)
                     kitting_desc = item.get('kitting_description', 'Kitting')
 
                     invoice_kitting_desc = f"  └ {kitting_desc}"
@@ -8942,13 +8969,13 @@ with tab4:
                         'PARTNER': partner,
                         'DESCRIPTION (Invoice)': invoice_kitting_desc,
                         'DESCRIPTION (PO)': po_kitting_desc,
-                        'QTY': 1,  # One-time charge
+                        'QTY': kitting_qty,
                         'IN-HANDS from Partner': partner_in_hands,
                         'COST/UNIT': f"${kitting_pbp:.2f}",
-                        'TOTAL COST': f"${kitting_pbp:.2f}",
+                        'TOTAL COST': f"${kitting_pbp * kitting_qty:.2f}",
                         'COST VERIFIED?': cost_verified,
                         'SELL PRICE/UNIT': f"${kitting_client:.2f}",
-                        'TOTAL SELL PRICE': f"${kitting_client:.2f}"
+                        'TOTAL SELL PRICE': f"${kitting_client * kitting_qty:.2f}"
                     })
 
                 # Add customization line items if present
