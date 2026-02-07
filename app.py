@@ -6073,6 +6073,14 @@ with tab3:
                 if new_quantity == 1:
                     st.caption("WARNING: Qty = 1")
 
+                # Check if quantity is below MOQ (skip custom products)
+                if base_price and not item.get('is_custom_product', False):
+                    current_markup = item.get('markup_percent', 100)
+                    estimated_client_price = base_price * (1 + current_markup / 100)
+                    moq_result = calculate_moq(estimated_client_price, product_data)
+                    if moq_result and moq_result['moq'] and new_quantity < moq_result['moq']:
+                        st.caption(f"Below MOQ of {moq_result['moq']} ({moq_result['breakdown']['source']})")
+
                 # Recalculate base price if quantity changed
                 if new_quantity != item['quantity']:
                     base_price, tier_range, tier_column = get_unit_price_new_system(product_data, new_quantity)
@@ -7277,6 +7285,24 @@ Rates default to current estimates but can be adjusted as needed.
     if len(st.session_state.order_items) == 0:
         st.caption("Add products to your order to see the total quote calculation.")
     else:
+        # Check for products below their MOQ
+        below_moq_warnings = []
+        for item in st.session_state.order_items:
+            if item.get('is_custom', False) or item.get('is_custom_product', False):
+                continue
+            product_data_check = item.get('product_data', {})
+            base_price_check, _, _ = get_unit_price_new_system(product_data_check, item['quantity'])
+            if base_price_check:
+                markup = item.get('markup_percent', 100)
+                client_price_est = base_price_check * (1 + markup / 100)
+                moq_check = calculate_moq(client_price_est, product_data_check)
+                if moq_check and moq_check['moq'] and item['quantity'] < moq_check['moq']:
+                    below_moq_warnings.append(
+                        f"- **{item['product_name']}**: {item['quantity']} units ordered, MOQ is {moq_check['moq']} ({moq_check['breakdown']['source']})"
+                    )
+        if below_moq_warnings:
+            st.warning("**The following products are below their Minimum Order Quantity:**\n" + "\n".join(below_moq_warnings))
+
         # Import helper functions
         from src.helpers import calculate_split_totals
 
