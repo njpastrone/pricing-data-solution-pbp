@@ -1591,10 +1591,36 @@ def has_variants(product_data):
     return str(has_var).strip().upper() == 'Y'
 
 
+def is_inquire_variants(product_data):
+    """
+    Check if a product's Variant Type indicates seasonal/variable variants
+    that require manual entry (e.g., 'Inquire about variants').
+
+    Args:
+        product_data: DataFrame row or dict containing product information
+
+    Returns:
+        bool: True if Variant Type contains the word 'inquire' (case-insensitive)
+
+    Examples:
+        >>> is_inquire_variants({'Variant Type': 'Inquire about variants'})
+        True
+        >>> is_inquire_variants({'Variant Type': '(Hot, Elderberry)'})
+        False
+        >>> is_inquire_variants({'Variant Type': ''})
+        False
+    """
+    variant_str = get_column_value(product_data, 'Variant Type', None, '')
+    if not variant_str:
+        return False
+    return 'inquire' in str(variant_str).strip().lower()
+
+
 def parse_variant_types(product_data):
     """
     Parse variant types from format (x, y, z) into list ['x', 'y', 'z'].
     Handles comma-separated values inside parentheses.
+    Returns empty list for 'Inquire about variants' (handled separately by UI).
 
     Args:
         product_data: DataFrame row or dict containing product information
@@ -1607,6 +1633,8 @@ def parse_variant_types(product_data):
         ['Hot', 'Elderberry', 'Rosemary', 'Creamed']
         >>> parse_variant_types({'Variant Type': '(4oz, 8oz, 12oz)'})
         ['4oz', '8oz', '12oz']
+        >>> parse_variant_types({'Variant Type': 'Inquire about variants'})
+        []
         >>> parse_variant_types({'Variant Type': ''})
         []
         >>> parse_variant_types({})
@@ -1619,6 +1647,10 @@ def parse_variant_types(product_data):
     # Convert to string and strip whitespace
     variant_str = str(variant_str).strip()
     if not variant_str:
+        return []
+
+    # "Inquire about variants" is not a parseable list — handled by UI text input
+    if 'inquire' in variant_str.lower():
         return []
 
     # Remove parentheses if present

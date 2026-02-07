@@ -5630,27 +5630,46 @@ with tab3:
             selected_product = st.selectbox("Select Product/Service", available_products, key="add_product_select")
 
     # Check if selected product has variants
-    from src.helpers import has_variants, parse_variant_types
+    from src.helpers import has_variants, parse_variant_types, is_inquire_variants
     selected_product_data = df_template[
         (df_template["Partner"] == selected_partner) &
         (df_template["Product/Service"] == selected_product)
     ].iloc[0] if selected_product else None
 
     product_has_variants = has_variants(selected_product_data) if selected_product_data is not None else False
+    inquire_variants = is_inquire_variants(selected_product_data) if product_has_variants else False
     variant_types = parse_variant_types(selected_product_data) if product_has_variants else []
 
     # Variant selector (if product has variants)
     selected_variant_manual = None
-    if product_has_variants and variant_types:
+    if product_has_variants:
         col_var = st.columns([2, 1, 1])[0]  # Match layout
         with col_var:
-            selected_variant_manual = st.selectbox(
-                "Select Variant:",
-                options=[''] + variant_types,  # Empty option first
-                key="manual_variant_select"
-            )
-            if not selected_variant_manual:
-                st.caption("Variant recommended but not required")
+            if inquire_variants:
+                # Seasonal/variable variants — free-text input only
+                selected_variant_manual = st.text_input(
+                    "Enter Variant (seasonal — inquire for current options):",
+                    key="manual_variant_text"
+                )
+                if not selected_variant_manual:
+                    st.caption("Variant recommended but not required")
+            elif variant_types:
+                # Predefined variants with an "Other" option for custom entry
+                options = [''] + variant_types + ['Other']
+                chosen = st.selectbox(
+                    "Select Variant:",
+                    options=options,
+                    key="manual_variant_select"
+                )
+                if chosen == 'Other':
+                    selected_variant_manual = st.text_input(
+                        "Enter custom variant:",
+                        key="manual_variant_custom"
+                    )
+                else:
+                    selected_variant_manual = chosen
+                if not selected_variant_manual:
+                    st.caption("Variant recommended but not required")
 
     with col2:
         st.write("")  # Spacing

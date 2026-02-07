@@ -53,7 +53,7 @@ This document defines the canonical data schemas for Peace by Piece Internationa
 | 1 | Partner | Text | Partner organization name | Required |
 | 2 | Product/Service | Text | Name of the product or service | Required |
 | 3 | Has Variants (Y/N) | Text | Product has variants (colors, flavors, sizes, etc.)? | Y or N, default N if blank |
-| 4 | Variant Type | Text | Available variant options for this product | Format: (x, y, z) - comma-separated in parentheses. Required if Has Variants = Y |
+| 4 | Variant Type | Text | Available variant options for this product | Format: (x, y, z) - comma-separated in parentheses, or "Inquire about variants" for seasonal products. Required if Has Variants = Y |
 | 5 | Purchase Description (to Partner) | Text | Description used on purchase orders to partners | Internal-facing, partner PO details |
 | 6 | Billing Description (to Client) | Text | Description used on invoices to clients | Client-facing, invoice line item description |
 | 7 | Marketing Description (Website) | Text | Description used on website and proposals | Client-facing, marketing copy |
@@ -136,7 +136,7 @@ This document defines the canonical data schemas for Peace by Piece Internationa
 ## Notes
 
 - Date format standard: MM/DD/YYYY
-- **Variant Type Format:** List variant options in parentheses, comma-separated: `(Hot, Elderberry, Rosemary, Creamed)`
+- **Variant Type Format:** List variant options in parentheses, comma-separated: `(Hot, Elderberry, Rosemary, Creamed)`. For seasonal/variable products, use `Inquire about variants` instead of a list — the app shows a free-text input.
 - **Product Consolidation:** Products with identical pricing can be consolidated into one row with variants instead of separate rows per variant
 - **Example:** Instead of 4 rows (9oz Hot Honey, 9oz Elderberry Honey, 9oz Rosemary Honey, 9oz Creamed Honey), use 1 row: Product = "9oz Honey", Variant Type = "(Hot, Elderberry, Rosemary, Creamed)"
 - **Display Format:** App displays products with variants as "Product/Service - Variant" (e.g., "9oz Honey - Hot")
