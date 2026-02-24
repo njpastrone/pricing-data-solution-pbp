@@ -67,6 +67,7 @@ from src.order_manager import (
 from src.template_loader import (
     get_template_path,
     get_template_name,
+    list_available_templates,
     TEMPLATE_CONFIG
 )
 
@@ -1281,8 +1282,9 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
     # Import match memory functions
     from src.match_memory import save_confirmed_match
 
-    # Get current dataset for saving confirmations
+    # Get current dataset and template name for saving confirmations
     current_dataset = st.session_state.get('selected_dataset', 'real')
+    current_template_name = st.session_state.get('selected_pptx_template', {}).get('name', '')
     st.markdown("---")
     st.subheader("Step 1. Review Product Matches")
 
@@ -1533,7 +1535,8 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                                         slide_title=result.pptx_product_name,
                                         dataset=current_dataset,
                                         match_type='fuzzy_confirmed' if match_type == 'fuzzy' else 'poor_confirmed',
-                                        confidence=result.confidence
+                                        confidence=result.confidence,
+                                        template_name=current_template_name
                                     )
                                     if not save_success:
                                         st.warning(f"Match confirmed locally but couldn't save to Google Sheets: {save_message}")
@@ -1607,7 +1610,8 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                                             slide_title=alt_name,
                                             dataset=current_dataset,
                                             match_type='alternative_selected',
-                                            confidence=alt_score
+                                            confidence=alt_score,
+                                            template_name=current_template_name
                                         )
                                 except Exception as save_error:
                                     # Don't block on save error - confirmation is already in session state
@@ -1653,7 +1657,8 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                                                 slide_title=slide_name,
                                                 dataset=current_dataset,
                                                 match_type='search_selected',
-                                                confidence=0
+                                                confidence=0,
+                                                template_name=current_template_name
                                             )
                                     except Exception as save_error:
                                         # Don't block on save error - confirmation is already in session state
@@ -1730,7 +1735,8 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                                                 slide_title=slide_name,
                                                 dataset=current_dataset,
                                                 match_type='manual_search',
-                                                confidence=0
+                                                confidence=0,
+                                                template_name=current_template_name
                                             )
                                     except Exception as save_error:
                                         # Don't block on save error - confirmation is already in session state
@@ -1942,7 +1948,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
         st.subheader("Step 2: Impact Slides")
 
         # Import impact slide functions
-        from src.slide_matcher import extract_unique_partners, PARTNER_IMPACT_SLIDES, find_all_impact_slides
+        from src.slide_matcher import extract_unique_partners, build_impact_slide_map, find_all_impact_slides
 
         # Extract unique partners from proposal
         unique_partners = extract_unique_partners(st.session_state.proposal_products)
@@ -1952,12 +1958,24 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
             if 'impact_slide_selections' not in st.session_state:
                 st.session_state.impact_slide_selections = {}
 
-            # Auto-select from reference table for all partners
+            # Build dynamic impact slide map from selected template
+            pptx_template_for_impacts = get_template_path('all_slides', show_loading=False)
+            if pptx_template_for_impacts:
+                # Cache map in session state keyed by template name
+                selected_template_name = st.session_state.get('selected_pptx_template', {}).get('name', '')
+                map_cache_key = f"impact_slide_map_{selected_template_name}"
+                if map_cache_key not in st.session_state:
+                    st.session_state[map_cache_key] = build_impact_slide_map(pptx_template_for_impacts)
+                dynamic_impact_map = st.session_state[map_cache_key]
+            else:
+                dynamic_impact_map = {}
+
+            # Auto-select from dynamic map for all partners
             partners_with_slides = []
             partners_without_slides = []
 
             for partner in unique_partners:
-                auto_selected = PARTNER_IMPACT_SLIDES.get(partner)
+                auto_selected = dynamic_impact_map.get(partner)
                 if auto_selected:
                     # Auto-select if not already set
                     current_selection = st.session_state.impact_slide_selections.get(partner)
@@ -2070,14 +2088,15 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     )
 
                     # Load templates from cloud/local (with loading spinner)
-                    st.info(f"Using template: **{get_template_name('all_slides')}**")
+                    selected_template = st.session_state.get('selected_pptx_template', {})
+                    st.info(f"Using template: **{selected_template.get('name', get_template_name('all_slides'))}**")
 
                     # Load templates with memory optimization if enabled
-                    november_template_path = get_template_path('all_slides', show_loading=True, use_cache=not USE_MEMORY_OPTIMIZATION)
+                    product_template_path = get_template_path('all_slides', show_loading=True, use_cache=not USE_MEMORY_OPTIMIZATION)
                     intro_outro_template_path = get_template_path('intro_outro', show_loading=False, use_cache=not USE_MEMORY_OPTIMIZATION)
 
                     # Validation checks
-                    if not november_template_path:
+                    if not product_template_path:
                         st.error("PowerPoint template could not be loaded. Please check Google Drive access.")
                         return None
 
@@ -2126,8 +2145,13 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
 
                     # Create complete presentation (products + impacts + outro only)
                     progress_container.info(f"Step 2/4: Selecting and updating {num_products} product slide(s) + {num_impacts} impact slide(s)...")
-                    prs = create_complete_proposal_presentation(
-                        str(november_template_path),
+                    # Get dynamic impact slide map for selected template
+                    gen_template_name = st.session_state.get('selected_pptx_template', {}).get('name', '')
+                    gen_impact_map_key = f"impact_slide_map_{gen_template_name}"
+                    gen_impact_map = st.session_state.get(gen_impact_map_key, {})
+
+                    prs, table_reports = create_complete_proposal_presentation(
+                        str(product_template_path),
                         str(intro_outro_template_path),
                         confirmed_matches,
                         st.session_state.proposal_products,
@@ -2138,7 +2162,8 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                         variant_groups_for_generation,
                         variant_prefs_for_generation,
                         fifty_cent_rounding,
-                        discount_type
+                        discount_type,
+                        gen_impact_map
                     )
 
                     progress_container.info(f"Step 3/4: Adding outro slides (4 slides)...")
@@ -2160,6 +2185,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     st.session_state.generated_pptx_filename = f"Proposal_{client_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pptx"
                     st.session_state.pptx_product_count = len(confirmed_matches)
                     st.session_state.pptx_generation_time = generation_time
+                    st.session_state.table_processing_reports = table_reports
 
                     # Clear progress indicator
                     progress_container.empty()
@@ -2192,6 +2218,33 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
 
             # Show instructions for reordering intro slides
             st.info("**Final step:** In PowerPoint, move the 8 intro slides (they're grouped together after products) to the beginning. Select slides → Drag to top (~5 seconds).")
+
+            # Table processing report
+            table_reports = st.session_state.get('table_processing_reports', [])
+            if table_reports:
+                auto_updated = sum(1 for r in table_reports if r['status'] == 'auto_updated')
+                needs_review = sum(1 for r in table_reports if r['status'] == 'needs_review')
+                unchanged = sum(1 for r in table_reports if r['status'] == 'unchanged')
+
+                report_summary = f"Table updates: {auto_updated} auto-updated, {unchanged} unchanged"
+                if needs_review > 0:
+                    report_summary += f", **{needs_review} need review**"
+                    st.warning(f"{report_summary}. {needs_review} slide(s) have tables that may need manual review after download.")
+                else:
+                    st.info(report_summary)
+
+                with st.expander("Table Processing Details", expanded=needs_review > 0):
+                    for report in table_reports:
+                        status_icon = {"auto_updated": "[Updated]", "needs_review": "[Review]", "unchanged": "[OK]"}.get(report['status'], "")
+                        st.markdown(f"**{status_icon} {report['slide_name']}**")
+
+                        # Show details for updated or flagged slides
+                        if report['status'] != 'unchanged':
+                            for action in report['actions']:
+                                if action['action'] == 'auto_updated':
+                                    st.caption(f"  Cell {action['cell']}: {action['old']} -> {action['new']}")
+                                elif action['action'] == 'flagged':
+                                    st.caption(f"  Cell {action['cell']}: {action['reason']}")
 
             # Warning about PowerPoint repair message
             st.warning("**Note:** PowerPoint may show a 'repair presentation' warning when opening the file. This is normal - click 'Repair' to proceed. The content will display correctly.")
@@ -3798,6 +3851,61 @@ with tab1:
             </script>
         """, height=0)
 
+        # Template selector
+        st.markdown("**Select Product Slides Template**")
+        template_col1, template_col2 = st.columns([4, 1])
+
+        with template_col1:
+            # Load available templates (cached in session state)
+            if 'available_pptx_templates' not in st.session_state:
+                with st.spinner("Loading available templates..."):
+                    st.session_state.available_pptx_templates = list_available_templates()
+
+            available_templates = st.session_state.get('available_pptx_templates', [])
+
+            if available_templates:
+                template_names = [t['name'] for t in available_templates]
+
+                # Find current selection index
+                current_selection = st.session_state.get('selected_pptx_template')
+                if current_selection and current_selection['name'] in template_names:
+                    default_idx = template_names.index(current_selection['name'])
+                else:
+                    default_idx = 0
+
+                selected_name = st.selectbox(
+                    "Template",
+                    options=template_names,
+                    index=default_idx,
+                    key="pptx_template_selector",
+                    label_visibility="collapsed"
+                )
+
+                # Find matching template dict
+                new_selection = next(t for t in available_templates if t['name'] == selected_name)
+
+                # Detect template change - clear template-specific state
+                old_selection = st.session_state.get('selected_pptx_template')
+                if old_selection and old_selection['name'] != new_selection['name']:
+                    st.session_state.pptx_match_results = None
+                    st.session_state.match_confirmations = {}
+                    st.session_state.generated_pptx = None
+                    st.session_state.pop('impact_slide_selections', None)
+                    # Clear cached template data for old template
+                    old_cache_key = f"pptx_template_{old_selection['name']}"
+                    old_temp_key = f"{old_cache_key}_tempfile"
+                    st.session_state.pop(old_cache_key, None)
+                    st.session_state.pop(old_temp_key, None)
+
+                st.session_state['selected_pptx_template'] = new_selection
+            else:
+                st.warning("No product slide templates found in Google Drive.")
+
+        with template_col2:
+            if st.button("Refresh", key="refresh_templates", use_container_width=True):
+                st.session_state.pop('available_pptx_templates', None)
+                st.rerun()
+
         # Button to trigger matching
         if st.button("Review Matches & Generate PowerPoint", type="primary", use_container_width=True, key="trigger_pptx_matching"):
             st.session_state.show_pptx_matching = True
@@ -3815,7 +3923,8 @@ with tab1:
                     from pptx import Presentation
 
                     # Display template name
-                    st.info(f"Using template: **{get_template_name('all_slides')}**")
+                    selected_template = st.session_state.get('selected_pptx_template', {})
+                    st.info(f"Using template: **{selected_template.get('name', get_template_name('all_slides'))}**")
 
                     pptx_template = get_template_path('all_slides', show_loading=True)
 
@@ -3853,7 +3962,8 @@ with tab1:
 
                             matcher = SlideMatcher(pptx_product_names)
                             current_dataset = st.session_state.get('selected_dataset', 'real')
-                            match_results = matcher.batch_match(gs_product_names, dataset=current_dataset)
+                            current_template_name = st.session_state.get('selected_pptx_template', {}).get('name', '')
+                            match_results = matcher.batch_match(gs_product_names, dataset=current_dataset, template_name=current_template_name)
 
                         # Cache results in session state
                         st.session_state.pptx_match_results = match_results

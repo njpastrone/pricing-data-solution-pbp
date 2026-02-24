@@ -270,7 +270,7 @@ class SlideMatcher:
         # Create uppercase mapping for exact matching
         self.pptx_upper_map = {name.upper(): name for name in pptx_product_names}
 
-    def find_match(self, gs_product_name: str, num_alternatives: int = 3, dataset: str = 'demo') -> SlideMatchResult:
+    def find_match(self, gs_product_name: str, num_alternatives: int = 3, dataset: str = 'demo', template_name: str = '') -> SlideMatchResult:
         """
         Find best matching PowerPoint slide for a Google Sheets product name.
 
@@ -278,6 +278,7 @@ class SlideMatcher:
             gs_product_name: Product name from Google Sheets
             num_alternatives: Number of alternative matches to return
             dataset: Current dataset ('demo' or 'real') for confirmed match lookup
+            template_name: Template name for confirmed match lookup
 
         Returns:
             SlideMatchResult with match information
@@ -295,7 +296,7 @@ class SlideMatcher:
         # Step 0: Check confirmed matches from Google Sheets FIRST (highest priority)
         try:
             from .match_memory import get_confirmed_match
-            confirmed_match = get_confirmed_match(gs_product_name, dataset)
+            confirmed_match = get_confirmed_match(gs_product_name, dataset, template_name=template_name)
 
             if confirmed_match:
                 # Confirmed match found - return with 100% confidence
@@ -396,18 +397,19 @@ class SlideMatcher:
             match_method=method_description
         )
 
-    def batch_match(self, gs_product_names: List[str], dataset: str = 'demo') -> List[SlideMatchResult]:
+    def batch_match(self, gs_product_names: List[str], dataset: str = 'demo', template_name: str = '') -> List[SlideMatchResult]:
         """
         Match multiple products at once.
 
         Args:
             gs_product_names: List of product names from Google Sheets
             dataset: Current dataset ('demo' or 'real') for confirmed match lookup
+            template_name: Template name for confirmed match lookup
 
         Returns:
             List of SlideMatchResult objects
         """
-        return [self.find_match(name, dataset=dataset) for name in gs_product_names]
+        return [self.find_match(name, dataset=dataset, template_name=template_name) for name in gs_product_names]
 
     def get_match_summary(self, results: List[SlideMatchResult], min_confidence: int = 70) -> Dict:
         """
@@ -436,37 +438,71 @@ class SlideMatcher:
         }
 
 
-# ============================================================
-# PARTNER IMPACT SLIDE REFERENCE TABLE
-# Source: templates/Impact Slide Reference Guide Nov 5 2025.xlsx
-# Extracted: 2025-11-05
-# ============================================================
-PARTNER_IMPACT_SLIDES = {
-    "GOEX": {"slide_title": "Apparel – Your Impact", "slide_index": 68},
-    "Gronn": {"slide_title": "Upcycled Glasses – Your Impact", "slide_index": 74},
-    "Homeless Garden Project": {"slide_title": "Spa & Food Gifts – Your Impact", "slide_index": 84},
-    "Hon's Honey": {"slide_title": "Honey Products – Your Impact", "slide_index": 99},
-    "Itza Wood": {"slide_title": "Wood Gifts – Your Impact", "slide_index": 129},
-    "Jaggery": {"slide_title": "Good Felt, ReDenim, and Upcycled Bags – Your Impact", "slide_index": 161},
-    "Work + Shelter": {"slide_title": "Sewn Goods – Your Impact", "slide_index": 295},
-}
-
-
-def get_impact_slide_for_partner(partner_name: str) -> Optional[Dict]:
+def build_impact_slide_map(template_path: str) -> Dict[str, Dict]:
     """
-    Get impact slide information for a partner from reference table.
+    Dynamically discover impact slides in a template and match them to partner names.
+
+    Uses find_all_impact_slides() to discover slides containing "Your Impact",
+    then fuzzy-matches each slide's category text against known partner names.
 
     Args:
-        partner_name: Partner name (e.g., "Jaggery", "GOEX")
+        template_path: Path to product slides template
 
     Returns:
-        Dict with slide_title and slide_index, or None if partner not found
+        Dict mapping partner name to impact slide info:
+        {
+            "Jaggery": {"slide_title": "...", "slide_index": 161},
+            "GOEX": {"slide_title": "...", "slide_index": 68},
+        }
 
     Example:
-        >>> get_impact_slide_for_partner("Jaggery")
-        {"slide_title": "Good Felt, ReDenim, and Upcycled Bags – Your Impact", "slide_index": 161}
+        >>> impact_map = build_impact_slide_map("templates/February All Slides.pptx")
+        >>> impact_map["Jaggery"]
+        {"slide_title": "Good Felt, ReDenim, and Upcycled Bags - Your Impact", "slide_index": 42}
     """
-    return PARTNER_IMPACT_SLIDES.get(partner_name)
+    # Known partner names to match against
+    known_partners = [
+        "GOEX", "Gronn", "Homeless Garden Project",
+        "Hon's Honey", "Itza Wood", "Jaggery", "Work + Shelter"
+    ]
+
+    impact_slides = find_all_impact_slides(template_path)
+    if not impact_slides:
+        return {}
+
+    result = {}
+
+    for partner in known_partners:
+        best_score = 0
+        best_slide = None
+
+        for slide_info in impact_slides:
+            slide_title = slide_info['slide_title']
+
+            # Extract category part (everything before "Your Impact")
+            category_part = slide_title.lower()
+            category_part = category_part.replace(" - your impact", "").replace(" \u2013 your impact", "").replace(" \u2014 your impact", "").replace("your impact", "").strip()
+
+            # Fuzzy match partner name against category text
+            scores = [
+                fuzz.token_sort_ratio(partner.lower(), category_part),
+                fuzz.token_set_ratio(partner.lower(), category_part),
+                fuzz.partial_ratio(partner.lower(), category_part)
+            ]
+            max_score = max(scores)
+
+            if max_score > best_score:
+                best_score = max_score
+                best_slide = slide_info
+
+        # Only include if confidence is reasonable (50%+)
+        if best_slide and best_score >= 50:
+            result[partner] = {
+                'slide_title': best_slide['slide_title'],
+                'slide_index': best_slide['slide_index']
+            }
+
+    return result
 
 
 # Confidence threshold constants

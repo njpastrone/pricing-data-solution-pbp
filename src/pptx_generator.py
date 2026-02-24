@@ -313,6 +313,276 @@ def check_pricing_consistency(pricing_data_list: List[Dict]) -> bool:
     return True
 
 
+# ============================================================
+# PHASE 2: DETECT-AND-COMPARE TABLE UPDATES
+# ============================================================
+
+def detect_prices_in_cell(cell_text: str) -> List[Dict]:
+    """
+    Find all dollar amounts in a cell's text.
+
+    Args:
+        cell_text: Text content of a table cell
+
+    Returns:
+        List of dicts: [{'match_text': '$34.00', 'start': 5, 'end': 11, 'value': 34.0}]
+        Empty list if no prices found.
+    """
+    if not cell_text:
+        return []
+
+    prices = []
+    for m in re.finditer(r'\$[\d,]+\.?\d{0,2}', cell_text):
+        try:
+            value = float(m.group().replace('$', '').replace(',', ''))
+            prices.append({
+                'match_text': m.group(),
+                'start': m.start(),
+                'end': m.end(),
+                'value': value
+            })
+        except ValueError:
+            continue
+    return prices
+
+
+def classify_columns(table) -> List[str]:
+    """
+    Read header row (row 0) and classify each column.
+
+    Returns:
+        List of classifications: 'price', 'moq', 'delivery', 'variant', or 'unknown'
+    """
+    cols = len(table.columns)
+    classifications = []
+
+    for c in range(cols):
+        try:
+            header_text = table.cell(0, c).text.strip().lower()
+        except Exception:
+            classifications.append('unknown')
+            continue
+
+        if any(kw in header_text for kw in ['price', '$', 'cost']):
+            classifications.append('price')
+        elif any(kw in header_text for kw in ['moq', 'qty', 'quantity', 'minimum']):
+            classifications.append('moq')
+        elif any(kw in header_text for kw in ['delivery', 'lead', 'ship', 'week']):
+            classifications.append('delivery')
+        elif any(kw in header_text for kw in ['variant', 'product', 'item', 'type']):
+            classifications.append('variant')
+        else:
+            classifications.append('unknown')
+
+    return classifications
+
+
+def replace_price_in_cell_preserve_format(cell, old_price_str: str, new_price_str: str) -> bool:
+    """
+    Surgically replace a dollar amount in a cell while keeping all surrounding text and formatting.
+
+    Args:
+        cell: Table cell object
+        old_price_str: Price string to find (e.g., "$34.00")
+        new_price_str: Replacement price string (e.g., "$38.00")
+
+    Returns:
+        True if replacement was made, False if not found
+    """
+    text_frame = cell.text_frame
+
+    for paragraph in text_frame.paragraphs:
+        for run in paragraph.runs:
+            if old_price_str in run.text:
+                run.text = run.text.replace(old_price_str, new_price_str, 1)
+                return True
+
+    # Fallback: price might span multiple runs, try full cell replacement
+    full_text = cell.text
+    if old_price_str in full_text:
+        new_full_text = full_text.replace(old_price_str, new_price_str, 1)
+        update_cell_text_preserve_format(cell, new_full_text)
+        return True
+
+    return False
+
+
+def update_pricing_table_smart(slide: object, proposal_items, variant_mode: bool = False,
+                               discount_percent: float = 0.0, discount_type: str = None) -> Dict:
+    """
+    Smart table update: detect existing prices and only replace values that differ.
+    Returns a processing report instead of silently overwriting.
+
+    Algorithm per cell:
+    1. Read cell text
+    2. Detect prices in cell
+    3. If 0 prices: skip (label/header/delivery). Report: "unchanged"
+    4. If 1 price: compare to calculated price, update if different. Report accordingly.
+    5. If 2+ prices: flag for manual review. Report: "flagged"
+
+    Args:
+        slide: Slide object with table
+        proposal_items: Single Dict OR List[Dict] for variants
+        variant_mode: If True, proposal_items is a list of variants
+        discount_percent: Discount percentage applied
+        discount_type: Type of discount
+
+    Returns:
+        Dict report:
+        {
+            'slide_name': str,
+            'actions': [{'cell': 'B2', 'action': 'auto_updated'|'unchanged'|'flagged',
+                        'old': str, 'new': str, 'reason': str}],
+            'status': 'auto_updated' | 'needs_review' | 'unchanged'
+        }
+    """
+    # Get slide name for reporting
+    slide_name = "Unknown Slide"
+    if len(slide.shapes) >= 1:
+        first_shape = slide.shapes[0]
+        if hasattr(first_shape, "text") and first_shape.text.strip():
+            slide_name = first_shape.text.strip()
+
+    report = {
+        'slide_name': slide_name,
+        'actions': [],
+        'status': 'unchanged'
+    }
+
+    # Find table in slide
+    table = None
+    for shape in slide.shapes:
+        if shape.has_table:
+            table = shape.table
+            break
+
+    if not table:
+        report['actions'].append({'cell': '-', 'action': 'unchanged', 'old': '', 'new': '', 'reason': 'No table found'})
+        return report
+
+    # Convert single item to list for consistent handling
+    if not variant_mode:
+        proposal_items = [proposal_items]
+
+    rows = len(table.rows)
+    cols = len(table.columns)
+
+    # Classify columns to know which hold prices
+    col_types = classify_columns(table)
+
+    # Detect customization row
+    customization_row_idx = None
+    for r in range(rows - 1, 0, -1):
+        try:
+            cell_text = table.cell(r, 0).text.lower()
+            if any(kw in cell_text for kw in ['customization', 'artwork', 'branding', 'setup', 'sticker', 'engraving', 'no customization']):
+                customization_row_idx = r
+                break
+        except Exception:
+            continue
+
+    # Calculate available data rows
+    if customization_row_idx:
+        available_data_rows = customization_row_idx - 1
+    else:
+        available_data_rows = rows - 1
+
+    # Build expected prices for each data row
+    has_updates = False
+    has_flagged = False
+
+    for idx, proposal_item in enumerate(proposal_items):
+        data_row_idx = idx + 1  # Row 0 is header
+
+        if data_row_idx >= rows:
+            break
+
+        # Get calculated prices
+        client_price = proposal_item.get('client_price', 0)
+        client_price_at_100 = proposal_item.get('client_price_at_100', client_price)
+        moq_price = proposal_item.get('moq_price_per_unit', 0)
+        base_price = moq_price if discount_percent > 0 else client_price
+
+        # Map expected prices to price columns
+        expected_prices_by_col = {}
+        price_col_indices = [c for c, t in enumerate(col_types) if t == 'price']
+
+        if len(price_col_indices) >= 2:
+            # Two price columns: first = price @ MOQ, second = price @ 100
+            expected_prices_by_col[price_col_indices[0]] = base_price
+            expected_prices_by_col[price_col_indices[1]] = client_price_at_100
+        elif len(price_col_indices) == 1:
+            # Single price column
+            expected_prices_by_col[price_col_indices[0]] = client_price
+
+        # Process each cell in this data row
+        for c in range(cols):
+            cell_ref = f"{chr(65 + c)}{data_row_idx + 1}"  # e.g., "B2"
+            cell_text = table.cell(data_row_idx, c).text.strip()
+            prices_found = detect_prices_in_cell(cell_text)
+
+            if len(prices_found) == 0:
+                # No prices in cell - it's a label, MOQ number, delivery time, etc.
+                report['actions'].append({
+                    'cell': cell_ref, 'action': 'unchanged',
+                    'old': cell_text, 'new': cell_text,
+                    'reason': 'No price in cell'
+                })
+
+            elif len(prices_found) == 1:
+                # Single price - compare and potentially update
+                existing_price = prices_found[0]['value']
+
+                if c in expected_prices_by_col:
+                    expected_price = expected_prices_by_col[c]
+                    if abs(existing_price - expected_price) < 0.01:
+                        report['actions'].append({
+                            'cell': cell_ref, 'action': 'unchanged',
+                            'old': cell_text, 'new': cell_text,
+                            'reason': 'Price already correct'
+                        })
+                    else:
+                        # Price differs - update
+                        old_price_str = prices_found[0]['match_text']
+                        new_price_str = f"${expected_price:.2f}"
+                        replace_price_in_cell_preserve_format(
+                            table.cell(data_row_idx, c), old_price_str, new_price_str
+                        )
+                        has_updates = True
+                        report['actions'].append({
+                            'cell': cell_ref, 'action': 'auto_updated',
+                            'old': old_price_str, 'new': new_price_str,
+                            'reason': f'Price updated ({old_price_str} -> {new_price_str})'
+                        })
+                else:
+                    # Price column not in our expected map - leave it alone
+                    report['actions'].append({
+                        'cell': cell_ref, 'action': 'unchanged',
+                        'old': cell_text, 'new': cell_text,
+                        'reason': 'Price in non-mapped column'
+                    })
+
+            else:
+                # Multiple prices in cell - flag for manual review
+                has_flagged = True
+                price_list = ", ".join(p['match_text'] for p in prices_found)
+                report['actions'].append({
+                    'cell': cell_ref, 'action': 'flagged',
+                    'old': cell_text, 'new': cell_text,
+                    'reason': f'Multiple prices in cell: {price_list}'
+                })
+
+    # Set overall status
+    if has_flagged:
+        report['status'] = 'needs_review'
+    elif has_updates:
+        report['status'] = 'auto_updated'
+    else:
+        report['status'] = 'unchanged'
+
+    return report
+
+
 def update_cell_text_preserve_format(cell, new_text: str):
     """
     Update table cell text while preserving original font formatting.
@@ -478,7 +748,7 @@ def copy_slide_with_images(source_prs: Presentation, target_prs: Presentation, s
 
 def update_pricing_table(slide: object, proposal_items, variant_mode: bool = False, discount_percent: float = 0.0, discount_type: str = None) -> bool:
     """
-    Update pricing table in slide with proposal data.
+    Update pricing table in slide with proposal data (legacy overwrite approach).
     Supports both single-product and multi-variant tables.
     Handles table formats: 2x3, 2x4, 3x4, and multi-row variant tables (v6.13).
 
@@ -780,7 +1050,7 @@ def create_proposal_presentation(
     Strategy: Load template, keep only needed slides, update pricing tables.
 
     Args:
-        template_path: Path to "November All Slides.pptx"
+        template_path: Path to product slides template
         confirmed_matches: Dict of {gs_product_name: pptx_product_name}
         proposal_products: List of proposal items from session state
         get_unit_price_func: Function to calculate unit prices
@@ -1035,7 +1305,7 @@ def extract_slides_from_template(template_path: str, slide_indices: List[int]) -
 
 
 def create_complete_proposal_presentation(
-    november_template_path: str,
+    product_template_path: str,
     intro_outro_template_path: str,
     confirmed_matches: Dict[str, str],
     proposal_products: List[Dict],
@@ -1046,7 +1316,8 @@ def create_complete_proposal_presentation(
     variant_groups: Optional[Dict[str, List[str]]] = None,
     variant_grouping_prefs: Optional[Dict[str, str]] = None,
     fifty_cent_rounding: bool = False,
-    discount_type: str = None
+    discount_type: str = None,
+    impact_slide_map: Optional[Dict[str, Dict]] = None
 ) -> Presentation:
     """
     Create complete presentation with intro, products, impact, and outro slides.
@@ -1054,12 +1325,12 @@ def create_complete_proposal_presentation(
 
     Slide Assembly Order:
     1. Intro slides (1-8) from Intro_Outro_Slides_PbP_Proposals.pptx
-    2. Product slides (customized) from November All Slides.pptx
-    3. Impact slides (one per partner, auto-selected from reference table) from November All Slides.pptx
+    2. Product slides (customized) from selected product template
+    3. Impact slides (one per partner) from selected product template
     4. Outro slides (9-12) from Intro_Outro_Slides_PbP_Proposals.pptx
 
     Args:
-        november_template_path: Path to November All Slides.pptx
+        product_template_path: Path to product slides template (e.g., "February All Slides.pptx")
         intro_outro_template_path: Path to Intro_Outro_Slides_PbP_Proposals.pptx
         confirmed_matches: Dict of {gs_product_name: pptx_product_name}
         proposal_products: List of proposal items
@@ -1068,37 +1339,38 @@ def create_complete_proposal_presentation(
         discount_percent: Discount percentage to apply
         discount_type: Type of discount - 'Non-profit', 'Volume Order', 'Custom', or None
         impact_slide_overrides: Optional dict of {partner: {"slide_index": X, "slide_title": Y}}
-                                If provided, overrides reference table for that partner
+                                If provided, overrides dynamic map for that partner
         variant_groups: Optional dict of {pptx_slide_name: [gs_product1, gs_product2, ...]}
                        Identifies which products are variants of same slide
         variant_grouping_prefs: Optional dict of {pptx_slide_name: user_choice_string}
                                User preferences for how to handle each variant group
+        impact_slide_map: Optional dict of {partner: {"slide_title": ..., "slide_index": ...}}
+                         Dynamically built map of partner impact slides
 
     Returns:
-        Complete Presentation with all slides assembled
+        Tuple of (Presentation, List[Dict]) - the assembled presentation and a list of
+        table processing reports (one per product slide)
 
     Example:
-        >>> prs = create_complete_proposal_presentation(
-        ...     "templates/November All Slides.pptx",
+        >>> prs, reports = create_complete_proposal_presentation(
+        ...     "templates/February All Slides.pptx",
         ...     "templates/Intro_Outro_Slides_PbP_Proposals.pptx",
         ...     {"Product A": "PRODUCT A"},
         ...     proposal_products,
         ...     get_unit_price_func
         ... )
     """
-    # Import reference table
-    from src.slide_matcher import PARTNER_IMPACT_SLIDES, extract_unique_partners
+    from src.slide_matcher import extract_unique_partners
 
-    # Load November template (we'll modify this)
-    prs_november = Presentation(november_template_path)
+    # Load product template (we'll modify this)
+    prs_product = Presentation(product_template_path)
 
-    # Build list of slides to keep from November template
-    # Format: [(slide_index, type, data), ...]
+    # Build list of slides to keep from product template
     slides_to_keep = []
 
     # Step 1: Find product slides
     for gs_name, pptx_name in confirmed_matches.items():
-        slide_idx = find_slide_by_product_name(prs_november, pptx_name)
+        slide_idx = find_slide_by_product_name(prs_product, pptx_name)
 
         if slide_idx is not None:
             # Find matching proposal item
@@ -1126,9 +1398,11 @@ def create_complete_proposal_presentation(
         # Check for override first
         if impact_slide_overrides and partner in impact_slide_overrides:
             impact_info = impact_slide_overrides[partner]
+        elif impact_slide_map:
+            # Use dynamically built map
+            impact_info = impact_slide_map.get(partner)
         else:
-            # Use reference table
-            impact_info = PARTNER_IMPACT_SLIDES.get(partner)
+            impact_info = None
 
         if impact_info and impact_info.get('slide_index') is not None:
             slides_to_keep.append({
@@ -1140,21 +1414,24 @@ def create_complete_proposal_presentation(
                 }
             })
 
-    # Step 3: Remove slides we don't need from November template (work backwards)
+    # Step 3: Remove slides we don't need from product template (work backwards)
     slide_indices_to_keep = set(entry['index'] for entry in slides_to_keep)
-    slide_list = list(prs_november.slides)
+    slide_list = list(prs_product.slides)
 
     for idx in range(len(slide_list) - 1, -1, -1):
         if idx not in slide_indices_to_keep:
-            rId = prs_november.slides._sldIdLst[idx].rId
-            prs_november.part.drop_rel(rId)
-            del prs_november.slides._sldIdLst[idx]
+            rId = prs_product.slides._sldIdLst[idx].rId
+            prs_product.part.drop_rel(rId)
+            del prs_product.slides._sldIdLst[idx]
 
     # Force garbage collection after slide removal (memory optimization)
     gc.collect()
 
     # Step 4: Update pricing tables in product slides (with variant support)
-    for slide in prs_november.slides:
+    # Use smart detect-and-compare for single products, legacy overwrite for variants
+    table_reports = []
+
+    for slide in prs_product.slides:
         if len(slide.shapes) >= 1:
             first_shape = slide.shapes[0]
             if hasattr(first_shape, "text") and first_shape.text.strip():
@@ -1171,7 +1448,6 @@ def create_complete_proposal_presentation(
 
                     if "single row" in user_choice.lower():
                         # Display simple single-row table (consistent pricing)
-                        # Use first variant as representative since all have same pricing
                         variant_products = variant_groups[slide_title]
                         gs_name = variant_products[0]
 
@@ -1190,7 +1466,6 @@ def create_complete_proposal_presentation(
                             )
 
                             if pricing_data:
-                                # Update table with single row (variant_mode=False for simple table)
                                 update_pricing_table(slide, pricing_data, variant_mode=False, discount_percent=discount_percent, discount_type=discount_type)
                                 print(f"DEBUG: Created single-row table for {slide_title} (consistent pricing)")
 
@@ -1223,15 +1498,10 @@ def create_complete_proposal_presentation(
                             print(f"DEBUG: Created multi-row table for {slide_title} with {len(pricing_data_list)} variants")
 
                     elif "skip" in user_choice.lower():
-                        # Skip - slide should have been removed already, but just in case
                         pass
 
-                    # If "separate" was chosen, each variant gets its own slide
-                    # This would require slide duplication, which is handled differently
-                    # For now, we'll treat "separate" like single products (first variant wins)
-
                 else:
-                    # Single product - normal behavior
+                    # Single product - use smart detect-and-compare update
                     for gs_name, pptx_name in confirmed_matches.items():
                         if pptx_name == slide_title:
                             proposal_item = next(
@@ -1249,25 +1519,42 @@ def create_complete_proposal_presentation(
                                 )
 
                                 if pricing_data:
-                                    update_pricing_table(slide, pricing_data, variant_mode=False, discount_percent=discount_percent, discount_type=discount_type)
+                                    # Try smart update first
+                                    report = update_pricing_table_smart(
+                                        slide, pricing_data,
+                                        variant_mode=False,
+                                        discount_percent=discount_percent,
+                                        discount_type=discount_type
+                                    )
+                                    table_reports.append(report)
+
+                                    # If smart update found no price columns at all,
+                                    # fall back to legacy overwrite
+                                    if report['status'] == 'unchanged' and not any(
+                                        a['reason'] == 'Price already correct' for a in report['actions']
+                                    ):
+                                        update_pricing_table(slide, pricing_data, variant_mode=False, discount_percent=discount_percent, discount_type=discount_type)
+                                        report['status'] = 'auto_updated'
+                                        report['actions'].append({
+                                            'cell': '-', 'action': 'auto_updated',
+                                            'old': '', 'new': '',
+                                            'reason': 'Used legacy overwrite (no prices detected in template)'
+                                        })
+
                             break
 
     # Step 5: Add intro/outro slides to END in their original order
-    # This keeps intro slides together, making it obvious they need to be moved to beginning
     prs_intro_outro = Presentation(intro_outro_template_path)
 
     # Add intro slides first (slides 1-8, indices 0-7)
     intro_slide_count = min(8, len(prs_intro_outro.slides))
     for idx in range(intro_slide_count):
-        copy_slide_with_images(prs_intro_outro, prs_november, idx)
+        copy_slide_with_images(prs_intro_outro, prs_product, idx)
 
     # Add outro slides after intro (slides 9-12, indices 8-11)
     outro_start_idx = 8
     outro_end_idx = min(12, len(prs_intro_outro.slides))
     for idx in range(outro_start_idx, outro_end_idx):
-        copy_slide_with_images(prs_intro_outro, prs_november, idx)
+        copy_slide_with_images(prs_intro_outro, prs_product, idx)
 
-    # Final structure: Products → Impacts → Intro (at end) → Outro (at end)
-    # User moves intro slides from end to beginning, leaves outro at end
-
-    return prs_november
+    return prs_product, table_reports

@@ -15,6 +15,7 @@ Storage Structure (saved_matches spreadsheet):
 - Match_Type: Type of match (fuzzy_confirmed, alternative_selected)
 - Confidence: Original confidence score before confirmation
 - Created_Date: Timestamp (YYYY-MM-DD HH:MM:SS)
+- Template_Name: Name of the template file (e.g., "February All Slides.pptx")
 """
 
 import json
@@ -38,10 +39,10 @@ def _get_matches_sheet():
             sheet = spreadsheet.worksheet('Sheet1')
         except Exception:
             # If doesn't exist, create it with headers
-            sheet = spreadsheet.add_worksheet(title='Sheet1', rows=100, cols=9)
+            sheet = spreadsheet.add_worksheet(title='Sheet1', rows=100, cols=10)
             headers = ['Match_ID', 'Product_Name', 'Original_Product_Name', 'Slide_Index',
-                      'Slide_Title', 'Dataset', 'Match_Type', 'Confidence', 'Created_Date']
-            sheet.update('A1:I1', [headers])
+                      'Slide_Title', 'Dataset', 'Match_Type', 'Confidence', 'Created_Date', 'Template_Name']
+            sheet.update('A1:J1', [headers])
 
         return sheet
     except Exception as e:
@@ -91,7 +92,7 @@ def generate_match_id():
     return datetime.now().strftime("MATCH_%Y%m%d_%H%M%S")
 
 
-def save_confirmed_match(product_name, slide_index, slide_title, dataset, match_type='fuzzy_confirmed', confidence=0):
+def save_confirmed_match(product_name, slide_index, slide_title, dataset, match_type='fuzzy_confirmed', confidence=0, template_name=''):
     """
     Save a confirmed product-to-slide match to Google Sheets.
 
@@ -102,6 +103,7 @@ def save_confirmed_match(product_name, slide_index, slide_title, dataset, match_
         dataset (str): Dataset used ('demo' or 'real')
         match_type (str): Type of match ('fuzzy_confirmed' or 'alternative_selected')
         confidence (int): Original confidence score (0-100)
+        template_name (str): Name of template file (e.g., "February All Slides.pptx")
 
     Returns:
         tuple: (success: bool, message: str)
@@ -120,11 +122,12 @@ def save_confirmed_match(product_name, slide_index, slide_title, dataset, match_
         # Load current data to check for existing match
         all_values = _load_all_matches_data()
 
-        # Look for existing match (same normalized name + dataset)
+        # Look for existing match (same normalized name + dataset + template_name)
         existing_row_idx = None
         for idx, row in enumerate(all_values[1:], start=2):  # Skip header
             if len(row) >= 6:
-                if row[1] == normalized_name and row[5] == dataset:
+                row_template = row[9] if len(row) >= 10 else ''
+                if row[1] == normalized_name and row[5] == dataset and row_template == template_name:
                     existing_row_idx = idx
                     break
 
@@ -132,7 +135,7 @@ def save_confirmed_match(product_name, slide_index, slide_title, dataset, match_
         match_id = generate_match_id()
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Prepare row data
+        # Prepare row data (10 columns)
         row_data = [
             match_id,
             normalized_name,
@@ -142,12 +145,13 @@ def save_confirmed_match(product_name, slide_index, slide_title, dataset, match_
             dataset,
             match_type,
             confidence,
-            timestamp
+            timestamp,
+            template_name
         ]
 
         if existing_row_idx:
             # Update existing match
-            sheet.update(f'A{existing_row_idx}:I{existing_row_idx}', [row_data])
+            sheet.update(f'A{existing_row_idx}:J{existing_row_idx}', [row_data])
             # Clear cache after update
             _load_all_matches_data.clear()
             return True, f"Match updated for '{product_name}'"
@@ -162,13 +166,15 @@ def save_confirmed_match(product_name, slide_index, slide_title, dataset, match_
         return False, f"Error saving match: {str(e)}"
 
 
-def get_confirmed_match(product_name, dataset):
+def get_confirmed_match(product_name, dataset, template_name=''):
     """
-    Get confirmed match for a specific product in the current dataset.
+    Get confirmed match for a specific product in the current dataset and template.
 
     Args:
         product_name (str): Product name to look up
         dataset (str): Dataset ('demo' or 'real')
+        template_name (str): Template name to filter by. If empty, matches legacy rows
+                            (rows without template_name column).
 
     Returns:
         dict or None: Match data if found, None otherwise
@@ -181,7 +187,8 @@ def get_confirmed_match(product_name, dataset):
             'dataset': 'demo',
             'match_type': 'fuzzy_confirmed',
             'confidence': 85,
-            'created_date': '2025-11-17 14:30:25'
+            'created_date': '2025-11-17 14:30:25',
+            'template_name': 'February All Slides.pptx'
         }
     """
     try:
@@ -194,10 +201,14 @@ def get_confirmed_match(product_name, dataset):
         # Normalize product name for lookup
         normalized_name = normalize_for_storage(product_name)
 
-        # Find match (normalized name + dataset)
+        # Find match (normalized name + dataset + template_name)
         for row in all_values[1:]:  # Skip header
             if len(row) >= 9:
-                if row[1] == normalized_name and row[5] == dataset:
+                row_template = row[9] if len(row) >= 10 else ''
+
+                # Match if template names are the same
+                # Legacy rows (no template) match when template_name is also empty
+                if row[1] == normalized_name and row[5] == dataset and row_template == template_name:
                     return {
                         'match_id': row[0],
                         'product_name': row[1],
@@ -207,7 +218,8 @@ def get_confirmed_match(product_name, dataset):
                         'dataset': row[5],
                         'match_type': row[6],
                         'confidence': int(row[7]) if row[7] else 0,
-                        'created_date': row[8]
+                        'created_date': row[8],
+                        'template_name': row_template
                     }
 
         return None
@@ -217,14 +229,16 @@ def get_confirmed_match(product_name, dataset):
         return None
 
 
-def load_all_confirmed_matches(dataset=None):
+def load_all_confirmed_matches(dataset=None, template_name=None):
     """
-    Load all confirmed matches, optionally filtered by dataset.
+    Load all confirmed matches, optionally filtered by dataset and/or template.
     Uses cached data to minimize API calls.
 
     Args:
         dataset (str, optional): Filter by dataset ('demo' or 'real').
                                  If None, returns all matches.
+        template_name (str, optional): Filter by template name.
+                                       If None, returns all templates.
 
     Returns:
         list: List of dicts with match data
@@ -244,6 +258,12 @@ def load_all_confirmed_matches(dataset=None):
                 if dataset and row[5] != dataset:
                     continue
 
+                row_template = row[9] if len(row) >= 10 else ''
+
+                # Filter by template_name if specified
+                if template_name is not None and row_template != template_name:
+                    continue
+
                 matches.append({
                     'match_id': row[0],
                     'product_name': row[1],
@@ -253,7 +273,8 @@ def load_all_confirmed_matches(dataset=None):
                     'dataset': row[5],
                     'match_type': row[6],
                     'confidence': int(row[7]) if row[7] else 0,
-                    'created_date': row[8]
+                    'created_date': row[8],
+                    'template_name': row_template
                 })
 
         # Sort by date (newest first)
@@ -266,13 +287,14 @@ def load_all_confirmed_matches(dataset=None):
         return []
 
 
-def delete_confirmed_match(product_name, dataset):
+def delete_confirmed_match(product_name, dataset, template_name=''):
     """
     Delete a confirmed match from Google Sheets.
 
     Args:
         product_name (str): Product name to delete
         dataset (str): Dataset ('demo' or 'real')
+        template_name (str): Template name to filter by
 
     Returns:
         tuple: (success: bool, message: str)
@@ -287,13 +309,15 @@ def delete_confirmed_match(product_name, dataset):
 
         all_values = _load_all_matches_data()
 
-        # Find row with matching product name + dataset
+        # Find row with matching product name + dataset + template
         for i, row in enumerate(all_values[1:], start=2):  # Start at row 2 (skip header)
             if len(row) >= 6 and row[1] == normalized_name and row[5] == dataset:
-                sheet.delete_rows(i)
-                # Clear cache after delete
-                _load_all_matches_data.clear()
-                return True, f"Match deleted for '{product_name}'"
+                row_template = row[9] if len(row) >= 10 else ''
+                if row_template == template_name:
+                    sheet.delete_rows(i)
+                    # Clear cache after delete
+                    _load_all_matches_data.clear()
+                    return True, f"Match deleted for '{product_name}'"
 
         return False, f"No match found for '{product_name}' in {dataset} dataset"
 
@@ -348,7 +372,7 @@ def clear_all_confirmed_matches(dataset=None):
         return False, f"Error clearing matches: {str(e)}", 0
 
 
-def bulk_update_confirmed_matches(product_names, new_slide_index, new_slide_title, dataset):
+def bulk_update_confirmed_matches(product_names, new_slide_index, new_slide_title, dataset, template_name=''):
     """
     Update multiple confirmed matches to point to a new slide.
     Useful for fixing incorrect matches in bulk.
@@ -358,6 +382,7 @@ def bulk_update_confirmed_matches(product_names, new_slide_index, new_slide_titl
         new_slide_index (int): New slide index
         new_slide_title (str): New slide title
         dataset (str): Dataset ('demo' or 'real')
+        template_name (str): Template name
 
     Returns:
         tuple: (success: bool, message: str, count: int)
@@ -377,7 +402,8 @@ def bulk_update_confirmed_matches(product_names, new_slide_index, new_slide_titl
                 slide_title=new_slide_title,
                 dataset=dataset,
                 match_type='bulk_updated',
-                confidence=0
+                confidence=0,
+                template_name=template_name
             )
 
             if success:
