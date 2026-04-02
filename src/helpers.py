@@ -521,21 +521,17 @@ def parse_tier_info(tier_string):
         return {}
 
     tier_dict = {}
-    parts = tier_string.split(',')
-    for part in parts:
-        if ':' not in part:
-            continue
-        # Extract "T1: 1-25" → tier_num=1, range=(1, 25)
-        tier_label, range_str = part.split(':', 1)
-        tier_num = int(tier_label.strip().replace('T', ''))
-        range_str = range_str.strip()
-        if '-' in range_str:
-            min_qty, max_qty = range_str.split('-')
-            tier_dict[tier_num] = (int(min_qty), int(max_qty))
-        elif '+' in range_str:
-            # Handle "1000+" format
-            min_qty = int(range_str.replace('+', ''))
-            tier_dict[tier_num] = (min_qty, float('inf'))
+    # Use regex to find all tier patterns like "T1: 1-25" or "T3: 1000+"
+    # This handles both comma-separated and space-separated tiers
+    import re
+    matches = re.findall(r'T(\d+)\s*:\s*(\d+)\s*[-–]\s*(\d+)', tier_string)
+    for tier_num, min_qty, max_qty in matches:
+        tier_dict[int(tier_num)] = (int(min_qty), int(max_qty))
+
+    # Handle open-ended tiers like "T6: 1000+"
+    plus_matches = re.findall(r'T(\d+)\s*:\s*(\d+)\s*\+', tier_string)
+    for tier_num, min_qty in plus_matches:
+        tier_dict[int(tier_num)] = (int(min_qty), float('inf'))
 
     return tier_dict
 
