@@ -526,7 +526,7 @@ def parse_tier_info(tier_string):
         if ':' not in part:
             continue
         # Extract "T1: 1-25" → tier_num=1, range=(1, 25)
-        tier_label, range_str = part.split(':')
+        tier_label, range_str = part.split(':', 1)
         tier_num = int(tier_label.strip().replace('T', ''))
         range_str = range_str.strip()
         if '-' in range_str:
