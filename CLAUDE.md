@@ -22,27 +22,38 @@
 ## ACTIVE DEVELOPMENT STATUS - May 2026
 
 **Current Focus:** Normal development - post-schema features and bug fixes
-- **Last Major Update:** 2026-04-02 - Tier parsing robustness fixes
-- **Current Version:** 8.2.0
+- **Last Major Update:** 2026-05-23 - Leadership meeting bug fixes and feature requests (16 items)
+- **Current Version:** 8.3.0
 - **Status:** Production-ready with 4-method pricing system (v8.1.0 schema, 45 columns)
 - **Codebase:** ~18,300 lines of Python, clean and documented
 
-**Recent Work (Jan-Apr 2026):**
+**Recent Work (May 2026):**
+- 16 bug fixes and feature requests from leadership meeting (see [docs/CHANGES_2026_05_23.md](docs/CHANGES_2026_05_23.md))
+- Current Proposal sidebar widget with scrollable list and remove dropdown
+- Fixed slide matching (get_slide_title helper checks title placeholder + all shapes)
+- Client Budget Range filter now uses MSRP, added Clear All Filters button
+- Google Form URL generation now on-demand with Update button
+- Import from Proposal promoted to full section (Option B) in Tab 3
+- PBP In-Hands Date field for Purchase Orders
+- Editable Customization Description field
+- Product Photos upload with HTML export embedding
+- Legacy Shipping & Tariffs hidden behind expander (costs now in product pricing)
+- Fixed HTML/CSV download buttons serving stale data in Tab 4
+- See [CHANGELOG.md](CHANGELOG.md) for complete details
+
+**Previous Work (Jan-Apr 2026):**
 - Template-resilient PowerPoint generation (handles missing/changed slides gracefully)
 - Volume Order Discount (5%) option in Tab 1 and Tab 3
 - MOQ warnings for orders below minimum quantity
 - Custom variant support and "Inquire about variants" handling
 - Google Form generation without requiring a proposal first
 - Per-product kitting as separate line items (Tab 3 and Tab 4)
-- Kitting quantity field for flexible kitting charges
 - Tier parsing robustness (handles space-separated and multi-colon formats)
-- Multiple PowerPoint discount/pricing fixes
 - Schema v8.1.0: Added "Other Add-On %" column, "Package" -> "Case" terminology
-- See [CHANGELOG.md](CHANGELOG.md) for complete details
 
 ### Active Development Documents:
 1. **[ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md)** - Current task list
-2. **[CHANGELOG.md](CHANGELOG.md)** - Comprehensive project history (v8.2.0 is latest)
+2. **[CHANGELOG.md](CHANGELOG.md)** - Comprehensive project history (v8.3.0 is latest)
 3. **[schema_update_jan_2026/MASTER_TRACKING.md](schema_update_jan_2026/MASTER_TRACKING.md)** - Schema transition reference (complete)
 4. **[schema_reference.md](schema_reference.md)** - Complete 45-column schema definition (v8.1.0)
 5. **[docs/planning/METHODOLOGY_LOGIC.md](docs/planning/METHODOLOGY_LOGIC.md)** - Pricing methodology (updated with 4 methods)
@@ -311,14 +322,15 @@ See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
   - Preview extracted data (client info + products) before applying
   - Smart defaults: shipping address field shows unless drop shipping is explicitly "Yes"
   - Handles user input errors gracefully
-- **Option C - Proposal-to-Order Import:** Import all or individual products from Tab 1 (preserves quantity & markup only)
-  - Only shows if proposal products exist
-  - Alternative workflow when you have a proposal but no completed form
-- **Option D - Manual Product Selection:** One-click add from dropdown with MSRP pricing
+- **Option B - Import from Proposal (Tab 1):** Most commonly used workflow - import all or individual products from Tab 1 (preserves quantity & markup)
+  - Full section (not hidden in expander) since this is the primary workflow
+  - Shows proposal source info (saved name, creator, date)
+  - Import All or select individual products
+  - Shows helpful message when no proposal exists
+- **Option C - Manual Product Selection:** One-click add from dropdown with MSRP pricing
   - **Use MSRP pricing checkbox (Default: ON):** Automatically calculates markup to match MSRP when adding products
   - Products with MSRP have markup auto-calculated, products without MSRP use 100% markup
   - Markup still manually editable after adding
-  - Becomes "Option B" when no proposal exists
   - Fallback for starting fresh without proposal or form
 - **Inline Product Editing:** Always-visible settings for each product (no expand/collapse)
 - **Real-time Pricing Updates:** Instant recalculation as you edit quantity, markup, or customization
@@ -386,6 +398,7 @@ pricing-data-solution-pbp/
 │
 ├── docs/                       # Documentation (organized by topic)
 │   ├── README.md              # Documentation index
+│   ├── CHANGES_2026_05_23.md  # May 23, 2026 changes & bug fixes (16 items)
 │   ├── CLIENT_QUESTIONS.md    # Unanswered client questions
 │   ├── SCROLL_PRESERVATION_PATTERN.md # Scroll preservation implementation
 │   ├── SESSION_STATE_AUDIT.md # Session state management
@@ -403,7 +416,8 @@ pricing-data-solution-pbp/
 │   │   └── PHASE_1_COMPLETION_SUMMARY.md # Phase 1 technical deep dive
 │   ├── meetings/              # Stakeholder meetings and notes
 │   │   ├── STAKEHOLDER_MEETING_NOTES.md # Organized requirements
-│   │   └── RAW_MEETING_NOTES_113024.md # Original Nov 30 notes
+│   │   ├── RAW_MEETING_NOTES_113024.md # Original Nov 30 notes
+│   │   └── PBP_MEETING_042125.md # Apr 21, 2025 leadership meeting notes
 │   ├── testing/               # Testing documentation
 │   │   └── TAB3_TAB4_TESTING_CHECKLIST.md # Tab 3→4 test plan
 │   ├── investigations/        # Technical investigations
@@ -467,7 +481,7 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 8.2.0
+**Version:** 8.3.0
 
 **Last Updated:** 2026-05-23
 
@@ -481,6 +495,21 @@ pricing-data-solution-pbp/
 - 55+ test scripts organized in scripts/ (core, features, investigations)
 - 4-method pricing system (v8.1.0 schema, 45 columns)
 - Fully deployed and operational on Render
+
+**Recent Improvements (2026-05-23 - v8.3.0):**
+- 16 bug fixes and feature requests from leadership meeting
+- Current Proposal sidebar widget (scrollable list + remove dropdown)
+- Simplified Save Proposal section, cleaned up Data Status sidebar
+- Fixed Client Budget Range filter to use MSRP, added Clear All Filters
+- Fixed slide matching (get_slide_title helper for robust title extraction)
+- Google Form URL generation on-demand with Update button
+- Import from Proposal promoted to Option B in Tab 3
+- PBP In-Hands Date field for Purchase Orders
+- Editable Customization Description field for base customization
+- Product Photos upload with HTML export embedding
+- Legacy Shipping & Tariffs hidden (costs now in product pricing)
+- Fixed HTML/CSV download buttons serving stale data
+- Full details: [docs/CHANGES_2026_05_23.md](docs/CHANGES_2026_05_23.md)
 
 **Recent Improvements (2026-02 to 2026-04 - v8.2.0):**
 - Template-resilient PowerPoint generation (handles missing/changed template slides gracefully)

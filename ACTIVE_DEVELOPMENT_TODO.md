@@ -1,12 +1,30 @@
 # Active Development TODO
 
 **Last Updated:** May 23, 2026
-**Current Version:** 8.2.0
+**Current Version:** 8.3.0
 **Status:** Normal development - post-schema features and maintenance
 
 ---
 
-## Completed Work (Jan-Apr 2026)
+## Completed Work (Jan-May 2026)
+
+### v8.3.0 Leadership Meeting Fixes (May 23, 2026)
+- [x] Current Proposal sidebar widget (scrollable list + remove dropdown)
+- [x] Simplified Save Proposal section (removed duplicate Load Proposal UI)
+- [x] Cleaned up Data Status sidebar (hid refresh, removed debug details)
+- [x] Removed duplicate Client Budget input from Proposal Settings
+- [x] Fixed Client Budget Range filter to use MSRP, added transparency message
+- [x] Added Clear All Filters button
+- [x] Hid Proposal Tables behind debug expander, removed CSV download
+- [x] Fixed slide matching (get_slide_title helper)
+- [x] Replaced broken tab navigation buttons with text notes
+- [x] Google Form URL generation on-demand with Update button
+- [x] Promoted Import from Proposal to Option B in Tab 3
+- [x] Added PBP In-Hands Date field for Purchase Orders
+- [x] Added editable Customization Description field
+- [x] Fixed HTML/CSV download stale data bug
+- [x] Hid legacy Shipping & Tariffs behind expander
+- [x] Added Product Photos upload with HTML export embedding
 
 ### v8.2.0 Features (Feb-Apr 2026)
 - [x] Template-resilient PowerPoint generation system
@@ -43,6 +61,12 @@
 
 ## Needs Discussion
 
+### Google Form Sign-In Issue
+- Google Forms requires sign-in when File Upload questions are present
+- Need to remove File Upload questions or find alternative for photo uploads
+- Related to meeting item #14 (product photo uploads)
+- **Action:** Decide whether to remove file upload from Google Form or handle photos separately
+
 ### Customer Setup Form
 - Define requirements
 - Determine integration points
@@ -64,6 +88,7 @@
 - **Codebase:** ~18,300 lines of Python
 - **Test Scripts:** 55+ organized in scripts/
 - **Schema:** v8.1.0 (45 columns, 4 pricing methods)
+- **Latest:** v8.3.0 - Leadership meeting fixes (16 items, May 23, 2026)
 - **Documentation:** See [CHANGELOG.md](CHANGELOG.md) for full history
 
 ---

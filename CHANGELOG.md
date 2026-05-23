@@ -3,6 +3,31 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [8.3.0] - 2026-05-23
+
+### Added
+- **Current Proposal Sidebar Widget:** Scrollable list showing all products in the proposal (most recently added first) with a dropdown to remove products
+- **Clear All Filters Button:** One-click reset of all product filters (budget range, partner, country, search) in Tab 1
+- **PBP In-Hands Date Field:** Date PBP needs to receive product from partner, shown in Tab 3 (Section 5), Tab 4 (Client & Order Information), and on Purchase Orders (both table display and HTML export)
+- **Customization Description Field:** Editable text input for base customization in Tab 3, pre-fills from spreadsheet data, appears on pricing breakdown and invoice/PO line items
+- **Product Photos Upload:** New Section 5 in Tab 3 for uploading multiple photos (PNG, JPG, GIF, WEBP) with thumbnail grid display and base64 embedding in HTML invoice/PO export
+- **Google Form URL On-Demand Generation:** "Generate Form URL" / "Update Form URL" button replaces auto-generation so users can regenerate after making changes
+- **Import from Proposal (Option B):** Promoted from hidden expander to full section in Tab 3 as most commonly used workflow; Manual Product Selection renamed to Option C
+
+### Changed
+- **Save Proposal Section Simplified:** Removed duplicate "Load Proposal" UI from Tab 2; loading now only done from sidebar
+- **Data Status Sidebar Cleaned Up:** Removed debug data details dropdown, hid refresh button behind "Having data issues?" expander
+- **Client Budget Input Removed:** Removed duplicate Client Budget input from Proposal Settings (already set at top when filtering)
+- **Client Budget Range Filter:** Now uses MSRP when available instead of cost x2, with transparency message showing MSRP vs estimated price counts
+- **Proposal Tables Section:** Replaced with discreet "View raw proposal data (debug)" expander, removed CSV download
+- **Tab Navigation Buttons:** Replaced non-functional "Continue to next tab" buttons with simple text notes
+- **Shipping & Tariffs Hidden:** Section wrapped in "Legacy" expander/checkbox in both Tab 3 and Tab 4 since costs are now factored into product pricing
+- **Section Numbering:** Tab 3 sections renumbered (Product Photos is now Section 5, Client & Order Information is Section 6)
+
+### Fixed
+- **Slide Matching:** Added `get_slide_title()` helper that checks PowerPoint title placeholder first, then all shapes on the slide, instead of only looking at shapes[0]
+- **HTML/CSV Download Stale Data:** Download buttons in Tab 4 now use dynamic keys based on content hash, ensuring downloaded files always match on-screen data
+
 ## [8.2.0] - 2026-05-23
 
 ### Added
