@@ -444,7 +444,8 @@ if 'client_info' not in st.session_state:
         'shipping_address': '',
         'payment_timeline': 'Net 30',  # MODIFIED: Changed to dropdown default
         'payment_preference': 'Check',  # MODIFIED: Changed to dropdown default
-        'client_in_hands_date': None,  # NEW: Target delivery date for client
+        'client_in_hands_date': None,  # Target delivery date for client
+        'pbp_in_hands_date': None,  # Date PBP needs to receive product from partner
         'order_submitted_by': '',  # NEW: Person submitting order
         'order_submitted_date': datetime.now().date(),  # NEW: Auto-filled submission date
         'cost_submitted_by': '',  # NEW: Person submitting costs
@@ -675,6 +676,40 @@ with st.sidebar:
     order_count = len(st.session_state.get('order_items', []))
 
     st.caption(f"**Proposal:** {proposal_count} items | **Order:** {order_count} items")
+
+    # Current Proposal widget - shows products sorted by recently added
+    if proposal_count > 0:
+        st.markdown("### Current Proposal")
+        # Build scrollable HTML list (most recently added first)
+        product_names_reversed = [
+            item['product_data'].get('Product/Service', 'Unknown')
+            for item in reversed(st.session_state.proposal_products)
+        ]
+        list_html = "".join(
+            f'<div style="padding:4px 8px;border-bottom:1px solid rgba(128,128,128,0.2);font-size:13px;">{name}</div>'
+            for name in product_names_reversed
+        )
+        st.markdown(
+            f'<div style="max-height:160px;overflow-y:auto;border:1px solid rgba(128,128,128,0.3);border-radius:4px;">'
+            f'{list_html}</div>',
+            unsafe_allow_html=True
+        )
+        # Remove product dropdown
+        remove_options = [""] + product_names_reversed
+        remove_choice = st.selectbox(
+            "Remove a product",
+            options=remove_options,
+            format_func=lambda x: "Select to remove..." if x == "" else x,
+            key="sidebar_remove_select",
+            label_visibility="collapsed"
+        )
+        if remove_choice:
+            # Find and remove the product (search from end since list is reversed)
+            for i in range(len(st.session_state.proposal_products) - 1, -1, -1):
+                if st.session_state.proposal_products[i]['product_data'].get('Product/Service') == remove_choice:
+                    st.session_state.proposal_products.pop(i)
+                    break
+            st.rerun()
 
     st.markdown("---")
 
@@ -1013,6 +1048,7 @@ with st.sidebar:
                     'payment_timeline': 'Net 30',
                     'payment_preference': 'Check',
                     'client_in_hands_date': None,
+                    'pbp_in_hands_date': None,
                     'order_submitted_by': '',
                     'order_submitted_date': datetime.now().date(),
                     'cost_submitted_by': '',
@@ -1133,67 +1169,38 @@ with st.sidebar:
             time_str = load_time.strftime('%I:%M %p')
 
         st.caption(f"Last updated: {time_str}")
+        st.caption("Data auto-refreshes every 5 minutes")
 
-        # Check if we can refresh (30-second cooldown to prevent API rate limiting)
-        last_manual_refresh = st.session_state.get('last_manual_refresh', None)
-        can_refresh = True
-        cooldown_remaining = 0
+        # Hidden refresh button for troubleshooting
+        with st.expander("Having data issues?", expanded=False):
+            # Check if we can refresh (30-second cooldown to prevent API rate limiting)
+            last_manual_refresh = st.session_state.get('last_manual_refresh', None)
+            can_refresh = True
+            cooldown_remaining = 0
 
-        if last_manual_refresh:
-            time_since_refresh = (datetime.now() - last_manual_refresh).seconds
-            if time_since_refresh < 30:
-                can_refresh = False
-                cooldown_remaining = 30 - time_since_refresh
+            if last_manual_refresh:
+                time_since_refresh = (datetime.now() - last_manual_refresh).seconds
+                if time_since_refresh < 30:
+                    can_refresh = False
+                    cooldown_remaining = 30 - time_since_refresh
 
-        if st.button("Refresh Data", use_container_width=True, disabled=not can_refresh):
-            if can_refresh:
-                # Store old data for comparison
-                old_product_count = len(st.session_state.get('df_template', []))
-                old_first_product = st.session_state.df_template.iloc[0]['Product/Service'] if old_product_count > 0 else 'N/A'
+            if st.button("Force Refresh Data", use_container_width=True, disabled=not can_refresh):
+                if can_refresh:
+                    load_pricing_data.clear()
+                    df_template, df_metadata, df_partner_info = load_pricing_data(st.session_state.selected_dataset)
 
-                # Clear the cache to force fresh data from Google Sheets
-                st.info("🔄 Clearing cache...")
-                load_pricing_data.clear()
+                    st.session_state.df_template = df_template
+                    st.session_state.df_metadata = df_metadata
+                    st.session_state.df_partner_info = df_partner_info
+                    st.session_state.data_loaded_at = datetime.now()
+                    st.session_state.last_manual_refresh = datetime.now()
+                    st.session_state.partner_contacts = extract_partner_contacts(df_partner_info)
 
-                # Reload from selected dataset
-                st.info("📥 Fetching fresh data from Google Sheets...")
-                df_template, df_metadata, df_partner_info = load_pricing_data(st.session_state.selected_dataset)
+                    st.success(f"Data refreshed! {len(df_template)} products loaded.")
+                    st.rerun()
 
-                # Update session state
-                st.session_state.df_template = df_template
-                st.session_state.df_metadata = df_metadata
-                st.session_state.df_partner_info = df_partner_info
-                st.session_state.data_loaded_at = datetime.now()
-                st.session_state.last_manual_refresh = datetime.now()
-
-                # Also update partner contacts from refreshed data
-                st.session_state.partner_contacts = extract_partner_contacts(df_partner_info)
-
-                # Show comparison
-                new_product_count = len(df_template)
-                new_first_product = df_template.iloc[0]['Product/Service'] if new_product_count > 0 else 'N/A'
-
-                st.success(f"✅ Data refreshed! Products: {old_product_count} → {new_product_count}")
-                if old_first_product != new_first_product:
-                    st.warning(f"🔍 First product changed: '{old_first_product}' → '{new_first_product}'")
-
-                st.rerun()
-
-        if not can_refresh:
-            st.caption(f"Please wait {cooldown_remaining}s before refreshing again (API rate limit protection)")
-        else:
-            st.caption("Data auto-refreshes every 5 minutes")
-
-        # Debug: Show current data details
-        with st.expander("🔍 Debug: Current Data Details"):
-            df = st.session_state.df_template
-            st.write(f"**Products loaded:** {len(df)}")
-            st.write(f"**First product:** {df.iloc[0]['Product/Service']}")
-            st.write(f"**Last product:** {df.iloc[-1]['Product/Service']}")
-            st.write(f"**Dataset:** {st.session_state.selected_dataset}")
-            if 'last_manual_refresh' in st.session_state:
-                st.write(f"**Last manual refresh:** {st.session_state.last_manual_refresh.strftime('%H:%M:%S')}")
-            st.caption("If changes aren't showing, run: streamlit run scripts/debug_refresh_data.py")
+            if not can_refresh:
+                st.caption(f"Please wait {cooldown_remaining}s before refreshing again")
     else:
         st.caption("Data status: Unknown")
 
@@ -2353,9 +2360,9 @@ with tab1:
                 value=st.session_state.proposal_filters.get('min_budget', 0.0),
                 step=1.0,
                 key="filter_min_budget",
-                help="Minimum client price per unit"
+                help="Filters by MSRP when available, otherwise by estimated price (cost x2)"
             )
-        
+
         with budget_col2:
             max_budget = st.number_input(
                 "Max price ($)",
@@ -2363,7 +2370,7 @@ with tab1:
                 value=st.session_state.proposal_filters.get('max_budget', 0.0),
                 step=1.0,
                 key="filter_max_budget",
-                help="Maximum client price per unit"
+                help="Filters by MSRP when available, otherwise by estimated price (cost x2)"
             )
         
         # Validation warning
@@ -2390,6 +2397,17 @@ with tab1:
             key="filter_countries"
         )
 
+    # Clear filters button
+    has_active_filters = (min_budget and min_budget > 0) or (max_budget and max_budget > 0) or selected_partners or selected_countries or search_query
+    if has_active_filters:
+        if st.button("Clear All Filters", key="clear_filters_btn"):
+            st.session_state.proposal_filters = {'min_budget': 0.0, 'max_budget': 0.0, 'partners': [], 'countries': []}
+            # Clear widget keys so they reset on rerun
+            for key in ['filter_min_budget', 'filter_max_budget', 'filter_partners', 'filter_countries', 'product_search']:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.rerun()
+
     # Update filters in session state
     st.session_state.proposal_filters['min_budget'] = min_budget if min_budget and min_budget > 0 else 0.0
     st.session_state.proposal_filters['max_budget'] = max_budget if max_budget and max_budget > 0 else 0.0
@@ -2405,25 +2423,37 @@ with tab1:
     if selected_countries:
         filtered_df = filtered_df[filtered_df["Country of Origin (Ships From)"].isin(selected_countries)]
 
-    # Price filtering based on client price range (cost * 2 for 100% markup)
+    # Price filtering based on MSRP when available, otherwise cost x 2 (100% markup)
     # Only apply if valid range (min <= max when both are set)
-    if ((min_budget and min_budget > 0) or (max_budget and max_budget > 0)) and \
-       not (min_budget and max_budget and min_budget > 0 and max_budget > 0 and min_budget > max_budget):
+    price_filter_active = ((min_budget and min_budget > 0) or (max_budget and max_budget > 0)) and \
+       not (min_budget and max_budget and min_budget > 0 and max_budget > 0 and min_budget > max_budget)
+    msrp_filter_count = 0
+    cost_filter_count = 0
+    if price_filter_active:
         price_filtered_indices = []
         for idx, row in filtered_df.iterrows():
-            # Get cost estimate at quantity 100
-            base_cost, _, _ = get_unit_price_new_system(row, 100)
-            if base_cost:
-                # Calculate client price (100% markup)
+            # Use MSRP if available, otherwise fall back to cost x 2
+            msrp_raw = get_column_value(row, 'Vendor Published MSRP', 'MSRP', '')
+            msrp = clean_price(msrp_raw) if msrp_raw and str(msrp_raw).strip() not in ['nan', '', '0', '0.0'] else None
+
+            if msrp and msrp > 0:
+                client_price = msrp
+                msrp_filter_count += 1
+            else:
+                # Fall back to cost x 2
+                base_cost, _, _ = get_unit_price_new_system(row, 100)
+                if not base_cost:
+                    continue
                 client_price = base_cost * 2
-                
-                # Check if price is within range
-                if min_budget and min_budget > 0 and client_price < min_budget:
-                    continue
-                if max_budget and max_budget > 0 and client_price > max_budget:
-                    continue
-                    
-                price_filtered_indices.append(idx)
+                cost_filter_count += 1
+
+            # Check if price is within range
+            if min_budget and min_budget > 0 and client_price < min_budget:
+                continue
+            if max_budget and max_budget > 0 and client_price > max_budget:
+                continue
+
+            price_filtered_indices.append(idx)
         filtered_df = filtered_df.loc[price_filtered_indices]
 
     # Search filtering - only search product names
@@ -2441,6 +2471,20 @@ with tab1:
         st.caption(f"**Filtered Results:** {len(filtered_df)} products with names containing '{search_query}'")
     else:
         st.caption(f"**Filtered Results:** {len(filtered_df)} products match your filters")
+
+    # Price filter transparency
+    if price_filter_active:
+        budget_range_str = ""
+        if min_budget and min_budget > 0 and max_budget and max_budget > 0:
+            budget_range_str = f"${min_budget:.0f} - ${max_budget:.0f}"
+        elif min_budget and min_budget > 0:
+            budget_range_str = f"${min_budget:.0f}+"
+        elif max_budget and max_budget > 0:
+            budget_range_str = f"up to ${max_budget:.0f}"
+        filter_details = f"Price filter ({budget_range_str}): using MSRP for {msrp_filter_count} products"
+        if cost_filter_count > 0:
+            filter_details += f", estimated price (cost x2) for {cost_filter_count} products without MSRP"
+        st.caption(filter_details)
 
     # Display success message if a product was just added
     if 'show_success_message' in st.session_state and st.session_state.show_success_message:
@@ -2900,168 +2944,81 @@ with tab1:
     # ============================================================
     # SAVED PROPOSALS SECTION (Always visible)
     # ============================================================
-    with st.expander("Saved Proposals", expanded=False):
-        st.caption("Save your current proposal or load a previously saved one")
+    # Save Current Proposal
+    st.markdown("**Save Current Proposal**")
+    st.caption("Load saved proposals from the sidebar")
 
-        # Load all saved proposals (cached to reduce API calls)
-        refresh_counter = st.session_state.get('saved_data_refresh_counter', 0)
-        saved_proposals = cached_load_all_proposals(refresh_counter)
+    # Check if there are products to save
+    has_products = len(st.session_state.proposal_products) > 0
 
-        # Two columns: Load/Delete on left, Save on right
-        load_col, save_col = st.columns(2)
+    if not has_products:
+        st.info("Add products to enable saving")
 
-        with load_col:
-            st.markdown("**Load Proposal**")
+    name_col, creator_col = st.columns(2)
+    with name_col:
+        proposal_name = st.text_input(
+            "Proposal name:",
+            key="save_proposal_name",
+            placeholder="e.g., Client ABC Winter Campaign",
+            disabled=not has_products
+        )
+    with creator_col:
+        created_by = st.text_input(
+            "Your name (optional):",
+            key="save_proposal_creator",
+            placeholder="e.g., John Smith",
+            disabled=not has_products
+        )
 
-            if len(saved_proposals) == 0:
-                st.info("No saved proposals yet")
+    if st.button("Save Proposal", key="save_proposal_btn", type="primary", use_container_width=True, disabled=not has_products):
+        if not proposal_name or not proposal_name.strip():
+            st.error("Please enter a proposal name")
+        else:
+            # Prepare proposal data
+            proposal_data = {
+                'proposal_products': st.session_state.proposal_products,
+                'proposal_marketing_rounding': st.session_state.proposal_marketing_rounding,
+                'proposal_use_msrp': st.session_state.proposal_use_msrp,
+                'proposal_discount_type': st.session_state.get('proposal_discount_type'),
+                'proposal_discount_percent': st.session_state.get('proposal_discount_percent', 0.0),
+                'proposal_client_budget': st.session_state.get('proposal_client_budget', 0.0)
+            }
+
+            success, message, result = save_proposal(
+                name=proposal_name.strip(),
+                created_by=created_by.strip() if created_by else "",
+                proposal_data=proposal_data,
+                dataset=st.session_state.selected_dataset
+            )
+
+            if success:
+                update_last_save_time('proposal')
+                clear_saved_data_cache()  # Clear cache to show new proposal
+                st.session_state.loaded_proposal_name = proposal_name.strip()
+                st.session_state.loaded_proposal_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+                st.session_state.loaded_proposal_creator = created_by.strip() if created_by else "Current User"
+                st.success(message)
+                st.rerun()
             else:
-                # Create dropdown options
-                proposal_options = {
-                    f"{p['name']} ({p['created_date'][:10]})": p['proposal_id']
-                    for p in saved_proposals
-                }
-
-                selected_proposal_label = st.selectbox(
-                    "Select proposal to load:",
-                    options=list(proposal_options.keys()),
-                    key="load_proposal_select"
-                )
-
-                if selected_proposal_label:
-                    selected_proposal_id = proposal_options[selected_proposal_label]
-
-                    # Find full proposal data
-                    selected_proposal = next(p for p in saved_proposals if p['proposal_id'] == selected_proposal_id)
-
-                    # Show preview
-                    st.caption(f"**Created by:** {selected_proposal['created_by'] or 'Unknown'}")
-                    st.caption(f"**Dataset:** {selected_proposal['dataset']}")
-
-                    # Load and Delete buttons
-                    load_btn_col, delete_btn_col = st.columns(2)
-
-                    with load_btn_col:
-                        if st.button("Load", key="load_proposal_btn", type="primary", use_container_width=True):
-                            success, proposal_data, dataset = load_proposal_data(selected_proposal_id)
-
-                            if success:
-                                # Check if dataset matches
-                                if dataset != st.session_state.selected_dataset:
-                                    st.warning(f"WARNING: This proposal was created with {dataset} dataset, but you're currently using {st.session_state.selected_dataset} dataset. Loading anyway...")
-
-                                # Load proposal data into session state
-                                st.session_state.proposal_products = proposal_data.get('proposal_products', [])
-                                st.session_state.proposal_marketing_rounding = proposal_data.get('proposal_marketing_rounding', False)
-                                st.session_state.proposal_use_msrp = proposal_data.get('proposal_use_msrp', True)
-                                st.session_state.proposal_discount_type = proposal_data.get('proposal_discount_type', None)
-                                st.session_state.proposal_discount_percent = proposal_data.get('proposal_discount_percent', 0.0)
-                                st.session_state.proposal_client_budget = proposal_data.get('proposal_client_budget', 0.0)
-
-                                st.success(f"Loaded proposal: {selected_proposal['name']}")
-                                st.rerun()
-                            else:
-                                st.error("Failed to load proposal data")
-
-                    with delete_btn_col:
-                        if st.button("Delete", key="delete_proposal_btn", use_container_width=True):
-                            # Confirmation dialog using session state
-                            if 'confirm_delete_proposal_id' not in st.session_state:
-                                st.session_state.confirm_delete_proposal_id = selected_proposal_id
-                                st.warning(f"WARNING: Are you sure you want to delete '{selected_proposal['name']}'?")
-
-                                confirm_col1, confirm_col2 = st.columns(2)
-                                with confirm_col1:
-                                    if st.button("Yes, Delete", key="confirm_delete_yes", type="primary"):
-                                        success, message = delete_proposal(st.session_state.confirm_delete_proposal_id)
-                                        if success:
-                                            clear_saved_data_cache()  # Clear cache after deletion
-                                            st.success(message)
-                                            del st.session_state.confirm_delete_proposal_id
-                                            st.rerun()
-                                        else:
-                                            st.error(message)
-                                with confirm_col2:
-                                    if st.button("Cancel", key="confirm_delete_no"):
-                                        del st.session_state.confirm_delete_proposal_id
-                                        st.rerun()
-
-        with save_col:
-            st.markdown("**Save Current Proposal**")
-
-            # Check if there are products to save
-            has_products = len(st.session_state.proposal_products) > 0
-
-            if not has_products:
-                st.info("Add products to enable saving")
-
-            proposal_name = st.text_input(
-                "Proposal name:",
-                key="save_proposal_name",
-                placeholder="e.g., Client ABC Winter Campaign",
-                disabled=not has_products
-            )
-
-            created_by = st.text_input(
-                "Your name (optional):",
-                key="save_proposal_creator",
-                placeholder="e.g., John Smith",
-                disabled=not has_products
-            )
-
-            if st.button("Save Proposal", key="save_proposal_btn", type="primary", use_container_width=True, disabled=not has_products):
-                if not proposal_name or not proposal_name.strip():
-                    st.error("Please enter a proposal name")
+                if result:  # result contains suggested name
+                    st.error(message)
+                    if st.button(f"Save as '{result}'", key="save_with_new_name"):
+                        success2, message2, _ = save_proposal(
+                            name=result,
+                            created_by=created_by.strip() if created_by else "",
+                            proposal_data=proposal_data,
+                            dataset=st.session_state.selected_dataset
+                        )
+                        if success2:
+                            update_last_save_time('proposal')
+                            clear_saved_data_cache()
+                            st.session_state.loaded_proposal_name = result
+                            st.session_state.loaded_proposal_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            st.session_state.loaded_proposal_creator = created_by.strip() if created_by else "Current User"
+                            st.success(message2)
+                            st.rerun()
                 else:
-                    # Prepare proposal data
-                    proposal_data = {
-                        'proposal_products': st.session_state.proposal_products,
-                        'proposal_marketing_rounding': st.session_state.proposal_marketing_rounding,
-                        'proposal_use_msrp': st.session_state.proposal_use_msrp,
-                        'proposal_discount_type': st.session_state.get('proposal_discount_type'),
-                        'proposal_discount_percent': st.session_state.get('proposal_discount_percent', 0.0),
-                        'proposal_client_budget': st.session_state.get('proposal_client_budget', 0.0)
-                    }
-
-                    success, message, result = save_proposal(
-                        name=proposal_name.strip(),
-                        created_by=created_by.strip() if created_by else "",
-                        proposal_data=proposal_data,
-                        dataset=st.session_state.selected_dataset
-                    )
-
-                    if success:
-                        update_last_save_time('proposal')
-                        clear_saved_data_cache()  # Clear cache to show new proposal
-                        # Track that this proposal was saved
-                        st.session_state.loaded_proposal_name = proposal_name.strip()
-                        st.session_state.loaded_proposal_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        st.session_state.loaded_proposal_creator = created_by.strip() if created_by else "Current User"
-                        st.success(message)
-                        st.rerun()  # Rerun to clear form
-                    else:
-                        # Check if it's a naming conflict
-                        if result:  # result contains suggested name
-                            st.error(message)
-                            # Offer to save with suggested name
-                            if st.button(f"Save as '{result}'", key="save_with_new_name"):
-                                success2, message2, _ = save_proposal(
-                                    name=result,
-                                    created_by=created_by.strip() if created_by else "",
-                                    proposal_data=proposal_data,
-                                    dataset=st.session_state.selected_dataset
-                                )
-                                if success2:
-                                    update_last_save_time('proposal')
-                                    clear_saved_data_cache()  # Clear cache to show new proposal
-                                    # Track that this proposal was saved with new name
-                                    st.session_state.loaded_proposal_name = result
-                                    st.session_state.loaded_proposal_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-                                    st.session_state.loaded_proposal_creator = created_by.strip() if created_by else "Current User"
-                                    st.success(message2)
-                                    st.rerun()
-                        else:
-                            st.error(message)
+                    st.error(message)
 
     st.divider()
 
@@ -3074,21 +3031,9 @@ with tab1:
         # Proposal Settings Section
         st.markdown("### Proposal Settings")
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
 
         with col1:
-            # Client Budget filter for volume pricing calculations
-            client_budget = st.number_input(
-                "Client Budget ($)",
-                min_value=0.0,
-                value=st.session_state.get('proposal_client_budget', 0.0),
-                step=100.0,
-                help="Total potential spend by client. Used to calculate volume pricing if budget allows higher quantities.",
-                key="proposal_client_budget_input"
-            )
-            st.session_state.proposal_client_budget = client_budget
-
-        with col2:
             # Discount options
             discount_type = st.selectbox(
                 "Client Discount",
@@ -3120,7 +3065,7 @@ with tab1:
                 st.session_state.proposal_discount_type = None
                 st.session_state.proposal_discount_percent = 0.0
 
-        with col3:
+        with col2:
             # Use MSRP pricing checkbox (defaults to checked)
             st.session_state.proposal_use_msrp = st.checkbox(
                 "Use MSRP pricing when available",
@@ -3370,13 +3315,9 @@ with tab1:
     # SECTION 3: GENERATE PROPOSAL TABLES
     # ============================================================
     st.divider()
-    st.subheader("3. Generate Proposal Tables")
-
-    if len(st.session_state.proposal_products) == 0:
-        st.caption("Add products to generate proposal tables")
-    else:
-        # Default to collapsed to save space, user can expand to view
-        with st.expander(f"View Proposal Tables ({len(st.session_state.proposal_products)} products)", expanded=False):
+    # Proposal tables section - hidden by default, useful for debugging
+    if len(st.session_state.proposal_products) > 0:
+        with st.expander("View raw proposal data (debug)", expanded=False):
             st.markdown("Each product is presented in a separate table with MOQ pricing.")
             st.markdown("")
 
@@ -3569,209 +3510,6 @@ with tab1:
 
             st.markdown("")
 
-        st.caption("Copy these tables and paste into your proposal template.")
-
-        # Download all proposals as CSV
-        st.markdown("---")
-        if st.button("Download All Proposal Tables (CSV)", use_container_width=True, type="primary"):
-            # Generate comprehensive CSV matching UI display
-            csv_lines = []
-            csv_lines.append("PEACE BY PIECE - PRODUCT PROPOSAL")
-            csv_lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            csv_lines.append("")
-
-            for idx, item in enumerate(st.session_state.proposal_products, 1):
-                product_row = item.get('product_data', {})
-
-                csv_lines.append(f"=== PRODUCT {idx}: {product_row.get('Product/Service', 'Unknown Product')} ===")
-                csv_lines.append(f"Partner: {product_row.get('Partner', 'N/A')}")
-                csv_lines.append(f"Country of Origin (Made In): {product_row.get('Country of Origin (Made In)', 'N/A')}")
-                csv_lines.append(f"Country of Origin (Ships From): {product_row.get('Country of Origin (Ships From)', 'N/A')}")
-                csv_lines.append("")
-
-                # Calculate MOQ using same logic as UI display
-                preliminary_base_price, _, _ = get_unit_price_new_system(product_row, 100)
-
-                if preliminary_base_price is not None:
-                    # Estimate total per-unit price with markup (no customization in MOQ calc)
-                    temp_markup_multiplier = 1 + (item['markup_percent'] / 100)
-                    estimated_unit_price = preliminary_base_price * temp_markup_multiplier
-
-                    # Calculate MOQ (returns dict with moq, breakdown, display_text)
-                    moq_result = calculate_moq(estimated_unit_price, product_row)
-                    moq = moq_result['moq'] if moq_result else None
-                    if moq is None:
-                        moq = 5
-
-                    # Get actual base price for MOQ quantity
-                    moq_base_price, moq_tier_range, _ = get_unit_price_new_system(product_row, moq)
-
-                    if moq_base_price is not None:
-                        # Use new pricing calculation (respects manual override if set)
-                        if item.get('manual_override', False):
-                            # Manual override: use stored markup percentage
-                            moq_product_cost = moq_base_price * moq
-                            moq_markup_amount = moq_product_cost * (item['markup_percent'] / 100)
-                            moq_product_only_total = moq_product_cost + moq_markup_amount
-                            moq_product_price_per_unit = moq_product_only_total / moq
-                        else:
-                            # Use pricing method from spreadsheet
-                            pricing_result = calculate_pbp_msrp(
-                                product_row,
-                                quantity=moq,
-                                user_markup_override=None
-                            )
-                            moq_product_price_per_unit = pricing_result['pbp_msrp']
-
-                        # Apply $0.50 rounding if enabled
-                        moq_product_price_per_unit = round_to_nearest_fifty_cents(
-                            moq_product_price_per_unit,
-                            st.session_state.proposal_fifty_cent_rounding
-                        )
-
-                        # Apply marketing rounding if enabled (after $0.50 rounding)
-                        moq_product_price_per_unit = apply_marketing_rounding(
-                            moq_product_price_per_unit,
-                            st.session_state.proposal_marketing_rounding
-                        )
-
-                        # Calculate Client Price based on discount and budget
-                        client_price = moq_product_price_per_unit
-
-                        # Get client budget and discount settings
-                        client_budget = st.session_state.get('proposal_client_budget', 0.0)
-                        discount_percent = st.session_state.get('proposal_discount_percent', 0.0)
-
-                        # Check if client budget allows for higher quantity (better pricing)
-                        volume_pricing_applied = False
-                        volume_pricing_quantity = None
-                        if client_budget > 0:
-                            moq_total = moq * moq_product_price_per_unit
-                            if client_budget > moq_total:
-                                # Calculate what quantity the client could afford at MOQ price
-                                potential_quantity = int(client_budget / moq_product_price_per_unit)
-
-                                # Get price at that higher quantity
-                                budget_qty_base_price, _, _ = get_unit_price_new_system(product_row, potential_quantity)
-
-                                if budget_qty_base_price is not None:
-                                    # Use new pricing calculation (respects manual override if set)
-                                    if item.get('manual_override', False):
-                                        # Manual override: use stored markup percentage
-                                        budget_qty_product_cost = budget_qty_base_price * potential_quantity
-                                        budget_qty_markup_amount = budget_qty_product_cost * (item['markup_percent'] / 100)
-                                        budget_qty_product_only_total = budget_qty_product_cost + budget_qty_markup_amount
-                                        budget_qty_price_per_unit = budget_qty_product_only_total / potential_quantity
-                                    else:
-                                        # Use pricing method from spreadsheet
-                                        pricing_result = calculate_pbp_msrp(
-                                            product_row,
-                                            quantity=potential_quantity,
-                                            user_markup_override=None
-                                        )
-                                        budget_qty_price_per_unit = pricing_result['pbp_msrp']
-
-                                    # Apply $0.50 rounding if enabled
-                                    budget_qty_price_per_unit = round_to_nearest_fifty_cents(
-                                        budget_qty_price_per_unit,
-                                        st.session_state.proposal_fifty_cent_rounding
-                                    )
-
-                                    # Apply marketing rounding if enabled (after $0.50 rounding)
-                                    budget_qty_price_per_unit = apply_marketing_rounding(
-                                        budget_qty_price_per_unit,
-                                        st.session_state.proposal_marketing_rounding
-                                    )
-
-                                    # Use the better price if different from MOQ price
-                                    if budget_qty_price_per_unit < moq_product_price_per_unit:
-                                        client_price = budget_qty_price_per_unit
-                                        volume_pricing_applied = True
-                                        volume_pricing_quantity = potential_quantity
-
-                        # Apply discount to client price
-                        discount_applied = False
-                        if discount_percent > 0:
-                            client_price = client_price * (1 - discount_percent / 100)
-                            discount_applied = True
-
-                            # Apply $0.50 rounding after discount if enabled
-                            client_price = round_to_nearest_fifty_cents(
-                                client_price,
-                                st.session_state.proposal_fifty_cent_rounding
-                            )
-
-                            # Apply marketing rounding again after discount if enabled
-                            client_price = apply_marketing_rounding(
-                                client_price,
-                                st.session_state.proposal_marketing_rounding
-                            )
-
-                        # Build price note for column header
-                        client_price_header = "Client Price"
-                        if discount_applied or volume_pricing_applied:
-                            notes = []
-                            if volume_pricing_applied:
-                                notes.append(f"Price ea @ Qty {volume_pricing_quantity}")
-                            if discount_applied:
-                                discount_type = st.session_state.get('proposal_discount_type')
-                                if discount_type == 'Non-profit':
-                                    notes.append("5% Non-profit discount")
-                                elif discount_type == 'Volume Order':
-                                    notes.append("5% Volume Order discount")
-                                else:
-                                    notes.append(f"{discount_percent:.1f}% discount")
-                            client_price_header = f"Client Price ({', '.join(notes)})"
-
-                        # Build CSV table matching UI display
-                        csv_lines.append(f"MOQ,Price Ea (@ Qty {moq}),{client_price_header},Delivery")
-                        csv_lines.append(f"{moq},${moq_product_price_per_unit:.2f},${client_price:.2f},")
-
-                        # Show MOQ calculation note
-                        moq_total_value = moq * moq_product_price_per_unit
-                        csv_lines.append("")
-                        csv_lines.append(f"MOQ calculated based on $1,000 minimum order value (MOQ {moq} units = ${moq_total_value:.2f})")
-
-                        # ALWAYS show customization costs from product data
-                        setup_fee_raw = get_column_value(product_row, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')
-                        per_unit_raw = get_column_value(product_row, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')
-                        setup_fee = clean_price(setup_fee_raw) or 0.0
-                        per_unit_cost = clean_price(per_unit_raw) or 0.0
-
-                        # Display customization costs
-                        if setup_fee > 0 or per_unit_cost > 0:
-                            csv_lines.append(f"Customization available: Artwork set-up: ${setup_fee:.2f} / Branding per piece: ${per_unit_cost:.2f}")
-                        else:
-                            csv_lines.append("Customization available: Contact for pricing")
-                    else:
-                        csv_lines.append(f"Unable to calculate MOQ pricing for {product_row.get('Product/Service', 'Unknown Product')}")
-                else:
-                    csv_lines.append(f"Product data not available for {product_row.get('Product/Service', 'Unknown Product')}")
-
-                csv_lines.append("")
-                csv_lines.append("")
-
-            # Pricing for Cards & Kitting
-            csv_lines.append("=== PRICING FOR CARDS & KITTING ===")
-            csv_lines.append(st.session_state.proposal_kitting_pricing)
-            csv_lines.append("")
-            csv_lines.append("")
-
-            # Terms & Conditions
-            csv_lines.append("=== TERMS & CONDITIONS ===")
-            csv_lines.append(st.session_state.proposal_terms)
-
-            proposal_csv = "\n".join(csv_lines)
-
-            st.download_button(
-                label="Click to Download CSV",
-                data=proposal_csv,
-                file_name=f"proposal_tables_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv",
-                key="download_all_proposals_csv",
-                use_container_width=True
-            )
-
     # ============================================================
     # LEGACY SECTIONS (HIDDEN BY DEFAULT)
     # ============================================================
@@ -3821,7 +3559,7 @@ with tab1:
     # ============================================================
     if len(st.session_state.proposal_products) > 0:
         st.divider()
-        st.subheader("4. Generate PowerPoint Proposal")
+        st.subheader("3. Generate PowerPoint Proposal")
         st.caption("Automatically create a customized PowerPoint presentation with matched product slides")
 
         # Add JavaScript to capture scroll position before PowerPoint section button clicks
@@ -3934,6 +3672,7 @@ with tab1:
                     else:
                         # Extract product names from PowerPoint
                         with st.spinner("Analyzing PowerPoint slides..."):
+                            from src.pptx_generator import get_slide_title
                             prs = Presentation(pptx_template)
 
                             pptx_product_names = []
@@ -3941,13 +3680,10 @@ with tab1:
                             slide_list = list(prs.slides)
 
                             for slide_idx, slide in enumerate(slide_list):
-                                if len(slide.shapes) >= 1:
-                                    first_shape = slide.shapes[0]
-                                    if hasattr(first_shape, "text") and first_shape.text.strip():
-                                        product_name = first_shape.text.strip()
-                                        if product_name not in pptx_product_names:
-                                            pptx_product_names.append(product_name)
-                                            pptx_name_to_index[product_name] = slide_idx
+                                product_name = get_slide_title(slide)
+                                if product_name and product_name not in pptx_product_names:
+                                    pptx_product_names.append(product_name)
+                                    pptx_name_to_index[product_name] = slide_idx
 
                         st.success(f"Loaded {len(pptx_product_names)} product slides from PowerPoint")
 
@@ -4085,18 +3821,9 @@ with tab1:
     else:
         st.info("Add products to your proposal to enable saving")
 
-    # Navigation button
+    # Navigation note
     st.divider()
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("Continue to Tab 2: Client Order Form", type="primary", use_container_width=True, key="tab1_to_tab2"):
-            st.session_state.show_tab2_prompt = True
-            st.rerun()
-
-    # Show navigation prompt if button was clicked
-    if st.session_state.get('show_tab2_prompt', False):
-        st.info("Click on the **'Client Order Form Generator'** tab above to continue.")
-        st.session_state.show_tab2_prompt = False
+    st.caption("To continue, scroll to the top and select the **Client Order Form Generator** tab.")
 
 # ============================================================
 # TAB 2: CLIENT ORDER FORM GENERATOR (NEW)
@@ -4324,7 +4051,7 @@ with tab2:
         # Build selected_products from manual list
         selected_products = list(st.session_state.google_form_manual_products)
 
-    # --- Form URL (shared for both proposal and manual paths) ---
+    # --- Form URL Generation (shared for both proposal and manual paths) ---
 
     # Client info (from Section 1)
     client_info = {
@@ -4335,34 +4062,44 @@ with tab2:
         'contact_phone': st.session_state.order_details.get('contact_phone', '')
     }
 
-    # Generate URL directly (no button needed — URL updates live as inputs change)
-    form_url = generate_prefilled_form_url(client_info, selected_products)
-
     st.markdown("#### Share This Form with Your Client")
+
+    # Determine button label based on whether a URL has been generated before
+    has_existing_url = bool(st.session_state.get('generated_form_url'))
+    button_label = "Update Form URL" if has_existing_url else "Generate Form URL"
 
     if selected_products:
         st.info(f"**{len(selected_products)} product(s)** and client info will be pre-filled in the form")
     else:
         st.caption("No products selected — the client will enter product names and quantities themselves.")
 
-    # Show URL in text area for easy copying
-    st.text_area(
-        "Copy this URL:",
-        value=form_url,
-        height=100,
-        key="google_form_url_display"
-    )
+    if st.button(button_label, type="primary", use_container_width=True, key="generate_form_url_btn"):
+        form_url = generate_prefilled_form_url(client_info, selected_products)
+        st.session_state.generated_form_url = form_url
+        st.rerun()
 
-    # Open in new tab link
-    st.markdown(f'<a href="{form_url}" target="_blank" style="text-decoration: none;"><button style="width: 100%; padding: 0.5rem; background-color: #0066cc; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">Open Form in New Tab (Preview)</button></a>', unsafe_allow_html=True)
+    # Show the generated URL if one exists
+    if st.session_state.get('generated_form_url'):
+        form_url = st.session_state.generated_form_url
 
-    st.info("""
-    **What's Next?**
-    1. Copy the URL above
-    2. Send it to your client (email, Slack, text message, etc.)
-    3. Client opens the form → sees pre-filled info → completes remaining fields → submits
-    4. Go to **Tab 3 → Option A** to import the completed response
-    """)
+        st.text_area(
+            "Copy this URL:",
+            value=form_url,
+            height=100,
+        )
+
+        # Open in new tab link
+        st.markdown(f'<a href="{form_url}" target="_blank" style="text-decoration: none;"><button style="width: 100%; padding: 0.5rem; background-color: #0066cc; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">Open Form in New Tab (Preview)</button></a>', unsafe_allow_html=True)
+
+        st.caption("If you change client info or products above, click **Update Form URL** to regenerate.")
+
+        st.info("""
+        **What's Next?**
+        1. Copy the URL above
+        2. Send it to your client (email, Slack, text message, etc.)
+        3. Client opens the form → sees pre-filled info → completes remaining fields → submits
+        4. Go to **Tab 3 → Option A** to import the completed response
+        """)
 
     # ============================================================
     # SECTION 3: HTML ORDER FORM (LEGACY - HIDDEN BY DEFAULT)
@@ -4673,18 +4410,9 @@ with tab2:
     3. You can import the completed HTML form directly in Tab 3
     """)
 
-    # Navigation button at bottom of Tab 2
+    # Navigation note
     st.divider()
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("Continue to Tab 3: Order & Client Info", type="primary", use_container_width=True, key="tab2_to_tab3"):
-            st.session_state.show_tab3_prompt = True
-            st.rerun()
-
-    # Show navigation prompt if button was clicked
-    if st.session_state.get('show_tab3_prompt', False):
-        st.info("Click on the **'Order & Client Info'** tab above to continue.")
-        st.session_state.show_tab3_prompt = False
+    st.caption("To continue, scroll to the top and select the **Order & Client Info** tab.")
 
 # ============================================================
 # TAB 3: ORDER & CLIENT INFO
@@ -4793,12 +4521,12 @@ with tab3:
     has_proposal = len(st.session_state.proposal_products) > 0
 
     st.markdown("""
-    **Primary Workflow:**
-    1. **Option A:** Import from Google Form Response (recommended - fastest)
-    2. **Option B:** Manually select products and configure order
+    **Choose how to add products to your order:**
+    1. **Option A:** Import from Google Form Response (if client submitted a form)
+    2. **Option B:** Import from Proposal (Tab 1) — most common workflow
+    3. **Option C:** Manually select products and configure order
 
     **Additional Options:**
-    - **Import from saved proposal** (Tab 1) - Available below if you have a proposal
     - **Legacy HTML form import** - Hidden in expandable section below
     """)
     st.divider()
@@ -5630,47 +5358,113 @@ with tab3:
 
             st.divider()
 
-        # ============================================================
-    # PROPOSAL PRODUCTS IMPORT (if available)
     # ============================================================
+    # OPTION B: IMPORT FROM PROPOSAL (Tab 1)
+    # ============================================================
+    st.header("Option B: Import from Proposal (Tab 1)")
+    st.markdown("**Use this if:** You created a proposal in Tab 1 and want to bring those products into an order")
+
     if len(st.session_state.proposal_products) > 0:
-        with st.expander("**Import Products from Proposal (Tab 1)**", expanded=False):
-            st.markdown("**Use this if:** You created a proposal in Tab 1 but don't have a completed client form")
+        # Display proposal source information
+        proposal_info_msg = f"**{len(st.session_state.proposal_products)} product(s) available**"
 
-            # Display proposal source information
-            proposal_info_msg = f"**{len(st.session_state.proposal_products)} product(s) available**"
-        
-            if 'loaded_proposal_name' in st.session_state and st.session_state.loaded_proposal_name:
-                # This is a saved/loaded proposal
-                proposal_info_msg += f" from saved proposal: **'{st.session_state.loaded_proposal_name}'**"
-                if 'loaded_proposal_date' in st.session_state:
-                    proposal_info_msg += f"\n\nCreated/Saved: {st.session_state.loaded_proposal_date}"
-                if 'loaded_proposal_creator' in st.session_state and st.session_state.loaded_proposal_creator != 'Unknown':
-                    proposal_info_msg += f" | By: {st.session_state.loaded_proposal_creator}"
-            else:
-                # This is an unsaved proposal from current session
-                proposal_info_msg += " from **Current Session Proposal (unsaved)**"
-                proposal_info_msg += "\n\nTip: Save your proposal in Tab 1 to preserve it for future use"
-        
-            st.info(proposal_info_msg)
-            st.session_state.using_proposal_data = True
+        if 'loaded_proposal_name' in st.session_state and st.session_state.loaded_proposal_name:
+            proposal_info_msg += f" from saved proposal: **'{st.session_state.loaded_proposal_name}'**"
+            if 'loaded_proposal_date' in st.session_state:
+                proposal_info_msg += f"\n\nCreated/Saved: {st.session_state.loaded_proposal_date}"
+            if 'loaded_proposal_creator' in st.session_state and st.session_state.loaded_proposal_creator != 'Unknown':
+                proposal_info_msg += f" | By: {st.session_state.loaded_proposal_creator}"
+        else:
+            proposal_info_msg += " from **Current Session Proposal (unsaved)**"
+            proposal_info_msg += "\n\nTip: Save your proposal in Tab 1 to preserve it for future use"
 
-            # Import All button at top level
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if st.button("Import All Products from Proposal", type="primary", use_container_width=True, key="import_all_proposal"):
-                    # Import all proposal products to order
-                    imported_count = 0
-                    max_pbp_shipping = 0.0  # Track maximum shipping cost among all products
+        st.info(proposal_info_msg)
+        st.session_state.using_proposal_data = True
 
-                    for prop_item in st.session_state.proposal_products:
+        # Import All button at top level
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            if st.button("Import All Products from Proposal", type="primary", use_container_width=True, key="import_all_proposal"):
+                # Import all proposal products to order
+                imported_count = 0
+                max_pbp_shipping = 0.0  # Track maximum shipping cost among all products
+
+                for prop_item in st.session_state.proposal_products:
+                    order_item = convert_proposal_to_order(
+                        prop_item,
+                        get_unit_price_new_system,
+                        calculate_product_tariff
+                    )
+                    st.session_state.order_items.append(order_item)
+                    imported_count += 1
+
+                    # Track maximum PBP shipping cost
+                    pbp_shipping, _ = get_shipping_costs(prop_item.get('product_data', {}))
+                    max_pbp_shipping = max(max_pbp_shipping, pbp_shipping)
+
+                # Auto-populate partner shipping with the maximum cost found
+                if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
+                    st.session_state.partner_shipping = max_pbp_shipping
+
+                st.toast(f"Imported all {imported_count} product(s) from proposal!")
+                st.rerun()
+
+        with col2:
+            st.caption("Or select individually below:")
+
+        st.markdown("---")
+        st.markdown("**Select Individual Products**")
+        show_individual = st.checkbox("Show individual product selection", key="show_individual_proposal_select")
+
+        if show_individual:
+            st.markdown("Select specific products from your proposal to add to this order. You can edit quantities and settings after adding.")
+
+            # Build selection checkboxes
+            selected_proposal_indices = []
+
+            for idx, prop_item in enumerate(st.session_state.proposal_products):
+                product_data = prop_item.get('product_data', {})
+
+                col1, col2 = st.columns([4, 1])
+
+                with col1:
+                    # Display product name with variant (if applicable)
+                    from src.helpers import format_product_with_variant
+                    product_display_name = format_product_with_variant(
+                        product_data.get('Product/Service', 'Unknown Product'),
+                        prop_item.get('selected_variant')
+                    )
+
+                    is_selected = st.checkbox(
+                        f"{product_display_name} - {product_data.get('Partner', 'N/A')}",
+                        key=f"select_proposal_{idx}"
+                    )
+
+                    # Show proposal details
+                    st.caption(f"Quantity: {prop_item.get('quantity', 'N/A')} | Markup: {prop_item.get('markup_percent', 0)}%")
+
+                    if prop_item.get('include_customization', False):
+                        setup_fee = prop_item.get('customization_setup_fee', 0)
+                        per_unit = prop_item.get('customization_per_unit', 0)
+                        st.caption(f"Customization: ${setup_fee:.2f} setup + ${per_unit:.2f}/unit")
+
+                with col2:
+                    if is_selected:
+                        selected_proposal_indices.append(idx)
+
+            # Add selected button
+            if len(selected_proposal_indices) > 0:
+                if st.button(f"Add {len(selected_proposal_indices)} Selected Product(s) to Order", type="primary", use_container_width=True):
+                    # Convert and add to order
+                    max_pbp_shipping = 0.0
+                    for idx in selected_proposal_indices:
+                        prop_item = st.session_state.proposal_products[idx]
                         order_item = convert_proposal_to_order(
                             prop_item,
                             get_unit_price_new_system,
                             calculate_product_tariff
                         )
                         st.session_state.order_items.append(order_item)
-                        imported_count += 1
 
                         # Track maximum PBP shipping cost
                         pbp_shipping, _ = get_shipping_costs(prop_item.get('product_data', {}))
@@ -5680,93 +5474,25 @@ with tab3:
                     if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
                         st.session_state.partner_shipping = max_pbp_shipping
 
-                    st.toast(f"Imported all {imported_count} product(s) from proposal!")
+                    st.toast(f"Added {len(selected_proposal_indices)} product(s) to order!")
                     st.rerun()
-
-            with col2:
-                st.caption("Or select individually below:")
-
-            st.markdown("---")
-            st.markdown("**Select Individual Products**")
-            show_individual = st.checkbox("Show individual product selection", key="show_individual_proposal_select")
-
-            if show_individual:
-                    st.markdown("Select specific products from your proposal to add to this order. You can edit quantities and settings after adding.")
-
-                    # Build selection checkboxes
-                    selected_proposal_indices = []
-
-                    for idx, prop_item in enumerate(st.session_state.proposal_products):
-                        product_data = prop_item.get('product_data', {})
-
-                        col1, col2 = st.columns([4, 1])
-
-                        with col1:
-                            # Display product name with variant (if applicable)
-                            from src.helpers import format_product_with_variant
-                            product_display_name = format_product_with_variant(
-                                product_data.get('Product/Service', 'Unknown Product'),
-                                prop_item.get('selected_variant')
-                            )
-
-                            is_selected = st.checkbox(
-                                f"{product_display_name} - {product_data.get('Partner', 'N/A')}",
-                                key=f"select_proposal_{idx}"
-                            )
-
-                            # Show proposal details
-                            st.caption(f"Quantity: {prop_item.get('quantity', 'N/A')} | Markup: {prop_item.get('markup_percent', 0)}%")
-
-                            if prop_item.get('include_customization', False):
-                                setup_fee = prop_item.get('customization_setup_fee', 0)
-                                per_unit = prop_item.get('customization_per_unit', 0)
-                                st.caption(f"Customization: ${setup_fee:.2f} setup + ${per_unit:.2f}/unit")
-
-                        with col2:
-                            if is_selected:
-                                selected_proposal_indices.append(idx)
-
-                    # Add selected button
-                    if len(selected_proposal_indices) > 0:
-                        if st.button(f"Add {len(selected_proposal_indices)} Selected Product(s) to Order", type="primary", use_container_width=True):
-                            # Convert and add to order
-                            max_pbp_shipping = 0.0
-                            for idx in selected_proposal_indices:
-                                prop_item = st.session_state.proposal_products[idx]
-                                order_item = convert_proposal_to_order(
-                                    prop_item,
-                                    get_unit_price_new_system,
-                                    calculate_product_tariff
-                                )
-                                st.session_state.order_items.append(order_item)
-
-                                # Track maximum PBP shipping cost
-                                pbp_shipping, _ = get_shipping_costs(prop_item.get('product_data', {}))
-                                max_pbp_shipping = max(max_pbp_shipping, pbp_shipping)
-
-                            # Auto-populate partner shipping with the maximum cost found
-                            if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
-                                st.session_state.partner_shipping = max_pbp_shipping
-
-                            st.toast(f"Added {len(selected_proposal_indices)} product(s) to order!")
-                            st.rerun()
-                    else:
-                        st.caption("Select at least one product above to add to order.")
-
-            st.divider()
+            else:
+                st.caption("Select at least one product above to add to order.")
     else:
         st.session_state.using_proposal_data = False
+        st.caption("No proposal products loaded. Create a proposal in Tab 1 first, or use Option A or C.")
 
+    st.divider()
 
     # ============================================================
-    # OPTION B: MANUAL PRODUCT SELECTION
+    # OPTION C: MANUAL PRODUCT SELECTION
     # ============================================================
     # Display success message if a product was just added
     if 'show_add_to_order_success' in st.session_state and st.session_state.show_add_to_order_success:
         st.toast(f"Added {st.session_state.add_to_order_product_name} to order")
         st.session_state.show_add_to_order_success = False
 
-    st.header("Option B: Manual Product Selection")
+    st.header("Option C: Manual Product Selection")
     st.markdown("**Use this if:** You're starting from scratch or adding products manually")
     st.caption("Add products to your order, then configure settings for each product below")
 
@@ -6443,6 +6169,16 @@ with tab3:
             )
 
             if new_include_custom:
+                    # Customization description (editable)
+                    default_desc = item.get('customization_description', '') or product_data.get('Customization Info', '')
+                    new_custom_desc = st.text_input(
+                        "Customization Description",
+                        value=default_desc,
+                        placeholder="e.g., Logo engraving on lid, Custom label printing",
+                        key=f"prod_custom_desc_{idx}",
+                        help="Describe the customization — this will appear on invoices and POs"
+                    )
+
                     col_setup, col_perunit = st.columns(2)
 
                     with col_setup:
@@ -6847,6 +6583,7 @@ with tab3:
                     'quantity': new_quantity,
                     'markup_percent': current_markup,
                     'include_customization': new_include_custom,
+                    'customization_description': new_custom_desc if new_include_custom else '',
                     'customization_setup_fee': new_setup_fee,
                     'customization_per_unit': new_perunit_cost,
                     'partner_customization_setup_fee': new_partner_setup_fee,
@@ -6910,9 +6647,10 @@ with tab3:
 
                 # Customization setup fee (if applicable)
                 if customization_setup_total > 0:
+                    custom_label = f"Customization Setup: {new_custom_desc}" if new_custom_desc else "Customization Setup"
                     breakdown_data.append(
                         format_pricing_breakdown_row(
-                            "Customization Setup",
+                            custom_label,
                             "one-time",
                             partner_customization_setup_total,  # PBP per unit (same as total for one-time)
                             partner_customization_setup_total,  # PBP total
@@ -6927,9 +6665,10 @@ with tab3:
                     # Calculate per-unit costs including add-ons
                     partner_per_unit_with_addons = partner_customization_unit_total / effective_custom_qty if effective_custom_qty > 0 else 0
                     client_per_unit_with_addons = customization_unit_total / effective_custom_qty if effective_custom_qty > 0 else 0
+                    custom_pu_label = f"Customization Per-Unit: {new_custom_desc}" if new_custom_desc else "Customization Per-Unit"
                     breakdown_data.append(
                         format_pricing_breakdown_row(
-                            "Customization Per-Unit",
+                            custom_pu_label,
                             effective_custom_qty,
                             partner_per_unit_with_addons,  # PBP per unit cost (includes add-ons)
                             partner_customization_unit_total,  # PBP total
@@ -7031,107 +6770,111 @@ with tab3:
     if len(st.session_state.order_items) == 0:
         st.caption("Add products to your order first, then configure order settings here.")
     else:
-        # Shipping & Tariffs - Side by Side
-        st.subheader("Shipping & Tariffs")
+        # Shipping & Tariffs - Legacy (hidden by default)
+        with st.expander("Legacy: Shipping & Tariffs (these costs are now included in product pricing)", expanded=False):
+            st.caption("Shipping and tariff costs are now factored into product pricing in the spreadsheet. This section is kept for reference but is no longer used in standard orders.")
 
-        col_shipping, col_tariff = st.columns(2)
+            col_shipping, col_tariff = st.columns(2)
 
-        with col_shipping:
-            st.markdown("**Client Shipping:**")
-            st.session_state.order_shipping = st.number_input(
-                "Shipping Price to Client ($)",
-                min_value=0.0,
-                value=st.session_state.order_shipping,
-                step=10.0,
-                key="shipping_input",
-                help="Shipping cost charged to client"
-            )
+            with col_shipping:
+                st.markdown("**Client Shipping:**")
+                st.session_state.order_shipping = st.number_input(
+                    "Shipping Price to Client ($)",
+                    min_value=0.0,
+                    value=st.session_state.order_shipping,
+                    step=10.0,
+                    key="shipping_input",
+                    help="Shipping cost charged to client"
+                )
 
-            st.markdown("**Partner Shipping:**")
-            st.session_state.partner_shipping = st.number_input(
-                "Shipping Cost from Partner ($)",
-                min_value=0.0,
-                value=st.session_state.partner_shipping,
-                step=10.0,
-                key="partner_shipping_input",
-                help="Shipping cost PBP pays to partner (for Purchase Orders)"
-            )
+                st.markdown("**Partner Shipping:**")
+                st.session_state.partner_shipping = st.number_input(
+                    "Shipping Cost from Partner ($)",
+                    min_value=0.0,
+                    value=st.session_state.partner_shipping,
+                    step=10.0,
+                    key="partner_shipping_input",
+                    help="Shipping cost PBP pays to partner (for Purchase Orders)"
+                )
 
-            st.markdown("**Sales Tax:**")
-            st.session_state.sales_tax = st.number_input(
-                "Estimated Sales Tax ($)",
-                min_value=0.0,
-                value=st.session_state.sales_tax,
-                step=5.0,
-                key="sales_tax_input",
-                help="Estimated sales tax amount to be charged to client"
-            )
+                st.markdown("**Sales Tax:**")
+                st.session_state.sales_tax = st.number_input(
+                    "Estimated Sales Tax ($)",
+                    min_value=0.0,
+                    value=st.session_state.sales_tax,
+                    step=5.0,
+                    key="sales_tax_input",
+                    help="Estimated sales tax amount to be charged to client"
+                )
 
-        with col_tariff:
-            # Calculate total tariff for expander label
-            total_tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
+            with col_tariff:
+                # Calculate total tariff
+                total_tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
+                st.write(f"**Tariff Total:** ${total_tariff:.2f}")
 
-            with st.expander(f"Tariff Configuration (Total: ${total_tariff:.2f})", expanded=False):
-                st.caption("Default rates applied based on country of origin. Expand to customize per product.")
-                st.markdown("""
-Tariffs are import duties based on product country of origin.
-Rates default to current estimates but can be adjusted as needed.
-""")
+                show_tariff_config = st.checkbox(
+                    "Customize Tariff Rates",
+                    key="show_tariff_config",
+                    help="Default rates applied based on country of origin. Check to customize per product."
+                )
 
-                # Build editable tariff table with detailed breakdown
-                tariff_table_rows = []
+                if show_tariff_config:
+                    st.caption("Tariffs are import duties based on product country of origin. Rates default to current estimates but can be adjusted as needed.")
 
-                for idx, item in enumerate(st.session_state.order_items):
-                    # Get tariff base (product cost + markup, excludes customization)
-                    tariff_base = item.get('tariff_base', 0.0)
-                    tariff_base_per_unit = tariff_base / item['quantity'] if item['quantity'] > 0 else 0
+                    # Build editable tariff table with detailed breakdown
+                    tariff_table_rows = []
 
-                    # Display product info
-                    st.markdown(f"**{idx + 1}. {item['product_name']}**")
+                    for idx, item in enumerate(st.session_state.order_items):
+                        # Get tariff base (product cost + markup, excludes customization)
+                        tariff_base = item.get('tariff_base', 0.0)
+                        tariff_base_per_unit = tariff_base / item['quantity'] if item['quantity'] > 0 else 0
 
-                    col1, col2, col3 = st.columns([2, 2, 2])
+                        # Display product info
+                        st.markdown(f"**{idx + 1}. {item['product_name']}**")
 
-                    with col1:
-                        country = item.get('country_of_origin', 'N/A')
-                        st.write(f"**Country:** {country if country else 'N/A'}")
-                        st.write(f"**Quantity:** {item['quantity']} units")
+                        col1, col2, col3 = st.columns([2, 2, 2])
 
-                    with col2:
-                        st.write(f"**Unit Cost:** ${tariff_base_per_unit:.2f}")
-                        st.write(f"**Total Cost:** ${tariff_base:.2f}")
-                        st.caption("(Product + Markup, excludes customization)")
+                        with col1:
+                            country = item.get('country_of_origin', 'N/A')
+                            st.write(f"**Country:** {country if country else 'N/A'}")
+                            st.write(f"**Quantity:** {item['quantity']} units")
 
-                    with col3:
-                        # Editable tariff rate
-                        current_rate = item.get('tariff_rate_percent', 0.0)
-                        new_rate = st.number_input(
-                            "Tariff Rate (%)",
-                            min_value=0.0,
-                            max_value=100.0,
-                            value=current_rate,
-                            step=0.5,
-                            key=f"tariff_rate_{idx}",
-                            format="%.1f"
-                        )
+                        with col2:
+                            st.write(f"**Unit Cost:** ${tariff_base_per_unit:.2f}")
+                            st.write(f"**Total Cost:** ${tariff_base:.2f}")
+                            st.caption("(Product + Markup, excludes customization)")
 
-                        # Update if changed
-                        if new_rate != current_rate:
-                            item['tariff_rate_percent'] = new_rate
-                            item['tariff_amount'] = calculate_product_tariff(tariff_base, new_rate)
+                        with col3:
+                            # Editable tariff rate
+                            current_rate = item.get('tariff_rate_percent', 0.0)
+                            new_rate = st.number_input(
+                                "Tariff Rate (%)",
+                                min_value=0.0,
+                                max_value=100.0,
+                                value=current_rate,
+                                step=0.5,
+                                key=f"tariff_rate_{idx}",
+                                format="%.1f"
+                            )
 
-                        tariff_amount = item.get('tariff_amount', 0.0)
-                        st.write(f"**Tariff Amount:** ${tariff_amount:.2f}")
-                        if tariff_base > 0 and new_rate > 0:
-                            st.caption(f"${tariff_base:.2f} × {new_rate}% = ${tariff_amount:.2f}")
+                            # Update if changed
+                            if new_rate != current_rate:
+                                item['tariff_rate_percent'] = new_rate
+                                item['tariff_amount'] = calculate_product_tariff(tariff_base, new_rate)
 
-                    # Show tariff info if available
-                    tariff_info = item.get('tariff_info', '')
-                    if tariff_info and tariff_info.strip():
-                        st.caption(f"{tariff_info}")
+                            tariff_amount = item.get('tariff_amount', 0.0)
+                            st.write(f"**Tariff Amount:** ${tariff_amount:.2f}")
+                            if tariff_base > 0 and new_rate > 0:
+                                st.caption(f"${tariff_base:.2f} × {new_rate}% = ${tariff_amount:.2f}")
 
-                    st.markdown("")  # Spacing
+                        # Show tariff info if available
+                        tariff_info = item.get('tariff_info', '')
+                        if tariff_info and tariff_info.strip():
+                            st.caption(f"{tariff_info}")
 
-                st.caption("Tariff is calculated on product cost + markup (excludes customization fees and shipping)")
+                        st.markdown("")  # Spacing
+
+                    st.caption("Tariff is calculated on product cost + markup (excludes customization fees and shipping)")
 
         # Order Adjustments - Consolidated Section
         st.divider()
@@ -7771,10 +7514,42 @@ Rates default to current estimates but can be adjusted as needed.
             st.rerun()
 
     # ============================================================
+    # PRODUCT PHOTOS
+    # ============================================================
+    st.divider()
+    st.header("5. Product Photos")
+    st.caption("Upload photos related to this order (product images, mockups, artwork, etc.)")
+
+    if 'order_photos' not in st.session_state:
+        st.session_state.order_photos = []
+
+    uploaded_photos = st.file_uploader(
+        "Upload photos",
+        type=["png", "jpg", "jpeg", "gif", "webp"],
+        accept_multiple_files=True,
+        key="order_photo_uploader",
+        label_visibility="collapsed"
+    )
+
+    if uploaded_photos:
+        st.session_state.order_photos = uploaded_photos
+        st.success(f"{len(uploaded_photos)} photo(s) attached to this order")
+
+        # Display thumbnails in a grid
+        cols = st.columns(min(len(uploaded_photos), 4))
+        for i, photo in enumerate(uploaded_photos):
+            with cols[i % 4]:
+                st.image(photo, caption=photo.name, use_column_width=True)
+    elif st.session_state.order_photos:
+        st.caption(f"{len(st.session_state.order_photos)} photo(s) previously uploaded this session")
+
+    st.caption("Photos are stored for this session only. They will not persist after closing the app.")
+
+    # ============================================================
     # CLIENT INFORMATION UI
     # ============================================================
     st.divider()
-    st.header("5. Client & Order Information")
+    st.header("6. Client & Order Information")
 
     with st.expander("Client Details", expanded=False):
         st.markdown("Enter client information for invoices and purchase orders.")
@@ -7978,11 +7753,18 @@ Rates default to current estimates but can be adjusted as needed.
             )
 
         with col6:
-            # NEW: Client in-hands date
+            # Client in-hands date
             st.session_state.client_info['client_in_hands_date'] = st.date_input(
                 "Client In-Hands Date",
                 value=st.session_state.client_info.get('client_in_hands_date'),
                 help="Target delivery date for client to receive products"
+            )
+
+            # PBP in-hands date (when PBP needs to receive from partner)
+            st.session_state.client_info['pbp_in_hands_date'] = st.date_input(
+                "PBP In-Hands Date",
+                value=st.session_state.client_info.get('pbp_in_hands_date'),
+                help="Date PBP needs to receive product from partner (for Purchase Orders)"
             )
 
         st.markdown("---")
@@ -8131,18 +7913,9 @@ Rates default to current estimates but can be adjusted as needed.
     else:
         st.info("Add products to your order to enable saving")
 
-    # Navigation button at bottom of Tab 3
+    # Navigation note
     st.divider()
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("Continue to Tab 4: Execution & Accounting", type="primary", use_container_width=True, key="tab3_to_tab4"):
-            st.session_state.show_tab4_prompt = True
-            st.rerun()
-
-    # Show navigation prompt if button was clicked
-    if st.session_state.get('show_tab4_prompt', False):
-        st.info("Click on the **'Execution & Accounting'** tab above to continue.")
-        st.session_state.show_tab4_prompt = False
+    st.caption("To continue, scroll to the top and select the **Execution & Accounting** tab.")
 
 # ============================================================
 # TAB 4: EXECUTION & ACCOUNTING
@@ -8330,6 +8103,17 @@ with tab4:
                     on_change=update_in_hands_date
                 )
 
+                def update_pbp_in_hands_date():
+                    st.session_state.client_info['pbp_in_hands_date'] = st.session_state.tab3_pbp_in_hands_date
+
+                st.date_input(
+                    "PBP In-Hands Date",
+                    value=st.session_state.client_info.get('pbp_in_hands_date'),
+                    key="tab3_pbp_in_hands_date",
+                    on_change=update_pbp_in_hands_date,
+                    help="Date PBP needs to receive product from partner (for Purchase Orders)"
+                )
+
                 def update_ship_method():
                     st.session_state.client_info['shipping_type'] = st.session_state.tab3_ship_method
 
@@ -8477,109 +8261,116 @@ with tab4:
         with st.expander("Edit Order Settings", expanded=False):
             st.caption("Make adjustments to order settings here. Changes sync to Tab 2.")
 
-            # Shipping & Tariffs - Side by Side
-            st.subheader("Shipping & Tariffs")
+            # Shipping & Tariffs - Legacy
+            show_legacy_shipping = st.checkbox(
+                "Show Legacy Shipping & Tariffs (these costs are now included in product pricing)",
+                value=False,
+                key="tab4_show_legacy_shipping"
+            )
 
-            col_shipping, col_tariff = st.columns(2)
+            if show_legacy_shipping:
+                st.caption("Shipping and tariff costs are now factored into product pricing in the spreadsheet. This section is kept for reference but is no longer used in standard orders.")
 
-            with col_shipping:
-                st.markdown("**Client Shipping:**")
-                st.session_state.order_shipping = st.number_input(
-                    "Shipping Price to Client ($)",
-                    min_value=0.0,
-                    value=st.session_state.order_shipping,
-                    step=10.0,
-                    key="tab3_shipping_input",
-                    help="Shipping cost charged to client"
-                )
+                col_shipping, col_tariff = st.columns(2)
 
-                st.markdown("**Partner Shipping:**")
-                st.session_state.partner_shipping = st.number_input(
-                    "Shipping Cost from Partner ($)",
-                    min_value=0.0,
-                    value=st.session_state.partner_shipping,
-                    step=10.0,
-                    key="tab3_partner_shipping_input",
-                    help="Shipping cost PBP pays to partner (for Purchase Orders)"
-                )
+                with col_shipping:
+                    st.markdown("**Client Shipping:**")
+                    st.session_state.order_shipping = st.number_input(
+                        "Shipping Price to Client ($)",
+                        min_value=0.0,
+                        value=st.session_state.order_shipping,
+                        step=10.0,
+                        key="tab3_shipping_input",
+                        help="Shipping cost charged to client"
+                    )
 
-                st.markdown("**Sales Tax:**")
-                st.session_state.sales_tax = st.number_input(
-                    "Estimated Sales Tax ($)",
-                    min_value=0.0,
-                    value=st.session_state.sales_tax,
-                    step=5.0,
-                    key="tab3_sales_tax_input",
-                    help="Estimated sales tax amount to be charged to client"
-                )
+                    st.markdown("**Partner Shipping:**")
+                    st.session_state.partner_shipping = st.number_input(
+                        "Shipping Cost from Partner ($)",
+                        min_value=0.0,
+                        value=st.session_state.partner_shipping,
+                        step=10.0,
+                        key="tab3_partner_shipping_input",
+                        help="Shipping cost PBP pays to partner (for Purchase Orders)"
+                    )
 
-            with col_tariff:
-                # Calculate total tariff for display
-                total_tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
+                    st.markdown("**Sales Tax:**")
+                    st.session_state.sales_tax = st.number_input(
+                        "Estimated Sales Tax ($)",
+                        min_value=0.0,
+                        value=st.session_state.sales_tax,
+                        step=5.0,
+                        key="tab3_sales_tax_input",
+                        help="Estimated sales tax amount to be charged to client"
+                    )
 
-                st.write(f"**Tariff Total:** ${total_tariff:.2f}")
+                with col_tariff:
+                    # Calculate total tariff for display
+                    total_tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
 
-                show_tariff_details = st.checkbox(
-                    "Customize Tariff Rates",
-                    key="tab3_show_tariff_details",
-                    help="Default rates applied based on country of origin. Check to customize per product."
-                )
+                    st.write(f"**Tariff Total:** ${total_tariff:.2f}")
 
-                if show_tariff_details:
-                    st.caption("Tariffs are import duties based on product country of origin. Rates default to current estimates but can be adjusted as needed.")
+                    show_tariff_details = st.checkbox(
+                        "Customize Tariff Rates",
+                        key="tab3_show_tariff_details",
+                        help="Default rates applied based on country of origin. Check to customize per product."
+                    )
 
-                    # Build editable tariff table with detailed breakdown
-                    for idx, item in enumerate(st.session_state.order_items):
-                        # Get tariff base (product cost + markup, excludes customization)
-                        tariff_base = item.get('tariff_base', 0.0)
-                        tariff_base_per_unit = tariff_base / item['quantity'] if item['quantity'] > 0 else 0
+                    if show_tariff_details:
+                        st.caption("Tariffs are import duties based on product country of origin. Rates default to current estimates but can be adjusted as needed.")
 
-                        # Display product info
-                        st.markdown(f"**{idx + 1}. {item['product_name']}**")
+                        # Build editable tariff table with detailed breakdown
+                        for idx, item in enumerate(st.session_state.order_items):
+                            # Get tariff base (product cost + markup, excludes customization)
+                            tariff_base = item.get('tariff_base', 0.0)
+                            tariff_base_per_unit = tariff_base / item['quantity'] if item['quantity'] > 0 else 0
 
-                        col1, col2, col3 = st.columns([2, 2, 2])
+                            # Display product info
+                            st.markdown(f"**{idx + 1}. {item['product_name']}**")
 
-                        with col1:
-                            country = item.get('country_of_origin', 'N/A')
-                            st.write(f"**Country:** {country if country else 'N/A'}")
-                            st.write(f"**Quantity:** {item['quantity']} units")
+                            col1, col2, col3 = st.columns([2, 2, 2])
 
-                        with col2:
-                            st.write(f"**Unit Cost:** ${tariff_base_per_unit:.2f}")
-                            st.write(f"**Total Cost:** ${tariff_base:.2f}")
-                            st.caption("(Product + Markup, excludes customization)")
+                            with col1:
+                                country = item.get('country_of_origin', 'N/A')
+                                st.write(f"**Country:** {country if country else 'N/A'}")
+                                st.write(f"**Quantity:** {item['quantity']} units")
 
-                        with col3:
-                            # Editable tariff rate
-                            current_rate = item.get('tariff_rate_percent', 0.0)
-                            new_rate = st.number_input(
-                                "Tariff Rate (%)",
-                                min_value=0.0,
-                                max_value=100.0,
-                                value=current_rate,
-                                step=0.5,
-                                key=f"tab3_tariff_rate_{idx}",
-                                format="%.1f"
-                            )
+                            with col2:
+                                st.write(f"**Unit Cost:** ${tariff_base_per_unit:.2f}")
+                                st.write(f"**Total Cost:** ${tariff_base:.2f}")
+                                st.caption("(Product + Markup, excludes customization)")
 
-                            # Update if changed
-                            if new_rate != current_rate:
-                                item['tariff_rate_percent'] = new_rate
-                                item['tariff_amount'] = calculate_product_tariff(tariff_base, new_rate)
+                            with col3:
+                                # Editable tariff rate
+                                current_rate = item.get('tariff_rate_percent', 0.0)
+                                new_rate = st.number_input(
+                                    "Tariff Rate (%)",
+                                    min_value=0.0,
+                                    max_value=100.0,
+                                    value=current_rate,
+                                    step=0.5,
+                                    key=f"tab3_tariff_rate_{idx}",
+                                    format="%.1f"
+                                )
 
-                            tariff_amount = item.get('tariff_amount', 0.0)
-                            st.write(f"**Tariff Amount:** ${tariff_amount:.2f}")
-                            if tariff_base > 0 and new_rate > 0:
-                                st.caption(f"${tariff_base:.2f} × {new_rate}% = ${tariff_amount:.2f}")
+                                # Update if changed
+                                if new_rate != current_rate:
+                                    item['tariff_rate_percent'] = new_rate
+                                    item['tariff_amount'] = calculate_product_tariff(tariff_base, new_rate)
 
-                        # Show tariff info if available
-                        tariff_info = item.get('tariff_info', '')
-                        if tariff_info and tariff_info.strip():
-                            st.caption(f"{tariff_info}")
+                                tariff_amount = item.get('tariff_amount', 0.0)
+                                st.write(f"**Tariff Amount:** ${tariff_amount:.2f}")
+                                if tariff_base > 0 and new_rate > 0:
+                                    st.caption(f"${tariff_base:.2f} × {new_rate}% = ${tariff_amount:.2f}")
 
-                        st.markdown("")  # Spacing
+                            # Show tariff info if available
+                            tariff_info = item.get('tariff_info', '')
+                            if tariff_info and tariff_info.strip():
+                                st.caption(f"{tariff_info}")
 
-                    st.caption("Tariff is calculated on product cost + markup (excludes customization fees and shipping)")
+                            st.markdown("")  # Spacing
+
+                        st.caption("Tariff is calculated on product cost + markup (excludes customization fees and shipping)")
 
             # Order Adjustments - Consolidated Section
             st.divider()
@@ -8954,6 +8745,10 @@ with tab4:
         # Client In-Hands Date
         client_in_hands = client_info.get('client_in_hands_date', 'Not specified')
         order_details_data.append(["Client In-Hands Date", format_date_display(client_in_hands)])
+
+        # PBP In-Hands Date
+        pbp_in_hands = client_info.get('pbp_in_hands_date', 'Not specified')
+        order_details_data.append(["PBP In-Hands Date", format_date_display(pbp_in_hands)])
 
         # Ship Method
         ship_method = client_info.get('shipping_type', 'Not specified')
@@ -9559,6 +9354,10 @@ with tab4:
             <td>{format_date_display(client_in_hands)}</td>
         </tr>
         <tr>
+            <td>PBP In-Hands Date</td>
+            <td>{format_date_display(pbp_in_hands)}</td>
+        </tr>
+        <tr>
             <td>Ship Method</td>
             <td>{ship_method}</td>
         </tr>
@@ -9653,11 +9452,33 @@ with tab4:
             html_invoice += """
     </div>"""
 
+        # Add product photos if any were uploaded
+        if st.session_state.get('order_photos'):
+            import base64
+            html_invoice += """
+    <h3>Product Photos</h3>"""
+            for photo in st.session_state.order_photos:
+                photo.seek(0)  # Reset file pointer
+                photo_bytes = photo.read()
+                b64 = base64.b64encode(photo_bytes).decode()
+                # Determine mime type from file name
+                ext = photo.name.rsplit('.', 1)[-1].lower()
+                mime_map = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp': 'image/webp'}
+                mime_type = mime_map.get(ext, 'image/png')
+                html_invoice += f"""
+    <div style="margin-bottom: 20px;">
+        <p style="font-weight: bold; margin-bottom: 5px;">{photo.name}</p>
+        <img src="data:{mime_type};base64,{b64}" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;" />
+    </div>"""
+
         html_invoice += """
 </body>
 </html>"""
 
         # Download buttons side by side
+        # Use a dynamic key based on data length to force Streamlit to refresh
+        # the download button data when the invoice content changes
+        download_key_suffix = hash(html_invoice) % 100000
         col1, col2 = st.columns(2)
 
         with col1:
@@ -9667,7 +9488,7 @@ with tab4:
                 data=invoice_csv,
                 file_name=f"invoice_po_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv",
-                key="download_invoice_po_csv",
+                key=f"download_invoice_po_csv_{download_key_suffix}",
                 use_container_width=True
             )
 
@@ -9677,7 +9498,7 @@ with tab4:
                 data=html_invoice,
                 file_name=f"invoice_po_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
                 mime="text/html",
-                key="download_invoice_po_html",
+                key=f"download_invoice_po_html_{download_key_suffix}",
                 use_container_width=True
             )
 

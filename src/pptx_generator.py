@@ -17,6 +17,26 @@ import gc  # For memory optimization
 from src.helpers import get_column_value, calculate_moq, round_to_nearest_fifty_cents
 
 
+def get_slide_title(slide):
+    """
+    Extract the title/product name from a PowerPoint slide.
+    Checks multiple sources in order of priority:
+    1. The title placeholder (slide.shapes.title)
+    2. The first shape with text (slide.shapes[0], [1], etc.)
+    Returns the text string, or None if no title found.
+    """
+    # Try the title placeholder first
+    if slide.shapes.title and hasattr(slide.shapes.title, "text") and slide.shapes.title.text.strip():
+        return slide.shapes.title.text.strip()
+
+    # Fall back to checking all shapes for text
+    for shape in slide.shapes:
+        if hasattr(shape, "text") and shape.text.strip():
+            return shape.text.strip()
+
+    return None
+
+
 def apply_marketing_rounding(price, marketing_rounding_enabled):
     """Apply marketing rounding (charm pricing) if enabled."""
     if not marketing_rounding_enabled:
@@ -437,11 +457,7 @@ def update_pricing_table_smart(slide: object, proposal_items, variant_mode: bool
         }
     """
     # Get slide name for reporting
-    slide_name = "Unknown Slide"
-    if len(slide.shapes) >= 1:
-        first_shape = slide.shapes[0]
-        if hasattr(first_shape, "text") and first_shape.text.strip():
-            slide_name = first_shape.text.strip()
+    slide_name = get_slide_title(slide) or "Unknown Slide"
 
     report = {
         'slide_name': slide_name,
@@ -643,11 +659,9 @@ def find_slide_by_product_name(prs: Presentation, product_name: str) -> Optional
         Slide index (int) or None if not found
     """
     for idx, slide in enumerate(prs.slides):
-        if len(slide.shapes) >= 1:
-            first_shape = slide.shapes[0]
-            if hasattr(first_shape, "text") and first_shape.text.strip():
-                if first_shape.text.strip() == product_name:
-                    return idx
+        title = get_slide_title(slide)
+        if title and title == product_name:
+            return idx
     return None
 
 
@@ -1095,34 +1109,31 @@ def create_proposal_presentation(
     # Update pricing tables in remaining slides
     # Note: After deletion, slide indices change, so we need to match by name
     for slide in prs.slides:
-        # Get product name from first shape
-        if len(slide.shapes) >= 1:
-            first_shape = slide.shapes[0]
-            if hasattr(first_shape, "text") and first_shape.text.strip():
-                product_name = first_shape.text.strip()
+        # Get product name from slide title
+        product_name = get_slide_title(slide)
+        if product_name:
+            # Find the proposal item for this slide
+            for gs_name, pptx_name in confirmed_matches.items():
+                if pptx_name == product_name:
+                    # Find proposal item
+                    proposal_item = next(
+                        (item for item in proposal_products
+                         if item['product_data']['Product/Service'] == gs_name),
+                        None
+                    )
 
-                # Find the proposal item for this slide
-                for gs_name, pptx_name in confirmed_matches.items():
-                    if pptx_name == product_name:
-                        # Find proposal item
-                        proposal_item = next(
-                            (item for item in proposal_products
-                             if item['product_data']['Product/Service'] == gs_name),
-                            None
+                    if proposal_item:
+                        # Calculate pricing data
+                        pricing_data = calculate_proposal_pricing(
+                            proposal_item,
+                            get_unit_price_func,
+                            marketing_rounding,
+                            discount_percent
                         )
 
-                        if proposal_item:
-                            # Calculate pricing data
-                            pricing_data = calculate_proposal_pricing(
-                                proposal_item,
-                                get_unit_price_func,
-                                marketing_rounding,
-                                discount_percent
-                            )
-
-                            if pricing_data:
-                                update_pricing_table(slide, pricing_data, discount_percent=discount_percent, discount_type=discount_type)
-                        break
+                        if pricing_data:
+                            update_pricing_table(slide, pricing_data, discount_percent=discount_percent, discount_type=discount_type)
+                    break
 
     return prs
 
@@ -1228,31 +1239,28 @@ def create_proposal_presentation_with_impact(
 
     # Update pricing tables in product slides
     for slide in prs.slides:
-        if len(slide.shapes) >= 1:
-            first_shape = slide.shapes[0]
-            if hasattr(first_shape, "text") and first_shape.text.strip():
-                product_name = first_shape.text.strip()
+        product_name = get_slide_title(slide)
+        if product_name:
+            # Find if this is a product slide that needs updating
+            for gs_name, pptx_name in confirmed_matches.items():
+                if pptx_name == product_name:
+                    proposal_item = next(
+                        (item for item in proposal_products
+                         if item['product_data']['Product/Service'] == gs_name),
+                        None
+                    )
 
-                # Find if this is a product slide that needs updating
-                for gs_name, pptx_name in confirmed_matches.items():
-                    if pptx_name == product_name:
-                        proposal_item = next(
-                            (item for item in proposal_products
-                             if item['product_data']['Product/Service'] == gs_name),
-                            None
+                    if proposal_item:
+                        pricing_data = calculate_proposal_pricing(
+                            proposal_item,
+                            get_unit_price_func,
+                            marketing_rounding,
+                            discount_percent
                         )
 
-                        if proposal_item:
-                            pricing_data = calculate_proposal_pricing(
-                                proposal_item,
-                                get_unit_price_func,
-                                marketing_rounding,
-                                discount_percent
-                            )
-
-                            if pricing_data:
-                                update_pricing_table(slide, pricing_data, discount_percent=discount_percent, discount_type=discount_type)
-                        break
+                        if pricing_data:
+                            update_pricing_table(slide, pricing_data, discount_percent=discount_percent, discount_type=discount_type)
+                    break
 
     # Note: Outro slides now handled by create_complete_proposal_presentation()
 
@@ -1432,25 +1440,46 @@ def create_complete_proposal_presentation(
     table_reports = []
 
     for slide in prs_product.slides:
-        if len(slide.shapes) >= 1:
-            first_shape = slide.shapes[0]
-            if hasattr(first_shape, "text") and first_shape.text.strip():
-                slide_title = first_shape.text.strip()
+        slide_title = get_slide_title(slide)
+        if slide_title:
+            # Check if this slide has variant groups
+            is_variant_group = variant_groups and slide_title in variant_groups
 
-                # Check if this slide has variant groups
-                is_variant_group = variant_groups and slide_title in variant_groups
+            if is_variant_group:
+                # Get user preference for this variant group
+                user_choice = variant_grouping_prefs.get(slide_title, "") if variant_grouping_prefs else ""
+                print(f"DEBUG: Variant group detected for '{slide_title}' with {len(variant_groups[slide_title])} products")
+                print(f"DEBUG: User choice: '{user_choice}'")
 
-                if is_variant_group:
-                    # Get user preference for this variant group
-                    user_choice = variant_grouping_prefs.get(slide_title, "") if variant_grouping_prefs else ""
-                    print(f"DEBUG: Variant group detected for '{slide_title}' with {len(variant_groups[slide_title])} products")
-                    print(f"DEBUG: User choice: '{user_choice}'")
+                if "single row" in user_choice.lower():
+                    # Display simple single-row table (consistent pricing)
+                    variant_products = variant_groups[slide_title]
+                    gs_name = variant_products[0]
 
-                    if "single row" in user_choice.lower():
-                        # Display simple single-row table (consistent pricing)
-                        variant_products = variant_groups[slide_title]
-                        gs_name = variant_products[0]
+                    proposal_item = next(
+                        (item for item in proposal_products
+                         if item['product_data']['Product/Service'] == gs_name),
+                        None
+                    )
 
+                    if proposal_item:
+                        pricing_data = calculate_proposal_pricing(
+                            proposal_item,
+                            get_unit_price_func,
+                            marketing_rounding,
+                            discount_percent
+                        )
+
+                        if pricing_data:
+                            update_pricing_table(slide, pricing_data, variant_mode=False, discount_percent=discount_percent, discount_type=discount_type)
+                            print(f"DEBUG: Created single-row table for {slide_title} (consistent pricing)")
+
+                elif "all variants" in user_choice.lower() or "together" in user_choice.lower():
+                    # Display variants together - collect all variants for this slide
+                    variant_products = variant_groups[slide_title]
+                    pricing_data_list = []
+
+                    for gs_name in variant_products:
                         proposal_item = next(
                             (item for item in proposal_products
                              if item['product_data']['Product/Service'] == gs_name),
@@ -1466,82 +1495,58 @@ def create_complete_proposal_presentation(
                             )
 
                             if pricing_data:
-                                update_pricing_table(slide, pricing_data, variant_mode=False, discount_percent=discount_percent, discount_type=discount_type)
-                                print(f"DEBUG: Created single-row table for {slide_title} (consistent pricing)")
+                                pricing_data_list.append(pricing_data)
 
-                    elif "all variants" in user_choice.lower() or "together" in user_choice.lower():
-                        # Display variants together - collect all variants for this slide
-                        variant_products = variant_groups[slide_title]
-                        pricing_data_list = []
+                    # Update table with all variants (variant_mode=True)
+                    if pricing_data_list:
+                        update_pricing_table(slide, pricing_data_list, variant_mode=True, discount_percent=discount_percent, discount_type=discount_type)
+                        print(f"DEBUG: Created multi-row table for {slide_title} with {len(pricing_data_list)} variants")
 
-                        for gs_name in variant_products:
-                            proposal_item = next(
-                                (item for item in proposal_products
-                                 if item['product_data']['Product/Service'] == gs_name),
-                                None
+                elif "skip" in user_choice.lower():
+                    pass
+
+            else:
+                # Single product - use smart detect-and-compare update
+                for gs_name, pptx_name in confirmed_matches.items():
+                    if pptx_name == slide_title:
+                        proposal_item = next(
+                            (item for item in proposal_products
+                             if item['product_data']['Product/Service'] == gs_name),
+                            None
+                        )
+
+                        if proposal_item:
+                            pricing_data = calculate_proposal_pricing(
+                                proposal_item,
+                                get_unit_price_func,
+                                marketing_rounding,
+                                discount_percent
                             )
 
-                            if proposal_item:
-                                pricing_data = calculate_proposal_pricing(
-                                    proposal_item,
-                                    get_unit_price_func,
-                                    marketing_rounding,
-                                    discount_percent
+                            if pricing_data:
+                                # Try smart update first
+                                report = update_pricing_table_smart(
+                                    slide, pricing_data,
+                                    variant_mode=False,
+                                    discount_percent=discount_percent,
+                                    discount_type=discount_type
                                 )
+                                table_reports.append(report)
 
-                                if pricing_data:
-                                    pricing_data_list.append(pricing_data)
+                                # If smart update found no price columns at all,
+                                # fall back to legacy overwrite
+                                if report['status'] == 'unchanged' and not any(
+                                    a['reason'] == 'Price already correct' for a in report['actions']
+                                ):
+                                    update_pricing_table(slide, pricing_data, variant_mode=False, discount_percent=discount_percent, discount_type=discount_type)
+                                    report['status'] = 'auto_updated'
+                                    report['actions'].append({
+                                        'cell': '-', 'action': 'auto_updated',
+                                        'old': '', 'new': '',
+                                        'reason': 'Used legacy overwrite (no prices detected in template)'
+                                    })
 
-                        # Update table with all variants (variant_mode=True)
-                        if pricing_data_list:
-                            update_pricing_table(slide, pricing_data_list, variant_mode=True, discount_percent=discount_percent, discount_type=discount_type)
-                            print(f"DEBUG: Created multi-row table for {slide_title} with {len(pricing_data_list)} variants")
-
-                    elif "skip" in user_choice.lower():
-                        pass
-
-                else:
-                    # Single product - use smart detect-and-compare update
-                    for gs_name, pptx_name in confirmed_matches.items():
-                        if pptx_name == slide_title:
-                            proposal_item = next(
-                                (item for item in proposal_products
-                                 if item['product_data']['Product/Service'] == gs_name),
-                                None
-                            )
-
-                            if proposal_item:
-                                pricing_data = calculate_proposal_pricing(
-                                    proposal_item,
-                                    get_unit_price_func,
-                                    marketing_rounding,
-                                    discount_percent
-                                )
-
-                                if pricing_data:
-                                    # Try smart update first
-                                    report = update_pricing_table_smart(
-                                        slide, pricing_data,
-                                        variant_mode=False,
-                                        discount_percent=discount_percent,
-                                        discount_type=discount_type
-                                    )
-                                    table_reports.append(report)
-
-                                    # If smart update found no price columns at all,
-                                    # fall back to legacy overwrite
-                                    if report['status'] == 'unchanged' and not any(
-                                        a['reason'] == 'Price already correct' for a in report['actions']
-                                    ):
-                                        update_pricing_table(slide, pricing_data, variant_mode=False, discount_percent=discount_percent, discount_type=discount_type)
-                                        report['status'] = 'auto_updated'
-                                        report['actions'].append({
-                                            'cell': '-', 'action': 'auto_updated',
-                                            'old': '', 'new': '',
-                                            'reason': 'Used legacy overwrite (no prices detected in template)'
-                                        })
-
-                            break
+                        break
 
     # Step 5: Add intro/outro slides to END in their original order
     prs_intro_outro = Presentation(intro_outro_template_path)
