@@ -3,10 +3,17 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [Unreleased]
+## [8.2.0] - 2026-05-23
 
 ### Added
-- **Volume Order Discount (5%):** New discount option available in Tab 1 (Proposal Generator) and Tab 3 (Order & Client Info)
+- **Template-Resilient PowerPoint Generation (Feb 23):** System now handles missing or changed template slides gracefully instead of failing
+- **Google Form Without Proposal (Feb 21):** Tab 2 Google Form generation no longer requires a proposal to exist first
+- **Custom Variant Support (Feb 7):** "Inquire about variants" handling in Tab 3 for products with custom variant options
+- **MOQ Warnings (Feb 7):** Visual alerts when order quantity is below minimum order quantity
+- **Volume Order Discount Reminder (Jan 29):** Automatic reminder shown for orders over $10,000 suggesting volume discount
+- **Kitting Quantity Field (Jan 29):** Per-product kitting now supports configurable quantities
+- **Google Forms Product Name Sync Tools (Jan 28):** Helper scripts for syncing product names between catalog and Google Forms
+- **Volume Order Discount (5%) (Jan 28):** New discount option available in Tab 1 (Proposal Generator) and Tab 3 (Order & Client Info)
   - Provides clear distinction between non-profit discounts and volume-based discounts
   - Four discount options now available: None, Non-profit (5%), Volume Order (5%), Custom
   - Better tracking and reporting with distinct labels in order summaries
@@ -16,7 +23,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - "Discount Quoted to Client" warning in Tab 3 shows Volume Order discount when applicable
 
 ### Changed
-- **Per-Product Kitting Display:** Kitting now shown as separate line items instead of merged into product rows
+- **Variant Functionality Removed from Tab 1 (Jan 27):** Variant handling moved to Tab 3 custom variant support; Tab 1 Proposal Generator simplified
+- **Workflow Progress Section Removed (Jan 26):** Sidebar workflow progress tracker removed for cleaner UI
+- **All Emojis Removed from App (Jan 23):** Completed emoji removal for professional appearance
+- **Per-Product Kitting Display (Jan 28):** Kitting now shown as separate line items instead of merged into product rows
   - **Tab 3 (Order Summary):** Added new "Per-Product Kitting" section after Customization
     - Each product's kitting shows as separate line with "one-time" quantity
     - Displays kitting description (e.g., "Premium gift box", "Repackaging")
@@ -33,7 +43,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - **Test Coverage:** All 5 tests passing in `scripts/features/test_per_product_kitting.py`
 
 ### Fixed
-- **Schema Column Name Mismatch (CRITICAL):** Fixed KeyError caused by code using old column names from v7.x schema instead of new v8.x names
+- **Tier Parsing Robustness (Apr 2):** Fixed ValueError when tier strings contain multiple colons or space-separated formats
+  - `parse_tier_info()` now handles formats like "1 - 99" (space-separated) and "Tier 1: 1:99" (multiple colons)
+- **Double Normalization Bug (Jan 29):** Fixed Per Case products being normalized twice, resulting in incorrect pricing
+- **"MSRP + Other Add-On %" Pricing Logic (Jan 28):** Fixed calculation for the fourth pricing method
+- **Google Form Bugs (Jan 28):** Multiple fixes for Google Form response import and Tab 2/3 UI cleanup
+- **Sidebar Session State (Jan 28):** Corrected session state variable name in sidebar
+- **"Loading data..." Sidebar Issue (Jan 26):** Resolved persistent loading indicator in sidebar
+- **PBP $1,000 Baseline MOV (Jan 23):** Enforced $1,000 minimum order value per-product in MOQ calculations
+- **Schema Column Name Mismatch (CRITICAL, Jan 28):** Fixed KeyError caused by code using old column names from v7.x schema instead of new v8.x names
   - **Root Cause:** Google Sheets updated to v8.1.0 schema (Jan 28, 2026) but some code still referenced old column names
   - **Errors:** `KeyError: "['PBP Cost (No Tiers)'] not in index"` when trying to display or refresh data
   - **Fixed Columns:**

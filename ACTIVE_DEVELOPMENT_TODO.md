@@ -1,75 +1,49 @@
 # Active Development TODO
 
-**Last Updated:** January 20, 2026
-**Current Version:** 7.6.0-dev
-**Sprint:** Google Forms Integration - COMPLETE ✅
+**Last Updated:** May 23, 2026
+**Current Version:** 8.2.0
+**Status:** Normal development - post-schema features and maintenance
 
 ---
 
-## 🔴 ACTIVE WORK (Recent Sprints)
+## Completed Work (Jan-Apr 2026)
 
-### ✅ Google Forms Integration COMPLETE! (January 20, 2026)
+### v8.2.0 Features (Feb-Apr 2026)
+- [x] Template-resilient PowerPoint generation system
+- [x] Tab 2 Google Form generation without requiring a proposal
+- [x] Custom variant support and "Inquire about variants" handling
+- [x] MOQ warnings for orders below minimum quantity
+- [x] Volume order discount reminder for orders > $10,000
+- [x] Kitting quantity field for per-product kitting
+- [x] Tier parsing robustness (space-separated, multi-colon formats)
 
-#### ✅ Completed Features
-1. **Google Forms Integration (Tab 2 → Tab 3)** - Modern client order collection workflow
-   - Pre-fill Google Forms with proposal products and client info
-   - One-click URL generation with preview
-   - Response import from Google Sheets with automatic product matching
-   - Tracking columns prevent duplicate imports
-   - 50-70% faster than HTML workflow
-   - Complete documentation and testing checklist
+### v8.1.0 Schema Update (Jan 28, 2026)
+- [x] Added "Other Add-On % (of Cost)" column (45 total columns)
+- [x] "Package" -> "Case" terminology update
+- [x] Fourth pricing method: "MSRP + Other Add-On %"
+- [x] Volume Order Discount (5%) option
+- [x] Per-product kitting as separate line items
+- [x] Refresh Data button fix
+- [x] PowerPoint discount/pricing fixes (3 issues)
+- [x] All emojis removed from app
+- [x] PBP $1,000 baseline MOV enforcement
 
-### ✅ Week 2 Sprint COMPLETE! (December 2024)
+### v8.0.0 Schema Transition (Jan 22, 2026)
+- [x] 3 sophisticated pricing methods implemented
+- [x] 33 -> 44 column schema expansion
+- [x] Full backward compatibility via get_column_value()
 
-#### ✅ Completed Features
-1. **Direct client price editing in Tab 3** - Bidirectional pricing like Tab 1
-2. **NGO → Non-profit terminology** - Updated throughout app
-3. **Directory reorganization** - Cleaner structure
-4. **Tab 3 Option B toast notification** - Added deferred toast pattern for all product additions
-5. **Execution form updates** - Checkbox format for New Client? and MM/DD/YY date format
-6. **Customization Add-On feature** - Multiple add-ons with separate invoice line items
-
----
-
-## ✅ TESTING COMPLETE (December 26, 2024)
-
-### Calculation Tests ✅
-- [x] Client discount (5% Non-profit, custom %)
-- [x] Markup % calculations with new bidirectional pricing
-- [x] Tiered pricing at all boundaries
-- [x] Sales tax calculations
-- [x] Kitting cost calculations
-- [x] $0.50 rounding accuracy
-
-### PowerPoint Tests ✅
-- [x] Multi-variant products
-- [x] All table formats (2×3, 2×4, 3×4)
-- [x] Impact slides for all partners
-
-### Integration Tests ✅
-- [x] Tab 3 → Tab 4 data flow with new features
-- [x] Saved proposals/orders with new fields
-- [x] Dataset switching (demo ↔ real)
-
-**Test Summary:**
-- Created 3 comprehensive test suites
-- 14 test categories validated
-- All tests PASSED
-- System ready for production
-- Test results saved in: test_results_summary.txt
-- Master test runner: scripts/features/run_all_tests.py
+### Earlier Completed
+- [x] Google Forms integration (v7.6.0)
+- [x] Schema update with backward compatibility (v7.4.0)
+- [x] Bidirectional price editing (v7.3.0)
+- [x] Production deployment on Render (v7.0)
 
 ---
 
-## 🔵 NEEDS DISCUSSION
+## Needs Discussion
 
-### ~~Tab 2 Redesign~~ ✅ RESOLVED - Google Forms Implemented
-- ~~Research Google Forms API integration~~ DONE
-- ~~Design dropshipping-specific form~~ DONE
-- ~~Consider TypeForm alternatives~~ NOT NEEDED
-- **Resolution:** Google Forms pre-filled URL approach implemented successfully
-
-### Customer Setup Form (NEW)
+### Customer Setup Form
 - Define requirements
 - Determine integration points
 - Design user experience flow
@@ -77,7 +51,7 @@
 
 ---
 
-## 🟢 FUTURE ENHANCEMENTS (Post-MVP)
+## Future Enhancements (Post-MVP)
 - Custom product creation workflow
 - Executive samples handling
 - Advanced tax calculations
@@ -86,24 +60,22 @@
 
 ---
 
-## 📊 Quick Stats
-- **Completed Features:** 17 of 19 (89%)
-- **Recent Sprint:** Google Forms Integration (Jan 2026)
-- **Test Scripts:** 28 organized in scripts/
-- **Documentation:** See [CHANGELOG.md](CHANGELOG.md) for history
-- **New Modules:** 2 (forms_config.py, forms_helper.py)
-- **Lines Added:** ~600 lines of Python code
+## Quick Stats
+- **Codebase:** ~18,300 lines of Python
+- **Test Scripts:** 55+ organized in scripts/
+- **Schema:** v8.1.0 (45 columns, 4 pricing methods)
+- **Documentation:** See [CHANGELOG.md](CHANGELOG.md) for full history
 
 ---
 
-## 🛠️ Development Guidelines
+## Development Guidelines
 
 ### Commit Pattern
 ```bash
 git commit -m "FEAT: Brief description"  # New feature
 git commit -m "FIX: Brief description"   # Bug fix
 git commit -m "TEST: Brief description"  # Test addition
-git commit -m "DOCS: Brief description"  # Documentation
+git commit -m "DOC: Brief description"   # Documentation
 ```
 
 ### Testing Commands
@@ -114,23 +86,15 @@ streamlit run scripts/core/test_connection.py
 # Feature tests
 python scripts/features/test_bidirectional_pricing.py
 
-# Run app with real data
+# Run app
 streamlit run app.py
 ```
 
 ### Key Files
-- **app.py** - Main application (359KB)
-- **src/** - Modular helpers and engines
+- **app.py** - Main application (~10,600 lines)
+- **src/** - 12 modular helpers and engines
 - **docs/** - All documentation
 - **CHANGELOG.md** - Completed work history
-
----
-
-## 📝 Notes for Next Session
-- Test bidirectional pricing thoroughly
-- Consider batching date format changes
-- Customization Add-On needs UI/UX design
-- Multiple Streamlit instances running (ports 8502, 8503)
 
 ---
 

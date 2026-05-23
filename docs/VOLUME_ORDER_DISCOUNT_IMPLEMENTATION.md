@@ -2,7 +2,7 @@
 
 **Date:** 2026-01-28
 **Status:** ✅ Complete
-**Version:** v8.1.0 (Unreleased)
+**Version:** v8.2.0 (Released)
 
 ---
 
