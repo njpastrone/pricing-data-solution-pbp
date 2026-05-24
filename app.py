@@ -8731,62 +8731,6 @@ with tab4:
         st.divider()
 
         # ============================================================
-        # PRODUCT PHOTOS
-        # ============================================================
-        product_photos_meta = st.session_state.get('product_photo_metadata', {})
-        product_photos_session = st.session_state.get('product_photos', {})
-
-        # Combine: session photos take priority, then saved metadata
-        all_photo_products = set(
-            [k for k, v in product_photos_session.items() if v] +
-            [k for k, v in product_photos_meta.items() if v]
-        )
-
-        if all_photo_products:
-            st.subheader("Product Photos")
-            st.caption("Download individual photos to attach to POs or invoices")
-
-            for prod_name in sorted(all_photo_products):
-                st.markdown(f"**{prod_name}**")
-
-                # Try session photos first (current session uploads)
-                if prod_name in product_photos_session and product_photos_session[prod_name]:
-                    photos = product_photos_session[prod_name]
-                    photo_cols = st.columns(min(len(photos), 4))
-                    for pi, photo in enumerate(photos):
-                        with photo_cols[pi % 4]:
-                            photo.seek(0)
-                            st.image(photo, caption=photo.name, use_column_width=True)
-                            photo.seek(0)
-                            st.download_button(
-                                label=f"Download",
-                                data=photo.read(),
-                                file_name=photo.name,
-                                key=f"tab4_dl_photo_{prod_name}_{pi}"
-                            )
-
-                # Fall back to Drive photos (loaded from saved order)
-                elif prod_name in product_photos_meta and product_photos_meta[prod_name]:
-                    photos_meta = product_photos_meta[prod_name]
-                    photo_cols = st.columns(min(len(photos_meta), 4))
-                    for pi, meta in enumerate(photos_meta):
-                        with photo_cols[pi % 4]:
-                            from src.drive_helper import download_photo
-                            photo_bytes = download_photo(meta['file_id'])
-                            if photo_bytes:
-                                st.image(photo_bytes, caption=meta['filename'], use_column_width=True)
-                                st.download_button(
-                                    label=f"Download",
-                                    data=photo_bytes,
-                                    file_name=meta['filename'],
-                                    key=f"tab4_dl_drive_{prod_name}_{pi}"
-                                )
-                            else:
-                                st.caption(f"Could not load: {meta['filename']}")
-
-            st.divider()
-
-        # ============================================================
         # SECTION 3: INVOICE & PURCHASE ORDER GENERATION
         # ============================================================
         st.subheader("2. Generate Invoice & Purchase Order")
@@ -9691,6 +9635,62 @@ with tab4:
         st.caption("CSV for spreadsheet import | HTML for email-ready professional format")
 
         st.divider()
+
+        # ============================================================
+        # PRODUCT PHOTOS
+        # ============================================================
+        product_photos_meta = st.session_state.get('product_photo_metadata', {})
+        product_photos_session = st.session_state.get('product_photos', {})
+
+        # Combine: session photos take priority, then saved metadata
+        all_photo_products = set(
+            [k for k, v in product_photos_session.items() if v] +
+            [k for k, v in product_photos_meta.items() if v]
+        )
+
+        if all_photo_products:
+            st.subheader("Product Photos")
+            st.caption("Download individual photos to attach to POs or invoices")
+
+            for prod_name in sorted(all_photo_products):
+                st.markdown(f"**{prod_name}**")
+
+                # Try session photos first (current session uploads)
+                if prod_name in product_photos_session and product_photos_session[prod_name]:
+                    photos = product_photos_session[prod_name]
+                    photo_cols = st.columns(min(len(photos), 4))
+                    for pi, photo in enumerate(photos):
+                        with photo_cols[pi % 4]:
+                            photo.seek(0)
+                            st.image(photo, caption=photo.name, use_column_width=True)
+                            photo.seek(0)
+                            st.download_button(
+                                label=f"Download",
+                                data=photo.read(),
+                                file_name=photo.name,
+                                key=f"tab4_dl_photo_{prod_name}_{pi}"
+                            )
+
+                # Fall back to saved photos (loaded from Google Sheets)
+                elif prod_name in product_photos_meta and product_photos_meta[prod_name]:
+                    photos_meta = product_photos_meta[prod_name]
+                    photo_cols = st.columns(min(len(photos_meta), 4))
+                    for pi, meta in enumerate(photos_meta):
+                        with photo_cols[pi % 4]:
+                            from src.drive_helper import download_photo
+                            photo_bytes = download_photo(meta['file_id'])
+                            if photo_bytes:
+                                st.image(photo_bytes, caption=meta['filename'], use_column_width=True)
+                                st.download_button(
+                                    label=f"Download",
+                                    data=photo_bytes,
+                                    file_name=meta['filename'],
+                                    key=f"tab4_dl_drive_{prod_name}_{pi}"
+                                )
+                            else:
+                                st.caption(f"Could not load: {meta['filename']}")
+
+            st.divider()
 
         # ============================================================
         # SECTION 4: ACCOUNTING EXPORT (FUTURE)
