@@ -84,3 +84,146 @@ def load_proposal_for_client(proposal_id):
     except Exception as e:
         print(f"Error loading proposal for client form: {e}")
         return None
+
+
+def _serialize_form_data(form_data):
+    """Serialize form data dict to JSON string for storage."""
+    return json.dumps(form_data)
+
+
+def _deserialize_form_data(json_string):
+    """Deserialize JSON string back to form data dict."""
+    if not json_string or not json_string.strip():
+        return {}
+    try:
+        return json.loads(json_string)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _get_drafts_sheet():
+    """
+    Get or create the client_form_drafts sheet.
+
+    Returns:
+        gspread.Worksheet or None
+    """
+    try:
+        client = connect_to_sheets()
+        spreadsheet = client.open_by_key(DATASET_CONFIGS['saved_orders']['spreadsheet_id'])
+
+        try:
+            sheet = spreadsheet.worksheet(DRAFTS_SHEET_NAME)
+        except gspread.exceptions.WorksheetNotFound:
+            sheet = spreadsheet.add_worksheet(title=DRAFTS_SHEET_NAME, rows=100, cols=8)
+            headers = [
+                'Proposal_ID', 'Session_ID', 'Draft_Data_JSON',
+                'File_Data_Base64', 'File_Name', 'Created_Date',
+                'Updated_Date', 'Status'
+            ]
+            sheet.update('A1:H1', [headers])
+
+        return sheet
+
+    except Exception as e:
+        print(f"Error accessing drafts sheet: {e}")
+        return None
+
+
+def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=None):
+    """
+    Save or update a form draft in Google Sheets.
+
+    Args:
+        proposal_id (str): Proposal ID
+        session_id (str): Session token
+        form_data (dict): All form field values
+        file_data (bytes or None): Uploaded file bytes
+        file_name (str or None): Original filename
+
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    try:
+        sheet = _get_drafts_sheet()
+        if sheet is None:
+            return False, "Failed to connect to drafts sheet"
+
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        json_data = _serialize_form_data(form_data)
+
+        # Encode file if provided
+        file_b64 = ""
+        if file_data:
+            file_b64 = base64.b64encode(file_data).decode('utf-8')
+
+        # Check if draft already exists for this proposal+session
+        all_values = sheet.get_all_values()
+        existing_row = None
+        for i, row in enumerate(all_values[1:], start=2):
+            if len(row) >= 2 and row[0] == proposal_id and row[1] == session_id:
+                existing_row = i
+                break
+
+        if existing_row:
+            # Update existing draft (preserve Created_Date in column F)
+            sheet.update(f'C{existing_row}:E{existing_row}', [[json_data, file_b64, file_name or '']])
+            sheet.update(f'G{existing_row}:H{existing_row}', [[now, 'draft']])
+        else:
+            # Create new draft
+            sheet.append_row([
+                proposal_id, session_id, json_data,
+                file_b64, file_name or '', now, now, 'draft'
+            ])
+
+        return True, "Draft saved"
+
+    except Exception as e:
+        return False, f"Error saving draft: {str(e)}"
+
+
+def load_draft(proposal_id, session_id):
+    """
+    Load a saved draft for a proposal+session.
+
+    Args:
+        proposal_id (str): Proposal ID
+        session_id (str): Session token
+
+    Returns:
+        dict or None: {
+            'form_data': dict,
+            'file_name': str or None,
+            'file_data': bytes or None,
+            'updated_date': str,
+            'status': str
+        }
+        Returns None if no draft found.
+    """
+    try:
+        sheet = _get_drafts_sheet()
+        if sheet is None:
+            return None
+
+        all_values = sheet.get_all_values()
+
+        for row in all_values[1:]:
+            if len(row) >= 8 and row[0] == proposal_id and row[1] == session_id:
+                form_data = _deserialize_form_data(row[2])
+                file_b64 = row[3]
+                file_name = row[4] if row[4] else None
+                file_data = base64.b64decode(file_b64) if file_b64 else None
+
+                return {
+                    'form_data': form_data,
+                    'file_name': file_name,
+                    'file_data': file_data,
+                    'updated_date': row[6],
+                    'status': row[7],
+                }
+
+        return None
+
+    except Exception as e:
+        print(f"Error loading draft: {e}")
+        return None
