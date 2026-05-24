@@ -1,83 +1,92 @@
 """
-Drive Helper Module for PBP Pricing App
+Photo Storage Module for PBP Pricing App
 
-Handles uploading, downloading, and deleting product photos in Google Drive.
-Photos are stored in a single shared folder. File IDs are stored in order JSON.
+Stores product photos as base64 chunks in a dedicated Google Sheet.
+Photos are split into 40,000-character chunks (well under Sheets' 50K cell limit).
+Each photo gets a unique ID. The interface matches the original Drive-based design
+so order_manager.py and app.py don't need changes.
+
+Sheet structure: Photo_ID | Order_ID | Product_Name | Photo_Index | Filename | Chunk_Index | Base64_Chunk
 """
 
-import io
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
+import base64
+import uuid
+import gspread
+from src.data_loader import connect_to_sheets
+
+# Maximum characters per cell (Google Sheets limit is 50,000, we use 40,000 for safety)
+CHUNK_SIZE = 40000
+
+# Spreadsheet ID for photo storage (uses the saved_orders spreadsheet, "Photos" sheet)
+PHOTOS_SHEET_NAME = "Photos"
 
 
-# Google Drive folder ID for storing product photos.
-# To set up: Create a folder in Drive, share it with the service account email,
-# and paste the folder ID here (the long string in the folder's URL).
-PHOTO_FOLDER_ID = ""  # User must fill this in after setup
-
-
-def _get_drive_service():
+def _get_photos_sheet():
     """
-    Build and return a Google Drive API service using existing credentials.
-    Reuses the same credential pattern as template_loader.py.
+    Get or create the Photos sheet in the saved_orders spreadsheet.
 
     Returns:
-        googleapiclient.discovery.Resource: Drive API service
+        gspread.Worksheet or None
     """
-    from src.template_loader import get_drive_credentials
-    creds = get_drive_credentials()
-    return build('drive', 'v3', credentials=creds)
+    try:
+        from src.data_loader import DATASET_CONFIGS
+        client = connect_to_sheets()
+        spreadsheet = client.open_by_key(DATASET_CONFIGS['saved_orders']['spreadsheet_id'])
+
+        try:
+            sheet = spreadsheet.worksheet(PHOTOS_SHEET_NAME)
+        except gspread.exceptions.WorksheetNotFound:
+            sheet = spreadsheet.add_worksheet(title=PHOTOS_SHEET_NAME, rows=1000, cols=7)
+            headers = ['Photo_ID', 'Order_ID', 'Product_Name', 'Photo_Index', 'Filename', 'Chunk_Index', 'Base64_Chunk']
+            sheet.update('A1:G1', [headers])
+
+        return sheet
+
+    except Exception as e:
+        print(f"Error accessing photos sheet: {e}")
+        return None
 
 
-def upload_photo(file_bytes, filename, folder_id=None):
+def upload_photo(file_bytes, filename, order_id=""):
     """
-    Upload a photo to Google Drive.
+    Store a photo as base64 chunks in Google Sheets.
 
     Args:
         file_bytes (bytes): Raw photo bytes
-        filename (str): Name for the file in Drive (e.g., "ORDER_123_Jam_1.png")
-        folder_id (str, optional): Drive folder ID. Uses PHOTO_FOLDER_ID if not provided.
+        filename (str): Original filename (e.g., "ORDER_123_Jam_1.png")
+        order_id (str): Order ID for grouping (passed via filename convention)
 
     Returns:
-        str or None: File ID if successful, None if failed
+        str or None: Photo ID if successful, None if failed
     """
-    folder = folder_id or PHOTO_FOLDER_ID
-    if not folder:
-        print("Error: PHOTO_FOLDER_ID not configured in drive_helper.py")
-        return None
-
     try:
-        service = _get_drive_service()
+        sheet = _get_photos_sheet()
+        if sheet is None:
+            return None
 
-        # Determine mime type from filename
-        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'png'
-        mime_map = {
-            'png': 'image/png',
-            'jpg': 'image/jpeg',
-            'jpeg': 'image/jpeg',
-            'gif': 'image/gif',
-            'webp': 'image/webp'
-        }
-        mime_type = mime_map.get(ext, 'image/png')
+        # Generate unique photo ID
+        photo_id = str(uuid.uuid4())[:8]
 
-        file_metadata = {
-            'name': filename,
-            'parents': [folder]
-        }
+        # Encode to base64
+        b64_string = base64.b64encode(file_bytes).decode('utf-8')
 
-        media = MediaIoBaseUpload(
-            io.BytesIO(file_bytes),
-            mimetype=mime_type,
-            resumable=False
-        )
+        # Split into chunks
+        chunks = [b64_string[i:i + CHUNK_SIZE] for i in range(0, len(b64_string), CHUNK_SIZE)]
 
-        file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id'
-        ).execute()
+        # Parse order_id and product info from filename convention: ORDER_ID_ProductName_Index.ext
+        # We just store the filename as-is for simplicity
+        parts = filename.rsplit('.', 1)[0].split('_', 2) if '_' in filename else [filename]
+        stored_order_id = order_id or (parts[0] + '_' + parts[1] if len(parts) > 1 else "")
 
-        return file.get('id')
+        # Write all chunks as rows
+        rows = []
+        for chunk_idx, chunk in enumerate(chunks):
+            rows.append([photo_id, stored_order_id, "", str(chunk_idx), filename, str(chunk_idx), chunk])
+
+        if rows:
+            sheet.append_rows(rows)
+
+        return photo_id
 
     except Exception as e:
         print(f"Error uploading photo '{filename}': {e}")
@@ -86,59 +95,84 @@ def upload_photo(file_bytes, filename, folder_id=None):
 
 def download_photo(file_id):
     """
-    Download a photo from Google Drive by file ID.
+    Download a photo from Google Sheets by photo ID.
 
     Args:
-        file_id (str): Google Drive file ID
+        file_id (str): Photo ID (stored when photo was uploaded)
 
     Returns:
         bytes or None: Photo bytes if successful, None if failed
     """
     try:
-        service = _get_drive_service()
+        sheet = _get_photos_sheet()
+        if sheet is None:
+            return None
 
-        request = service.files().get_media(fileId=file_id)
-        buffer = io.BytesIO()
-        downloader = MediaIoBaseDownload(buffer, request)
+        # Find all rows with this photo_id
+        all_values = sheet.get_all_values()
 
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
+        # Collect chunks for this photo
+        chunks = {}
+        for row in all_values[1:]:  # Skip header
+            if len(row) >= 7 and row[0] == file_id:
+                chunk_idx = int(row[5])
+                chunks[chunk_idx] = row[6]
 
-        buffer.seek(0)
-        return buffer.read()
+        if not chunks:
+            print(f"Photo not found: {file_id}")
+            return None
+
+        # Reassemble in order
+        b64_string = ''.join(chunks[i] for i in sorted(chunks.keys()))
+
+        # Decode from base64
+        return base64.b64decode(b64_string)
 
     except Exception as e:
-        print(f"Error downloading photo (file_id={file_id}): {e}")
+        print(f"Error downloading photo (id={file_id}): {e}")
         return None
 
 
 def delete_photos(file_ids):
     """
-    Delete multiple photos from Google Drive. Best-effort: logs failures
-    but does not raise exceptions.
+    Delete photos from Google Sheets by their IDs. Best-effort: logs failures.
 
     Args:
-        file_ids (list): List of Google Drive file IDs to delete
+        file_ids (list): List of photo IDs to delete
 
     Returns:
-        int: Number of files successfully deleted
+        int: Number of photos successfully deleted
     """
     if not file_ids:
         return 0
 
-    deleted = 0
     try:
-        service = _get_drive_service()
+        sheet = _get_photos_sheet()
+        if sheet is None:
+            return 0
 
-        for file_id in file_ids:
+        all_values = sheet.get_all_values()
+
+        # Find rows to delete (collect indices, delete from bottom up)
+        rows_to_delete = []
+        for i, row in enumerate(all_values[1:], start=2):  # Start at row 2 (skip header)
+            if len(row) >= 1 and row[0] in file_ids:
+                rows_to_delete.append(i)
+
+        # Delete from bottom up to avoid shifting indices
+        deleted_ids = set()
+        for row_idx in sorted(rows_to_delete, reverse=True):
             try:
-                service.files().delete(fileId=file_id).execute()
-                deleted += 1
+                # Track which photo IDs we're deleting
+                row_data = all_values[row_idx - 1]  # -1 because all_values is 0-indexed
+                if row_data:
+                    deleted_ids.add(row_data[0])
+                sheet.delete_rows(row_idx)
             except Exception as e:
-                print(f"Warning: Could not delete Drive file {file_id}: {e}")
+                print(f"Warning: Could not delete row {row_idx}: {e}")
+
+        return len(deleted_ids)
 
     except Exception as e:
-        print(f"Error connecting to Drive for deletion: {e}")
-
-    return deleted
+        print(f"Error deleting photos: {e}")
+        return 0
