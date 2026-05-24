@@ -66,7 +66,7 @@ def load_proposal_for_client(proposal_id):
 
                 # Extract product list (name + partner only — no pricing)
                 products = []
-                items = proposal_data.get('proposal_items', proposal_data.get('items', []))
+                items = proposal_data.get('proposal_products', [])
                 for item in items:
                     product_data = item.get('product_data', {})
                     products.append({

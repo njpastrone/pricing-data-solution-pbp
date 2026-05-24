@@ -491,9 +491,20 @@ def _render_client_form_page(proposal_id, session_id):
         if not uploaded_file and draft and draft.get('file_name'):
             st.info(f"Previously uploaded: {draft['file_name']}")
 
+    # Restore saved date from draft if available
+    saved_in_hands = saved_shipping.get('in_hands_date', '')
+    default_date = None
+    if saved_in_hands:
+        try:
+            parts = saved_in_hands.split('-')
+            if len(parts) == 3:
+                default_date = date(int(parts[0]), int(parts[1]), int(parts[2]))
+        except (ValueError, IndexError):
+            pass
+
     in_hands_date = st.date_input(
         "In-Hands Date (when do you need this order?) *",
-        value=None,
+        value=default_date,
         key="cf_in_hands_date"
     )
 
@@ -668,10 +679,14 @@ if "ping" in query_params:
 
 # Client form mode — render clean form page for external clients
 if _is_client_form_page:
-    _render_client_form_page(
-        query_params.get("client_form", ""),
-        query_params.get("session", "")
-    )
+    # Handle both old API (returns lists) and new API (returns strings)
+    cf_param = query_params.get("client_form", "")
+    session_param = query_params.get("session", "")
+    if isinstance(cf_param, list):
+        cf_param = cf_param[0] if cf_param else ""
+    if isinstance(session_param, list):
+        session_param = session_param[0] if session_param else ""
+    _render_client_form_page(cf_param, session_param)
     st.stop()
 
 # Prevent automatic page scrolling on widget interaction
