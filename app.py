@@ -847,6 +847,9 @@ if 'cc_fee_percent' not in st.session_state:
 if 'proposal_products' not in st.session_state:
     st.session_state.proposal_products = []
 
+if 'loaded_proposal_id' not in st.session_state:
+    st.session_state.loaded_proposal_id = None
+
 if 'proposal_marketing_rounding' not in st.session_state:
     st.session_state.proposal_marketing_rounding = False
 
@@ -1111,6 +1114,7 @@ with st.sidebar:
                                 st.session_state.loaded_proposal_name = proposal['name']
                                 st.session_state.loaded_proposal_date = proposal.get('created_date', 'Unknown')
                                 st.session_state.loaded_proposal_creator = proposal.get('created_by', 'Unknown')
+                                st.session_state.loaded_proposal_id = proposal['proposal_id']
 
                                 st.success(f"Loaded: {proposal['name']}")
                                 st.rerun()
@@ -1142,6 +1146,7 @@ with st.sidebar:
                                 st.session_state.loaded_proposal_name = proposal['name']
                                 st.session_state.loaded_proposal_date = proposal.get('created_date', 'Unknown')
                                 st.session_state.loaded_proposal_creator = proposal.get('created_by', 'Unknown')
+                                st.session_state.loaded_proposal_id = proposal['proposal_id']
 
                                 st.success(f"Loaded: {proposal['name']}")
                                 st.rerun()
@@ -1377,6 +1382,7 @@ with st.sidebar:
                 st.session_state.loaded_proposal_name = None
                 st.session_state.loaded_proposal_date = None
                 st.session_state.loaded_proposal_creator = None
+                st.session_state.loaded_proposal_id = None
                 st.session_state.client_info = {
                     'is_new_client': True,
                     'company_name': '',
@@ -3338,13 +3344,14 @@ with tab1:
                 st.session_state.loaded_proposal_name = proposal_name.strip()
                 st.session_state.loaded_proposal_date = datetime.now().strftime("%Y-%m-%d %H:%M")
                 st.session_state.loaded_proposal_creator = created_by.strip() if created_by else "Current User"
+                st.session_state.loaded_proposal_id = result
                 st.success(message)
                 st.rerun()
             else:
                 if result:  # result contains suggested name
                     st.error(message)
                     if st.button(f"Save as '{result}'", key="save_with_new_name"):
-                        success2, message2, _ = save_proposal(
+                        success2, message2, result2 = save_proposal(
                             name=result,
                             created_by=created_by.strip() if created_by else "",
                             proposal_data=proposal_data,
@@ -3356,6 +3363,7 @@ with tab1:
                             st.session_state.loaded_proposal_name = result
                             st.session_state.loaded_proposal_date = datetime.now().strftime("%Y-%m-%d %H:%M")
                             st.session_state.loaded_proposal_creator = created_by.strip() if created_by else "Current User"
+                            st.session_state.loaded_proposal_id = result2
                             st.success(message2)
                             st.rerun()
                 else:
@@ -4281,169 +4289,224 @@ with tab2:
         st.session_state.show_order_form_updated = False
 
     # ============================================================
-    # SECTION 2: GENERATE GOOGLE FORM (RECOMMENDED)
+    # SECTION 2: GENERATE CLIENT ORDER FORM LINK (RECOMMENDED)
     # ============================================================
     st.divider()
-    st.subheader("2. Generate Google Form (Recommended)")
-    st.caption("Pre-fill a Google Form with proposal products and client info, then send link to client")
+    st.subheader("2. Generate Client Order Form Link (Recommended)")
+    st.caption("Generate a shareable link to a client order form. No Google sign-in required for file uploads.")
 
-    # Check if proposal products exist
-    has_proposal_products = len(st.session_state.proposal_products) > 0
+    # Check if a proposal is saved
+    saved_proposal_id = st.session_state.get('loaded_proposal_id')
 
-    # Import forms helper
-    from src.forms_helper import generate_prefilled_form_url
-
-    # Initialize manual form products list (for when no proposal exists)
-    if 'google_form_manual_products' not in st.session_state:
-        st.session_state.google_form_manual_products = []
-
-    if has_proposal_products:
-        st.success(f"Found {len(st.session_state.proposal_products)} products from your proposal")
-
-        # Product selection from proposal
-        st.markdown("#### Select Products for Client")
-        st.caption("Choose which products from your proposal to include in the form")
-
-        selected_products = []
-
-        # Show proposal products with checkboxes
-        for idx, item in enumerate(st.session_state.proposal_products):
-            product_name = item['product_data'].get('Product/Service', '')
-            quantity = item.get('pricing_snapshot', {}).get('quantity', 100)  # Default to 100 from proposal
-
-            col1, col2 = st.columns([4, 1])
-
-            with col1:
-                include = st.checkbox(
-                    f"{product_name}",
-                    value=True,  # Default checked
-                    key=f"google_form_product_{idx}"
-                )
-
-            with col2:
-                qty = st.number_input(
-                    "Qty",
-                    value=quantity,
-                    min_value=1,
-                    key=f"google_form_qty_{idx}",
-                    label_visibility="collapsed"
-                )
-
-            if include:
-                selected_products.append({
-                    'name': product_name,
-                    'quantity': qty,
-                    'customization_notes': ''  # Client can add this in the form
-                })
-
+    if not saved_proposal_id:
+        st.warning("Please save your proposal first before generating a client form link.")
+        st.caption("Go to Tab 1 → Save Proposal, then return here.")
     else:
-        # No proposal — allow manual product selection or blank form
-        st.info("**No proposal products loaded.** You can add products from the catalog below, or generate a blank form (client fills in products themselves).")
+        # Show products from proposal
+        has_proposal_products = len(st.session_state.proposal_products) > 0
 
-        st.markdown("#### Add Products to Form")
-        st.caption("Select products from the catalog to pre-fill in the client form")
+        if has_proposal_products:
+            st.success(f"Proposal saved. {len(st.session_state.proposal_products)} products will be shown to the client.")
 
-        # Partner and product selector
-        col_partner, col_product, col_qty = st.columns([2, 2, 1])
+            # Product list preview (read-only)
+            with st.expander("Preview products client will see", expanded=False):
+                for item in st.session_state.proposal_products:
+                    product_name = item['product_data'].get('Product/Service', '')
+                    partner = item['product_data'].get('Partner', '')
+                    st.text(f"- {product_name} ({partner})")
 
-        with col_partner:
-            form_partners = sorted(df_template["Partner"].unique().tolist())
-            form_selected_partner = st.selectbox("Partner", form_partners, key="form_manual_partner")
+        # Generate link button
+        if st.button("Generate Client Form Link", type="primary", use_container_width=True, key="gen_client_form_link_btn"):
+            token = generate_session_token()
 
-        with col_product:
-            form_available_products = df_template[df_template["Partner"] == form_selected_partner]["Product/Service"].unique().tolist()
-            form_selected_product = st.selectbox("Product/Service", form_available_products, key="form_manual_product")
+            # Build URL
+            base_url = "https://pricing-data-solution-pbp.onrender.com/"
+            form_link = f"{base_url}?client_form={saved_proposal_id}&session={token}"
+            st.session_state.generated_client_form_link = form_link
+            st.rerun()
 
-        with col_qty:
-            form_qty = st.number_input("Qty", value=100, min_value=1, key="form_manual_qty")
+        # Display generated link
+        if st.session_state.get('generated_client_form_link'):
+            link = st.session_state.generated_client_form_link
+            st.text_area("Copy this link and send to your client:", value=link, height=80, key="client_form_link_display")
 
-        if st.button("Add Product to Form", key="form_manual_add_btn"):
-            # Check for duplicates
-            already_added = any(p['name'] == form_selected_product for p in st.session_state.google_form_manual_products)
-            if already_added:
-                st.warning(f"{form_selected_product} is already in the form list.")
-            else:
-                st.session_state.google_form_manual_products.append({
-                    'name': form_selected_product,
-                    'quantity': form_qty,
-                    'customization_notes': ''
-                })
-                st.toast(f"Added {form_selected_product} to form")
-                st.rerun()
+            st.markdown(f'<a href="{link}" target="_blank" style="text-decoration: none;"><button style="width: 100%; padding: 0.5rem; background-color: #0066cc; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">Preview Form in New Tab</button></a>', unsafe_allow_html=True)
 
-        # Show manually added products
-        if st.session_state.google_form_manual_products:
-            st.markdown("**Products to include in form:**")
-            remove_idx = None
-            for idx, p in enumerate(st.session_state.google_form_manual_products):
-                col1, col2, col3 = st.columns([4, 1, 1])
-                with col1:
-                    st.text(f"{p['name']}")
-                with col2:
-                    st.text(f"Qty: {p['quantity']}")
-                with col3:
-                    if st.button("Remove", key=f"form_manual_remove_{idx}"):
-                        remove_idx = idx
+            st.info("""
+**What's Next?**
+1. Copy the link above and send it to your client
+2. Client opens the link, fills out the form, and submits
+3. Go to **Tab 3 → Option A** to import the completed response
+""")
 
-            if remove_idx is not None:
-                st.session_state.google_form_manual_products.pop(remove_idx)
-                st.rerun()
-
-        # Build selected_products from manual list
-        selected_products = list(st.session_state.google_form_manual_products)
-
-    # --- Form URL Generation (shared for both proposal and manual paths) ---
-
-    # Client info (from Section 1)
-    client_info = {
-        'client_type': st.session_state.order_details.get('client_type', 'New'),
-        'company_name': st.session_state.order_details.get('company_name', ''),
-        'contact_name': st.session_state.order_details.get('contact_name', ''),
-        'contact_email': st.session_state.order_details.get('contact_email', ''),
-        'contact_phone': st.session_state.order_details.get('contact_phone', '')
-    }
-
-    st.markdown("#### Share This Form with Your Client")
-
-    # Determine button label based on whether a URL has been generated before
-    has_existing_url = bool(st.session_state.get('generated_form_url'))
-    button_label = "Update Form URL" if has_existing_url else "Generate Form URL"
-
-    if selected_products:
-        st.info(f"**{len(selected_products)} product(s)** and client info will be pre-filled in the form")
-    else:
-        st.caption("No products selected — the client will enter product names and quantities themselves.")
-
-    if st.button(button_label, type="primary", use_container_width=True, key="generate_form_url_btn"):
-        form_url = generate_prefilled_form_url(client_info, selected_products)
-        st.session_state.generated_form_url = form_url
-        st.rerun()
-
-    # Show the generated URL if one exists
-    if st.session_state.get('generated_form_url'):
-        form_url = st.session_state.generated_form_url
-
-        st.text_area(
-            "Copy this URL:",
-            value=form_url,
-            height=100,
-        )
-
-        # Open in new tab link
-        st.markdown(f'<a href="{form_url}" target="_blank" style="text-decoration: none;"><button style="width: 100%; padding: 0.5rem; background-color: #0066cc; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">Open Form in New Tab (Preview)</button></a>', unsafe_allow_html=True)
-
-        st.caption("If you change client info or products above, click **Update Form URL** to regenerate.")
-
-        st.info("""
-        **What's Next?**
-        1. Copy the URL above
-        2. Send it to your client (email, Slack, text message, etc.)
-        3. Client opens the form → sees pre-filled info → completes remaining fields → submits
-        4. Go to **Tab 3 → Option A** to import the completed response
-        """)
+            st.caption("Each click of 'Generate' creates a new unique link. Multiple clients can use different links for the same proposal.")
 
     # ============================================================
-    # SECTION 3: HTML ORDER FORM (LEGACY - HIDDEN BY DEFAULT)
+    # SECTION 3: GENERATE GOOGLE FORM (LEGACY)
+    # ============================================================
+    st.divider()
+    st.subheader("3. Google Form (Legacy - Alternative)")
+    st.caption("Alternative method: Pre-fill a Google Form URL. The in-app client form link above is now recommended.")
+
+    with st.expander("Google Form (Legacy Method)", expanded=False):
+
+        # Check if proposal products exist
+        has_proposal_products = len(st.session_state.proposal_products) > 0
+
+        # Import forms helper
+        from src.forms_helper import generate_prefilled_form_url
+
+        # Initialize manual form products list (for when no proposal exists)
+        if 'google_form_manual_products' not in st.session_state:
+            st.session_state.google_form_manual_products = []
+
+        if has_proposal_products:
+            st.success(f"Found {len(st.session_state.proposal_products)} products from your proposal")
+
+            # Product selection from proposal
+            st.markdown("#### Select Products for Client")
+            st.caption("Choose which products from your proposal to include in the form")
+
+            selected_products = []
+
+            # Show proposal products with checkboxes
+            for idx, item in enumerate(st.session_state.proposal_products):
+                product_name = item['product_data'].get('Product/Service', '')
+                quantity = item.get('pricing_snapshot', {}).get('quantity', 100)  # Default to 100 from proposal
+
+                col1, col2 = st.columns([4, 1])
+
+                with col1:
+                    include = st.checkbox(
+                        f"{product_name}",
+                        value=True,  # Default checked
+                        key=f"google_form_product_{idx}"
+                    )
+
+                with col2:
+                    qty = st.number_input(
+                        "Qty",
+                        value=quantity,
+                        min_value=1,
+                        key=f"google_form_qty_{idx}",
+                        label_visibility="collapsed"
+                    )
+
+                if include:
+                    selected_products.append({
+                        'name': product_name,
+                        'quantity': qty,
+                        'customization_notes': ''  # Client can add this in the form
+                    })
+
+        else:
+            # No proposal — allow manual product selection or blank form
+            st.info("**No proposal products loaded.** You can add products from the catalog below, or generate a blank form (client fills in products themselves).")
+
+            st.markdown("#### Add Products to Form")
+            st.caption("Select products from the catalog to pre-fill in the client form")
+
+            # Partner and product selector
+            col_partner, col_product, col_qty = st.columns([2, 2, 1])
+
+            with col_partner:
+                form_partners = sorted(df_template["Partner"].unique().tolist())
+                form_selected_partner = st.selectbox("Partner", form_partners, key="form_manual_partner")
+
+            with col_product:
+                form_available_products = df_template[df_template["Partner"] == form_selected_partner]["Product/Service"].unique().tolist()
+                form_selected_product = st.selectbox("Product/Service", form_available_products, key="form_manual_product")
+
+            with col_qty:
+                form_qty = st.number_input("Qty", value=100, min_value=1, key="form_manual_qty")
+
+            if st.button("Add Product to Form", key="form_manual_add_btn"):
+                # Check for duplicates
+                already_added = any(p['name'] == form_selected_product for p in st.session_state.google_form_manual_products)
+                if already_added:
+                    st.warning(f"{form_selected_product} is already in the form list.")
+                else:
+                    st.session_state.google_form_manual_products.append({
+                        'name': form_selected_product,
+                        'quantity': form_qty,
+                        'customization_notes': ''
+                    })
+                    st.toast(f"Added {form_selected_product} to form")
+                    st.rerun()
+
+            # Show manually added products
+            if st.session_state.google_form_manual_products:
+                st.markdown("**Products to include in form:**")
+                remove_idx = None
+                for idx, p in enumerate(st.session_state.google_form_manual_products):
+                    col1, col2, col3 = st.columns([4, 1, 1])
+                    with col1:
+                        st.text(f"{p['name']}")
+                    with col2:
+                        st.text(f"Qty: {p['quantity']}")
+                    with col3:
+                        if st.button("Remove", key=f"form_manual_remove_{idx}"):
+                            remove_idx = idx
+
+                if remove_idx is not None:
+                    st.session_state.google_form_manual_products.pop(remove_idx)
+                    st.rerun()
+
+            # Build selected_products from manual list
+            selected_products = list(st.session_state.google_form_manual_products)
+
+        # --- Form URL Generation (shared for both proposal and manual paths) ---
+
+        # Client info (from Section 1)
+        client_info = {
+            'client_type': st.session_state.order_details.get('client_type', 'New'),
+            'company_name': st.session_state.order_details.get('company_name', ''),
+            'contact_name': st.session_state.order_details.get('contact_name', ''),
+            'contact_email': st.session_state.order_details.get('contact_email', ''),
+            'contact_phone': st.session_state.order_details.get('contact_phone', '')
+        }
+
+        st.markdown("#### Share This Form with Your Client")
+
+        # Determine button label based on whether a URL has been generated before
+        has_existing_url = bool(st.session_state.get('generated_form_url'))
+        button_label = "Update Form URL" if has_existing_url else "Generate Form URL"
+
+        if selected_products:
+            st.info(f"**{len(selected_products)} product(s)** and client info will be pre-filled in the form")
+        else:
+            st.caption("No products selected — the client will enter product names and quantities themselves.")
+
+        if st.button(button_label, type="primary", use_container_width=True, key="generate_form_url_btn"):
+            form_url = generate_prefilled_form_url(client_info, selected_products)
+            st.session_state.generated_form_url = form_url
+            st.rerun()
+
+        # Show the generated URL if one exists
+        if st.session_state.get('generated_form_url'):
+            form_url = st.session_state.generated_form_url
+
+            st.text_area(
+                "Copy this URL:",
+                value=form_url,
+                height=100,
+            )
+
+            # Open in new tab link
+            st.markdown(f'<a href="{form_url}" target="_blank" style="text-decoration: none;"><button style="width: 100%; padding: 0.5rem; background-color: #0066cc; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">Open Form in New Tab (Preview)</button></a>', unsafe_allow_html=True)
+
+            st.caption("If you change client info or products above, click **Update Form URL** to regenerate.")
+
+            st.info("""
+            **What's Next?**
+            1. Copy the URL above
+            2. Send it to your client (email, Slack, text message, etc.)
+            3. Client opens the form → sees pre-filled info → completes remaining fields → submits
+            4. Go to **Tab 3 → Option A** to import the completed response
+            """)
+
+    # ============================================================
+    # SECTION 4: HTML ORDER FORM (LEGACY - HIDDEN BY DEFAULT)
     # ============================================================
     st.divider()
 
