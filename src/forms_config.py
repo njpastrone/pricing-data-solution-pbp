@@ -193,6 +193,9 @@ RESPONSE_COLUMNS = {
     'order_id': 'Order ID',
     'imported_by': 'Imported By',
     'import_date': 'Import Date',
+
+    # File upload tracking (added for in-app client form)
+    'dropshipping_file': 'Dropshipping File Name',
 }
 
 # ============================================================
