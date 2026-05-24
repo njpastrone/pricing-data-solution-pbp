@@ -914,6 +914,11 @@ with st.sidebar:
                                     }
                                 st.session_state.order_confirmed = order_data.get('order_confirmed', False)
 
+                                # Load photo metadata from saved order
+                                saved_photos = order_data.get('product_photos', {})
+                                st.session_state.product_photos = {}
+                                st.session_state.product_photo_metadata = saved_photos if saved_photos else {}
+
                                 st.success(f"Loaded: {order['name']}")
                                 st.rerun()
                     with col3:
@@ -972,6 +977,11 @@ with st.sidebar:
                                         'external_clients': ''
                                     }
                                 st.session_state.order_confirmed = order_data.get('order_confirmed', False)
+
+                                # Load photo metadata from saved order
+                                saved_photos = order_data.get('product_photos', {})
+                                st.session_state.product_photos = {}
+                                st.session_state.product_photo_metadata = saved_photos if saved_photos else {}
 
                                 st.success(f"Loaded: {order['name']}")
                                 st.rerun()
@@ -4491,11 +4501,25 @@ with tab3:
                             'order_confirmed': st.session_state.order_confirmed
                         }
 
+                        # Prepare photos for upload to Drive
+                        photos_for_upload = {}
+                        for prod_name, photos in st.session_state.get('product_photos', {}).items():
+                            if photos:
+                                photo_list = []
+                                for photo in photos:
+                                    photo.seek(0)
+                                    photo_list.append({
+                                        'bytes': photo.read(),
+                                        'filename': photo.name
+                                    })
+                                photos_for_upload[prod_name] = photo_list
+
                         success, message, result = save_order(
                             name=quick_order_name.strip(),
                             created_by=quick_creator.strip() if quick_creator else "",
                             order_data=order_data,
-                            dataset=st.session_state.selected_dataset
+                            dataset=st.session_state.selected_dataset,
+                            photos_by_product=photos_for_upload if photos_for_upload else None
                         )
 
                         if success:
@@ -4625,6 +4649,11 @@ with tab3:
                                     }
                                 st.session_state.order_confirmed = order_data.get('order_confirmed', False)
 
+                                # Load photo metadata from saved order
+                                saved_photos = order_data.get('product_photos', {})
+                                st.session_state.product_photos = {}
+                                st.session_state.product_photo_metadata = saved_photos if saved_photos else {}
+
                                 st.success(f"Loaded order: {selected_order['name']}")
                                 st.rerun()
                             else:
@@ -4700,11 +4729,25 @@ with tab3:
                         'order_confirmed': st.session_state.order_confirmed
                     }
 
+                    # Prepare photos for upload to Drive
+                    photos_for_upload = {}
+                    for prod_name, photos in st.session_state.get('product_photos', {}).items():
+                        if photos:
+                            photo_list = []
+                            for photo in photos:
+                                photo.seek(0)
+                                photo_list.append({
+                                    'bytes': photo.read(),
+                                    'filename': photo.name
+                                })
+                            photos_for_upload[prod_name] = photo_list
+
                     success, message, result = save_order(
                         name=order_name.strip(),
                         created_by=created_by.strip() if created_by else "",
                         order_data=order_data,
-                        dataset=st.session_state.selected_dataset
+                        dataset=st.session_state.selected_dataset,
+                        photos_by_product=photos_for_upload if photos_for_upload else None
                     )
 
                     if success:
@@ -4722,7 +4765,8 @@ with tab3:
                                     name=result,
                                     created_by=created_by.strip() if created_by else "",
                                     order_data=order_data,
-                                    dataset=st.session_state.selected_dataset
+                                    dataset=st.session_state.selected_dataset,
+                                    photos_by_product=photos_for_upload if photos_for_upload else None
                                 )
                                 if success2:
                                     update_last_save_time('order')
@@ -7518,32 +7562,73 @@ with tab3:
     # ============================================================
     st.divider()
     st.header("5. Product Photos")
-    st.caption("Upload photos related to this order (product images, mockups, artwork, etc.)")
+    st.caption("Upload photos for specific products (e.g., product images, mockups, artwork). Up to 5 photos per product.")
 
-    if 'order_photos' not in st.session_state:
-        st.session_state.order_photos = []
+    if 'product_photos' not in st.session_state:
+        st.session_state.product_photos = {}
+    if 'product_photo_metadata' not in st.session_state:
+        st.session_state.product_photo_metadata = {}
 
-    uploaded_photos = st.file_uploader(
-        "Upload photos",
-        type=["png", "jpg", "jpeg", "gif", "webp"],
-        accept_multiple_files=True,
-        key="order_photo_uploader",
-        label_visibility="collapsed"
-    )
+    if st.session_state.order_items:
+        # Dropdown to select which product to upload photos for
+        product_names = [item['product'] for item in st.session_state.order_items]
+        selected_product = st.selectbox(
+            "Select product to upload photos for",
+            options=product_names,
+            key="photo_product_selector"
+        )
 
-    if uploaded_photos:
-        st.session_state.order_photos = uploaded_photos
-        st.success(f"{len(uploaded_photos)} photo(s) attached to this order")
+        # Show current photo count for selected product
+        current_photos = st.session_state.product_photos.get(selected_product, [])
+        remaining = 5 - len(current_photos)
 
-        # Display thumbnails in a grid
-        cols = st.columns(min(len(uploaded_photos), 4))
-        for i, photo in enumerate(uploaded_photos):
-            with cols[i % 4]:
-                st.image(photo, caption=photo.name, use_column_width=True)
-    elif st.session_state.order_photos:
-        st.caption(f"{len(st.session_state.order_photos)} photo(s) previously uploaded this session")
+        if remaining > 0:
+            uploaded_photos = st.file_uploader(
+                f"Upload photos for {selected_product} ({remaining} remaining)",
+                type=["png", "jpg", "jpeg", "webp"],
+                accept_multiple_files=True,
+                key=f"photo_uploader_{selected_product}"
+            )
 
-    st.caption("Photos are stored for this session only. They will not persist after closing the app.")
+            if uploaded_photos:
+                # Add new photos up to the cap of 5
+                existing = st.session_state.product_photos.get(selected_product, [])
+                space_left = 5 - len(existing)
+                new_photos = uploaded_photos[:space_left]
+
+                if new_photos:
+                    st.session_state.product_photos[selected_product] = existing + new_photos
+                    if len(uploaded_photos) > space_left:
+                        st.warning(f"Only added {space_left} photo(s) - maximum 5 per product reached.")
+        else:
+            st.info(f"{selected_product} already has 5 photos (maximum).")
+
+        # Display photos for selected product
+        current_photos = st.session_state.product_photos.get(selected_product, [])
+        if current_photos:
+            st.markdown(f"**{selected_product}** - {len(current_photos)} photo(s):")
+            cols = st.columns(min(len(current_photos), 4))
+            for i, photo in enumerate(current_photos):
+                with cols[i % 4]:
+                    photo.seek(0)
+                    st.image(photo, caption=photo.name, use_column_width=True)
+
+        # Summary of all products with photos
+        products_with_photos = {k: v for k, v in st.session_state.product_photos.items() if v}
+        if products_with_photos:
+            st.divider()
+            st.markdown("**Photo Summary:**")
+            for prod_name, photos in products_with_photos.items():
+                st.caption(f"- {prod_name}: {len(photos)} photo(s)")
+        else:
+            st.caption("No photos uploaded yet.")
+
+        if st.session_state.product_photos:
+            st.caption("Photos will be saved to Google Drive when you save the order.")
+        else:
+            st.caption("Photos are stored for this session only until the order is saved.")
+    else:
+        st.info("Add products to your order first, then you can upload photos for each product.")
 
     # ============================================================
     # CLIENT INFORMATION UI
@@ -7878,11 +7963,25 @@ with tab3:
                     'order_confirmed': st.session_state.order_confirmed
                 }
 
+                # Prepare photos for upload to Drive
+                photos_for_upload = {}
+                for prod_name, photos in st.session_state.get('product_photos', {}).items():
+                    if photos:
+                        photo_list = []
+                        for photo in photos:
+                            photo.seek(0)
+                            photo_list.append({
+                                'bytes': photo.read(),
+                                'filename': photo.name
+                            })
+                        photos_for_upload[prod_name] = photo_list
+
                 success, message, result = save_order(
                     name=order_name.strip(),
                     created_by=created_by.strip() if created_by else "",
                     order_data=order_data,
-                    dataset=st.session_state.selected_dataset
+                    dataset=st.session_state.selected_dataset,
+                    photos_by_product=photos_for_upload if photos_for_upload else None
                 )
 
                 if success:
@@ -7900,7 +7999,8 @@ with tab3:
                                 name=result,
                                 created_by=created_by.strip() if created_by else "",
                                 order_data=order_data,
-                                dataset=st.session_state.selected_dataset
+                                dataset=st.session_state.selected_dataset,
+                                photos_by_product=photos_for_upload if photos_for_upload else None
                             )
                             if success2:
                                 update_last_save_time('order')
