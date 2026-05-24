@@ -25,7 +25,7 @@
 - **Last Major Update:** 2026-05-23 - Leadership meeting bug fixes and feature requests (16 items)
 - **Current Version:** 8.3.0
 - **Status:** Production-ready with 4-method pricing system (v8.1.0 schema, 45 columns)
-- **Codebase:** ~18,300 lines of Python, clean and documented
+- **Codebase:** ~18,500 lines of Python, clean and documented
 
 **Recent Work (May 2026):**
 - 16 bug fixes and feature requests from leadership meeting (see [docs/CHANGES_2026_05_23.md](docs/CHANGES_2026_05_23.md))
@@ -36,7 +36,7 @@
 - Import from Proposal promoted to full section (Option B) in Tab 3
 - PBP In-Hands Date field for Purchase Orders
 - Editable Customization Description field
-- Product Photos upload with HTML export embedding
+- Per-product photo persistence via Google Sheets (upload, save, load, download, delete)
 - Legacy Shipping & Tariffs hidden behind expander (costs now in product pricing)
 - Fixed HTML/CSV download buttons serving stale data in Tab 4
 - See [CHANGELOG.md](CHANGELOG.md) for complete details
@@ -438,6 +438,7 @@ pricing-data-solution-pbp/
 │   ├── match_memory.py        # Confirmed match storage (Google Sheets, v6.9)
 │   ├── proposal_manager.py    # Save/load/delete proposals (v6.6)
 │   ├── order_manager.py       # Save/load/delete orders (v6.7)
+│   ├── drive_helper.py         # Photo storage via Google Sheets (base64 chunked)
 │   ├── forms_config.py        # Google Forms configuration (v7.6, NEW)
 │   └── forms_helper.py        # Google Forms URL generation & response import (v7.6, NEW)
 │
@@ -491,7 +492,7 @@ pricing-data-solution-pbp/
 - Google Forms integration in production use
 
 **Codebase Status:**
-- ~18,300 lines of Python code (app.py + 12 src/ modules)
+- ~18,500 lines of Python code (app.py + 13 src/ modules)
 - 55+ test scripts organized in scripts/ (core, features, investigations)
 - 4-method pricing system (v8.1.0 schema, 45 columns)
 - Fully deployed and operational on Render
@@ -506,7 +507,7 @@ pricing-data-solution-pbp/
 - Import from Proposal promoted to Option B in Tab 3
 - PBP In-Hands Date field for Purchase Orders
 - Editable Customization Description field for base customization
-- Product Photos upload with HTML export embedding
+- Per-product photo persistence via Google Sheets (upload, save, load, download, delete)
 - Legacy Shipping & Tariffs hidden (costs now in product pricing)
 - Fixed HTML/CSV download buttons serving stale data
 - Full details: [docs/CHANGES_2026_05_23.md](docs/CHANGES_2026_05_23.md)

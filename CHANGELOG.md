@@ -10,7 +10,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - **Clear All Filters Button:** One-click reset of all product filters (budget range, partner, country, search) in Tab 1
 - **PBP In-Hands Date Field:** Date PBP needs to receive product from partner, shown in Tab 3 (Section 5), Tab 4 (Client & Order Information), and on Purchase Orders (both table display and HTML export)
 - **Customization Description Field:** Editable text input for base customization in Tab 3, pre-fills from spreadsheet data, appears on pricing breakdown and invoice/PO line items
-- **Product Photos Upload:** New Section 5 in Tab 3 for uploading multiple photos (PNG, JPG, GIF, WEBP) with thumbnail grid display and base64 embedding in HTML invoice/PO export
+- **Per-Product Photo Persistence:** Upload photos per product in Tab 3 (dropdown selector, up to 5 per product, thumbnail grid with summary). Photos persist across sessions via Google Sheets storage (base64 chunked). Tab 4 shows per-product photos with individual download buttons below Invoice/PO downloads. Photos auto-deleted when order is deleted. New module: `src/drive_helper.py` (photo storage)
 - **Google Form URL On-Demand Generation:** "Generate Form URL" / "Update Form URL" button replaces auto-generation so users can regenerate after making changes
 - **Import from Proposal (Option B):** Promoted from hidden expander to full section in Tab 3 as most commonly used workflow; Manual Product Selection renamed to Option C
 
