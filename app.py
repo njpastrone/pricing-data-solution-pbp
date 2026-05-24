@@ -70,6 +70,13 @@ from src.template_loader import (
     list_available_templates,
     TEMPLATE_CONFIG
 )
+from src.client_form import (
+    load_proposal_for_client,
+    load_draft,
+    save_draft,
+    submit_form,
+    generate_session_token
+)
 
 # ============================================================
 # HELPER FUNCTIONS
@@ -316,14 +323,330 @@ def clear_saved_data_cache():
     cached_load_all_proposals.clear()
     cached_load_all_orders.clear()
 
+def _render_client_form_page(proposal_id, session_id):
+    """
+    Render the client-facing order form page.
+    Called when ?client_form=PROP_ID&session=TOKEN is in the URL.
+    Hides sidebar, tabs, and all internal tools.
+    """
+    # Hide Streamlit chrome for clean client experience
+    st.markdown("""<style>
+        [data-testid="stSidebar"] { display: none; }
+        #MainMenu { visibility: hidden; }
+        footer { visibility: hidden; }
+        [data-testid="stToolbar"] { visibility: hidden; }
+    </style>""", unsafe_allow_html=True)
+
+    # Validate inputs
+    if not proposal_id:
+        st.error("Invalid form link. Please contact your PBP representative.")
+        return
+
+    if not session_id:
+        st.error("Invalid form link (missing session). Please contact your PBP representative.")
+        return
+
+    # Load proposal
+    proposal = load_proposal_for_client(proposal_id)
+    if proposal is None:
+        st.error("This form is no longer available. Please contact your PBP representative.")
+        return
+
+    # Load existing draft (if client is returning)
+    draft = load_draft(proposal_id, session_id)
+    saved_data = draft['form_data'] if draft else {}
+
+    # --- Header ---
+    st.title("PBP Client Order Form")
+    st.caption(f"Proposal: {proposal['proposal_name']}")
+
+    if draft and draft.get('updated_date'):
+        st.caption(f"Draft saved: {draft['updated_date']}")
+
+    st.divider()
+
+    # --- Section 1: Client Information ---
+    st.subheader("1. Client Information")
+
+    saved_client = saved_data.get('client_info', {})
+
+    col1, col2 = st.columns(2)
+    with col1:
+        client_type = st.selectbox(
+            "Client Type",
+            options=["New", "Existing"],
+            index=0 if saved_client.get('client_type', 'New') == 'New' else 1,
+            key="cf_client_type"
+        )
+        company_name = st.text_input(
+            "Company Name *",
+            value=saved_client.get('company_name', ''),
+            key="cf_company_name"
+        )
+        contact_phone = st.text_input(
+            "Contact Phone",
+            value=saved_client.get('contact_phone', ''),
+            key="cf_contact_phone"
+        )
+
+    with col2:
+        contact_name = st.text_input(
+            "Contact Name *",
+            value=saved_client.get('contact_name', ''),
+            key="cf_contact_name"
+        )
+        contact_email = st.text_input(
+            "Contact Email *",
+            value=saved_client.get('contact_email', ''),
+            key="cf_contact_email"
+        )
+
+    st.divider()
+
+    # --- Section 2: Products & Quantities ---
+    st.subheader("2. Products & Quantities")
+
+    saved_products = saved_data.get('products', [])
+    products_input = []
+
+    for idx, product in enumerate(proposal['products']):
+        # Find saved quantity/notes for this product
+        saved_item = next(
+            (p for p in saved_products if p.get('name') == product['name']),
+            {}
+        )
+
+        st.markdown(f"**{product['name']}**")
+        if product.get('partner'):
+            st.caption(f"Partner: {product['partner']}")
+
+        col_qty, col_notes = st.columns([1, 3])
+        with col_qty:
+            qty = st.number_input(
+                "Quantity *",
+                min_value=1,
+                value=saved_item.get('quantity', 100),
+                key=f"cf_qty_{idx}"
+            )
+        with col_notes:
+            notes = st.text_input(
+                "Customization Notes",
+                value=saved_item.get('customization_notes', ''),
+                key=f"cf_notes_{idx}",
+                placeholder="Optional: describe any customization needed"
+            )
+
+        products_input.append({
+            'name': product['name'],
+            'quantity': qty,
+            'customization_notes': notes,
+        })
+
+    st.divider()
+
+    # --- Section 3: Shipping & Delivery ---
+    st.subheader("3. Shipping & Delivery")
+
+    saved_shipping = saved_data.get('shipping_info', {})
+
+    shipping_address = st.text_area(
+        "Shipping Address *",
+        value=saved_shipping.get('shipping_address', ''),
+        key="cf_shipping_address",
+        height=100
+    )
+
+    billing_address = st.text_area(
+        "Billing Address (if different from shipping)",
+        value=saved_shipping.get('billing_address', ''),
+        key="cf_billing_address",
+        height=100
+    )
+
+    drop_shipping = st.selectbox(
+        "Will this order be drop-shipped? *",
+        options=["No", "Yes"],
+        index=1 if saved_shipping.get('drop_shipping', '').lower() == 'yes' else 0,
+        key="cf_drop_shipping"
+    )
+
+    drop_instructions = ""
+    uploaded_file = None
+    if drop_shipping == "Yes":
+        drop_instructions = st.text_area(
+            "Drop-Shipping Instructions",
+            value=saved_shipping.get('drop_shipping_instructions', ''),
+            key="cf_drop_instructions",
+            height=100
+        )
+
+        uploaded_file = st.file_uploader(
+            "Upload Drop-Shipping Address File (.xlsx, .csv)",
+            type=["xlsx", "csv"],
+            key="cf_file_upload"
+        )
+
+        # Show previously uploaded file if exists
+        if not uploaded_file and draft and draft.get('file_name'):
+            st.info(f"Previously uploaded: {draft['file_name']}")
+
+    in_hands_date = st.date_input(
+        "In-Hands Date (when do you need this order?) *",
+        value=None,
+        key="cf_in_hands_date"
+    )
+
+    st.divider()
+
+    # --- Section 4: Payment & Preferences ---
+    st.subheader("4. Payment & Preferences")
+
+    saved_payment = saved_data.get('payment_info', {})
+
+    impact_cards = st.selectbox(
+        "Would you like Impact Cards included?",
+        options=["No", "Yes"],
+        index=1 if saved_payment.get('impact_cards', '').lower() == 'yes' else 0,
+        key="cf_impact_cards"
+    )
+
+    impact_selection = ""
+    if impact_cards == "Yes":
+        impact_selection = st.text_input(
+            "Impact Card Selection",
+            value=saved_payment.get('impact_card_selection', ''),
+            key="cf_impact_selection",
+            placeholder="e.g., Story Card, Recipe Card"
+        )
+
+    payment_pref_options = ["Net 30", "Net 60", "Due on Receipt", "Other"]
+    saved_pref = saved_payment.get('payment_preference', 'Net 30')
+    payment_pref = st.selectbox(
+        "Payment Preference *",
+        options=payment_pref_options,
+        index=payment_pref_options.index(saved_pref) if saved_pref in payment_pref_options else 0,
+        key="cf_payment_pref"
+    )
+
+    payment_method_options = ["Credit Card", "ACH", "Check", "Other"]
+    saved_method = saved_payment.get('payment_method', 'Credit Card')
+    payment_method = st.selectbox(
+        "Payment Method *",
+        options=payment_method_options,
+        index=payment_method_options.index(saved_method) if saved_method in payment_method_options else 0,
+        key="cf_payment_method"
+    )
+
+    st.divider()
+
+    # --- Section 5: Additional Notes ---
+    st.subheader("5. Additional Notes")
+
+    special_requests = st.text_area(
+        "Special Requests, Notes, or Questions",
+        value=saved_data.get('notes', ''),
+        key="cf_special_requests",
+        height=100
+    )
+
+    st.divider()
+
+    # --- Collect all form data ---
+    def _collect_form_data():
+        return {
+            'client_info': {
+                'client_type': client_type,
+                'company_name': company_name,
+                'contact_name': contact_name,
+                'contact_email': contact_email,
+                'contact_phone': contact_phone,
+            },
+            'products': products_input,
+            'shipping_info': {
+                'shipping_address': shipping_address,
+                'billing_address': billing_address,
+                'drop_shipping': drop_shipping,
+                'drop_shipping_instructions': drop_instructions,
+                'in_hands_date': str(in_hands_date) if in_hands_date else '',
+            },
+            'payment_info': {
+                'impact_cards': impact_cards,
+                'impact_card_selection': impact_selection,
+                'payment_preference': payment_pref,
+                'payment_method': payment_method,
+            },
+            'notes': special_requests,
+        }
+
+    # --- Action Buttons ---
+    col_save, col_submit = st.columns(2)
+
+    with col_save:
+        if st.button("Save Progress", use_container_width=True, key="cf_save_btn"):
+            form_data = _collect_form_data()
+            file_bytes = uploaded_file.read() if uploaded_file else (draft.get('file_data') if draft else None)
+            fname = uploaded_file.name if uploaded_file else (draft.get('file_name') if draft else None)
+            success, msg = save_draft(proposal_id, session_id, form_data, file_bytes, fname)
+            if success:
+                st.success("Progress saved! You can close this page and return later.")
+            else:
+                st.error(f"Could not save: {msg}")
+
+    with col_submit:
+        if st.button("Submit Order", type="primary", use_container_width=True, key="cf_submit_btn"):
+            form_data = _collect_form_data()
+
+            # Validate required fields
+            missing = []
+            if not company_name.strip():
+                missing.append("Company Name")
+            if not contact_name.strip():
+                missing.append("Contact Name")
+            if not contact_email.strip():
+                missing.append("Contact Email")
+            if not shipping_address.strip():
+                missing.append("Shipping Address")
+            if not in_hands_date:
+                missing.append("In-Hands Date")
+
+            if missing:
+                st.error(f"Please fill in required fields: {', '.join(missing)}")
+            else:
+                file_bytes = uploaded_file.read() if uploaded_file else (draft.get('file_data') if draft else None)
+                fname = uploaded_file.name if uploaded_file else (draft.get('file_name') if draft else None)
+                success, msg = submit_form(proposal_id, session_id, form_data, file_bytes, fname)
+                if success:
+                    st.balloons()
+                    st.success("Your order has been submitted successfully! Your PBP representative will be in touch.")
+                    st.info("You can close this page now.")
+                else:
+                    st.error(f"Submission error: {msg}")
+
+
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIGURATION (conditional based on route)
 # ============================================================
-st.set_page_config(
-    page_title="PBP Order Management",
-    layout="wide",
-    initial_sidebar_state="auto"
-)
+# Check route before setting page config (must be first st command)
+# Use try/except to handle both old and new Streamlit API for query params
+try:
+    _early_query_params = st.query_params
+except AttributeError:
+    _early_query_params = st.experimental_get_query_params()
+
+_is_client_form_page = "client_form" in _early_query_params
+
+if _is_client_form_page:
+    st.set_page_config(
+        page_title="PBP Client Order Form",
+        layout="centered",
+        initial_sidebar_state="collapsed"
+    )
+else:
+    st.set_page_config(
+        page_title="PBP Order Management",
+        layout="wide",
+        initial_sidebar_state="auto"
+    )
 
 # ============================================================
 # KEEP-ALIVE PING ROUTE (for GitHub Actions)
@@ -340,6 +663,14 @@ except AttributeError:
 
 if "ping" in query_params:
     st.write("pong")
+    st.stop()
+
+# Client form mode — render clean form page for external clients
+if _is_client_form_page:
+    _render_client_form_page(
+        query_params.get("client_form", ""),
+        query_params.get("session", "")
+    )
     st.stop()
 
 # Prevent automatic page scrolling on widget interaction
