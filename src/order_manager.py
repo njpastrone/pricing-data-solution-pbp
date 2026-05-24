@@ -133,7 +133,63 @@ def generate_order_id():
     return datetime.now().strftime("ORDER_%Y%m%d_%H%M%S")
 
 
-def save_order(name, created_by, order_data, dataset):
+def upload_order_photos(order_id, photos_by_product):
+    """
+    Upload photos to Google Drive and return file ID metadata.
+
+    Args:
+        order_id (str): Order ID for naming files
+        photos_by_product (dict): {product_name: [{"bytes": b"...", "filename": "photo.png"}, ...]}
+
+    Returns:
+        dict: {product_name: [{"file_id": "abc123", "filename": "photo.png"}, ...]}
+    """
+    from src.drive_helper import upload_photo
+
+    photo_metadata = {}
+
+    for product_name, photos in photos_by_product.items():
+        product_files = []
+        # Clean product name for use in filename (remove special characters)
+        safe_name = "".join(c if c.isalnum() or c in (' ', '-', '_') else '_' for c in product_name).strip()
+
+        for i, photo in enumerate(photos):
+            ext = photo['filename'].rsplit('.', 1)[-1].lower() if '.' in photo['filename'] else 'png'
+            drive_filename = f"{order_id}_{safe_name}_{i+1}.{ext}"
+
+            file_id = upload_photo(photo['bytes'], drive_filename)
+            if file_id:
+                product_files.append({
+                    'file_id': file_id,
+                    'filename': photo['filename']  # Keep original filename for display
+                })
+
+        if product_files:
+            photo_metadata[product_name] = product_files
+
+    return photo_metadata
+
+
+def get_photo_file_ids_from_order(order_data):
+    """
+    Extract all Drive file IDs from an order's photo metadata.
+
+    Args:
+        order_data (dict): Deserialized order data
+
+    Returns:
+        list: List of Drive file IDs
+    """
+    file_ids = []
+    product_photos = order_data.get('product_photos', {})
+    for product_name, photos in product_photos.items():
+        for photo in photos:
+            if 'file_id' in photo:
+                file_ids.append(photo['file_id'])
+    return file_ids
+
+
+def save_order(name, created_by, order_data, dataset, photos_by_product=None):
     """
     Save an order to Google Sheets.
 
@@ -170,6 +226,12 @@ def save_order(name, created_by, order_data, dataset):
         # Generate unique ID and timestamp
         order_id = generate_order_id()
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Upload photos to Google Drive if any were provided
+        if photos_by_product:
+            photo_metadata = upload_order_photos(order_id, photos_by_product)
+            if photo_metadata:
+                order_data['product_photos'] = photo_metadata
 
         # Convert any date/datetime objects to strings before JSON serialization
         order_data_serializable = convert_dates_to_strings(order_data)
@@ -273,7 +335,7 @@ def load_order_data(order_id):
 
 def delete_order(order_id):
     """
-    Delete an order from Google Sheets.
+    Delete an order from Google Sheets and clean up associated Drive photos.
 
     Args:
         order_id (str): Unique order ID to delete
@@ -291,6 +353,18 @@ def delete_order(order_id):
         # Find row with matching order_id
         for i, row in enumerate(all_values[1:], start=2):  # Start at row 2 (skip header)
             if len(row) >= 1 and row[0] == order_id:
+                # Try to delete associated photos from Drive (best-effort)
+                if len(row) >= 6 and row[5]:
+                    try:
+                        order_data = json.loads(row[5])
+                        file_ids = get_photo_file_ids_from_order(order_data)
+                        if file_ids:
+                            from src.drive_helper import delete_photos
+                            deleted = delete_photos(file_ids)
+                            print(f"Deleted {deleted}/{len(file_ids)} photos from Drive")
+                    except Exception as e:
+                        print(f"Warning: Could not clean up Drive photos: {e}")
+
                 sheet.delete_rows(i)
                 return True, "Order deleted successfully"
 
