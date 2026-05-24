@@ -7571,7 +7571,7 @@ with tab3:
 
     if st.session_state.order_items:
         # Dropdown to select which product to upload photos for
-        product_names = [item['product'] for item in st.session_state.order_items]
+        product_names = [item['product_name'] for item in st.session_state.order_items]
         selected_product = st.selectbox(
             "Select product to upload photos for",
             options=product_names,
