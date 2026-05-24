@@ -8731,6 +8731,62 @@ with tab4:
         st.divider()
 
         # ============================================================
+        # PRODUCT PHOTOS
+        # ============================================================
+        product_photos_meta = st.session_state.get('product_photo_metadata', {})
+        product_photos_session = st.session_state.get('product_photos', {})
+
+        # Combine: session photos take priority, then saved metadata
+        all_photo_products = set(
+            [k for k, v in product_photos_session.items() if v] +
+            [k for k, v in product_photos_meta.items() if v]
+        )
+
+        if all_photo_products:
+            st.subheader("Product Photos")
+            st.caption("Download individual photos to attach to POs or invoices")
+
+            for prod_name in sorted(all_photo_products):
+                st.markdown(f"**{prod_name}**")
+
+                # Try session photos first (current session uploads)
+                if prod_name in product_photos_session and product_photos_session[prod_name]:
+                    photos = product_photos_session[prod_name]
+                    photo_cols = st.columns(min(len(photos), 4))
+                    for pi, photo in enumerate(photos):
+                        with photo_cols[pi % 4]:
+                            photo.seek(0)
+                            st.image(photo, caption=photo.name, use_column_width=True)
+                            photo.seek(0)
+                            st.download_button(
+                                label=f"Download",
+                                data=photo.read(),
+                                file_name=photo.name,
+                                key=f"tab4_dl_photo_{prod_name}_{pi}"
+                            )
+
+                # Fall back to Drive photos (loaded from saved order)
+                elif prod_name in product_photos_meta and product_photos_meta[prod_name]:
+                    photos_meta = product_photos_meta[prod_name]
+                    photo_cols = st.columns(min(len(photos_meta), 4))
+                    for pi, meta in enumerate(photos_meta):
+                        with photo_cols[pi % 4]:
+                            from src.drive_helper import download_photo
+                            photo_bytes = download_photo(meta['file_id'])
+                            if photo_bytes:
+                                st.image(photo_bytes, caption=meta['filename'], use_column_width=True)
+                                st.download_button(
+                                    label=f"Download",
+                                    data=photo_bytes,
+                                    file_name=meta['filename'],
+                                    key=f"tab4_dl_drive_{prod_name}_{pi}"
+                                )
+                            else:
+                                st.caption(f"Could not load: {meta['filename']}")
+
+            st.divider()
+
+        # ============================================================
         # SECTION 3: INVOICE & PURCHASE ORDER GENERATION
         # ============================================================
         st.subheader("2. Generate Invoice & Purchase Order")
@@ -9552,22 +9608,52 @@ with tab4:
             html_invoice += """
     </div>"""
 
-        # Add product photos if any were uploaded
-        if st.session_state.get('order_photos'):
+        # Add product photos if any exist (per-product structure)
+        product_photos_meta = st.session_state.get('product_photo_metadata', {})
+        product_photos_session = st.session_state.get('product_photos', {})
+
+        all_photo_products = set(
+            [k for k, v in product_photos_session.items() if v] +
+            [k for k, v in product_photos_meta.items() if v]
+        )
+
+        if all_photo_products:
             import base64
             html_invoice += """
     <h3>Product Photos</h3>"""
-            for photo in st.session_state.order_photos:
-                photo.seek(0)  # Reset file pointer
-                photo_bytes = photo.read()
-                b64 = base64.b64encode(photo_bytes).decode()
-                # Determine mime type from file name
-                ext = photo.name.rsplit('.', 1)[-1].lower()
-                mime_map = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp': 'image/webp'}
-                mime_type = mime_map.get(ext, 'image/png')
+
+            for prod_name in sorted(all_photo_products):
                 html_invoice += f"""
+    <h4>{prod_name}</h4>"""
+
+                # Try session photos first (current session uploads)
+                if prod_name in product_photos_session and product_photos_session[prod_name]:
+                    for photo in product_photos_session[prod_name]:
+                        photo.seek(0)
+                        photo_bytes = photo.read()
+                        b64 = base64.b64encode(photo_bytes).decode()
+                        ext = photo.name.rsplit('.', 1)[-1].lower()
+                        mime_map = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp': 'image/webp'}
+                        mime_type = mime_map.get(ext, 'image/png')
+                        html_invoice += f"""
     <div style="margin-bottom: 20px;">
         <p style="font-weight: bold; margin-bottom: 5px;">{photo.name}</p>
+        <img src="data:{mime_type};base64,{b64}" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;" />
+    </div>"""
+
+                # Fall back to Drive photos (loaded from saved order)
+                elif prod_name in product_photos_meta and product_photos_meta[prod_name]:
+                    for meta in product_photos_meta[prod_name]:
+                        from src.drive_helper import download_photo as dl_photo
+                        photo_bytes = dl_photo(meta['file_id'])
+                        if photo_bytes:
+                            b64 = base64.b64encode(photo_bytes).decode()
+                            ext = meta['filename'].rsplit('.', 1)[-1].lower()
+                            mime_map = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp': 'image/webp'}
+                            mime_type = mime_map.get(ext, 'image/png')
+                            html_invoice += f"""
+    <div style="margin-bottom: 20px;">
+        <p style="font-weight: bold; margin-bottom: 5px;">{meta['filename']}</p>
         <img src="data:{mime_type};base64,{b64}" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;" />
     </div>"""
 
