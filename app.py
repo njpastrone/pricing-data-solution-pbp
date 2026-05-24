@@ -75,7 +75,8 @@ from src.client_form import (
     load_draft,
     save_draft,
     submit_form,
-    generate_session_token
+    generate_session_token,
+    retrieve_file_by_proposal
 )
 
 # ============================================================
@@ -5298,6 +5299,26 @@ with tab3:
                         st.write(f"- {product['name']} (Qty: {product['quantity']})")
                         if product.get('customization_notes'):
                             st.caption(f"  Custom: {product['customization_notes']}")
+
+                    # Dropshipping file download (if submitted from in-app form)
+                    row_dict = row.to_dict() if hasattr(row, 'to_dict') else row
+                    dropshipping_filename = row_dict.get('Dropshipping File Name', '')
+                    if dropshipping_filename:
+                        st.markdown(f"**Attached File:** {dropshipping_filename}")
+                        proposal_id_from_session = st.session_state.get('loaded_proposal_id', '')
+                        if proposal_id_from_session:
+                            file_bytes, fname = retrieve_file_by_proposal(proposal_id_from_session)
+                            if file_bytes:
+                                st.download_button(
+                                    f"Download: {fname}",
+                                    data=file_bytes,
+                                    file_name=fname,
+                                    key=f"download_dropship_file_{idx}"
+                                )
+                            else:
+                                st.caption("(File not available for download)")
+                        else:
+                            st.caption("(No proposal loaded — file cannot be retrieved)")
 
                     # Import button with status-aware label and warning
                     if is_imported:
