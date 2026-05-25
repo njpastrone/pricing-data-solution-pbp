@@ -562,15 +562,6 @@ def _render_client_form_page(proposal_id, session_id):
         key="cf_impact_cards"
     )
 
-    impact_selection = ""
-    if impact_cards == "Yes":
-        impact_selection = st.text_input(
-            "Impact Card Selection",
-            value=saved_payment.get('impact_card_selection', ''),
-            key="cf_impact_selection",
-            placeholder="e.g., Story Card, Recipe Card"
-        )
-
     payment_pref_options = ["Net 30", "Net 60", "Due on Receipt", "Other"]
     saved_pref = saved_payment.get('payment_preference', 'Net 30')
     payment_pref = st.selectbox(
@@ -623,7 +614,7 @@ def _render_client_form_page(proposal_id, session_id):
             },
             'payment_info': {
                 'impact_cards': impact_cards,
-                'impact_card_selection': impact_selection,
+                'impact_card_selection': '',
                 'payment_preference': payment_pref,
                 'payment_method': payment_method,
             },
