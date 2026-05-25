@@ -330,12 +330,13 @@ def _render_client_form_page(proposal_id, session_id):
     Called when ?client_form=PROP_ID&session=TOKEN is in the URL.
     Hides sidebar, tabs, and all internal tools.
     """
-    # Hide Streamlit chrome for clean client experience
+    # Hide Streamlit chrome and center content for clean client experience
     st.markdown("""<style>
         [data-testid="stSidebar"] { display: none; }
         #MainMenu { visibility: hidden; }
         footer { visibility: hidden; }
         [data-testid="stToolbar"] { visibility: hidden; }
+        .block-container { max-width: 700px; margin: 0 auto; }
     </style>""", unsafe_allow_html=True)
 
     # Validate inputs
@@ -636,54 +637,21 @@ def _render_client_form_page(proposal_id, session_id):
 
 
 # ============================================================
-# PAGE CONFIGURATION (conditional based on route)
+# PAGE CONFIGURATION
 # ============================================================
-# Detect client form route before setting page config.
-# Must handle multiple Streamlit versions (1.29 old API, 1.30+ new API).
-# Use try/except with multiple fallbacks for maximum compatibility.
-_is_client_form_page = False
-_client_form_id = ""
-_client_form_session = ""
-
-try:
-    # Streamlit >= 1.30: st.query_params is a QueryParamsProxy
-    _qp = st.query_params
-    _client_form_id = _qp.get("client_form", "")
-    _client_form_session = _qp.get("session", "")
-    _is_client_form_page = bool(_client_form_id)
-except AttributeError:
-    # Streamlit < 1.30: old API returns dict of lists
-    _qp = st.experimental_get_query_params()
-    _cf_list = _qp.get("client_form", [])
-    _sess_list = _qp.get("session", [])
-    _client_form_id = _cf_list[0] if _cf_list else ""
-    _client_form_session = _sess_list[0] if _sess_list else ""
-    _is_client_form_page = bool(_client_form_id)
-
-if _is_client_form_page:
-    st.set_page_config(
-        page_title="PBP Client Order Form",
-        layout="centered",
-        initial_sidebar_state="collapsed"
-    )
-else:
-    st.set_page_config(
-        page_title="PBP Order Management",
-        layout="wide",
-        initial_sidebar_state="auto"
-    )
+st.set_page_config(
+    page_title="PBP Order Management",
+    layout="wide",
+    initial_sidebar_state="auto"
+)
 
 # ============================================================
-# KEEP-ALIVE PING ROUTE (for GitHub Actions)
+# ROUTING (ping, client form)
 # ============================================================
-# Lightweight endpoint to keep Streamlit Cloud app awake
-# Responds instantly without loading data or UI
 # Handle both old and new Streamlit API for query params
 try:
-    # Try new API (Streamlit >= 1.30)
     query_params = st.query_params
 except AttributeError:
-    # Fall back to old API (Streamlit < 1.30)
     query_params = st.experimental_get_query_params()
 
 if "ping" in query_params:
@@ -691,8 +659,16 @@ if "ping" in query_params:
     st.stop()
 
 # Client form mode — render clean form page for external clients
-if _is_client_form_page:
-    _render_client_form_page(_client_form_id, _client_form_session)
+# Extract param value (new API returns str, old API returns list)
+_cf_param = query_params.get("client_form", "")
+if isinstance(_cf_param, list):
+    _cf_param = _cf_param[0] if _cf_param else ""
+
+if _cf_param:
+    _session_param = query_params.get("session", "")
+    if isinstance(_session_param, list):
+        _session_param = _session_param[0] if _session_param else ""
+    _render_client_form_page(_cf_param, _session_param)
     st.stop()
 
 # Prevent automatic page scrolling on widget interaction
