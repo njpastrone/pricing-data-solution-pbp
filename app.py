@@ -651,15 +651,9 @@ st.set_page_config(
 # Handle both old and new Streamlit API for query params
 try:
     query_params = st.query_params
-    _qp_type = "new"
 except AttributeError:
     query_params = st.experimental_get_query_params()
-    _qp_type = "old"
 
-# DEBUG: Uncomment next 3 lines to diagnose query param issues
-st.write(f"DEBUG: qp_type={_qp_type}, params={dict(query_params) if hasattr(query_params, '__iter__') else str(query_params)}")
-st.write(f"DEBUG: 'ping' in qp = {'ping' in query_params}, 'client_form' in qp = {'client_form' in query_params}")
-st.stop()
 
 if "ping" in query_params:
     st.write("pong")
@@ -4325,7 +4319,7 @@ with tab2:
             token = generate_session_token()
 
             # Build URL
-            base_url = "https://pricing-data-solution-pbp.onrender.com/"
+            base_url = "https://pbp-order-management-system.onrender.com/"
             form_link = f"{base_url}?client_form={saved_proposal_id}&session={token}"
             st.session_state.generated_client_form_link = form_link
             st.rerun()
