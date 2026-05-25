@@ -9,6 +9,7 @@ Version: 6.13 (Multi-Variant Product Consolidation in PowerPoint)
 # Disabled since upgrading to Render Standard tier (2GB RAM) - caching improves UX
 USE_MEMORY_OPTIMIZATION = False
 
+import os
 import streamlit as st
 import gc  # For memory optimization
 import streamlit.components.v1 as components
@@ -701,6 +702,32 @@ if _cf_param:
     if isinstance(_session_param, list):
         _session_param = _session_param[0] if _session_param else ""
     _render_client_form_page(_cf_param, _session_param)
+    st.stop()
+
+# ============================================================
+# PASSWORD GATE (main app only — client forms bypass this)
+# ============================================================
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.markdown("""<style>
+        [data-testid="stSidebar"] { display: none; }
+        #MainMenu { visibility: hidden; }
+        [data-testid="stToolbar"] { visibility: hidden; }
+        .block-container { max-width: 400px; margin: 0 auto; padding-top: 10rem; }
+    </style>""", unsafe_allow_html=True)
+
+    st.title("PBP Order Management")
+    password = st.text_input("Enter password to continue", type="password", key="login_password")
+
+    if st.button("Log In", type="primary", use_container_width=True):
+        app_password = os.getenv("APP_PASSWORD") or st.secrets.get("app_password", "")
+        if password == app_password:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
     st.stop()
 
 # Prevent automatic page scrolling on widget interaction
