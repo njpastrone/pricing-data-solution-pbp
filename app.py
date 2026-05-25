@@ -359,23 +359,30 @@ def _render_client_form_page(proposal_id, session_id):
     saved_data = draft['form_data'] if draft else {}
 
     # --- Header ---
-    st.title("PBP Client Order Form")
-    st.caption(f"Proposal: {proposal['proposal_name']}")
+    st.title("Piece by Piece International Order Form")
+
+    # Check if already submitted (from draft status or session state)
+    already_submitted = (draft and draft.get('status') == 'submitted') or st.session_state.get('cf_submitted')
+    if already_submitted:
+        st.success("This order has been submitted. Your PBP representative will be in touch.")
+        st.info("If you need to make changes, please contact your PBP representative directly.")
+        return
 
     if draft and draft.get('updated_date'):
         st.caption(f"Draft saved: {draft['updated_date']}")
 
     st.divider()
 
-    # --- Section 1: Client Information ---
-    st.subheader("1. Client Information")
+    # --- Section 1: Your Information ---
+    st.subheader("1. Your Information")
+    st.caption("Please verify that all this information is correct and up to date and make any necessary changes.")
 
     saved_client = saved_data.get('client_info', {})
 
     col1, col2 = st.columns(2)
     with col1:
         client_type = st.selectbox(
-            "Client Type",
+            "Type",
             options=["New", "Existing"],
             index=0 if saved_client.get('client_type', 'New') == 'New' else 1,
             key="cf_client_type"
@@ -407,42 +414,70 @@ def _render_client_form_page(proposal_id, session_id):
 
     # --- Section 2: Products & Quantities ---
     st.subheader("2. Products & Quantities")
+    st.caption("Select the products you would like to order and enter the quantity for each.")
+
+    # Build product name list for dropdowns (with a blank placeholder)
+    product_names = [p['name'] for p in proposal['products']]
+    dropdown_options = ["-- Select a product --"] + product_names
 
     saved_products = saved_data.get('products', [])
+
+    # Determine how many item slots to show (saved items + 1 empty, max = number of products)
+    max_items = len(product_names)
+    # Initialize item count in session state
+    if 'cf_item_count' not in st.session_state:
+        st.session_state.cf_item_count = max(len(saved_products), 1)
+
     products_input = []
 
-    for idx, product in enumerate(proposal['products']):
-        # Find saved quantity/notes for this product
-        saved_item = next(
-            (p for p in saved_products if p.get('name') == product['name']),
-            {}
+    for idx in range(st.session_state.cf_item_count):
+        st.markdown(f"**Item {idx + 1}**")
+
+        # Restore saved selection for this slot
+        saved_item = saved_products[idx] if idx < len(saved_products) else {}
+        saved_name = saved_item.get('name', '')
+        default_index = dropdown_options.index(saved_name) if saved_name in dropdown_options else 0
+
+        selected_product = st.selectbox(
+            "Product",
+            options=dropdown_options,
+            index=default_index,
+            key=f"cf_product_{idx}",
+            label_visibility="collapsed"
         )
 
-        st.markdown(f"**{product['name']}**")
-        if product.get('partner'):
-            st.caption(f"Partner: {product['partner']}")
+        if selected_product != "-- Select a product --":
+            col_qty, col_notes = st.columns([1, 3])
+            with col_qty:
+                qty = st.number_input(
+                    "Quantity *",
+                    min_value=1,
+                    value=saved_item.get('quantity', 100),
+                    key=f"cf_qty_{idx}"
+                )
+            with col_notes:
+                notes = st.text_input(
+                    "Customization Notes",
+                    value=saved_item.get('customization_notes', ''),
+                    key=f"cf_notes_{idx}",
+                    placeholder="Optional: describe any customization needed"
+                )
 
-        col_qty, col_notes = st.columns([1, 3])
-        with col_qty:
-            qty = st.number_input(
-                "Quantity *",
-                min_value=1,
-                value=saved_item.get('quantity', 100),
-                key=f"cf_qty_{idx}"
-            )
-        with col_notes:
-            notes = st.text_input(
-                "Customization Notes",
-                value=saved_item.get('customization_notes', ''),
-                key=f"cf_notes_{idx}",
-                placeholder="Optional: describe any customization needed"
-            )
+            products_input.append({
+                'name': selected_product,
+                'quantity': qty,
+                'customization_notes': notes,
+            })
 
-        products_input.append({
-            'name': product['name'],
-            'quantity': qty,
-            'customization_notes': notes,
-        })
+        # Separator between items
+        if idx < st.session_state.cf_item_count - 1:
+            st.markdown("---")
+
+    # "Add another item" button (up to max products in proposal)
+    if st.session_state.cf_item_count < max_items:
+        if st.button("+ Add Another Item", key="cf_add_item"):
+            st.session_state.cf_item_count += 1
+            st.rerun()
 
     st.divider()
 
@@ -450,6 +485,37 @@ def _render_client_form_page(proposal_id, session_id):
     st.subheader("3. Shipping & Delivery")
 
     saved_shipping = saved_data.get('shipping_info', {})
+
+    # Drop-shipping question first (address depends on this choice)
+    drop_shipping = st.selectbox(
+        "Will this order be dropshipped or shipped to an individual address? *",
+        options=["Shipped to one address", "Yes, dropshipped to multiple addresses"],
+        index=1 if saved_shipping.get('drop_shipping', '').lower() == 'yes' else 0,
+        key="cf_drop_shipping"
+    )
+
+    drop_instructions = ""
+    uploaded_file = None
+    if drop_shipping == "Yes, dropshipped to multiple addresses":
+        st.caption("Please upload a spreadsheet of addresses and indicate what you want dropshipped to each location.")
+
+        uploaded_file = st.file_uploader(
+            "Upload Dropshipping Address File (.xlsx, .csv)",
+            type=["xlsx", "csv"],
+            key="cf_file_upload"
+        )
+
+        # Show previously uploaded file if exists
+        if not uploaded_file and draft and draft.get('file_name'):
+            st.info(f"Previously uploaded: {draft['file_name']}")
+
+        drop_instructions = st.text_area(
+            "Additional Dropshipping Instructions",
+            value=saved_shipping.get('drop_shipping_instructions', ''),
+            key="cf_drop_instructions",
+            height=100,
+            placeholder="Any special instructions for dropshipping"
+        )
 
     shipping_address = st.text_area(
         "Shipping Address *",
@@ -465,36 +531,9 @@ def _render_client_form_page(proposal_id, session_id):
         height=100
     )
 
-    drop_shipping = st.selectbox(
-        "Will this order be drop-shipped? *",
-        options=["No", "Yes"],
-        index=1 if saved_shipping.get('drop_shipping', '').lower() == 'yes' else 0,
-        key="cf_drop_shipping"
-    )
-
-    drop_instructions = ""
-    uploaded_file = None
-    if drop_shipping == "Yes":
-        drop_instructions = st.text_area(
-            "Drop-Shipping Instructions",
-            value=saved_shipping.get('drop_shipping_instructions', ''),
-            key="cf_drop_instructions",
-            height=100
-        )
-
-        uploaded_file = st.file_uploader(
-            "Upload Drop-Shipping Address File (.xlsx, .csv)",
-            type=["xlsx", "csv"],
-            key="cf_file_upload"
-        )
-
-        # Show previously uploaded file if exists
-        if not uploaded_file and draft and draft.get('file_name'):
-            st.info(f"Previously uploaded: {draft['file_name']}")
-
     # Restore saved date from draft if available
     saved_in_hands = saved_shipping.get('in_hands_date', '')
-    default_date = None
+    default_date = []  # Empty list = no date selected (Streamlit convention)
     if saved_in_hands:
         try:
             parts = saved_in_hands.split('-')
@@ -518,8 +557,8 @@ def _render_client_form_page(proposal_id, session_id):
 
     impact_cards = st.selectbox(
         "Would you like Impact Cards included?",
-        options=["No", "Yes"],
-        index=1 if saved_payment.get('impact_cards', '').lower() == 'yes' else 0,
+        options=["Yes", "No"],
+        index=0 if saved_payment.get('impact_cards', 'Yes').lower() != 'no' else 1,
         key="cf_impact_cards"
     )
 
@@ -541,8 +580,8 @@ def _render_client_form_page(proposal_id, session_id):
         key="cf_payment_pref"
     )
 
-    payment_method_options = ["Credit Card", "ACH", "Check", "Other"]
-    saved_method = saved_payment.get('payment_method', 'Credit Card')
+    payment_method_options = ["ACH", "Credit Card", "Check", "Other"]
+    saved_method = saved_payment.get('payment_method', 'ACH')
     payment_method = st.selectbox(
         "Payment Method *",
         options=payment_method_options,
@@ -578,9 +617,9 @@ def _render_client_form_page(proposal_id, session_id):
             'shipping_info': {
                 'shipping_address': shipping_address,
                 'billing_address': billing_address,
-                'drop_shipping': drop_shipping,
+                'drop_shipping': 'Yes' if drop_shipping.startswith('Yes') else 'No',
                 'drop_shipping_instructions': drop_instructions,
-                'in_hands_date': str(in_hands_date) if in_hands_date else '',
+                'in_hands_date': str(in_hands_date) if isinstance(in_hands_date, date) else '',
             },
             'payment_info': {
                 'impact_cards': impact_cards,
@@ -611,6 +650,8 @@ def _render_client_form_page(proposal_id, session_id):
 
             # Validate required fields
             missing = []
+            if not products_input:
+                missing.append("At least one product")
             if not company_name.strip():
                 missing.append("Company Name")
             if not contact_name.strip():
@@ -619,7 +660,7 @@ def _render_client_form_page(proposal_id, session_id):
                 missing.append("Contact Email")
             if not shipping_address.strip():
                 missing.append("Shipping Address")
-            if not in_hands_date:
+            if not isinstance(in_hands_date, date):
                 missing.append("In-Hands Date")
 
             if missing:
@@ -629,9 +670,8 @@ def _render_client_form_page(proposal_id, session_id):
                 fname = uploaded_file.name if uploaded_file else (draft.get('file_name') if draft else None)
                 success, msg = submit_form(proposal_id, session_id, form_data, file_bytes, fname)
                 if success:
-                    st.balloons()
-                    st.success("Your order has been submitted successfully! Your PBP representative will be in touch.")
-                    st.info("You can close this page now.")
+                    st.session_state.cf_submitted = True
+                    st.rerun()
                 else:
                     st.error(f"Submission error: {msg}")
 
@@ -4193,7 +4233,8 @@ with tab2:
             'client_type': 'New',
             'company_name': '',
             'contact_name': '',
-            'contact_email': ''
+            'contact_email': '',
+            'contact_phone': ''
         }
 
     col1, col2 = st.columns(2)
@@ -4226,6 +4267,12 @@ with tab2:
             "Contact Email",
             value=st.session_state.order_details.get('contact_email', ''),
             key="order_detail_contact_email"
+        )
+
+        st.session_state.order_details['contact_phone'] = st.text_input(
+            "Contact Phone",
+            value=st.session_state.order_details.get('contact_phone', ''),
+            key="order_detail_contact_phone"
         )
 
     # ============================================================
@@ -4317,6 +4364,22 @@ with tab2:
         # Generate link button
         if st.button("Generate Client Form Link", type="primary", use_container_width=True, key="gen_client_form_link_btn"):
             token = generate_session_token()
+
+            # Save exec's client info as a draft so the form starts pre-filled
+            order_details = st.session_state.get('order_details', {})
+            prefill_data = {
+                'client_info': {
+                    'client_type': order_details.get('client_type', 'New'),
+                    'company_name': order_details.get('company_name', ''),
+                    'contact_name': order_details.get('contact_name', ''),
+                    'contact_email': order_details.get('contact_email', ''),
+                    'contact_phone': order_details.get('contact_phone', ''),
+                },
+            }
+            # Only save draft if exec entered any client info
+            has_client_info = any(v.strip() for k, v in prefill_data['client_info'].items() if k != 'client_type' and isinstance(v, str))
+            if has_client_info:
+                save_draft(saved_proposal_id, token, prefill_data)
 
             # Build URL
             base_url = "https://pbp-order-management-system.onrender.com/"
