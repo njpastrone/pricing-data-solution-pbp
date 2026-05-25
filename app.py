@@ -715,7 +715,7 @@ if not st.session_state.authenticated:
         [data-testid="stSidebar"] { display: none; }
         #MainMenu { visibility: hidden; }
         [data-testid="stToolbar"] { visibility: hidden; }
-        .block-container { max-width: 400px; margin: 0 auto; padding-top: 10rem; }
+        .block-container { max-width: 500px; margin: 0 auto; padding-top: 10rem; }
     </style>""", unsafe_allow_html=True)
 
     st.title("PBP Order Management")
