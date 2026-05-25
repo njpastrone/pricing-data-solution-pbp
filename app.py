@@ -533,7 +533,7 @@ def _render_client_form_page(proposal_id, session_id):
 
     # Restore saved date from draft if available
     saved_in_hands = saved_shipping.get('in_hands_date', '')
-    default_date = []  # Empty list = no date selected (Streamlit convention)
+    default_date = None  # None = no date selected, single-date mode
     if saved_in_hands:
         try:
             parts = saved_in_hands.split('-')
