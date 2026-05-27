@@ -2373,13 +2373,9 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
             # Resolve impact slides from Google Sheet mapping + current template
             pptx_template_for_impacts = get_template_path('all_slides', show_loading=False)
             if pptx_template_for_impacts:
-                selected_template_name = st.session_state.get('selected_pptx_template', {}).get('name', '')
-                map_cache_key = f"impact_slide_map_{selected_template_name}"
-                if map_cache_key not in st.session_state:
-                    sheet_mapping = load_impact_slide_mapping()
-                    template_slides = find_all_impact_slides(pptx_template_for_impacts)
-                    st.session_state[map_cache_key] = resolve_impact_slides(unique_partners, sheet_mapping, template_slides)
-                dynamic_impact_map = st.session_state[map_cache_key]
+                sheet_mapping = load_impact_slide_mapping()
+                template_slides = find_all_impact_slides(pptx_template_for_impacts)
+                dynamic_impact_map = resolve_impact_slides(unique_partners, sheet_mapping, template_slides)
             else:
                 dynamic_impact_map = {}
 
@@ -2559,15 +2555,11 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     # Create complete presentation (products + impacts + outro only)
                     progress_container.info(f"Step 2/4: Selecting and updating {num_products} product slide(s) + {num_impacts} impact slide(s)...")
                     # Get dynamic impact slide map for selected template
-                    gen_template_name = st.session_state.get('selected_pptx_template', {}).get('name', '')
-                    gen_impact_map_key = f"impact_slide_map_{gen_template_name}"
-                    if gen_impact_map_key not in st.session_state:
-                        from src.data_loader import load_impact_slide_mapping
-                        sheet_mapping = load_impact_slide_mapping()
-                        template_slides = find_all_impact_slides(str(product_template_path))
-                        gen_partners = extract_unique_partners(st.session_state.proposal_products)
-                        st.session_state[gen_impact_map_key] = resolve_impact_slides(gen_partners, sheet_mapping, template_slides)
-                    gen_impact_map = st.session_state.get(gen_impact_map_key, {})
+                    from src.data_loader import load_impact_slide_mapping
+                    sheet_mapping = load_impact_slide_mapping()
+                    template_slides = find_all_impact_slides(str(product_template_path))
+                    gen_partners = extract_unique_partners(st.session_state.proposal_products)
+                    gen_impact_map = resolve_impact_slides(gen_partners, sheet_mapping, template_slides)
 
                     prs, table_reports = create_complete_proposal_presentation(
                         str(product_template_path),
