@@ -30,3 +30,59 @@ def test_load_impact_slide_mapping_values_contain_your_impact():
     for partner, slide_title in result.items():
         assert "Your Impact" in slide_title or "your impact" in slide_title.lower(), \
             f"Partner '{partner}' has unexpected slide title: '{slide_title}'"
+
+
+def test_resolve_impact_slides_with_matching_titles():
+    """resolve_impact_slides matches sheet titles against template slides."""
+    from src.slide_matcher import resolve_impact_slides
+
+    sheet_mapping = {"GOEX": "Apparel \u2013 Your Impact"}
+    template_slides = [
+        {"slide_index": 50, "slide_title": "Apparel \u2013 Your Impact"},
+        {"slide_index": 100, "slide_title": "Honey Products \u2013 Your Impact"},
+    ]
+
+    result = resolve_impact_slides(["GOEX"], sheet_mapping, template_slides)
+    assert "GOEX" in result
+    assert result["GOEX"]["slide_index"] == 50
+    assert result["GOEX"]["slide_title"] == "Apparel \u2013 Your Impact"
+
+
+def test_resolve_impact_slides_fuzzy_dash_match():
+    """resolve_impact_slides handles dash vs em-dash differences."""
+    from src.slide_matcher import resolve_impact_slides
+
+    sheet_mapping = {"GOEX": "Apparel \u2013 Your Impact"}
+    template_slides = [
+        {"slide_index": 50, "slide_title": "Apparel - Your Impact"},
+    ]
+
+    result = resolve_impact_slides(["GOEX"], sheet_mapping, template_slides)
+    assert "GOEX" in result
+    assert result["GOEX"]["slide_index"] == 50
+
+
+def test_resolve_impact_slides_partner_not_in_sheet():
+    """Partners not in the sheet mapping are skipped."""
+    from src.slide_matcher import resolve_impact_slides
+
+    sheet_mapping = {"GOEX": "Apparel \u2013 Your Impact"}
+    template_slides = [
+        {"slide_index": 50, "slide_title": "Apparel \u2013 Your Impact"},
+    ]
+
+    result = resolve_impact_slides(["Unknown Partner"], sheet_mapping, template_slides)
+    assert "Unknown Partner" not in result
+
+
+def test_resolve_impact_slides_title_not_in_template():
+    """If sheet title doesn't match any template slide, partner is skipped."""
+    from src.slide_matcher import resolve_impact_slides
+
+    sheet_mapping = {"GOEX": "Deleted Slide -- Your Impact"}
+    template_slides = [
+        {"slide_index": 50, "slide_title": "Apparel \u2013 Your Impact"},
+    ]
+
+    result = resolve_impact_slides(["GOEX"], sheet_mapping, template_slides)
+    assert "GOEX" not in result

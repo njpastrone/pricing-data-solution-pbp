@@ -778,6 +778,65 @@ def find_all_impact_slides(template_path: str) -> List[Dict]:
     return impact_slides
 
 
+def resolve_impact_slides(
+    partners: List[str],
+    sheet_mapping: Dict[str, str],
+    template_slides: List[Dict]
+) -> Dict[str, Dict]:
+    """
+    Resolve impact slides by matching Google Sheet titles against current template slides.
+
+    Args:
+        partners: List of partner names in the proposal
+        sheet_mapping: Dict from load_impact_slide_mapping(), e.g. {"GOEX": "Apparel -- Your Impact"}
+        template_slides: List from find_all_impact_slides(), e.g. [{"slide_index": 50, "slide_title": "..."}]
+
+    Returns:
+        Dict mapping partner to resolved slide info:
+        {
+            "GOEX": {"slide_index": 50, "slide_title": "Apparel -- Your Impact"}
+        }
+        Partners with no match are omitted.
+    """
+    result = {}
+
+    for partner in partners:
+        expected_title = sheet_mapping.get(partner)
+        if not expected_title:
+            continue
+
+        def normalize_dashes(text):
+            return text.replace("\u2014", "-").replace("\u2013", "-").replace("\u2012", "-")
+
+        normalized_expected = normalize_dashes(expected_title).lower().strip()
+
+        # Try exact match first (after dash normalization)
+        matched_slide = None
+        for slide in template_slides:
+            normalized_slide = normalize_dashes(slide['slide_title']).lower().strip()
+            if normalized_slide == normalized_expected:
+                matched_slide = slide
+                break
+
+        # Fall back to fuzzy match on title text (handles minor wording changes)
+        if not matched_slide:
+            best_score = 0
+            for slide in template_slides:
+                normalized_slide = normalize_dashes(slide['slide_title']).lower().strip()
+                score = fuzz.ratio(normalized_expected, normalized_slide)
+                if score > best_score:
+                    best_score = score
+                    matched_slide = slide if score >= 80 else None
+
+        if matched_slide:
+            result[partner] = {
+                'slide_title': matched_slide['slide_title'],
+                'slide_index': matched_slide['slide_index']
+            }
+
+    return result
+
+
 def match_impact_slides_by_partner(
     partners: List[str],
     template_path: str,
