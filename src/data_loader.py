@@ -51,6 +51,12 @@ DATASET_CONFIGS = {
         'url': 'https://docs.google.com/spreadsheets/d/1cU5CW0ydE1BXDjy3TNkbm4TohZ9CA8jR6h4zQPY_9Io',
         'description': 'Storage for confirmed product-to-slide matches',
         'spreadsheet_id': '1cU5CW0ydE1BXDjy3TNkbm4TohZ9CA8jR6h4zQPY_9Io'
+    },
+    'impact_slide_mapping': {
+        'name': 'Impact Slide Mapping',
+        'url': 'https://docs.google.com/spreadsheets/d/1MB5Loc4LcxOHF4vHTOFpW_XuwvErGHP7wNGD-nn4OVg',
+        'description': 'Partner-to-impact-slide title mapping (human-managed)',
+        'spreadsheet_id': '1MB5Loc4LcxOHF4vHTOFpW_XuwvErGHP7wNGD-nn4OVg'
     }
 }
 
@@ -252,3 +258,39 @@ def load_pricing_data(dataset='demo'):
             df_partner_info = df_partner_info[df_partner_info['Partner'].str.strip() != '']
 
     return df_template, df_metadata, df_partner_info
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_impact_slide_mapping():
+    """
+    Load partner-to-impact-slide-title mapping from Google Sheets.
+
+    The sheet has two columns: Partner, Slide Title.
+    Header is row 1, data starts row 2.
+
+    Returns:
+        dict: {partner_name: slide_title} e.g. {"GOEX": "Apparel -- Your Impact"}
+              Returns empty dict on error.
+    """
+    try:
+        client = connect_to_sheets()
+        spreadsheet_id = DATASET_CONFIGS['impact_slide_mapping']['spreadsheet_id']
+        spreadsheet = client.open_by_key(spreadsheet_id)
+        sheet = spreadsheet.worksheet('Sheet1')
+        all_values = sheet.get_all_values()
+
+        if not all_values or len(all_values) <= 1:
+            return {}
+
+        mapping = {}
+        for row in all_values[1:]:  # Skip header
+            if len(row) >= 2 and row[0].strip() and row[1].strip():
+                partner = row[0].strip()
+                slide_title = row[1].strip()
+                mapping[partner] = slide_title
+
+        return mapping
+
+    except Exception as e:
+        print(f"Error loading impact slide mapping: {e}")
+        return {}
