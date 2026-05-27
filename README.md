@@ -2,42 +2,28 @@
 
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
-**Current Status:** ✅ **IN PRODUCTION** - https://pricing-data-solution-pbp.onrender.com
-**Version:** 8.0.0 - Major Schema Transition Complete
-**Last Updated:** 2026-01-22
-**Data Status:** Partial partner data loaded (collecting remaining partners)
+**Status:** IN PRODUCTION - https://pricing-data-solution-pbp.onrender.com
+**Version:** 8.4.0
+**Last Updated:** 2026-05-27
 
 ---
 
-## 🎉 Major Update: Schema Transition Complete (v8.0.0)
+## What's New (v8.4.0 - May 2026)
 
-**Status:** ✅ Complete - All 6 implementation phases finished and tested
-**Release Date:** January 22, 2026
+**Client Order Form as Shareable Link:**
+- Standalone form page accessible via direct URL -- no app password or Google account needed
+- New `src/client_form.py` module (session tokens, proposal loading, draft save/load, form submission)
+- Query-param routing (`?client_form=<id>`) renders form instead of main app
+- Password gate for main app; client form links bypass the gate
+- Generate Client Form Link section in Tab 2
 
-**What Changed:**
-- Complete pricing engine rewrite with 3 sophisticated pricing methods
-- Schema expanded from 33 to 44 columns (+11 new fields)
-- Hybrid validation system (calculated vs spreadsheet comparison)
-- Manual override flexibility for all pricing methods
-- Clean description hierarchies for invoices, POs, and proposals
-- Full testing and documentation complete
+**v8.3.0 (May 2026):** 16 bug fixes and feature requests from leadership meeting. See [docs/CHANGES_2026_05_23.md](docs/CHANGES_2026_05_23.md).
 
-**Pricing Methods Now Supported:**
-1. **"MSRP + % of cost"** - Vendor MSRP plus shipping recovery (47.1% of products)
-2. **"MSRP capped – ship absorbed"** - Vendor MSRP exactly (37.3% of products)
-3. **"Standard markup"** - Traditional cost × markup (15.7% of products)
-
-**Documentation:**
-- Complete transition tracking: [schema_update_jan_2026/MASTER_TRACKING.md](schema_update_jan_2026/MASTER_TRACKING.md)
-- New pricing methodology: [docs/planning/METHODOLOGY_LOGIC.md](docs/planning/METHODOLOGY_LOGIC.md)
-- Updated schema reference: [schema_reference.md](schema_reference.md) (44 columns)
-- Full changelog: [CHANGELOG.md](CHANGELOG.md#800---2026-01-22)
-
-**Previous Feature:** Google Forms Integration (v7.6.0) - Complete and production-ready ✅
+**v8.0.0-8.2.0 (Jan-Apr 2026):** Major schema transition (33 to 45 columns), 4 pricing methods, per-product kitting, Google Forms integration, template-resilient PowerPoint generation. See [CHANGELOG.md](CHANGELOG.md) for full history.
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Install Dependencies
 ```bash
@@ -60,50 +46,74 @@ streamlit run scripts/test_connection.py
 
 ---
 
-## 📁 Project Structure
+## Architecture
+
+- **Frontend:** Streamlit (Python) with 4-tab structure + standalone client form page
+- **Data Source:** Google Sheets (Demo and Real datasets, switchable in sidebar)
+- **Authentication:** Google Cloud service account + password gate for main app
+- **Codebase:** ~19,500 lines of Python (app.py + 14 src/ modules)
+
+### Recommended Workflow
+1. **Tab 1 (Proposal Generator):** Browse & filter products, configure proposal, generate PowerPoint
+2. **Tab 2 (Client Order Form):** Generate shareable Client Form Link, send to client
+3. **Client completes form:** Standalone in-app form (no login required), saves to Google Sheets
+4. **Tab 3 (Order & Client Info):** Import form response, configure order details
+5. **Tab 4 (Execution & Accounting):** Review order, generate invoice & PO, download exports
+
+---
+
+## Features
+
+### Tab 1: Proposal Generator
+- Product catalog with filtering (price range, partner, country)
+- Bulk actions: add all products from selected partners
+- MSRP pricing (auto-calculated markup to match vendor MSRP)
+- Saved proposals (cloud-persistent via Google Sheets)
+- MOQ-based pricing tables
+- PowerPoint generation with automated slide matching
+
+### Tab 2: Client Order Form Generator
+- **Client Form Link (Recommended):** Shareable URL to standalone form page, no login needed
+- **Google Form (Legacy):** Pre-filled Google Form URL generation
+- **HTML Form (Legacy):** Professional HTML order forms with template customization
+
+### Tab 3: Order & Client Info
+- 4 entry points: Client Form import, HTML import, Proposal import, Manual selection
+- Per-product markup, customization, kitting
+- Tiered and flat-rate pricing
+- Discount options (Non-profit 5%, Volume Order 5%, custom)
+- Per-product photo uploads with cross-session persistence
+- Detailed order summary with line-item breakdown
+
+### Tab 4: Execution & Accounting
+- 4-table Invoice/PO format (bookkeeper-standardized)
+- Editable order information with validation
+- Dual export: CSV (bookkeeper) and HTML (client-facing)
+- Per-product photo display and download
+
+### Pricing System (v8.1.0 Schema, 45 columns)
+4 pricing methods:
+1. **"MSRP + % of cost"** -- Vendor MSRP plus shipping recovery
+2. **"MSRP capped -- ship absorbed"** -- Vendor MSRP exactly
+3. **"Standard markup"** -- Traditional cost x markup
+4. **"MSRP + Other Add-On %"** -- MSRP plus add-on percentage of cost
+
+---
+
+## Project Structure
 
 ```
 pricing-data-solution-pbp/
-├── app.py                      # Main application (PRODUCTION)
+├── app.py                      # Main application (~11,100 lines)
+├── start.sh                    # Render deployment startup script
 ├── requirements.txt            # Python dependencies
-├── CLAUDE.md                   # Project rules & context
-├── README.md                   # This file
+├── CLAUDE.md                   # Project rules & AI context
 │
-├── .streamlit/
-│   └── secrets.toml           # Google service account credentials (SECRET)
-│
-├── docs/                       # Documentation (organized by topic)
-│   ├── SCHEMA_TRANSITION_JAN2026.md # 🚨 PRIMARY TRACKING DOC - Schema transition (ACTIVE)
-│   ├── planning/              # Core project documentation
-│   │   ├── PLANNING.md        # Project requirements & goals
-│   │   ├── RESTRUCTURE_CONTEXT.md # Data structure reference
-│   │   ├── METHODOLOGY_LOGIC.md   # Pricing calculations & business rules
-│   │   ├── INVOICE_AND_PROPOSAL_SPEC.md # Invoice/PO format
-│   │   ├── GOOGLE_FORMS_IMPLEMENTATION_COMPLETE.md # Google Forms guide (v7.6)
-│   │   ├── GOOGLE_FORM_CREATION_GUIDE.md # Form creation steps (v7.6)
-│   │   └── GOOGLE_FORMS_PREFILLED_WORKFLOW.md # Workflow analysis (v7.6)
-│   ├── powerpoint/            # PowerPoint automation documentation
-│   │   ├── PHASE_2_COMPLETION_SUMMARY.md # Production-ready summary
-│   │   └── PHASE_1_COMPLETION_SUMMARY.md # Technical deep dive
-│   ├── meetings/              # Stakeholder meetings
-│   │   ├── STAKEHOLDER_MEETING_NOTES.md # Organized requirements
-│   │   └── RAW_MEETING_NOTES_113024.md # Original Nov 30 notes
-│   ├── testing/               # Testing documentation
-│   │   └── TAB3_TAB4_TESTING_CHECKLIST.md # Test plans
-│   ├── investigations/        # Technical investigations
-│   │   └── PARTNER_POC_INVESTIGATION.md # Debugging docs
-│   ├── archive/               # Historical documentation (preserved for reference)
-│   │   ├── powerpoint-planning/ # PowerPoint planning docs (14 files)
-│   │   └── tab2-improvements/   # UI redesign docs (9 files)
-│   ├── CLIENT_QUESTIONS.md    # Unanswered client questions
-│   ├── SCROLL_PRESERVATION_PATTERN.md # Scroll preservation implementation
-│   ├── SESSION_STATE_AUDIT.md # Session state management
-│   └── CODE_SIMPLIFICATION_AGENT.md # Code cleanup process
-│
-├── src/                        # Modular code (12 modules, ~5,518 lines)
+├── src/                        # Modular code (14 modules, ~8,300 lines)
 │   ├── data_loader.py         # Google Sheets data loading
-│   ├── helpers.py             # Utility functions
-│   ├── pricing_engine.py      # Pricing calculations
+│   ├── helpers.py             # Utility functions, validation, HTML parsing
+│   ├── pricing_engine.py      # Pricing calculations and quote generation
+│   ├── client_form.py         # Client order form page (v8.4.0)
 │   ├── slide_matcher.py       # PowerPoint slide matching
 │   ├── pptx_generator.py      # PowerPoint generation
 │   ├── template_loader.py     # Cloud-based template loading
@@ -111,500 +121,88 @@ pricing-data-solution-pbp/
 │   ├── match_memory.py        # Confirmed match storage (Google Sheets)
 │   ├── proposal_manager.py    # Save/load/delete proposals
 │   ├── order_manager.py       # Save/load/delete orders
-│   ├── forms_config.py        # Google Forms configuration (NEW v7.6)
-│   └── forms_helper.py        # Google Forms URL generation & import (NEW v7.6)
+│   ├── drive_helper.py        # Photo storage via Google Sheets (base64)
+│   ├── forms_config.py        # Google Forms configuration
+│   └── forms_helper.py        # Google Forms URL generation & import
 │
-├── scripts/                    # Utility scripts (organized, 26 files)
-│   ├── core/                  # Essential core functionality (2 files)
-│   │   ├── test_connection.py # Google Sheets API test (ESSENTIAL)
-│   │   └── investigate_data.py # Data debugging tool
-│   ├── features/              # Feature-specific tests (19 files)
-│   │   ├── test_saved_proposals.py # Test proposals feature
-│   │   ├── test_saved_orders.py # Test orders feature
-│   │   ├── test_units_per_package.py # Test multi-unit products
-│   │   ├── test_match_memory.py # Test match memory feature
-│   │   ├── test_bidirectional_pricing.py # Tab 1 & 3 price editing
-│   │   └── [14 more feature tests...]
-│   └── investigations/        # Technical debugging (7 files)
-│       ├── investigate_partner_poc.py # Partner contact debugging
-│       └── [6 more investigation scripts...]
+├── tests/                      # Unit tests
+│   └── test_client_form.py    # Client form module tests
 │
-└── backups/                    # Reference backup (1 file)
-    └── app_before_modular_refactor_20251027.py  # Pre-modular structure
+├── docs/                       # Documentation (organized by topic)
+│   ├── planning/              # Requirements, pricing logic, data structure
+│   ├── powerpoint/            # PowerPoint automation (Phase 1 & 2)
+│   ├── meetings/              # Stakeholder meeting notes
+│   ├── testing/               # Test plans and checklists
+│   └── archive/               # Historical documentation
+│
+├── scripts/                    # Utility scripts (55+ files)
+│   ├── core/                  # Essential: test_connection.py, investigate_data.py
+│   ├── features/              # Feature-specific tests (43 files)
+│   └── investigations/        # Technical debugging (16 files)
+│
+├── templates/                  # PowerPoint template, invoice reference
+└── backups/                    # Pre-modular structure reference
 ```
 
 ---
 
-## 🎯 Features
-
-### 4-Tab Workflow
-
-#### Tab 1: Proposal Generator (for prospective clients)
-- **Product Filtering:** Filter by price range, partner, country of origin
-- **Product Catalog:** Browse all products with detailed specifications
-- **Bulk Actions:** Add all products from selected partners at once
-- **Proposal Configuration:** Set quantity, markup %, MSRP pricing (auto-calculated)
-- **Saved Proposals:** Save and load proposals across sessions (cloud-persistent)
-- **MOQ-Based Pricing Tables:** Automatic minimum order quantity calculations
-- **PowerPoint Generation (v6.13):**
-  - Automated slide matching and customized presentations
-  - **Multi-variant product support:** Consolidates product variants (sizes/flavors) intelligently
-  - **Smart pricing detection:** Automatically detects if variants have consistent pricing
-  - **Conditional display options:** Simple single-row tables for consistent pricing, multi-row for variable pricing
-  - **Price transparency:** Shows MOQ and price for each variant before generation
-  - **Dynamic table layouts:** Adapts table format based on pricing (MOQ column vs Price @ 100 column)
-- **CSV Downloads:** Export proposal tables
-
-#### Tab 2: Client Order Form Generator
-- **Section 1: Client Information** - Pre-fill client details (type, company, contact, email, phone)
-- **Section 2: Generate Google Form (NEW! RECOMMENDED)** - Modern workflow
-  - **Pre-filled URL Generation:** Populate form with proposal products and client info
-  - **Product Selection:** Choose up to 10 products from proposal, adjust quantities
-  - **One-Click Generation:** Copy URL and send to client
-  - **Client Experience:** Professional Google Form → Auto-saves to Google Sheets
-  - **Benefits:** 50-70% faster than HTML, better UX, automatic tracking
-- **Section 3: HTML Order Form (Alternative)** - Legacy workflow
-  - **Form Template Customization:** Edit any template text with dropdown selector
-  - **Professional HTML Forms:** Email-ready order forms with styled tables
-  - **Multiple Formats:** Download as HTML, TXT, or CSV
-
-#### Tab 3: Order & Client Info (main workflow)
-- **Saved Orders:** Save and load orders across sessions (cloud-persistent)
-- **4 Entry Points:**
-  - Option A: Import Google Form responses (NEW! RECOMMENDED) - Load from Google Sheets
-  - Option B: Import completed HTML order forms (alternative)
-  - Option C: Import products from Tab 1 proposals
-  - Option D: Manual product selection with MSRP pricing
-- **Multi-Product Ordering:** Add multiple products with add-to-cart pattern
-- **Per-Product Markup:** Configure individual markup percentages
-- **Tiered & Flat-Rate Pricing:** Flexible pricing models per product
-- **Customization Options:** Setup fees + per-unit costs for custom branding
-- **Order-Level Settings:** Shipping, tariffs, discounts, custom line items
-- **Order Notes:** 5 categories (kitting, client requests, samples, artwork, general)
-
-#### Tab 4: Execution & Accounting
-- **Order Validation:** Completeness check with warnings
-- **Editable Order Information:** Review and complete missing fields
-- **4-Table Invoice/PO Format:** Bookkeeper-standardized template
-  - Client/Company Information
-  - Partners + Point of Contacts
-  - Order Details
-  - Invoice and PO Item Details
-- **Dual Export Options:** CSV (bookkeeper) and HTML (client-facing)
-
-### Formula
-
-**Single Product:**
-```
-Product Total = (Base Price × Quantity) + Art Setup + Label Costs + Markup
-
-Where:
-- Markup = Base Price × Quantity × (Markup % / 100)
-```
-
-**Multi-Product Order:**
-```
-Total Order = Sum(All Product Totals) - Discount + Shipping + Tariff
-
-Where:
-- Discount applies to products subtotal (not shipping/tariff)
-- Shipping and Tariff apply once to entire order
-- Optional marketing rounding applies to final total
-- Each product has independent markup percentage
-```
-
----
-
-## 📊 Data Source
+## Data Source
 
 **Datasets:** Switchable between Demo and Real data (sidebar selector)
-- **Demo:** `master_pricing_template_10_14` (testing data - 19 products, 4 partners)
-- **Real:** `master_pricing` (production data - 51 products, 4 partners, **44 columns**)
+- **Demo:** `master_pricing_template_10_14` (19 products, 4 partners)
+- **Real:** `master_pricing` (133 products, 4 partners)
 
-**Schema:** 44 columns (updated January 2026 - v8.0.0)
-- Complete schema documentation: [schema_reference.md](schema_reference.md)
-- Transition documentation: [schema_update_jan_2026/MASTER_TRACKING.md](schema_update_jan_2026/MASTER_TRACKING.md)
+**Schema:** v8.1.0, 45 columns. See [schema_reference.md](schema_reference.md) for complete definition.
 
-**Structure:** 3-sheet workbook
-- **Data** (header at row 6/7): Partner-product pricing data
+**Structure:** 3-sheet Google Sheets workbook
+- **Data** (header at row 6): Partner-product pricing data
 - **Metadata** (header at row 2): Deliverable field definitions
 - **Partner-Specific Info** (header at row 2): Partner configuration reference
 
-**New Pricing System (v8.0.0):**
-- **Three Pricing Methods:**
-  1. **"MSRP + % of cost"** - Vendor MSRP plus shipping recovery (Vendor MSRP + Shipping Add-On % × cost)
-  2. **"MSRP capped – ship absorbed"** - Vendor MSRP exactly, shipping absorbed
-  3. **"Standard markup"** - Traditional cost × (1 + markup%), with diagnostic support or 100% default
-- **Cost Basis System:** Explicit "Per Item" vs "Per Package" normalization
-- **Hybrid Validation:** App calculates prices and compares against spreadsheet values
-- **Manual Override:** All pricing methods can be manually overridden by users
-- **Calculated Fields:**
-  - `PBP Cost (Per-Unit, No Tiers, Calculated)` - Normalized per-item cost
-  - `PBP MSRP (Per-Unit, No Tiers, Calculated)` - **AUTHORITATIVE PRICE**
-  - `Vendor Markup (Calculated)` - Diagnostic vendor markup %
-  - `PBP Markup (Calculated)` - Diagnostic PBP markup %
-
-**Key Schema Changes:**
-- **Pricing Logic** (#23): Defines pricing method (3 allowed values)
-- **Cost Basis** (#20): "Per Item" or "Per Package" declaration
-- **Shipping Add-On %** (#24): Percentage for MSRP + % method
-- **Pricing Notes** (#25): Method assumptions and exceptions
-- **Billing Description** (#6): Client-facing invoice description (NEW)
-- **Purchase Description** (#5): Partner-facing PO description (renamed)
-- **Marketing Description** (#7): Website/proposal description (renamed)
-- **PBP Cost (No Tiers/Tier 1)** (#14): Consolidated base cost column
-- **Data Collection Notes** (#44): Data quality and governance (NEW)
-
-**Backward Compatibility:**
-- `get_column_value()` helper supports old and new column names seamlessly
-- Empty fields handled gracefully with sensible defaults
-- Old spreadsheets still work (fallback to old column names)
-
-See [docs/planning/METHODOLOGY_LOGIC.md](docs/planning/METHODOLOGY_LOGIC.md) for complete pricing methodology documentation.
-
 ---
 
-## 🔧 Configuration
+## Deployment
 
-### Pricing Tiers (Soft-Coded)
-Edit tier ranges in `app.py` → `get_price_for_quantity()` function:
-
-```python
-tier_columns = [
-    {'min': 1, 'max': 25, 'column': 'PBP Cost w/o shipping (1-25)'},
-    {'min': 26, 'max': 50, 'column': 'PBP Cost w/o shipping (26-50)'},
-    # ... more tiers
-]
-```
-
-### Label Costs (Jaggery Partner)
-- Label Art Setup: $70 (one-time)
-- Label Unit Cost: From product data
-- Label Minimum: 100 labels
-
-Edit in `app.py` → `calculate_additional_costs()` function.
-
----
-
-## 📚 Documentation
-
-**Essential Reading:**
-- [CLAUDE.md](CLAUDE.md) - Project rules & development guidelines
-- [docs/RESTRUCTURE_CONTEXT.md](docs/RESTRUCTURE_CONTEXT.md) - Current data structure
-- [docs/METHODOLOGY_LOGIC.md](docs/METHODOLOGY_LOGIC.md) - Pricing calculations
-- [docs/INVOICE_AND_PROPOSAL_SPEC.md](docs/INVOICE_AND_PROPOSAL_SPEC.md) - Invoice & proposal formats
-
-**Planning:**
-- [docs/PLANNING.md](docs/PLANNING.md) - Project requirements
-- [docs/CLIENT_QUESTIONS.md](docs/CLIENT_QUESTIONS.md) - Tracking open questions
-
----
-
-## 🧪 Testing
-
-### Manual Testing Checklist
-
-**Product Selection & Customization:**
-- [ ] Product selection dropdown works
-- [ ] Quantity input validates minimum
-- [ ] Tier selection matches quantity (e.g., 70 → 51-100 tier)
-- [ ] Label checkbox adds correct costs
-- [ ] Label minimum enforced (100 labels)
-- [ ] Art setup fee only shows when labels selected
-- [ ] Markup applies to product price only
-- [ ] Per-product markup can be set independently
-
-**Multi-Product Order Management:**
-- [ ] Add to Order button adds product to order
-- [ ] Current Order section displays all added products
-- [ ] Edit button repopulates form with product details
-- [ ] Update button replaces edited product in order
-- [ ] Remove button deletes product from order
-- [ ] Clear Entire Order button clears all products
-- [ ] Order persists across product additions (session state)
-
-**Order-Level Settings:**
-- [ ] Shipping input only active when products in order
-- [ ] Tariff input only active when products in order
-- [ ] Shipping/tariff apply once to entire order
-
-**Calculations & Display:**
-- [ ] Product totals calculate correctly
-- [ ] Order total sums all products + shipping + tariff
-- [ ] Per-product breakdowns show in Current Order
-- [ ] Order Summary shows all products with totals
-- [ ] Proposal displays multi-product details correctly
-- [ ] Invoice displays multi-product line items correctly
-
-### Test Cases
-See [docs/METHODOLOGY_LOGIC.md](docs/METHODOLOGY_LOGIC.md) for detailed single-product and multi-product test cases.
-
----
-
-## 🚢 Deployment
-
-### Render (Current Deployment)
 **Live URL:** https://pricing-data-solution-pbp.onrender.com
 
-**Configuration:**
-- **Instance Type:** Standard ($25/month)
-- **RAM:** 2GB
-- **CPU:** 1 core
-- **Automatic Deployment:** Connected to GitHub (deploys on push to main)
-- **Environment Variables:** Set in Render dashboard (GCP credentials)
-- **Startup Command:** Defined in `start.sh`
-
-**Template Storage:**
-- 43MB PowerPoint template stored in Google Drive
-- Downloaded on-demand (not bundled with app)
-- Cached in session for performance
+- **Platform:** Render Standard tier (2GB RAM, $25/month)
+- **Auto-deploy:** Connected to GitHub (deploys on push to main)
+- **Environment:** GCP credentials set in Render dashboard
+- **PowerPoint template:** 43MB file stored in Google Drive, downloaded on-demand
 
 **Local Development:**
 1. Clone repository
-2. Install dependencies: `pip install -r requirements.txt`
+2. `pip install -r requirements.txt`
 3. Create `.streamlit/secrets.toml` with GCP credentials
-4. Run: `streamlit run app.py`
+4. `streamlit run app.py`
 
 ---
 
-## 🔮 Future Enhancements
+## Documentation
 
-### Multi-Partner Support
-Currently built for Jaggery partner. Future versions will support multiple partners with:
-- Different pricing tier structures
-- Different tier ranges
-- Different cost components
-- Partner-specific configurations
-
-See [docs/APP_UPDATE_PLAN.md](docs/APP_UPDATE_PLAN.md) for multi-partner architecture strategy.
-
----
-
-## 🛠️ Common Tasks
-
-**Refresh pricing data:** Menu → "Rerun" in the app
-
-**Update credentials:** Edit `.streamlit/secrets.toml`
-
-**Test connection:** `streamlit run scripts/test_connection.py`
-
-**Debug data:** `streamlit run scripts/investigate_data.py`
-
-**Update schema/data model:** Follow [SCHEMA_UPDATE_PROCESS.md](SCHEMA_UPDATE_PROCESS.md) for systematic process
+| Document | Purpose |
+|----------|---------|
+| [CLAUDE.md](CLAUDE.md) | Project rules & development guidelines |
+| [CHANGELOG.md](CHANGELOG.md) | Complete version history (v6.0 through v8.4.0) |
+| [ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md) | Current task list and priorities |
+| [schema_reference.md](schema_reference.md) | 45-column schema definition (v8.1.0) |
+| [docs/planning/METHODOLOGY_LOGIC.md](docs/planning/METHODOLOGY_LOGIC.md) | Pricing calculations & business rules |
+| [docs/planning/PLANNING.md](docs/planning/PLANNING.md) | Project requirements & goals |
+| [docs/planning/INVOICE_AND_PROPOSAL_SPEC.md](docs/planning/INVOICE_AND_PROPOSAL_SPEC.md) | Invoice/PO format specs |
+| [SCHEMA_UPDATE_PROCESS.md](SCHEMA_UPDATE_PROCESS.md) | Process for updating data model |
 
 ---
 
-## 📝 Development Guidelines
+## Development Guidelines
 
-See [CLAUDE.md](CLAUDE.md) for complete development rules, including:
+See [CLAUDE.md](CLAUDE.md) for complete rules:
 - Always use Python & Streamlit
 - Write beginner-friendly code
 - Take the simplest route
-- Soft-code everything for easy editing
-- Minimize codebase size
-- Avoid code duplication
+- Minimize codebase size, avoid duplication
+- No emojis in the app
+- Commit prefixes: `FEAT:`, `FIX:`, `TEST:`, `DOC:`
 
 ---
-
-## 📄 License
 
 Peace by Piece International - Internal Tool
-
----
-
-**Last Updated:** 2025-12-20
-**Version:** 7.3.0 (Week 2 Sprint - 84% Complete)
-
-## 🆕 Recent Updates (v7.3.0 - 2025-12-20)
-
-### Week 2 Sprint Features
-**3 of 6 features complete:**
-
-**Bidirectional Price Editing in Tab 3:**
-- Users can now edit client price per unit directly, not just markup %
-- Markup % automatically recalculates when price is changed
-- Matches Tab 1 pricing behavior for consistency
-- Fixed critical undefined variable error
-
-**NGO to Non-profit Terminology:**
-- Updated all references throughout the app for better inclusivity
-- Changed discount label, form fields, and UI text
-- Maintains 5% preset for non-profit organizations
-
-**Directory Reorganization:**
-- Organized docs/ into subdirectories (meetings, testing, investigations)
-- Organized scripts/ into core, features, investigations folders
-- Created comprehensive CHANGELOG.md for version history
-- Cleaner, more maintainable project structure
-
----
-
-## Previous Updates (v7.0 - 2025-11-20)
-
-### Production Deployment Complete
-Application is now fully operational in production on Render:
-
-**Milestone Achievement:**
-- ✅ Production deployment complete and stable
-- ✅ All features tested and working in live environment
-- ✅ Clean, maintainable codebase ready for ongoing development
-- ✅ Documentation complete and up-to-date
-
-**Documentation:**
-- Added [docs/CODE_SIMPLIFICATION_AGENT.md](docs/CODE_SIMPLIFICATION_AGENT.md)
-- Documents autonomous code cleanup process
-- Serves as reference for future AI-assisted maintenance
-- Records decisions and rationale for 13,649-line reduction
-
-**Production URL:** https://pricing-data-solution-pbp.onrender.com
-
-This marks the completion of the initial deployment phase. The application is ready for active use by Peace by Piece International team.
-
----
-
-## Previous Updates (v6.18 - 2025-11-20)
-
-### Codebase Simplification & Code Clarity
-Major cleanup and refactoring to improve maintainability and beginner-friendliness:
-
-**Cleanup Results:**
-- **Deleted:** ~13,649 lines of Python code (49% reduction)
-- **Archived:** 23 documentation files (preserved in docs/archive/)
-- **Size reduction:** 22MB saved (142MB → 120MB)
-- **Current codebase:** ~14,138 lines of clean, focused code
-
-**What Was Removed:**
-- Deleted entire archive/ directory (22.5MB of deprecated jaggery_demo code)
-- Consolidated backups (3 of 4 deleted, kept modular refactor reference)
-- Removed 13 obsolete test scripts (kept 6 essential ones)
-- Archived 23 completed planning docs (PowerPoint + Tab 2 UI redesign)
-
-**Code Clarity Improvements:**
-- Renamed `normalize_product_name()` → `normalize_for_storage()` in match_manager.py
-- Fixed confusing duplicate function names (one returned uppercase, one lowercase)
-- Removed unused imports in slide_matcher.py
-- Updated function docstrings for self-documenting code
-- Now fully beginner-friendly and clear
-
-**Why This Matters:**
-The codebase is now significantly easier to navigate, understand, and maintain. All deleted code was either deprecated, redundant (covered by git history), or testing completed features. Documentation was archived (not deleted) for reference. The app maintains 100% functionality with a much leaner footprint.
-
----
-
-## Previous Updates (v6.17 - 2025-11-20)
-
-### Render Deployment & Memory Optimization
-Successfully deployed to production on Render with cloud-based template management:
-
-**Deployment Infrastructure:**
-- Deployed to Render Standard tier (2GB RAM, $25/month)
-- Created `start.sh` for Render startup configuration
-- Added environment variable support to `data_loader.py` for credentials
-- Moved 43MB PowerPoint template to Google Drive (prevents bundling in deployment)
-
-**New Module: template_loader.py**
-- Cloud-based PowerPoint template management
-- On-demand download from Google Drive
-- Session-based caching for performance
-- Supports both Google Drive and local fallback modes
-
-**Memory Optimization Infrastructure (v6.16):**
-- Added `USE_MEMORY_OPTIMIZATION` toggle (currently disabled)
-- Lazy loading support with `use_cache=False` parameter
-- Garbage collection after heavy operations in `pptx_generator.py`
-- Optimization disabled after tier upgrade (caching provides better UX)
-- Template downloads once and stays cached (no duplicate downloads)
-
-**Branding:**
-- Added peace dove icon (🕊️) to replace Streamlit crown
-- Visible in browser tab and bookmarks
-
-**Key Files:**
-- `start.sh` - Render deployment configuration
-- `src/template_loader.py` - Cloud template management
-- Updated `src/data_loader.py` - Environment variable support
-- Updated `app.py` - Memory optimization toggle
-
-**Production URL:** https://pricing-data-solution-pbp.onrender.com
-
----
-
-## Previous Updates (v6.15 - 2025-11-19)
-
-### HTML Order Form Product Extraction
-Complete automation of client order form import with product parsing:
-
-**Key Features:**
-- Automatically extracts product names from Order Details table in HTML forms
-- Smart product matching: exact match first, then partial match
-- Checkbox selection UI (same as Option B for consistency)
-- Shows match type (Exact/Partial) and warns about unmatched products
-- Adds products with default settings (quantity 1, 100% markup) ready for editing
-
-**Benefits:**
-- One-click import of both client info AND products from completed forms
-- No more manual product entry after receiving client forms
-- Intelligent matching catches variations in product names
-- Clear visibility of which products matched and which didn't
-
-**Workflow:**
-1. Upload completed HTML order form (Tab 3, Option A)
-2. Review extracted client info and products
-3. Click "Import Client Information"
-4. Select which matched products to add
-5. Click "Add Selected Products to Order"
-6. Edit quantities, markup, customization in Section 2
-
----
-
-## Previous Updates (v6.14 - 2025-11-19)
-
-### Toast Notifications for Better User Feedback
-Improved user experience with toast notifications that appear in the bottom-right corner:
-
-**Key Improvements:**
-- Replaced static success messages with toast notifications for all product additions
-- Notifications visible regardless of scroll position (major UX win)
-- Auto-dismiss after 4 seconds (non-intrusive)
-- Professional appearance without emoji icons
-
-**Applied to:**
-- Adding individual products to proposal (Tab 1)
-- Bulk adding products to proposal (Tab 1)
-- Importing products from proposal to order (Tab 3)
-- Adding custom line items (Tab 3 & Tab 4)
-
-**Why This Matters:**
-Previously, success messages appeared at the top of sections and were invisible when users scrolled down in the product catalog. Now, users always see confirmation of their actions.
-
----
-
-## Previous Updates (v6.13 - 2025-11-19)
-
-### Multi-Variant Product Consolidation
-Intelligent handling of product variants (different sizes/flavors) that map to the same PowerPoint slide:
-
-**Smart Pricing Detection:**
-- Automatically detects if variants have identical MOQ and pricing
-- Shows visual indicators: ✅ Consistent Pricing or ⚠️ Variable Pricing
-- Displays MOQ and price for each variant for transparency
-
-**Conditional Display Options:**
-- **Consistent Pricing:** Recommends single-row table (avoids redundant multi-row display)
-- **Variable Pricing:** Recommends multi-row table (shows price differences clearly)
-- User can still override automatic recommendations
-
-**Dynamic Table Layouts:**
-- **Single-row variant table:** `MOQ | Price Ea @ MOQ | Price @ Qty 100 | Delivery`
-- **Multi-row variant table (simplified):** `Variant | MOQ | Price Ea @ MOQ | Delivery`
-- **Multi-row variant table (full):** `Variant | Price @ MOQ | Price @ Qty 100 | Delivery`
-
-**Examples:**
-- **Honey Flavors (same price):** Single-row table, one price applies to all flavors
-- **Beeswax Candles (different prices):** Multi-row table, shows each size with its price
-
-**Technical Improvements:**
-- New function: `check_pricing_consistency()` - Compares MOQ and price across variants
-- Enhanced variant detection UI with pricing info displayed inline
-- Delivery time preservation from PowerPoint template (fixes hardcoded fallback bug)
-- Price @ Qty 100 calculation added to all pricing data
