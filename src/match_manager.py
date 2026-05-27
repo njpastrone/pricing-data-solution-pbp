@@ -26,8 +26,7 @@ def load_manual_matches() -> Dict:
     Returns:
         Dict with structure:
         {
-            "product_matches": {...},
-            "partner_impact_matches": {...}
+            "product_matches": {...}
         }
     """
     # Create data directory if it doesn't exist
@@ -38,8 +37,7 @@ def load_manual_matches() -> Dict:
     # Create file with empty structure if it doesn't exist
     if not os.path.exists(MANUAL_MATCHES_FILE):
         empty_structure = {
-            "product_matches": {},
-            "partner_impact_matches": {}
+            "product_matches": {}
         }
         with open(MANUAL_MATCHES_FILE, 'w') as f:
             json.dump(empty_structure, f, indent=2)
@@ -50,19 +48,16 @@ def load_manual_matches() -> Dict:
         with open(MANUAL_MATCHES_FILE, 'r') as f:
             data = json.load(f)
 
-        # Ensure both keys exist
+        # Ensure key exists
         if "product_matches" not in data:
             data["product_matches"] = {}
-        if "partner_impact_matches" not in data:
-            data["partner_impact_matches"] = {}
 
         return data
     except (json.JSONDecodeError, IOError) as e:
         # If file is corrupted, return empty structure
         print(f"Error loading manual matches: {e}")
         return {
-            "product_matches": {},
-            "partner_impact_matches": {}
+            "product_matches": {}
         }
 
 
@@ -76,10 +71,10 @@ def save_manual_match(
     Save a manual match to JSON file.
 
     Args:
-        product_name: Name of product or partner
+        product_name: Name of product
         slide_index: Index of slide in template (0-based)
         slide_title: Title text of the slide
-        match_category: "product" or "partner_impact"
+        match_category: "product"
 
     Returns:
         bool: True if save successful, False otherwise
@@ -94,8 +89,6 @@ def save_manual_match(
         # Determine which section to save to
         if match_category == "product":
             category_key = "product_matches"
-        elif match_category == "partner_impact":
-            category_key = "partner_impact_matches"
         else:
             print(f"Invalid match category: {match_category}")
             return False
@@ -132,8 +125,8 @@ def delete_manual_match(
     Delete a manual match from JSON file.
 
     Args:
-        product_name: Name of product or partner to delete
-        match_category: "product" or "partner_impact"
+        product_name: Name of product to delete
+        match_category: "product"
 
     Returns:
         bool: True if deletion successful, False otherwise
@@ -148,8 +141,6 @@ def delete_manual_match(
         # Determine which section to delete from
         if match_category == "product":
             category_key = "product_matches"
-        elif match_category == "partner_impact":
-            category_key = "partner_impact_matches"
         else:
             print(f"Invalid match category: {match_category}")
             return False
@@ -181,8 +172,8 @@ def get_manual_match(
     Get manual match for a specific product or partner.
 
     Args:
-        product_name: Name of product or partner
-        match_category: "product" or "partner_impact"
+        product_name: Name of product
+        match_category: "product"
 
     Returns:
         Dict with match data if found, None otherwise
@@ -205,8 +196,6 @@ def get_manual_match(
         # Determine which section to search
         if match_category == "product":
             category_key = "product_matches"
-        elif match_category == "partner_impact":
-            category_key = "partner_impact_matches"
         else:
             return None
 
@@ -223,7 +212,7 @@ def get_all_manual_matches(match_category: str = "product") -> Dict:
     Get all manual matches for a category.
 
     Args:
-        match_category: "product" or "partner_impact"
+        match_category: "product"
 
     Returns:
         Dict of all matches in the category
@@ -242,8 +231,6 @@ def get_all_manual_matches(match_category: str = "product") -> Dict:
         # Determine which section to return
         if match_category == "product":
             return data.get("product_matches", {})
-        elif match_category == "partner_impact":
-            return data.get("partner_impact_matches", {})
         else:
             return {}
 

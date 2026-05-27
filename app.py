@@ -2359,7 +2359,8 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
         st.subheader("Step 2: Impact Slides")
 
         # Import impact slide functions
-        from src.slide_matcher import extract_unique_partners, build_impact_slide_map, find_all_impact_slides
+        from src.slide_matcher import extract_unique_partners, resolve_impact_slides, find_all_impact_slides
+        from src.data_loader import load_impact_slide_mapping
 
         # Extract unique partners from proposal
         unique_partners = extract_unique_partners(st.session_state.proposal_products)
@@ -2369,14 +2370,15 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
             if 'impact_slide_selections' not in st.session_state:
                 st.session_state.impact_slide_selections = {}
 
-            # Build dynamic impact slide map from selected template
+            # Resolve impact slides from Google Sheet mapping + current template
             pptx_template_for_impacts = get_template_path('all_slides', show_loading=False)
             if pptx_template_for_impacts:
-                # Cache map in session state keyed by template name
                 selected_template_name = st.session_state.get('selected_pptx_template', {}).get('name', '')
                 map_cache_key = f"impact_slide_map_{selected_template_name}"
                 if map_cache_key not in st.session_state:
-                    st.session_state[map_cache_key] = build_impact_slide_map(pptx_template_for_impacts)
+                    sheet_mapping = load_impact_slide_mapping()
+                    template_slides = find_all_impact_slides(pptx_template_for_impacts)
+                    st.session_state[map_cache_key] = resolve_impact_slides(unique_partners, sheet_mapping, template_slides)
                 dynamic_impact_map = st.session_state[map_cache_key]
             else:
                 dynamic_impact_map = {}
@@ -2559,6 +2561,12 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                     # Get dynamic impact slide map for selected template
                     gen_template_name = st.session_state.get('selected_pptx_template', {}).get('name', '')
                     gen_impact_map_key = f"impact_slide_map_{gen_template_name}"
+                    if gen_impact_map_key not in st.session_state:
+                        from src.data_loader import load_impact_slide_mapping
+                        sheet_mapping = load_impact_slide_mapping()
+                        template_slides = find_all_impact_slides(str(product_template_path))
+                        gen_partners = extract_unique_partners(st.session_state.proposal_products)
+                        st.session_state[gen_impact_map_key] = resolve_impact_slides(gen_partners, sheet_mapping, template_slides)
                     gen_impact_map = st.session_state.get(gen_impact_map_key, {})
 
                     prs, table_reports = create_complete_proposal_presentation(
