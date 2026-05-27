@@ -1,7 +1,7 @@
 # Client Order Form - In-App Design Spec
 
 **Date:** 2026-05-24
-**Status:** Approved
+**Status:** COMPLETE (shipped v8.4.0, 2026-05-27)
 **Replaces:** Google Forms workflow (kept as legacy fallback)
 
 ---

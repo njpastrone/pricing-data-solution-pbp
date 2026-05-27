@@ -21,24 +21,23 @@
 
 ## ACTIVE DEVELOPMENT STATUS - May 2026
 
-**Current Focus:** Normal development - post-schema features and bug fixes
-- **Last Major Update:** 2026-05-23 - Leadership meeting bug fixes and feature requests (16 items)
-- **Current Version:** 8.3.0
+**Current Focus:** Normal development - client order form feature and bug fixes
+- **Last Major Update:** 2026-05-27 - Client Order Form as shareable link (v8.4.0)
+- **Current Version:** 8.4.0
 - **Status:** Production-ready with 4-method pricing system (v8.1.0 schema, 45 columns)
-- **Codebase:** ~18,500 lines of Python, clean and documented
+- **Codebase:** ~19,500 lines of Python, clean and documented
 
 **Recent Work (May 2026):**
-- 16 bug fixes and feature requests from leadership meeting (see [docs/CHANGES_2026_05_23.md](docs/CHANGES_2026_05_23.md))
-- Current Proposal sidebar widget with scrollable list and remove dropdown
-- Fixed slide matching (get_slide_title helper checks title placeholder + all shapes)
-- Client Budget Range filter now uses MSRP, added Clear All Filters button
-- Google Form URL generation now on-demand with Update button
-- Import from Proposal promoted to full section (Option B) in Tab 3
-- PBP In-Hands Date field for Purchase Orders
-- Editable Customization Description field
-- Per-product photo persistence via Google Sheets (upload, save, load, download, delete)
-- Legacy Shipping & Tariffs hidden behind expander (costs now in product pricing)
-- Fixed HTML/CSV download buttons serving stale data in Tab 4
+- **Client Order Form as Shareable Link (v8.4.0):** New standalone form page accessible via direct URL
+  - New `src/client_form.py` module (session tokens, proposal loading, draft save/load, form submission)
+  - Query-param routing (`?client_form=<proposal_id>`) renders form instead of main app
+  - Password gate for main app — clients bypass gate when accessing forms via link
+  - Redesigned form UX with improved layout and usability
+  - Dropshipping file download support in Tab 3 response preview
+  - Generate Client Form Link section in Tab 2
+  - Design spec: [docs/superpowers/specs/2026-05-24-client-order-form-design.md](docs/superpowers/specs/2026-05-24-client-order-form-design.md)
+- Bug fixes: single-date picker for In-Hands Date, removed Impact Card Selection box, password gate width fix, query param routing across Streamlit versions
+- v8.3.0: 16 bug fixes and feature requests from leadership meeting (see [docs/CHANGES_2026_05_23.md](docs/CHANGES_2026_05_23.md))
 - See [CHANGELOG.md](CHANGELOG.md) for complete details
 
 **Previous Work (Jan-Apr 2026):**
@@ -53,7 +52,7 @@
 
 ### Active Development Documents:
 1. **[ACTIVE_DEVELOPMENT_TODO.md](ACTIVE_DEVELOPMENT_TODO.md)** - Current task list
-2. **[CHANGELOG.md](CHANGELOG.md)** - Comprehensive project history (v8.3.0 is latest)
+2. **[CHANGELOG.md](CHANGELOG.md)** - Comprehensive project history (v8.4.0 is latest)
 3. **[schema_update_jan_2026/MASTER_TRACKING.md](schema_update_jan_2026/MASTER_TRACKING.md)** - Schema transition reference (complete)
 4. **[schema_reference.md](schema_reference.md)** - Complete 45-column schema definition (v8.1.0)
 5. **[docs/planning/METHODOLOGY_LOGIC.md](docs/planning/METHODOLOGY_LOGIC.md)** - Pricing methodology (updated with 4 methods)
@@ -161,11 +160,13 @@ See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
 
 ## Architecture
 
-- **Frontend:** Streamlit (Python-based web app) with 4-tab structure
+- **Frontend:** Streamlit (Python-based web app) with 4-tab structure + standalone client form page
+  - **Client Form Page** - Standalone form accessed via shareable link (`?client_form=<id>`), bypasses password gate
   - **Tab 1: Proposal Generator** - Product catalog, filtering, proposal generation (tables & PowerPoint)
-  - **Tab 2: Client Order Form Generator** - Create professional HTML order forms to send to clients
+  - **Tab 2: Client Order Form Generator** - Generate shareable client form links and legacy HTML forms
   - **Tab 3: Order & Client Info** - Order management, client data collection
   - **Tab 4: Execution & Accounting** - Invoice/PO generation, bookkeeping
+- **Password Gate:** Main app requires password; client form links bypass the gate
 - **Data Source:** Google Sheets with dataset selector (Demo or Real)
   - **Demo Dataset:** master_pricing_template_10_14 (19 products, 4 partners - testing/development data)
   - **Real Dataset:** master_pricing (133 products, 4 partners - production data READY)
@@ -187,24 +188,20 @@ See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
   - `src/data_loader.py` - Google Sheets data loading and caching
   - `src/helpers.py` - Utility functions, conversions, validation, HTML parsing
   - `src/pricing_engine.py` - Pricing calculations and quote generation
-- **Authentication:** Google Cloud service account
+  - `src/client_form.py` - Client order form page (session tokens, proposal loading, draft save/load, submission)
+- **Authentication:** Google Cloud service account + password gate for main app
 - **Pricing Model:** Flexible tiered or flat-rate pricing per product
-- **Recommended Workflow (Google Forms - NEW!):**
-  1. **Tab 1 (Proposal Generator):** Browse & filter products → Configure proposal → Generate tables & PowerPoint
-  2. **Tab 2 (Client Order Form Generator):** Enter client info → Generate Google Form URL → Send to client
-  3. **Client completes form:** Professional Google Form → Auto-saves to Google Sheets
+- **Recommended Workflow (Client Form Link):**
+  1. **Tab 1 (Proposal Generator):** Browse & filter products → Configure proposal → Generate PowerPoint
+  2. **Tab 2 (Client Order Form Generator):** Enter client info → Generate Client Form Link → Send link to client
+  3. **Client completes form:** Standalone in-app form (no login required) → Saves to Google Sheets
   4. **Tab 3 (Order & Client Info):** Load & import form response → All data auto-populates → Configure order details
   5. **Tab 4 (Execution & Accounting):** Review/edit order → Generate invoice & PO → Download for bookkeeping
 - **Alternative Workflows:**
+  - **Google Form:** Tab 2 → Generate Google Form URL → Client completes → Tab 3 → Import response
   - **HTML Form:** Tab 2 → Generate HTML form → Client completes → Tab 3 → Import HTML file
-  - **Proposal Direct:** Tab 1 → Create proposal → Tab 3 → Import from proposal (Option C)
-  - **Manual Entry:** Tab 3 → Add products manually (Option D)
-- **Workflow Notes:**
-  - Tab 3 has 4 entry points with clear guidance at the top
-  - **Google Form import (Option A)** is the recommended workflow - 50-70% faster than HTML
-  - HTML form import (Option B) is an alternative for legacy workflow
-  - Proposal import (Option C) skips client form entirely
-  - Manual selection (Option D) is a fallback for starting from scratch
+  - **Proposal Direct:** Tab 1 → Create proposal → Tab 3 → Import from proposal (Option B)
+  - **Manual Entry:** Tab 3 → Add products manually (Option C)
 
 ## Current Features
 
@@ -254,7 +251,14 @@ See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
 
 ### Tab 2: Client Order Form Generator
 - **Section 1: Client Information** - Pre-fill client details (type, company, contact, email, phone)
-- **Section 2: Generate Google Form (RECOMMENDED - NEW!)** - Modern workflow using Google Forms
+- **Section 2: Generate Client Form Link (RECOMMENDED)** - Shareable link to in-app client form
+  - Generates a unique URL with proposal data embedded via query params
+  - Client accesses form without needing app password or Google account
+  - Form pulls live product data from saved proposal
+  - Supports file uploads (dropshipping address spreadsheets) without Google sign-in
+  - Client can save draft and return later
+  - Submissions saved to Google Sheets for import in Tab 3
+- **Section 3: Generate Google Form (Legacy)** - Google Forms workflow (kept as fallback)
   - **Pre-filled URL Generation:**
     - Automatically populates form with proposal products and client info
     - Select which products to include (up to 10 product lines)
@@ -431,6 +435,7 @@ pricing-data-solution-pbp/
 │   ├── data_loader.py         # Google Sheets data loading
 │   ├── helpers.py             # Utility functions, conversions, validation
 │   ├── pricing_engine.py      # Pricing calculations and quote generation
+│   ├── client_form.py         # Client order form page (v8.4.0)
 │   ├── slide_matcher.py       # PowerPoint slide matching (Phase 1)
 │   ├── pptx_generator.py      # PowerPoint generation (Phase 2)
 │   ├── template_loader.py     # Cloud-based PowerPoint template loading (v6.16)
@@ -438,9 +443,12 @@ pricing-data-solution-pbp/
 │   ├── match_memory.py        # Confirmed match storage (Google Sheets, v6.9)
 │   ├── proposal_manager.py    # Save/load/delete proposals (v6.6)
 │   ├── order_manager.py       # Save/load/delete orders (v6.7)
-│   ├── drive_helper.py         # Photo storage via Google Sheets (base64 chunked)
-│   ├── forms_config.py        # Google Forms configuration (v7.6, NEW)
-│   └── forms_helper.py        # Google Forms URL generation & response import (v7.6, NEW)
+│   ├── drive_helper.py        # Photo storage via Google Sheets (base64 chunked)
+│   ├── forms_config.py        # Google Forms configuration (v7.6)
+│   └── forms_helper.py        # Google Forms URL generation & response import (v7.6)
+│
+├── tests/                      # Unit tests
+│   └── test_client_form.py    # Client form module tests
 │
 ├── templates/                  # Templates and reference files
 │   ├── November All Slides.pptx # PowerPoint template (339 slides, 43MB)
@@ -482,34 +490,33 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 8.3.0
+**Version:** 8.4.0
 
-**Last Updated:** 2026-05-23
+**Last Updated:** 2026-05-27
 
 **Deployment:** IN PRODUCTION at https://pricing-data-solution-pbp.onrender.com
 - Render Standard tier (2GB RAM, $25/month)
 - Cloud-based PowerPoint template loading
-- Google Forms integration in production use
+- Password gate for main app (client form links bypass)
 
 **Codebase Status:**
-- ~18,500 lines of Python code (app.py + 13 src/ modules)
+- ~19,500 lines of Python code (app.py + 14 src/ modules)
 - 55+ test scripts organized in scripts/ (core, features, investigations)
 - 4-method pricing system (v8.1.0 schema, 45 columns)
 - Fully deployed and operational on Render
 
+**Recent Improvements (2026-05-27 - v8.4.0):**
+- Client Order Form as shareable link (standalone page, no login required)
+- New `src/client_form.py` module with session tokens, proposal loading, draft save/load, form submission
+- Query-param routing in app.py (`?client_form=<id>` renders form instead of main app)
+- Password gate for main app (client forms bypass gate)
+- Redesigned client order form UX
+- Dropshipping file download in Tab 3 response preview
+- Generate Client Form Link section in Tab 2
+- Bug fixes: single-date picker for In-Hands Date, removed Impact Card Selection box, password gate width, query param routing across Streamlit versions
+
 **Recent Improvements (2026-05-23 - v8.3.0):**
 - 16 bug fixes and feature requests from leadership meeting
-- Current Proposal sidebar widget (scrollable list + remove dropdown)
-- Simplified Save Proposal section, cleaned up Data Status sidebar
-- Fixed Client Budget Range filter to use MSRP, added Clear All Filters
-- Fixed slide matching (get_slide_title helper for robust title extraction)
-- Google Form URL generation on-demand with Update button
-- Import from Proposal promoted to Option B in Tab 3
-- PBP In-Hands Date field for Purchase Orders
-- Editable Customization Description field for base customization
-- Per-product photo persistence via Google Sheets (upload, save, load, download, delete)
-- Legacy Shipping & Tariffs hidden (costs now in product pricing)
-- Fixed HTML/CSV download buttons serving stale data
 - Full details: [docs/CHANGES_2026_05_23.md](docs/CHANGES_2026_05_23.md)
 
 **Recent Improvements (2026-02 to 2026-04 - v8.2.0):**
@@ -537,9 +544,11 @@ pricing-data-solution-pbp/
 - All emojis removed from app UI
 - Enforced PBP $1,000 baseline MOV per-product in MOQ calculations
 
-**Previous Versions:** See [CHANGELOG.md](CHANGELOG.md) for complete history (v6.0 through v8.2.0)
+**Previous Versions:** See [CHANGELOG.md](CHANGELOG.md) for complete history (v6.0 through v8.3.0)
 
 **Features Implemented:**
+- ✅ **Client Order Form Link (v8.4.0):** Shareable URL to standalone form page, no login/Google account needed
+- ✅ **Password Gate (v8.4.0):** Main app password-protected, client form links bypass gate
 - ✅ **4-Tab Workflow:** Proposals → Client Order Forms → Order & Client Info → Execution & Accounting
 - ✅ **Proposal System:** Product filtering, catalog browser, MOQ-based pricing tables, saved proposals
 - ✅ **HTML Client Order Form Generation:** Professional table format with clear instructions
@@ -602,6 +611,9 @@ pricing-data-solution-pbp/
 - ✅ Schema v8.1.0 compatibility tested (45 columns)
 - ✅ Tier parsing edge cases tested (overlaps, spaces, multi-colon)
 - ✅ Template-resilient PowerPoint generation tested
+- ✅ Client form module unit tests (tests/test_client_form.py)
+- ✅ Query param routing tested across Streamlit versions
+- ✅ Password gate tested (main app gated, client forms bypass)
 
 **Production Status:** Ready for production use
 

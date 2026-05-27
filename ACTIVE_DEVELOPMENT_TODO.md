@@ -1,12 +1,22 @@
 # Active Development TODO
 
-**Last Updated:** May 23, 2026
-**Current Version:** 8.3.0
-**Status:** Normal development - post-schema features and maintenance
+**Last Updated:** May 27, 2026
+**Current Version:** 8.4.0
+**Status:** Normal development - client form feature shipped
 
 ---
 
 ## Completed Work (Jan-May 2026)
+
+### v8.4.0 Client Order Form Link (May 24-27, 2026)
+- [x] New `src/client_form.py` module (session tokens, proposal loading, draft save/load, submission)
+- [x] Query-param routing in app.py (`?client_form=<id>` renders standalone form)
+- [x] Password gate for main app (client forms bypass gate)
+- [x] Generate Client Form Link section in Tab 2
+- [x] Redesigned client order form UX
+- [x] Dropshipping file download in Tab 3 response preview
+- [x] Unit tests (`tests/test_client_form.py`)
+- [x] Bug fixes: single-date picker, removed Impact Card Selection, query param routing, password gate width
 
 ### v8.3.0 Leadership Meeting Fixes (May 23, 2026)
 - [x] Current Proposal sidebar widget (scrollable list + remove dropdown)
@@ -63,9 +73,9 @@
 
 ### Google Form Sign-In Issue
 - Google Forms requires sign-in when File Upload questions are present
-- Need to remove File Upload questions or find alternative for photo uploads
-- Related to meeting item #14 (product photo uploads)
-- **Action:** Decide whether to remove file upload from Google Form or handle photos separately
+- **Partially resolved:** New Client Form Link (v8.4.0) bypasses Google sign-in entirely
+- Google Form workflow kept as legacy fallback
+- **Action:** Consider fully deprecating Google Form workflow in favor of Client Form Link
 
 ### Customer Setup Form
 - Define requirements
@@ -85,10 +95,10 @@
 ---
 
 ## Quick Stats
-- **Codebase:** ~18,300 lines of Python
+- **Codebase:** ~19,500 lines of Python
 - **Test Scripts:** 55+ organized in scripts/
 - **Schema:** v8.1.0 (45 columns, 4 pricing methods)
-- **Latest:** v8.3.0 - Leadership meeting fixes (16 items, May 23, 2026)
+- **Latest:** v8.4.0 - Client Order Form as shareable link (May 27, 2026)
 - **Documentation:** See [CHANGELOG.md](CHANGELOG.md) for full history
 
 ---
@@ -116,8 +126,8 @@ streamlit run app.py
 ```
 
 ### Key Files
-- **app.py** - Main application (~10,600 lines)
-- **src/** - 12 modular helpers and engines
+- **app.py** - Main application (~11,100 lines)
+- **src/** - 14 modular helpers and engines
 - **docs/** - All documentation
 - **CHANGELOG.md** - Completed work history
 

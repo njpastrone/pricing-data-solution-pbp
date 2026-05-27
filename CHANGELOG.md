@@ -3,6 +3,25 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [8.4.0] - 2026-05-27
+
+### Added
+- **Client Order Form as Shareable Link:** Standalone form page accessible via direct URL (`?client_form=<proposal_id>`). Clients can complete order forms without needing app password or Google account. New module: `src/client_form.py` (session tokens, proposal loading, draft save/load, form submission)
+- **Password Gate:** Main app now requires password entry. Client form links bypass the gate automatically. Styled container prevents title overflow
+- **Generate Client Form Link (Tab 2):** New section for generating shareable client form URLs from saved proposals
+- **Dropshipping File Download (Tab 3):** Download button for dropshipping address files in form response preview
+- **Unit Tests:** Added `tests/test_client_form.py` for client form module
+
+### Changed
+- **In-Hands Date Picker:** Switched from date range picker to single-date picker for clearer UX
+- **Google Form Section (Tab 2):** Demoted to legacy fallback; Client Form Link is now the recommended workflow
+
+### Fixed
+- **Impact Card Selection:** Removed non-functional Impact Card Selection box from order form
+- **Query Param Routing:** Fixed client form routing across multiple Streamlit versions (set_page_config ordering, param detection)
+- **Render URL:** Corrected production URL in query param generation
+- **Password Gate Width:** Widened container to prevent title text overflow
+
 ## [8.3.0] - 2026-05-23
 
 ### Added
