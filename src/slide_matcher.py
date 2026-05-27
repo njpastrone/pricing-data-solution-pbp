@@ -578,15 +578,19 @@ def resolve_impact_slides(
         if not expected_title:
             continue
 
-        def normalize_dashes(text):
-            return text.replace("\u2014", "-").replace("\u2013", "-").replace("\u2012", "-")
+        def normalize_title(text):
+            # Normalize dashes (em dash, en dash, figure dash) to regular dash
+            text = text.replace("\u2014", "-").replace("\u2013", "-").replace("\u2012", "-")
+            # Normalize non-breaking spaces to regular spaces
+            text = text.replace("\xa0", " ")
+            return text.lower().strip()
 
-        normalized_expected = normalize_dashes(expected_title).lower().strip()
+        normalized_expected = normalize_title(expected_title)
 
-        # Try exact match first (after dash normalization)
+        # Try exact match first (after normalization)
         matched_slide = None
         for slide in template_slides:
-            normalized_slide = normalize_dashes(slide['slide_title']).lower().strip()
+            normalized_slide = normalize_title(slide['slide_title'])
             if normalized_slide == normalized_expected:
                 matched_slide = slide
                 break
@@ -594,12 +598,15 @@ def resolve_impact_slides(
         # Fall back to fuzzy match on title text (handles minor wording changes)
         if not matched_slide:
             best_score = 0
+            best_match = None
             for slide in template_slides:
-                normalized_slide = normalize_dashes(slide['slide_title']).lower().strip()
+                normalized_slide = normalize_title(slide['slide_title'])
                 score = fuzz.ratio(normalized_expected, normalized_slide)
                 if score > best_score:
                     best_score = score
-                    matched_slide = slide if score >= 80 else None
+                    best_match = slide
+            if best_score >= 80:
+                matched_slide = best_match
 
         if matched_slide:
             result[partner] = {

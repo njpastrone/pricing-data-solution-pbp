@@ -62,6 +62,23 @@ def test_resolve_impact_slides_fuzzy_dash_match():
     assert result["GOEX"]["slide_index"] == 50
 
 
+def test_resolve_impact_slides_non_breaking_space():
+    """resolve_impact_slides handles non-breaking spaces in template titles."""
+    from src.slide_matcher import resolve_impact_slides
+
+    # Sheet has regular spaces, template has non-breaking spaces (\xa0)
+    sheet_mapping = {"GOEX": "Apparel \u2013 Your Impact"}
+    template_slides = [
+        {"slide_index": 68, "slide_title": "Apparel\xa0\u2013\xa0Your Impact"},
+        {"slide_index": 219, "slide_title": "Ceramic Goods \u2013 Your Impact"},
+    ]
+
+    result = resolve_impact_slides(["GOEX"], sheet_mapping, template_slides)
+    assert "GOEX" in result
+    assert result["GOEX"]["slide_index"] == 68
+    assert "Apparel" in result["GOEX"]["slide_title"]
+
+
 def test_resolve_impact_slides_partner_not_in_sheet():
     """Partners not in the sheet mapping are skipped."""
     from src.slide_matcher import resolve_impact_slides
