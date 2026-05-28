@@ -10,6 +10,7 @@ Version: 6.13 (Multi-Variant Product Consolidation in PowerPoint)
 USE_MEMORY_OPTIMIZATION = False
 
 import os
+import hashlib
 import streamlit as st
 import gc  # For memory optimization
 import streamlit.components.v1 as components
@@ -706,9 +707,31 @@ if _cf_param:
 
 # ============================================================
 # PASSWORD GATE (main app only — client forms bypass this)
+# Persists login in browser localStorage so users don't have
+# to re-enter the password on every visit.
 # ============================================================
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
+
+# Build the expected auth token from the stored password
+_app_password = os.getenv("APP_PASSWORD") or st.secrets.get("app_password", "")
+_auth_token = hashlib.sha256(_app_password.encode()).hexdigest()[:16] if _app_password else ""
+
+# Check if browser sent an auth token via query param
+_auth_param = query_params.get("auth", "")
+if isinstance(_auth_param, list):
+    _auth_param = _auth_param[0] if _auth_param else ""
+
+if _auth_param and _auth_param == _auth_token:
+    st.session_state.authenticated = True
+    # Remove the auth param from the URL to keep it clean
+    try:
+        # Preserve other query params (like tab)
+        new_params = {k: v for k, v in query_params.items() if k != "auth"}
+        st.query_params.clear()
+        st.query_params.update(new_params)
+    except Exception:
+        pass
 
 if not st.session_state.authenticated:
     st.markdown("""<style>
@@ -718,14 +741,37 @@ if not st.session_state.authenticated:
         .block-container { max-width: 500px; margin: 0 auto; padding-top: 10rem; }
     </style>""", unsafe_allow_html=True)
 
+    # On first load, check localStorage for a saved auth token and redirect
+    components.html("""
+        <script>
+            var token = window.parent.localStorage.getItem('pbp_auth_token');
+            if (token) {
+                var url = new URL(window.parent.location.href);
+                if (!url.searchParams.has('auth')) {
+                    url.searchParams.set('auth', token);
+                    window.parent.location.href = url.toString();
+                }
+            }
+        </script>
+    """, height=0)
+
     st.title("PBP Order Management")
     password = st.text_input("Enter password to continue", type="password", key="login_password")
 
     if st.button("Log In", type="primary", use_container_width=True):
-        app_password = os.getenv("APP_PASSWORD") or st.secrets.get("app_password", "")
-        if password == app_password:
+        if password == _app_password:
             st.session_state.authenticated = True
-            st.rerun()
+            # Save auth token to browser localStorage so login persists
+            components.html(f"""
+                <script>
+                    window.parent.localStorage.setItem('pbp_auth_token', '{_auth_token}');
+                    // Reload without the password form
+                    var url = new URL(window.parent.location.href);
+                    url.searchParams.delete('auth');
+                    window.parent.location.href = url.toString();
+                </script>
+            """, height=0)
+            st.stop()
         else:
             st.error("Incorrect password.")
     st.stop()
