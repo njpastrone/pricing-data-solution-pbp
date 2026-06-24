@@ -35,11 +35,17 @@ def determine_tier_number(quantity, tier_info_string, has_tiers):
         if min_qty <= quantity <= max_qty:
             return tier_num
 
-    # If quantity exceeds all ranges, use highest tier
-    if tier_ranges:
-        return max(tier_ranges.keys())
+    # Quantity falls outside every defined tier range.
+    # If it is below the smallest tier minimum (e.g. ordering 1 unit when the
+    # lowest tier starts at 100), use the lowest tier so we show the
+    # entry-level price, not the cheaper bulk price. Otherwise the quantity is
+    # above all ranges, so use the highest tier (bulk price).
+    lowest_tier = min(tier_ranges.keys())
+    smallest_min_qty = tier_ranges[lowest_tier][0]
+    if quantity < smallest_min_qty:
+        return lowest_tier
 
-    return None
+    return max(tier_ranges.keys())
 
 
 def get_unit_price_new_system(row, quantity):
