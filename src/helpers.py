@@ -1686,13 +1686,14 @@ def format_product_with_variant(product_name, variant):
 
 # ========== SPLIT TOTALS CALCULATIONS ==========
 
-def calculate_split_totals(order_items, markup_only=False):
+def calculate_split_totals(order_items, markup_only=False, fifty_cent_rounding=False):
     """
     Calculate PBP costs and client prices separately for order items.
 
     Args:
         order_items (list): List of order items with pricing information
         markup_only (bool): If True, only return product costs with markup (no customization)
+        fifty_cent_rounding (bool): If True, round client per-unit prices to nearest $0.50
 
     Returns:
         dict: Dictionary containing:
@@ -1729,9 +1730,15 @@ def calculate_split_totals(order_items, markup_only=False):
         product_cost = item.get('product_subtotal', 0)
         results['products_pbp_cost'] += product_cost
 
-        # Product client price (with markup)
+        # Product client price (with markup), applying per-unit rounding if enabled
         markup_amount = item.get('markup_amount', 0)
-        product_with_markup = product_cost + markup_amount
+        qty = item.get('quantity', 1)
+        if fifty_cent_rounding and qty > 0:
+            client_per_unit_raw = (product_cost + markup_amount) / qty
+            client_per_unit_rounded = round_to_nearest_fifty_cents(client_per_unit_raw, True)
+            product_with_markup = client_per_unit_rounded * qty
+        else:
+            product_with_markup = product_cost + markup_amount
         results['products_client_price'] += product_with_markup
         results['products_only_client_price'] += product_with_markup
 

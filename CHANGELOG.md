@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [8.5.0] - 2026-07-02
+
+### Fixed
+- **Rounded Pricing in Order Summary:** $0.50 rounding now applies to per-unit prices in the Order Summary table and totals, matching what's shown in the product editing section
+- **Password Gate (Local):** Fixed `st.secrets.get()` returning empty on Streamlit 1.29; switched to bracket access with fallback
+- **Shipping Type vs Ship Method Conflict:** Separated `shipping_type` (One Location / Drop Shipping) from `ship_method` (Ground / Air / Freight / Other) into independent session state keys. Previously they shared one field, causing "One Location" to display as "Drop Shipping"
+- **Tab 3 to Tab 4 Data Flow:** Client info now carries correctly between tabs (resolved by shipping field separation)
+
+### Added
+- **Editable Partner Contacts (Tab 4):** Partner POC name, email, and phone are now editable text fields in Tab 4, pre-filled from the spreadsheet. Edits carry through to HTML invoice export
+- **Cost Basis Display (Tab 3):** Products priced per case now show "Priced per case (X units/case)" below the quantity input
+
+### Removed
+- **Cost Verified Column (Tab 4):** Removed the "Cost Verified?" column from invoice/PO tables, CSV export, and HTML export (not needed in workflow)
+
 ## [8.4.0] - 2026-05-27
 
 ### Added

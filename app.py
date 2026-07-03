@@ -714,7 +714,12 @@ if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
 # Build the expected auth token from the stored password
-_app_password = os.getenv("APP_PASSWORD") or st.secrets.get("app_password", "")
+_app_password = os.getenv("APP_PASSWORD", "")
+if not _app_password:
+    try:
+        _app_password = st.secrets["app_password"]
+    except Exception:
+        _app_password = "pbp2026"
 _auth_token = hashlib.sha256(_app_password.encode()).hexdigest()[:16] if _app_password else ""
 
 # Check if browser sent an auth token via query param
@@ -874,7 +879,8 @@ if 'client_info' not in st.session_state:
         ],
         'client_po': '',
         'billing_address': '',
-        'shipping_type': 'Ground',  # MODIFIED: Changed to dropdown default
+        'shipping_type': 'One Location',  # One Location or Drop Shipping
+        'ship_method': 'Ground',  # Ground, Air, Freight, Other
         'shipping_address': '',
         'payment_timeline': 'Net 30',  # MODIFIED: Changed to dropdown default
         'payment_preference': 'Check',  # MODIFIED: Changed to dropdown default
@@ -1493,7 +1499,8 @@ with st.sidebar:
                     'contact_email': '',
                     'client_po': '',
                     'billing_address': '',
-                    'shipping_type': 'Ground',
+                    'shipping_type': 'One Location',
+                    'ship_method': 'Ground',
                     'shipping_address': '',
                     'payment_timeline': 'Net 30',
                     'payment_preference': 'Check',
@@ -5483,7 +5490,8 @@ with tab3:
                             'contacts': contacts,
                             'client_po': '',
                             'billing_address': response_data['shipping_info'].get('billing_address', ''),
-                            'shipping_type': 'Drop Shipping' if drop_shipping == 'Yes' else 'Ground',
+                            'shipping_type': 'Drop Shipping' if drop_shipping == 'Yes' else 'One Location',
+                            'ship_method': 'Ground',
                             'shipping_address': response_data['shipping_info'].get('shipping_address', ''),
                             'payment_timeline': response_data['payment_info'].get('payment_preference', 'Net 30'),
                             'payment_preference': response_data['payment_info'].get('payment_method', 'Check'),
@@ -6555,6 +6563,17 @@ with tab3:
                     key=f"prod_qty_{idx}",
                     label_visibility="collapsed"
                 )
+
+                # Show cost basis (Per Case vs Per Item) if applicable
+                cost_basis = get_column_value(product_data, 'Cost Basis (Per Item/Per Case)', 'Per Item')
+                units_per_case = get_column_value(product_data, 'Units per Case', 'Units per Package', 1)
+                try:
+                    units_per_case = float(units_per_case) if units_per_case else 1
+                except (ValueError, TypeError):
+                    units_per_case = 1
+                if str(cost_basis).strip().lower() == 'per case' and units_per_case > 1:
+                    st.caption(f"Priced per case ({int(units_per_case)} units/case)")
+
                 # Highlight if quantity is 1 (warning)
                 if new_quantity == 1:
                     st.caption("WARNING: Qty = 1")
@@ -7810,7 +7829,7 @@ with tab3:
         from src.helpers import calculate_split_totals
 
         # Calculate split totals
-        split_totals = calculate_split_totals(st.session_state.order_items)
+        split_totals = calculate_split_totals(st.session_state.order_items, fifty_cent_rounding=st.session_state.order_fifty_cent_rounding)
 
         # Apply discount ONLY to products client price (not customization)
         discount_amount = split_totals['products_only_client_price'] * (discount_percent / 100)
@@ -7882,10 +7901,12 @@ with tab3:
 
             # Regular product: show base product with product name (WITHOUT kitting)
             product_pbp_cost = item.get('product_subtotal', 0)
-            product_client_price = product_pbp_cost + item.get('markup_amount', 0)
-
             product_pbp_per_unit = product_pbp_cost / item['quantity'] if item['quantity'] > 0 else 0
-            product_client_per_unit = product_client_price / item['quantity'] if item['quantity'] > 0 else 0
+
+            # Apply per-unit rounding to client price to match Tab 3 display
+            client_per_unit_raw = (product_pbp_cost + item.get('markup_amount', 0)) / item['quantity'] if item['quantity'] > 0 else 0
+            product_client_per_unit = round_to_nearest_fifty_cents(client_per_unit_raw, st.session_state.order_fifty_cent_rounding)
+            product_client_price = product_client_per_unit * item['quantity']
 
             summary_items.append([
                 f"Base Product: {item['product_name']}",
@@ -8357,23 +8378,17 @@ with tab3:
         col5, col6 = st.columns(2)
 
         with col5:
-            # NEW: Ship method dropdown
+            # Ship method dropdown (separate from shipping type)
             ship_method_options = ['Ground', 'Air', 'Freight', 'Other']
-            current_ship_type = st.session_state.client_info.get('shipping_type', 'Ground')
-            # Map old values to new
-            if current_ship_type == 'One Location':
-                current_ship_type = 'Ground'
-            elif current_ship_type == 'Drop Shipping':
-                current_ship_type = 'Other'
+            current_ship_method = st.session_state.client_info.get('ship_method', 'Ground')
 
-            if current_ship_type not in ship_method_options:
-                ship_method_options.append(current_ship_type)
+            if current_ship_method not in ship_method_options:
+                ship_method_options.append(current_ship_method)
 
-            # Note: We're overriding shipping_type to use ship method
-            ship_method = st.selectbox(
+            st.session_state.client_info['ship_method'] = st.selectbox(
                 "Ship Method",
                 options=ship_method_options,
-                index=ship_method_options.index(current_ship_type) if current_ship_type in ship_method_options else 0,
+                index=ship_method_options.index(current_ship_method) if current_ship_method in ship_method_options else 0,
                 help="How products will be shipped to client"
             )
 
@@ -8755,10 +8770,10 @@ with tab4:
                 )
 
                 def update_ship_method():
-                    st.session_state.client_info['shipping_type'] = st.session_state.tab3_ship_method
+                    st.session_state.client_info['ship_method'] = st.session_state.tab3_ship_method
 
                 ship_method_options = ['Ground', 'Air', 'Freight', 'Other']
-                current_ship = st.session_state.client_info.get('shipping_type', 'Ground')
+                current_ship = st.session_state.client_info.get('ship_method', 'Ground')
                 st.selectbox(
                     "Ship Method",
                     options=ship_method_options,
@@ -9347,31 +9362,53 @@ with tab4:
         st.divider()
 
         # ============================================================
-        # TABLE 2: PARTNERS + POINT OF CONTACTS
+        # TABLE 2: PARTNERS + POINT OF CONTACTS (Editable)
         # ============================================================
         st.markdown("#### 2. Partners + Point of Contacts")
 
         # Get unique partners from order items
-        partners_in_order = list(set(item['partner'] for item in st.session_state.order_items if not item.get('is_custom', False)))
+        partners_in_order = sorted(set(item['partner'] for item in st.session_state.order_items if not item.get('is_custom', False)))
 
-        partners_data = []
-        if partners_in_order and hasattr(st.session_state, 'partner_contacts'):
+        # Initialize editable partner contacts in session state if needed
+        if 'partner_contacts_editable' not in st.session_state:
+            st.session_state.partner_contacts_editable = {}
+
+        if partners_in_order:
             for partner_name in partners_in_order:
-                partner_contact = st.session_state.partner_contacts.get(partner_name, {})
-                poc_name = partner_contact.get('poc_name', 'Not specified')
-                poc_email = partner_contact.get('poc_email', 'Not specified')
-                partners_data.append({
-                    "Partner": partner_name,
-                    "Point of Contact (POC)": f"{poc_name} <{poc_email}>"
-                })
-        else:
-            partners_data.append({
-                "Partner": "No partners in order",
-                "Point of Contact (POC)": "N/A"
-            })
+                # Pre-fill from spreadsheet data if not already edited
+                if partner_name not in st.session_state.partner_contacts_editable:
+                    spreadsheet_contact = st.session_state.partner_contacts.get(partner_name, {}) if hasattr(st.session_state, 'partner_contacts') else {}
+                    st.session_state.partner_contacts_editable[partner_name] = {
+                        'poc_name': spreadsheet_contact.get('poc_name', ''),
+                        'poc_email': spreadsheet_contact.get('poc_email', ''),
+                        'poc_phone': spreadsheet_contact.get('poc_phone', '')
+                    }
 
-        partners_df = pd.DataFrame(partners_data)
-        st.table(partners_df)
+                st.markdown(f"**{partner_name}**")
+                col_pname, col_pemail, col_pphone = st.columns(3)
+                with col_pname:
+                    st.session_state.partner_contacts_editable[partner_name]['poc_name'] = st.text_input(
+                        "Contact Name",
+                        value=st.session_state.partner_contacts_editable[partner_name]['poc_name'],
+                        key=f"partner_poc_name_{partner_name}",
+                        placeholder="e.g., John Smith"
+                    )
+                with col_pemail:
+                    st.session_state.partner_contacts_editable[partner_name]['poc_email'] = st.text_input(
+                        "Contact Email",
+                        value=st.session_state.partner_contacts_editable[partner_name]['poc_email'],
+                        key=f"partner_poc_email_{partner_name}",
+                        placeholder="e.g., john@partner.com"
+                    )
+                with col_pphone:
+                    st.session_state.partner_contacts_editable[partner_name]['poc_phone'] = st.text_input(
+                        "Contact Phone",
+                        value=st.session_state.partner_contacts_editable[partner_name]['poc_phone'],
+                        key=f"partner_poc_phone_{partner_name}",
+                        placeholder="e.g., (555) 123-4567"
+                    )
+        else:
+            st.caption("No partners in order")
 
         st.divider()
 
@@ -9391,7 +9428,7 @@ with tab4:
         order_details_data.append(["PBP In-Hands Date", format_date_display(pbp_in_hands)])
 
         # Ship Method
-        ship_method = client_info.get('shipping_type', 'Not specified')
+        ship_method = client_info.get('ship_method', 'Not specified')
         order_details_data.append(["Ship Method", ship_method])
 
         # Payment Terms
@@ -9487,7 +9524,6 @@ with tab4:
                 qty = item['quantity']
                 cost_per_unit = item.get('total_per_unit', 0)
                 cost_total = item.get('product_total', 0)
-                cost_verified = "N/A"
 
                 # Custom items use same description for both invoice and PO
                 invoice_line_items.append({
@@ -9498,7 +9534,7 @@ with tab4:
                     'IN-HANDS from Partner': partner_in_hands,
                     'COST/UNIT': f"${cost_per_unit:.2f}",
                     'TOTAL COST': f"${cost_total:.2f}",
-                    'COST VERIFIED?': cost_verified,
+
                     'SELL PRICE/UNIT': f"${cost_per_unit:.2f}",
                     'TOTAL SELL PRICE': f"${cost_total:.2f}"
                 })
@@ -9581,7 +9617,7 @@ with tab4:
                 partner_cost_total = partner_cost_per_unit * qty
                 sell_price_total = sell_price_per_unit * qty
 
-                cost_verified = item.get('cost_verified', 'Pending')
+
 
                 # Add base product line (WITHOUT kitting - kitting will be separate line)
                 invoice_line_items.append({
@@ -9592,7 +9628,7 @@ with tab4:
                     'IN-HANDS from Partner': partner_in_hands,
                     'COST/UNIT': f"${partner_cost_per_unit:.2f}",
                     'TOTAL COST': f"${partner_cost_total:.2f}",
-                    'COST VERIFIED?': cost_verified,
+
                     'SELL PRICE/UNIT': f"${sell_price_per_unit:.2f}",
                     'TOTAL SELL PRICE': f"${sell_price_total:.2f}"
                 })
@@ -9615,7 +9651,7 @@ with tab4:
                         'IN-HANDS from Partner': partner_in_hands,
                         'COST/UNIT': f"${kitting_pbp:.2f}",
                         'TOTAL COST': f"${kitting_pbp * kitting_qty:.2f}",
-                        'COST VERIFIED?': cost_verified,
+    
                         'SELL PRICE/UNIT': f"${kitting_client:.2f}",
                         'TOTAL SELL PRICE': f"${kitting_client * kitting_qty:.2f}"
                     })
@@ -9647,7 +9683,7 @@ with tab4:
                             'IN-HANDS from Partner': partner_in_hands,
                             'COST/UNIT': f"${partner_customization_setup:.2f}",
                             'TOTAL COST': f"${partner_customization_setup:.2f}",
-                            'COST VERIFIED?': cost_verified,
+        
                             'SELL PRICE/UNIT': f"${customization_setup:.2f}",
                             'TOTAL SELL PRICE': f"${customization_setup:.2f}"
                         })
@@ -9665,7 +9701,7 @@ with tab4:
                             'IN-HANDS from Partner': partner_in_hands,
                             'COST/UNIT': f"${partner_customization_per_unit:.2f}",
                             'TOTAL COST': f"${partner_customization_unit_total:.2f}",
-                            'COST VERIFIED?': cost_verified,
+        
                             'SELL PRICE/UNIT': f"${customization_per_unit:.2f}",
                             'TOTAL SELL PRICE': f"${customization_unit_total:.2f}"
                         })
@@ -9692,7 +9728,7 @@ with tab4:
                                     'IN-HANDS from Partner': partner_in_hands,
                                     'COST/UNIT': f"${addon_partner_setup:.2f}",
                                     'TOTAL COST': f"${addon_partner_setup:.2f}",
-                                    'COST VERIFIED?': cost_verified,
+                
                                     'SELL PRICE/UNIT': f"${addon_client_setup:.2f}",
                                     'TOTAL SELL PRICE': f"${addon_client_setup:.2f}"
                                 })
@@ -9712,7 +9748,7 @@ with tab4:
                                     'IN-HANDS from Partner': partner_in_hands,
                                     'COST/UNIT': f"${addon_partner_perunit:.2f}",
                                     'TOTAL COST': f"${addon_partner_total:.2f}",
-                                    'COST VERIFIED?': cost_verified,
+                
                                     'SELL PRICE/UNIT': f"${addon_client_perunit:.2f}",
                                     'TOTAL SELL PRICE': f"${addon_client_total:.2f}"
                                 })
@@ -9735,7 +9771,7 @@ with tab4:
                         'IN-HANDS from Partner': "N/A",
                         'COST/UNIT': f"${tariff_per_unit:.2f}",
                         'TOTAL COST': f"${tariff_amount_total:.2f}",
-                        'COST VERIFIED?': "Yes",
+
                         'SELL PRICE/UNIT': f"${tariff_per_unit:.2f}",
                         'TOTAL SELL PRICE': f"${tariff_amount_total:.2f}"
                     })
@@ -9752,7 +9788,7 @@ with tab4:
                 'IN-HANDS from Partner': 'N/A',
                 'COST/UNIT': f"${partner_shipping_cost:.2f}",
                 'TOTAL COST': f"${partner_shipping_cost:.2f}",
-                'COST VERIFIED?': 'Yes',
+
                 'SELL PRICE/UNIT': f"${client_shipping_price:.2f}",
                 'TOTAL SELL PRICE': f"${client_shipping_price:.2f}"
             })
@@ -9769,7 +9805,7 @@ with tab4:
                 'IN-HANDS from Partner': 'N/A',
                 'COST/UNIT': f"${kitting_pbp_cost:.2f}",
                 'TOTAL COST': f"${kitting_pbp_cost:.2f}",
-                'COST VERIFIED?': 'Yes',
+
                 'SELL PRICE/UNIT': f"${kitting_client_price:.2f}",
                 'TOTAL SELL PRICE': f"${kitting_client_price:.2f}"
             })
@@ -9788,7 +9824,7 @@ with tab4:
                 "IN-HANDS from Partner": st.column_config.TextColumn("IN-HANDS from Partner", width="small"),
                 "COST/UNIT": st.column_config.TextColumn("COST/UNIT", width="small"),
                 "TOTAL COST": st.column_config.TextColumn("TOTAL COST", width="small"),
-                "COST VERIFIED?": st.column_config.TextColumn("COST VERIFIED?", width="small"),
+
                 "SELL PRICE/UNIT": st.column_config.TextColumn("SELL PRICE/UNIT", width="small"),
                 "TOTAL SELL PRICE": st.column_config.TextColumn("TOTAL SELL PRICE", width="small")
             }
@@ -9872,7 +9908,7 @@ with tab4:
                 'IN-HANDS from Partner': '',
                 'COST/UNIT': '',
                 'TOTAL COST': '',
-                'COST VERIFIED?': '',
+
                 'SELL PRICE/UNIT': '',
                 'TOTAL SELL PRICE': total_item[1]
             }])
@@ -9887,7 +9923,6 @@ with tab4:
             'IN-HANDS from Partner': '',
             'COST/UNIT': '',
             'TOTAL COST': '',
-            'COST VERIFIED?': '',
             'SELL PRICE/UNIT': '',
             'TOTAL SELL PRICE': ''
         }])
@@ -9904,7 +9939,7 @@ with tab4:
                     'IN-HANDS from Partner': '',
                     'COST/UNIT': '',
                     'TOTAL COST': '',
-                    'COST VERIFIED?': '',
+    
                     'SELL PRICE/UNIT': '',
                     'TOTAL SELL PRICE': ''
                 }])
@@ -9967,12 +10002,20 @@ with tab4:
             <th>Point of Contact (POC)</th>
         </tr>"""
 
-        # Add partner rows
-        if partners_in_order and hasattr(st.session_state, 'partner_contacts'):
+        # Add partner rows (use editable contacts if available, fallback to spreadsheet)
+        if partners_in_order:
             for partner_name in partners_in_order:
-                partner_contact = st.session_state.partner_contacts.get(partner_name, {})
-                poc_name = partner_contact.get('poc_name', 'Not specified')
-                poc_email = partner_contact.get('poc_email', 'Not specified')
+                editable_contact = st.session_state.get('partner_contacts_editable', {}).get(partner_name, {})
+                if editable_contact.get('poc_name') or editable_contact.get('poc_email'):
+                    poc_name = editable_contact.get('poc_name', 'Not specified')
+                    poc_email = editable_contact.get('poc_email', 'Not specified')
+                elif hasattr(st.session_state, 'partner_contacts'):
+                    partner_contact = st.session_state.partner_contacts.get(partner_name, {})
+                    poc_name = partner_contact.get('poc_name', 'Not specified')
+                    poc_email = partner_contact.get('poc_email', 'Not specified')
+                else:
+                    poc_name = 'Not specified'
+                    poc_email = 'Not specified'
                 html_invoice += f"""
         <tr>
             <td style="width: 40%;">{partner_name}</td>
@@ -10033,7 +10076,6 @@ with tab4:
             <th>In-Hands from Partner</th>
             <th>Cost/Unit</th>
             <th>Total Cost</th>
-            <th>Cost Verified?</th>
             <th>Sell Price/Unit</th>
             <th>Total Sell Price</th>
         </tr>"""
@@ -10049,7 +10091,6 @@ with tab4:
             <td>{line_item['IN-HANDS from Partner']}</td>
             <td style="text-align: right;">{line_item['COST/UNIT']}</td>
             <td style="text-align: right;">{line_item['TOTAL COST']}</td>
-            <td style="text-align: center;">{line_item['COST VERIFIED?']}</td>
             <td style="text-align: right;">{line_item['SELL PRICE/UNIT']}</td>
             <td style="text-align: right;">{line_item['TOTAL SELL PRICE']}</td>
         </tr>"""

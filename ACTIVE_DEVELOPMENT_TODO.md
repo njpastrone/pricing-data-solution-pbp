@@ -1,8 +1,24 @@
 # Active Development TODO
 
-**Last Updated:** May 27, 2026
-**Current Version:** 8.4.0
-**Status:** Normal development - client form feature shipped
+**Last Updated:** June 26, 2026
+**Current Version:** 8.5.0 (in progress)
+**Status:** Bug fix batch from team feedback
+
+---
+
+## In Progress - v8.5.0 Bug Fix Batch (June 2026)
+
+### Completed
+- [x] Bug 1: Rounded pricing now carries into Order Summary tables and totals
+- [x] Bug 2: Editable partner contact fields in Tab 4 (pre-filled from spreadsheet)
+- [x] Bug 3: Cost basis (cases vs units) now shown next to quantity in Tab 3
+- [x] Bug 5: Fixed "One Location" showing as "Drop Shipping" (separated shipping_type from ship_method)
+- [x] Bug 6: Removed "Cost Verified?" column (not needed)
+- [x] Bug 7: Tab 3 info carrying to Tab 4 (resolved by Bug 5 fix)
+- [x] Password gate fix for local Streamlit 1.29
+
+### Needs Clarification
+- Bug 4: Partner shipping method to US — needs more detail on what's needed
 
 ---
 
