@@ -1195,6 +1195,21 @@ with st.sidebar:
         if len(saved_proposals) == 0:
             st.info("No saved proposals yet")
         else:
+            def clear_proposal_row_widget_state():
+                """Remove stale per-row widget keys before loading a proposal.
+
+                Streamlit keeps a widget's state keyed by name; when a new
+                proposal is loaded into the same indexes, leftover
+                override_/markup_/price_ widget state from the previously shown
+                proposal would shadow the loaded values (e.g. wrongly showing
+                'Manual override' checked). Clearing them lets each widget
+                re-initialize from the loaded product.
+                """
+                prefixes = ('price_', 'markup_', 'override_', 'updating_from_markup_')
+                for widget_key in list(st.session_state.keys()):
+                    if widget_key.startswith(prefixes) and widget_key.rsplit('_', 1)[-1].isdigit():
+                        del st.session_state[widget_key]
+
             # Add manage mode checkbox
             manage_proposals = st.checkbox("Manage proposals (delete)", key="manage_proposals_mode")
 
@@ -1211,6 +1226,11 @@ with st.sidebar:
                             if success:
                                 if dataset != st.session_state.selected_dataset:
                                     st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
+
+                                # Clear stale per-row widget state from the
+                                # previously shown proposal so it doesn't shadow
+                                # the loaded values (e.g. Override checkbox).
+                                clear_proposal_row_widget_state()
 
                                 st.session_state.proposal_products = proposal_data.get('proposal_products', [])
                                 st.session_state.proposal_marketing_rounding = proposal_data.get('proposal_marketing_rounding', False)
@@ -1243,6 +1263,11 @@ with st.sidebar:
                             if success:
                                 if dataset != st.session_state.selected_dataset:
                                     st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
+
+                                # Clear stale per-row widget state from the
+                                # previously shown proposal so it doesn't shadow
+                                # the loaded values (e.g. Override checkbox).
+                                clear_proposal_row_widget_state()
 
                                 st.session_state.proposal_products = proposal_data.get('proposal_products', [])
                                 st.session_state.proposal_marketing_rounding = proposal_data.get('proposal_marketing_rounding', False)
@@ -3427,6 +3452,14 @@ with tab1:
             disabled=not has_products
         )
 
+    overwrite_proposal = st.checkbox(
+        "Overwrite existing proposal with this name",
+        key="save_proposal_overwrite",
+        value=False,
+        disabled=not has_products,
+        help="When checked, saving updates the existing proposal of the same name in place. Leave unchecked to keep separate versions."
+    )
+
     if st.button("Save Proposal", key="save_proposal_btn", type="primary", use_container_width=True, disabled=not has_products):
         if not proposal_name or not proposal_name.strip():
             st.error("Please enter a proposal name")
@@ -3445,7 +3478,8 @@ with tab1:
                 name=proposal_name.strip(),
                 created_by=created_by.strip() if created_by else "",
                 proposal_data=proposal_data,
-                dataset=st.session_state.selected_dataset
+                dataset=st.session_state.selected_dataset,
+                overwrite=overwrite_proposal
             )
 
             if success:
@@ -3458,26 +3492,9 @@ with tab1:
                 st.success(message)
                 st.rerun()
             else:
-                if result:  # result contains suggested name
-                    st.error(message)
-                    if st.button(f"Save as '{result}'", key="save_with_new_name"):
-                        success2, message2, result2 = save_proposal(
-                            name=result,
-                            created_by=created_by.strip() if created_by else "",
-                            proposal_data=proposal_data,
-                            dataset=st.session_state.selected_dataset
-                        )
-                        if success2:
-                            update_last_save_time('proposal')
-                            clear_saved_data_cache()
-                            st.session_state.loaded_proposal_name = result
-                            st.session_state.loaded_proposal_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-                            st.session_state.loaded_proposal_creator = created_by.strip() if created_by else "Current User"
-                            st.session_state.loaded_proposal_id = result2
-                            st.success(message2)
-                            st.rerun()
-                else:
-                    st.error(message)
+                # Name conflict: guide the user to overwrite or rename
+                # (the Overwrite checkbox above is the reliable path).
+                st.error(message)
 
     st.divider()
 
@@ -4235,6 +4252,13 @@ with tab1:
                 placeholder="e.g., John Smith"
             )
 
+        overwrite_proposal = st.checkbox(
+            "Overwrite existing proposal with this name",
+            key="save_proposal_overwrite_bottom",
+            value=False,
+            help="When checked, saving updates the existing proposal of the same name in place. Leave unchecked to keep separate versions."
+        )
+
         if st.button("Save Proposal", type="primary", use_container_width=True, key="save_proposal_btn_bottom"):
             if not proposal_name or not proposal_name.strip():
                 st.error("Please enter a proposal name")
@@ -4253,7 +4277,8 @@ with tab1:
                     name=proposal_name.strip(),
                     created_by=created_by.strip() if created_by else "",
                     proposal_data=proposal_data,
-                    dataset=st.session_state.selected_dataset
+                    dataset=st.session_state.selected_dataset,
+                    overwrite=overwrite_proposal
                 )
 
                 if success:
@@ -4261,22 +4286,9 @@ with tab1:
                     time.sleep(1.5)
                     st.rerun()
                 else:
-                    # Check if it's a naming conflict
-                    if result:  # result contains suggested name
-                        st.error(message)
-                        if st.button(f"Save as '{result}'", key="save_with_new_name_bottom"):
-                            success2, message2, _ = save_proposal(
-                                name=result,
-                                created_by=created_by.strip() if created_by else "",
-                                proposal_data=proposal_data,
-                                dataset=st.session_state.selected_dataset
-                            )
-                            if success2:
-                                st.success(f"{message2} - You can find it in the sidebar")
-                                time.sleep(1.5)
-                                st.rerun()
-                    else:
-                        st.error(message)
+                    # Name conflict: guide the user to overwrite or rename
+                    # (the Overwrite checkbox above is the reliable path).
+                    st.error(message)
     else:
         st.info("Add products to your proposal to enable saving")
 
@@ -4988,6 +5000,12 @@ with tab3:
     has_order = len(st.session_state.order_items) > 0
     if has_order:
         with st.container():
+            quick_overwrite_order = st.checkbox(
+                "Overwrite existing order with this name",
+                key="quick_save_order_overwrite",
+                value=False,
+                help="When checked, saving updates the existing order of the same name in place. Leave unchecked to keep separate versions."
+            )
             col1, col2, col3 = st.columns([2, 2, 1])
             with col1:
                 quick_order_name = st.text_input(
@@ -5046,7 +5064,8 @@ with tab3:
                             created_by=quick_creator.strip() if quick_creator else "",
                             order_data=order_data,
                             dataset=st.session_state.selected_dataset,
-                            photos_by_product=photos_for_upload if photos_for_upload else None
+                            photos_by_product=photos_for_upload if photos_for_upload else None,
+                            overwrite=quick_overwrite_order
                         )
 
                         if success:
@@ -5056,10 +5075,8 @@ with tab3:
                             time.sleep(1)
                             st.rerun()
                         else:
-                            if result:
-                                st.error(f"{message} Try: {result}")
-                            else:
-                                st.error(message)
+                            # Name conflict: guide the user to overwrite or rename
+                            st.error(message)
 
     st.divider()
 
@@ -5232,6 +5249,14 @@ with tab3:
                 disabled=not has_products
             )
 
+            overwrite_order = st.checkbox(
+                "Overwrite existing order with this name",
+                key="save_order_overwrite",
+                value=False,
+                disabled=not has_products,
+                help="When checked, saving updates the existing order of the same name in place. Leave unchecked to keep separate versions."
+            )
+
             if st.button("Save Order", key="save_order_btn", type="primary", use_container_width=True, disabled=not has_products):
                 if not order_name or not order_name.strip():
                     st.error("Please enter an order name")
@@ -5274,7 +5299,8 @@ with tab3:
                         created_by=created_by.strip() if created_by else "",
                         order_data=order_data,
                         dataset=st.session_state.selected_dataset,
-                        photos_by_product=photos_for_upload if photos_for_upload else None
+                        photos_by_product=photos_for_upload if photos_for_upload else None,
+                        overwrite=overwrite_order
                     )
 
                     if success:
@@ -5283,25 +5309,10 @@ with tab3:
                         st.success(message)
                         st.rerun()  # Rerun to clear form
                     else:
-                        # Check if it's a naming conflict
-                        if result:  # result contains suggested name
-                            st.error(message)
-                            # Offer to save with suggested name
-                            if st.button(f"Save as '{result}'", key="save_order_with_new_name"):
-                                success2, message2, _ = save_order(
-                                    name=result,
-                                    created_by=created_by.strip() if created_by else "",
-                                    order_data=order_data,
-                                    dataset=st.session_state.selected_dataset,
-                                    photos_by_product=photos_for_upload if photos_for_upload else None
-                                )
-                                if success2:
-                                    update_last_save_time('order')
-                                    clear_saved_data_cache()  # Clear cache to show new order
-                                    st.success(message2)
-                                    st.rerun()
-                        else:
-                            st.error(message)
+                        # Name conflict: guide the user to overwrite or rename
+                        # (the Overwrite checkbox above is the reliable path;
+                        # a nested confirm button would be dropped on rerun).
+                        st.error(message)
 
     st.divider()
 
@@ -8494,6 +8505,13 @@ with tab3:
                 placeholder="e.g., John Smith"
             )
 
+        overwrite_order = st.checkbox(
+            "Overwrite existing order with this name",
+            key="save_order_overwrite_bottom",
+            value=False,
+            help="When checked, saving updates the existing order of the same name in place. Leave unchecked to keep separate versions."
+        )
+
         if st.button("Save Order", type="primary", use_container_width=True, key="save_order_btn_bottom"):
             if not order_name or not order_name.strip():
                 st.error("Please enter an order name")
@@ -8536,7 +8554,8 @@ with tab3:
                     created_by=created_by.strip() if created_by else "",
                     order_data=order_data,
                     dataset=st.session_state.selected_dataset,
-                    photos_by_product=photos_for_upload if photos_for_upload else None
+                    photos_by_product=photos_for_upload if photos_for_upload else None,
+                    overwrite=overwrite_order
                 )
 
                 if success:
@@ -8546,25 +8565,9 @@ with tab3:
                     time.sleep(1.5)
                     st.rerun()
                 else:
-                    # Check if it's a naming conflict
-                    if result:  # result contains suggested name
-                        st.error(message)
-                        if st.button(f"Save as '{result}'", key="save_with_new_name_order_bottom"):
-                            success2, message2, _ = save_order(
-                                name=result,
-                                created_by=created_by.strip() if created_by else "",
-                                order_data=order_data,
-                                dataset=st.session_state.selected_dataset,
-                                photos_by_product=photos_for_upload if photos_for_upload else None
-                            )
-                            if success2:
-                                update_last_save_time('order')
-                                clear_saved_data_cache()  # Clear cache to show new order
-                                st.success(f"{message2} - You can find it in the sidebar")
-                                time.sleep(1.5)
-                                st.rerun()
-                    else:
-                        st.error(message)
+                    # Name conflict: guide the user to overwrite or rename
+                    # (the Overwrite checkbox above is the reliable path).
+                    st.error(message)
     else:
         st.info("Add products to your order to enable saving")
 
@@ -8604,6 +8607,24 @@ with tab4:
 
         # Editable fields for missing information
         with st.expander("Edit Order Information", expanded=bool(validation_warnings)):
+            # Keep these editors in sync with values entered elsewhere (e.g., Tab 3).
+            # Streamlit ignores a widget's value= after its key is first created
+            # (which happens at app startup, before any input), so the panel would
+            # otherwise show stale/blank defaults. We seed each widget key from
+            # client_info every run; the on_change callbacks below write user edits
+            # back to client_info, keeping both directions consistent.
+            _ci_sync = st.session_state.client_info
+            st.session_state['tab4_is_new_client'] = _ci_sync.get('is_new_client', True)
+            st.session_state['tab3_company_name'] = _ci_sync.get('company_name', '')
+            st.session_state['tab3_billing_address'] = _ci_sync.get('billing_address', '')
+            st.session_state['tab3_shipping_address'] = _ci_sync.get('shipping_address', '')
+            st.session_state['tab3_order_submitted_by'] = _ci_sync.get('order_submitted_by', '')
+            st.session_state['tab3_cost_submitted_by'] = _ci_sync.get('cost_submitted_by', '')
+            for _sync_idx, _sync_contact in enumerate(_ci_sync.get('contacts', [])):
+                st.session_state[f'tab4_contact_name_{_sync_idx}'] = _sync_contact.get('name', '')
+                st.session_state[f'tab4_contact_email_{_sync_idx}'] = _sync_contact.get('email', '')
+                st.session_state[f'tab4_contact_phone_{_sync_idx}'] = _sync_contact.get('phone', '')
+
             col1, col2 = st.columns(2)
 
             with col1:
@@ -8615,7 +8636,6 @@ with tab4:
 
                 st.checkbox(
                     "New Client?",
-                    value=st.session_state.client_info.get('is_new_client', True),
                     key="tab4_is_new_client",
                     on_change=update_is_new_client
                 )
@@ -8626,7 +8646,6 @@ with tab4:
 
                 st.text_input(
                     "Company Name",
-                    value=st.session_state.client_info.get('company_name', ''),
                     key="tab3_company_name",
                     on_change=update_company_name
                 )
@@ -8637,7 +8656,6 @@ with tab4:
 
                 st.text_area(
                     "Billing Address",
-                    value=st.session_state.client_info.get('billing_address', ''),
                     key="tab3_billing_address",
                     height=80,
                     on_change=update_billing_address
@@ -8648,7 +8666,6 @@ with tab4:
 
                 st.text_area(
                     "Shipping Address",
-                    value=st.session_state.client_info.get('shipping_address', ''),
                     key="tab3_shipping_address",
                     height=80,
                     on_change=update_shipping_address
@@ -8698,18 +8715,19 @@ with tab4:
                     def update_contact_email(idx=idx):
                         st.session_state.client_info['contacts'][idx]['email'] = st.session_state[f"tab4_contact_email_{idx}"]
 
-                    contact['name'] = st.text_input(
+                    # Key is seeded from client_info each run (sync block above);
+                    # on_change writes edits back. No value= / no direct return
+                    # assignment here, so Tab 3 input is not clobbered.
+                    st.text_input(
                         "Name",
-                        value=contact.get('name', ''),
                         key=f"tab4_contact_name_{idx}",
                         on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
                             {'name': st.session_state[f"tab4_contact_name_{idx}"]}
                         )
                     )
 
-                    contact['email'] = st.text_input(
+                    st.text_input(
                         "Email",
-                        value=contact.get('email', ''),
                         key=f"tab4_contact_email_{idx}",
                         on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
                             {'email': st.session_state[f"tab4_contact_email_{idx}"]}
@@ -8717,9 +8735,8 @@ with tab4:
                     )
 
                 with contact_col2:
-                    contact['phone'] = st.text_input(
+                    st.text_input(
                         "Phone",
-                        value=contact.get('phone', ''),
                         key=f"tab4_contact_phone_{idx}",
                         on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
                             {'phone': st.session_state[f"tab4_contact_phone_{idx}"]}
@@ -8731,7 +8748,7 @@ with tab4:
                     if current_role not in role_options and current_role:
                         role_options.append(current_role)
 
-                    contact['role'] = st.selectbox(
+                    st.selectbox(
                         "Role",
                         options=role_options,
                         index=role_options.index(current_role) if current_role in role_options else 0,
@@ -8842,7 +8859,6 @@ with tab4:
 
                 st.text_input(
                     "Order Submitted By",
-                    value=st.session_state.client_info.get('order_submitted_by', ''),
                     key="tab3_order_submitted_by",
                     on_change=update_order_submitted_by
                 )
@@ -8852,7 +8868,6 @@ with tab4:
 
                 st.text_input(
                     "Cost Submitted By",
-                    value=st.session_state.client_info.get('cost_submitted_by', ''),
                     key="tab3_cost_submitted_by",
                     on_change=update_cost_submitted_by
                 )
@@ -9381,8 +9396,12 @@ with tab4:
                     st.session_state.partner_contacts_editable[partner_name] = {
                         'poc_name': spreadsheet_contact.get('poc_name', ''),
                         'poc_email': spreadsheet_contact.get('poc_email', ''),
-                        'poc_phone': spreadsheet_contact.get('poc_phone', '')
+                        'poc_phone': spreadsheet_contact.get('poc_phone', ''),
+                        'shipping_instructions': ''
                     }
+                # Backfill key for contacts created before this field existed
+                if 'shipping_instructions' not in st.session_state.partner_contacts_editable[partner_name]:
+                    st.session_state.partner_contacts_editable[partner_name]['shipping_instructions'] = ''
 
                 st.markdown(f"**{partner_name}**")
                 col_pname, col_pemail, col_pphone = st.columns(3)
@@ -9407,6 +9426,13 @@ with tab4:
                         key=f"partner_poc_phone_{partner_name}",
                         placeholder="e.g., (555) 123-4567"
                     )
+                st.session_state.partner_contacts_editable[partner_name]['shipping_instructions'] = st.text_area(
+                    "Shipping Instructions to PbP",
+                    value=st.session_state.partner_contacts_editable[partner_name]['shipping_instructions'],
+                    key=f"partner_ship_instructions_{partner_name}",
+                    placeholder="e.g., Ship ground only, no overnight for heavy items. Consolidate into one shipment.",
+                    help="Tell this partner how to ship the gifts to PbP (carrier, service level, consolidation, etc.). This prints on the invoice/PO."
+                )
         else:
             st.caption("No partners in order")
 
@@ -10000,6 +10026,7 @@ with tab4:
         <tr>
             <th>Partner</th>
             <th>Point of Contact (POC)</th>
+            <th>Shipping Instructions to PbP</th>
         </tr>"""
 
         # Add partner rows (use editable contacts if available, fallback to spreadsheet)
@@ -10016,15 +10043,17 @@ with tab4:
                 else:
                     poc_name = 'Not specified'
                     poc_email = 'Not specified'
+                ship_instructions = editable_contact.get('shipping_instructions', '').strip() or 'Not specified'
                 html_invoice += f"""
         <tr>
-            <td style="width: 40%;">{partner_name}</td>
+            <td style="width: 30%;">{partner_name}</td>
             <td>{poc_name} &lt;{poc_email}&gt;</td>
+            <td>{ship_instructions.replace(chr(10), '<br>')}</td>
         </tr>"""
         else:
             html_invoice += """
         <tr>
-            <td colspan="2" style="text-align: center; color: #7f8c8d;">No partners in order</td>
+            <td colspan="3" style="text-align: center; color: #7f8c8d;">No partners in order</td>
         </tr>"""
 
         html_invoice += f"""

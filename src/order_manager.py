@@ -12,6 +12,7 @@ Orders are stored in the saved_orders spreadsheet with the following columns:
 """
 
 import json
+import re
 from datetime import datetime, date
 import streamlit as st
 import gspread
@@ -189,7 +190,24 @@ def get_photo_file_ids_from_order(order_data):
     return file_ids
 
 
-def save_order(name, created_by, order_data, dataset, photos_by_product=None):
+def _next_version_name(name, existing_names):
+    """
+    Suggest the next available "(vN)" name.
+
+    Strips any existing "(vN)" suffix so re-saving "Order (v2)" suggests
+    "Order (v3)" rather than "Order (v2) (v2)", and increments past every
+    version that already exists.
+    """
+    base = re.sub(r'\s*\(v\d+\)$', '', name).strip()
+    version = 2
+    candidate = f"{base} (v{version})"
+    while candidate in existing_names:
+        version += 1
+        candidate = f"{base} (v{version})"
+    return candidate
+
+
+def save_order(name, created_by, order_data, dataset, photos_by_product=None, overwrite=False):
     """
     Save an order to Google Sheets.
 
@@ -198,6 +216,10 @@ def save_order(name, created_by, order_data, dataset, photos_by_product=None):
         created_by (str): Creator name/email (optional)
         order_data (dict): Order state data to save
         dataset (str): Dataset used ('demo' or 'real')
+        photos_by_product (dict): Optional product photos to upload
+        overwrite (bool): If True and an order with this name exists, replace it
+            in place (keeping its original Order_ID) instead of suggesting a
+            versioned name.
 
     Returns:
         tuple: (success: bool, message: str, order_id: str or None)
@@ -214,17 +236,26 @@ def save_order(name, created_by, order_data, dataset, photos_by_product=None):
         all_values = sheet.get_all_values()
         existing_names = [row[1] for row in all_values[1:] if len(row) > 1]  # Skip header row
 
-        if name in existing_names:
-            # Suggest versioned name
-            version = 2
-            new_name = f"{name} (v{version})"
-            while new_name in existing_names:
-                version += 1
-                new_name = f"{name} (v{version})"
-            return False, f"Order '{name}' already exists. Save as '{new_name}' instead?", new_name
+        # Name conflict, and the user did NOT choose to overwrite: suggest a
+        # versioned name and let the caller decide.
+        if name in existing_names and not overwrite:
+            new_name = _next_version_name(name, existing_names)
+            return False, f"Order '{name}' already exists. Turn on 'Overwrite' to replace it, or save as '{new_name}'.", new_name
 
-        # Generate unique ID and timestamp
-        order_id = generate_order_id()
+        # If overwriting, find the existing row so we can update it in place
+        # (keeping its original Order_ID). Otherwise we'll append a new row.
+        existing_row_index = None
+        order_id = None
+        if overwrite:
+            for i, row in enumerate(all_values[1:], start=2):  # Row 2 = first data row
+                if len(row) > 1 and row[1] == name:
+                    existing_row_index = i
+                    order_id = row[0]
+                    break
+
+        if order_id is None:
+            order_id = generate_order_id()
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Upload photos to Google Drive if any were provided
@@ -239,7 +270,6 @@ def save_order(name, created_by, order_data, dataset, photos_by_product=None):
         # Serialize order data to JSON
         order_json = json.dumps(order_data_serializable)
 
-        # Append row to sheet
         row_data = [
             order_id,
             name,
@@ -249,8 +279,13 @@ def save_order(name, created_by, order_data, dataset, photos_by_product=None):
             order_json
         ]
 
-        sheet.append_row(row_data)
+        if existing_row_index is not None:
+            # Overwrite the existing order in place
+            sheet.update(f"A{existing_row_index}:F{existing_row_index}", [row_data])
+            return True, f"Order '{name}' updated successfully!", order_id
 
+        # New order: append a new row
+        sheet.append_row(row_data)
         return True, f"Order '{name}' saved successfully!", order_id
 
     except Exception as e:

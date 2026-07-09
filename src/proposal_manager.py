@@ -12,6 +12,7 @@ Proposals are stored in the saved_proposals spreadsheet with the following colum
 """
 
 import json
+import re
 from datetime import datetime
 import streamlit as st
 import gspread
@@ -84,7 +85,24 @@ def generate_proposal_id():
     return datetime.now().strftime("PROP_%Y%m%d_%H%M%S")
 
 
-def save_proposal(name, created_by, proposal_data, dataset):
+def _next_version_name(name, existing_names):
+    """
+    Suggest the next available "(vN)" name.
+
+    Strips any existing "(vN)" suffix so re-saving "Proposal (v2)" suggests
+    "Proposal (v3)" rather than "Proposal (v2) (v2)", and increments past every
+    version that already exists.
+    """
+    base = re.sub(r'\s*\(v\d+\)$', '', name).strip()
+    version = 2
+    candidate = f"{base} (v{version})"
+    while candidate in existing_names:
+        version += 1
+        candidate = f"{base} (v{version})"
+    return candidate
+
+
+def save_proposal(name, created_by, proposal_data, dataset, overwrite=False):
     """
     Save a proposal to Google Sheets.
 
@@ -93,6 +111,9 @@ def save_proposal(name, created_by, proposal_data, dataset):
         created_by (str): Creator name/email (optional)
         proposal_data (dict): Proposal state data to save
         dataset (str): Dataset used ('demo' or 'real')
+        overwrite (bool): If True and a proposal with this name exists, replace
+            it in place (keeping its original Proposal_ID) instead of suggesting
+            a versioned name.
 
     Returns:
         tuple: (success: bool, message: str, proposal_id: str or None)
@@ -109,23 +130,31 @@ def save_proposal(name, created_by, proposal_data, dataset):
         all_values = sheet.get_all_values()
         existing_names = [row[1] for row in all_values[1:] if len(row) > 1]  # Skip header row
 
-        if name in existing_names:
-            # Suggest versioned name
-            version = 2
-            new_name = f"{name} (v{version})"
-            while new_name in existing_names:
-                version += 1
-                new_name = f"{name} (v{version})"
-            return False, f"Proposal '{name}' already exists. Save as '{new_name}' instead?", new_name
+        # Name conflict, and the user did NOT choose to overwrite: suggest a
+        # versioned name and let the caller decide.
+        if name in existing_names and not overwrite:
+            new_name = _next_version_name(name, existing_names)
+            return False, f"Proposal '{name}' already exists. Turn on 'Overwrite' to replace it, or save as '{new_name}'.", new_name
 
-        # Generate unique ID and timestamp
-        proposal_id = generate_proposal_id()
+        # If overwriting, find the existing row so we can update it in place
+        # (keeping its original Proposal_ID). Otherwise we'll append a new row.
+        existing_row_index = None
+        proposal_id = None
+        if overwrite:
+            for i, row in enumerate(all_values[1:], start=2):  # Row 2 = first data row
+                if len(row) > 1 and row[1] == name:
+                    existing_row_index = i
+                    proposal_id = row[0]
+                    break
+
+        if proposal_id is None:
+            proposal_id = generate_proposal_id()
+
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Serialize proposal data to JSON
         proposal_json = json.dumps(proposal_data)
 
-        # Append row to sheet
         row_data = [
             proposal_id,
             name,
@@ -135,8 +164,13 @@ def save_proposal(name, created_by, proposal_data, dataset):
             proposal_json
         ]
 
-        sheet.append_row(row_data)
+        if existing_row_index is not None:
+            # Overwrite the existing proposal in place
+            sheet.update(f"A{existing_row_index}:F{existing_row_index}", [row_data])
+            return True, f"Proposal '{name}' updated successfully!", proposal_id
 
+        # New proposal: append a new row
+        sheet.append_row(row_data)
         return True, f"Proposal '{name}' saved successfully!", proposal_id
 
     except Exception as e:

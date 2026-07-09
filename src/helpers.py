@@ -407,7 +407,10 @@ def calculate_markup_from_price(base_cost, client_price):
         return 0.0
 
     markup = ((client_price / base_cost) - 1) * 100
-    return round(markup, 2)  # Round to 2 decimal places for display
+    # Keep full precision (6 decimals) so the entered client price reconstructs
+    # exactly. Rounding to 2 here caused small residuals (e.g. a stray $0.03 on
+    # the line total). Display code rounds markup to 1 decimal separately.
+    return round(markup, 6)
 
 
 # ========== PARTNER & DATA EXTRACTION ==========
