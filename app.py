@@ -2960,6 +2960,15 @@ with tab1:
         st.toast(st.session_state.bulk_success_message)
         st.session_state.show_bulk_success_message = False
 
+    # Bulk add failed-products message (shown here, after the rerun, so it is
+    # not inside the catalog expander -- nested expanders are not allowed)
+    if st.session_state.get('bulk_failed_products'):
+        _failed = st.session_state.bulk_failed_products
+        st.warning(f"Skipped {len(_failed)} product(s) with missing pricing data in the master spreadsheet:")
+        for _failed_name in _failed:
+            st.caption(f"- {_failed_name}")
+        st.session_state.bulk_failed_products = []
+
     # ============================================================
     # BULK ACTIONS SECTION
     # ============================================================
@@ -3066,12 +3075,10 @@ with tab1:
                             st.session_state.show_bulk_success_message = True
                             st.session_state.bulk_success_message = f"Added **{added_count} filtered products** to proposal!"
 
-                        # Show warning for failed products
-                        if failed_products:
-                            st.warning(f"Failed to add {len(failed_products)} product(s): Missing pricing data in master spreadsheet")
-                            with st.expander("See failed products"):
-                                for product_name in failed_products:
-                                    st.caption(f"- {product_name}")
+                        # Stash failed products to show after the rerun
+                        # (cannot show here: this runs inside the catalog
+                        # expander, and expanders may not be nested)
+                        st.session_state.bulk_failed_products = failed_products
 
                         # Keep catalog expanded after bulk add
                         st.session_state.keep_catalog_expanded = True
@@ -3183,12 +3190,10 @@ with tab1:
                                 st.session_state.show_bulk_success_message = True
                                 st.session_state.bulk_success_message = f"Added **{added_count} products** from {partner_names} to proposal!"
 
-                            # Show warning for failed products
-                            if failed_products:
-                                st.warning(f"Failed to add {len(failed_products)} product(s): Missing pricing data in master spreadsheet")
-                                with st.expander("See failed products"):
-                                    for product_name in failed_products:
-                                        st.caption(f"- {product_name}")
+                            # Stash failed products to show after the rerun
+                            # (cannot show here: this runs inside the catalog
+                            # expander, and expanders may not be nested)
+                            st.session_state.bulk_failed_products = failed_products
 
                             # Keep catalog expanded after bulk add
                             st.session_state.keep_catalog_expanded = True

@@ -22,8 +22,8 @@
 ## ACTIVE DEVELOPMENT STATUS - July 2026
 
 **Current Focus:** Normal development - team-reported bug fixes
-- **Last Major Update:** 2026-07-10 - Password gate first-click login and browser persistence (v8.5.2)
-- **Current Version:** 8.5.2
+- **Last Major Update:** 2026-07-10 - Bulk-add crash fix for products with missing pricing (v8.5.3)
+- **Current Version:** 8.5.3
 - **Status:** Production-ready with 4-method pricing system (v8.1.0 schema, 45 columns)
 - **Codebase:** ~19,500 lines of Python, clean and documented
 
@@ -498,7 +498,7 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 8.5.2
+**Version:** 8.5.3
 
 **Last Updated:** 2026-07-10
 

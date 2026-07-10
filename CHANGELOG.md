@@ -3,6 +3,11 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [8.5.3] - 2026-07-10
+
+### Fixed
+- **Bulk Add Crash (Tab 1):** Adding all products by partner (or via "Quick Add All Products") no longer crashes with `StreamlitAPIException: Expanders may not be nested inside other expanders` when some products have missing pricing data. The "failed products" list is now shown after the rerun (outside the catalog expander) instead of in a nested expander, listing which products were skipped
+
 ## [8.5.2] - 2026-07-10
 
 ### Fixed
