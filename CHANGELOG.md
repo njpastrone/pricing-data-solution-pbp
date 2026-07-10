@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [8.5.1] - 2026-07-10
+
+### Added
+- **Partner Shipping Instructions (Tab 4):** New per-partner "Shipping Instructions to PbP" free-text field (how each partner should ship goods to PbP, e.g. carrier and service level). Editable alongside partner contacts and printed as a column in the HTML invoice/PO export. Keeps instructions from getting buried in "Note to Partner"
+- **Overwrite on Save (Orders and Proposals):** Save dialogs now include an "Overwrite existing order/proposal with this name" checkbox that updates the saved record in place, keeping its original ID. Added to all save buttons (top quick-save, bottom save, sidebar save)
+
+### Fixed
+- **Tab 3 to Tab 4 Carry-Over:** Tab 4 "Edit Order Information" widgets now seed from `client_info` on every run, so values entered in Tab 3 display correctly. Removed the contact direct-return assignment that was clobbering Tab 3 input with stale widget state (real data loss on contacts)
+- **Stray $0.03 on Line Totals:** `calculate_markup_from_price()` now keeps full precision (6 decimals) instead of rounding markup to 2, so an entered client price reconstructs exactly (e.g. 83 x $30.00 = $2490.00, not $2490.03)
+- **Save "always v2, can't overwrite":** `save_order()` / `save_proposal()` gained an in-place overwrite path; version-name suggestion now strips an existing `(vN)` suffix and increments properly (v2 to v3 to v4). Removed the nested "Save as (vN)" confirm buttons that were dropped on Streamlit rerun (the cause of the perpetual "v2")
+- **Proposal Load Forcing "Manual Override":** Loading a saved proposal now clears stale per-row widget state (`override_`, `markup_`, `price_` keys) so a previously shown proposal's checkbox state no longer bleeds onto the newly loaded products
+
+### Notes
+- **Blank MSRP fallback (not a code change):** Products with a "MSRP + % of cost" pricing logic but an empty Vendor Published MSRP cell correctly fall back to standard 2x markup. If prices look unexpected, add MSRP values to those spreadsheet rows or switch their Pricing Logic to "Standard markup"
+
 ## [8.5.0] - 2026-07-02
 
 ### Fixed

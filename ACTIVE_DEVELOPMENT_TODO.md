@@ -1,24 +1,30 @@
 # Active Development TODO
 
-**Last Updated:** June 26, 2026
-**Current Version:** 8.5.0 (in progress)
-**Status:** Bug fix batch from team feedback
+**Last Updated:** July 10, 2026
+**Current Version:** 8.5.1
+**Status:** Team-reported bug fixes complete, ready to deploy
 
 ---
 
-## In Progress - v8.5.0 Bug Fix Batch (June 2026)
+## Completed - v8.5.1 Bug Fix Batch (July 2026)
 
-### Completed
+- [x] Partner shipping instructions: per-partner "Shipping Instructions to PbP" field in Tab 4, printed on invoice/PO (resolves the Bug 4 clarification from v8.5.0)
+- [x] Tab 3 to Tab 4 carry-over: Tab 4 editors seed from client_info each run; removed contact clobber
+- [x] Stray $0.03 line total: full-precision markup conversion (`calculate_markup_from_price`)
+- [x] Save "always v2 / can't overwrite": in-place Overwrite checkbox for orders and proposals; fixed version increment
+- [x] Proposal load forcing "Manual override": clear stale per-row widget state on load
+- [x] Data note: blank Vendor MSRP with "MSRP + % of cost" logic falls back to 2x markup (spreadsheet fix, not code)
+
+## Completed - v8.5.0 Bug Fix Batch (June-July 2026)
+
 - [x] Bug 1: Rounded pricing now carries into Order Summary tables and totals
 - [x] Bug 2: Editable partner contact fields in Tab 4 (pre-filled from spreadsheet)
 - [x] Bug 3: Cost basis (cases vs units) now shown next to quantity in Tab 3
+- [x] Bug 4: Partner shipping method to US — clarified and delivered in v8.5.1
 - [x] Bug 5: Fixed "One Location" showing as "Drop Shipping" (separated shipping_type from ship_method)
 - [x] Bug 6: Removed "Cost Verified?" column (not needed)
-- [x] Bug 7: Tab 3 info carrying to Tab 4 (resolved by Bug 5 fix)
+- [x] Bug 7: Tab 3 info carrying to Tab 4 (further fixed in v8.5.1)
 - [x] Password gate fix for local Streamlit 1.29
-
-### Needs Clarification
-- Bug 4: Partner shipping method to US — needs more detail on what's needed
 
 ---
 

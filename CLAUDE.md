@@ -19,15 +19,23 @@
 
 ---
 
-## ACTIVE DEVELOPMENT STATUS - May 2026
+## ACTIVE DEVELOPMENT STATUS - July 2026
 
-**Current Focus:** Normal development - client order form feature and bug fixes
-- **Last Major Update:** 2026-05-27 - Client Order Form as shareable link (v8.4.0)
-- **Current Version:** 8.4.0
+**Current Focus:** Normal development - team-reported bug fixes
+- **Last Major Update:** 2026-07-10 - Team-reported bug fixes and partner shipping field (v8.5.1)
+- **Current Version:** 8.5.1
 - **Status:** Production-ready with 4-method pricing system (v8.1.0 schema, 45 columns)
 - **Codebase:** ~19,500 lines of Python, clean and documented
 
-**Recent Work (May 2026):**
+**Recent Work (July 2026):**
+- **Team Bug Fixes and Partner Shipping Field (v8.5.1):**
+  - Per-partner "Shipping Instructions to PbP" field in Tab 4, printed on invoice/PO
+  - Tab 3 to Tab 4 carry-over fixed (Tab 4 editors seed from client_info; removed contact clobber)
+  - Stray $0.03 line-total fixed (full-precision markup conversion)
+  - Save "always v2 / can't overwrite" fixed for orders and proposals (in-place Overwrite checkbox)
+  - Proposal load no longer forces "Manual override" (clears stale per-row widget state)
+  - Data note: blank Vendor MSRP with "MSRP + % of cost" logic falls back to 2x markup (spreadsheet fix, not code)
+- **7 Team-Reported Bug Fixes (v8.5.0):** Rounded pricing in Order Summary, editable partner contacts, cost basis display, shipping type vs ship method separation, removed Cost Verified column, local password gate fix
 - **Client Order Form as Shareable Link (v8.4.0):** New standalone form page accessible via direct URL
   - New `src/client_form.py` module (session tokens, proposal loading, draft save/load, form submission)
   - Query-param routing (`?client_form=<proposal_id>`) renders form instead of main app
@@ -490,11 +498,11 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 8.4.0
+**Version:** 8.5.1
 
-**Last Updated:** 2026-05-27
+**Last Updated:** 2026-07-10
 
-**Deployment:** IN PRODUCTION at https://pricing-data-solution-pbp.onrender.com
+**Deployment:** IN PRODUCTION at https://pbp-order-management-system.onrender.com
 - Render Standard tier (2GB RAM, $25/month)
 - Cloud-based PowerPoint template loading
 - Password gate for main app (client form links bypass)
@@ -504,6 +512,16 @@ pricing-data-solution-pbp/
 - 55+ test scripts organized in scripts/ (core, features, investigations)
 - 4-method pricing system (v8.1.0 schema, 45 columns)
 - Fully deployed and operational on Render
+
+**Recent Improvements (2026-07-10 - v8.5.1):**
+- Per-partner "Shipping Instructions to PbP" field (Tab 4 + invoice/PO export)
+- Tab 3 to Tab 4 carry-over fixed (Tab 4 editors seed from client_info; contact clobber removed)
+- Stray $0.03 line-total fixed (full-precision markup conversion in `calculate_markup_from_price`)
+- Overwrite-on-save for orders and proposals (in-place update, keeps original ID); fixed version increment
+- Proposal load no longer forces "Manual override" (clears stale per-row widget state)
+
+**Recent Improvements (2026-07-02 - v8.5.0):**
+- 7 team-reported bug fixes: rounded pricing in Order Summary, editable partner contacts, cost basis display, shipping type vs ship method separation, removed Cost Verified column, local password gate fix
 
 **Recent Improvements (2026-05-27 - v8.4.0):**
 - Client Order Form as shareable link (standalone page, no login required)
