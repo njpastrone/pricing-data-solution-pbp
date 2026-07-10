@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [8.5.2] - 2026-07-10
+
+### Fixed
+- **Password Gate First-Click Login:** Logging in now takes effect on the first click. Previously the gate set the auth flag then relied on a JavaScript page reload (via a sandboxed iframe) that often did not fire, leaving users clicking "Log In" repeatedly. Now uses `st.rerun()` so login is immediate
+- **Password Gate Browser Persistence:** "Remember this browser" now works. The old localStorage approach depended on a `components.html` iframe navigating the top window, which browsers block (sandboxed iframe without allow-top-navigation) -- so the login was never actually remembered. Switched to the `streamlit-local-storage` component, which returns the saved token to Python directly and auto-logs-in a returning browser
+
+### Added
+- **Dependency:** `streamlit-local-storage==0.0.25` (browser localStorage access for the password gate)
+
 ## [8.5.1] - 2026-07-10
 
 ### Added

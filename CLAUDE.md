@@ -22,8 +22,8 @@
 ## ACTIVE DEVELOPMENT STATUS - July 2026
 
 **Current Focus:** Normal development - team-reported bug fixes
-- **Last Major Update:** 2026-07-10 - Team-reported bug fixes and partner shipping field (v8.5.1)
-- **Current Version:** 8.5.1
+- **Last Major Update:** 2026-07-10 - Password gate first-click login and browser persistence (v8.5.2)
+- **Current Version:** 8.5.2
 - **Status:** Production-ready with 4-method pricing system (v8.1.0 schema, 45 columns)
 - **Codebase:** ~19,500 lines of Python, clean and documented
 
@@ -498,7 +498,7 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 8.5.1
+**Version:** 8.5.2
 
 **Last Updated:** 2026-07-10
 
@@ -512,6 +512,10 @@ pricing-data-solution-pbp/
 - 55+ test scripts organized in scripts/ (core, features, investigations)
 - 4-method pricing system (v8.1.0 schema, 45 columns)
 - Fully deployed and operational on Render
+
+**Recent Improvements (2026-07-10 - v8.5.2):**
+- Password gate now logs in on the first click (was requiring multiple clicks)
+- Login is remembered per browser via `streamlit-local-storage` (previous iframe-redirect approach was blocked by browser sandbox and never persisted)
 
 **Recent Improvements (2026-07-10 - v8.5.1):**
 - Per-partner "Shipping Instructions to PbP" field (Tab 4 + invoice/PO export)
