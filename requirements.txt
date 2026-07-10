@@ -1,4 +1,5 @@
 streamlit
+streamlit-local-storage==0.0.25
 gspread
 pandas
 google-auth

@@ -14,6 +14,7 @@ import hashlib
 import streamlit as st
 import gc  # For memory optimization
 import streamlit.components.v1 as components
+from streamlit_local_storage import LocalStorage
 import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
@@ -722,21 +723,16 @@ if not _app_password:
         _app_password = "pbp2026"
 _auth_token = hashlib.sha256(_app_password.encode()).hexdigest()[:16] if _app_password else ""
 
-# Check if browser sent an auth token via query param
-_auth_param = query_params.get("auth", "")
-if isinstance(_auth_param, list):
-    _auth_param = _auth_param[0] if _auth_param else ""
+# Browser localStorage handle. Unlike a components.html iframe (which is
+# sandboxed and cannot navigate the page), this component reads the saved
+# token and returns it directly to Python, so "remember this browser" works.
+_local_storage = LocalStorage()
 
-if _auth_param and _auth_param == _auth_token:
-    st.session_state.authenticated = True
-    # Remove the auth param from the URL to keep it clean
-    try:
-        # Preserve other query params (like tab)
-        new_params = {k: v for k, v in query_params.items() if k != "auth"}
-        st.query_params.clear()
-        st.query_params.update(new_params)
-    except Exception:
-        pass
+# Try to restore a saved login from a previous visit in this browser.
+if not st.session_state.authenticated:
+    _saved_token = _local_storage.getItem("pbp_auth_token")
+    if _saved_token and _auth_token and _saved_token == _auth_token:
+        st.session_state.authenticated = True
 
 if not st.session_state.authenticated:
     st.markdown("""<style>
@@ -746,40 +742,26 @@ if not st.session_state.authenticated:
         .block-container { max-width: 500px; margin: 0 auto; padding-top: 10rem; }
     </style>""", unsafe_allow_html=True)
 
-    # On first load, check localStorage for a saved auth token and redirect
-    components.html("""
-        <script>
-            var token = window.parent.localStorage.getItem('pbp_auth_token');
-            if (token) {
-                var url = new URL(window.parent.location.href);
-                if (!url.searchParams.has('auth')) {
-                    url.searchParams.set('auth', token);
-                    window.parent.location.href = url.toString();
-                }
-            }
-        </script>
-    """, height=0)
-
     st.title("PBP Order Management")
     password = st.text_input("Enter password to continue", type="password", key="login_password")
 
     if st.button("Log In", type="primary", use_container_width=True):
         if password == _app_password:
+            # Log in immediately for this session via st.rerun() (works on the
+            # first click). Persist to localStorage on the authenticated render
+            # below so a returning browser stays logged in.
             st.session_state.authenticated = True
-            # Save auth token to browser localStorage so login persists
-            components.html(f"""
-                <script>
-                    window.parent.localStorage.setItem('pbp_auth_token', '{_auth_token}');
-                    // Reload without the password form
-                    var url = new URL(window.parent.location.href);
-                    url.searchParams.delete('auth');
-                    window.parent.location.href = url.toString();
-                </script>
-            """, height=0)
-            st.stop()
+            st.session_state.persist_auth_token = True
+            st.rerun()
         else:
             st.error("Incorrect password.")
     st.stop()
+
+# Once authenticated, save the auth token to browser localStorage a single time
+# (right after a fresh login) so this browser is remembered on future visits.
+if st.session_state.get('persist_auth_token') and _auth_token:
+    _local_storage.setItem("pbp_auth_token", _auth_token, key="persist_auth_token_set")
+    st.session_state.persist_auth_token = False
 
 # Prevent automatic page scrolling on widget interaction
 st.markdown("""
