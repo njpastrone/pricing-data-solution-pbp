@@ -22,12 +22,13 @@
 ## ACTIVE DEVELOPMENT STATUS - July 2026
 
 **Current Focus:** Normal development - team-reported bug fixes
-- **Last Major Update:** 2026-07-10 - Bulk-add crash fix for products with missing pricing (v8.5.3)
-- **Current Version:** 8.5.3
+- **Last Major Update:** 2026-07-16 - Price range filter now matches displayed client price (v8.5.4)
+- **Current Version:** 8.5.4
 - **Status:** Production-ready with 4-method pricing system (v8.1.0 schema, 45 columns)
 - **Codebase:** ~19,500 lines of Python, clean and documented
 
 **Recent Work (July 2026):**
+- **Price Range Filter Fix (v8.5.4):** Tab 1 price filter now matches the client price shown for each product. It previously used a "Vendor MSRP or cost x2 @ qty 100" estimate that ignored add-ons and tier/quantity, letting over-budget products (e.g. above $30) slip through. Filter and catalog display now share one calculation (`calculate_catalog_client_price` in `src/pricing_engine.py`)
 - **Team Bug Fixes and Partner Shipping Field (v8.5.1):**
   - Per-partner "Shipping Instructions to PbP" field in Tab 4, printed on invoice/PO
   - Tab 3 to Tab 4 carry-over fixed (Tab 4 editors seed from client_info; removed contact clobber)
@@ -498,9 +499,9 @@ pricing-data-solution-pbp/
 
 ## Current Status
 
-**Version:** 8.5.3
+**Version:** 8.5.4
 
-**Last Updated:** 2026-07-10
+**Last Updated:** 2026-07-16
 
 **Deployment:** IN PRODUCTION at https://pbp-order-management-system.onrender.com
 - Render Standard tier (2GB RAM, $25/month)

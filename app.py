@@ -49,6 +49,7 @@ from src.pricing_engine import (
     get_unit_price_new_system,
     get_price_for_quantity,
     calculate_pbp_msrp,
+    calculate_catalog_client_price,
     calculate_additional_costs,
     calculate_customization_costs,
     calculate_product_quote,
@@ -2824,7 +2825,7 @@ with tab1:
                 value=st.session_state.proposal_filters.get('min_budget', 0.0),
                 step=1.0,
                 key="filter_min_budget",
-                help="Filters by MSRP when available, otherwise by estimated price (cost x2)"
+                help="Filters by the client price shown for each product (same price displayed in the catalog below)"
             )
 
         with budget_col2:
@@ -2834,7 +2835,7 @@ with tab1:
                 value=st.session_state.proposal_filters.get('max_budget', 0.0),
                 step=1.0,
                 key="filter_max_budget",
-                help="Filters by MSRP when available, otherwise by estimated price (cost x2)"
+                help="Filters by the client price shown for each product (same price displayed in the catalog below)"
             )
         
         # Validation warning
@@ -2887,29 +2888,20 @@ with tab1:
     if selected_countries:
         filtered_df = filtered_df[filtered_df["Country of Origin (Ships From)"].isin(selected_countries)]
 
-    # Price filtering based on MSRP when available, otherwise cost x 2 (100% markup)
+    # Price filtering uses the SAME client price shown in the catalog, so a
+    # product's displayed price and its filtered price always agree.
+    # (calculate_catalog_client_price applies the product's real pricing method
+    # at its MOQ quantity - matching the "client price" caption below.)
     # Only apply if valid range (min <= max when both are set)
     price_filter_active = ((min_budget and min_budget > 0) or (max_budget and max_budget > 0)) and \
        not (min_budget and max_budget and min_budget > 0 and max_budget > 0 and min_budget > max_budget)
-    msrp_filter_count = 0
-    cost_filter_count = 0
     if price_filter_active:
         price_filtered_indices = []
         for idx, row in filtered_df.iterrows():
-            # Use MSRP if available, otherwise fall back to cost x 2
-            msrp_raw = get_column_value(row, 'Vendor Published MSRP', 'MSRP', '')
-            msrp = clean_price(msrp_raw) if msrp_raw and str(msrp_raw).strip() not in ['nan', '', '0', '0.0'] else None
-
-            if msrp and msrp > 0:
-                client_price = msrp
-                msrp_filter_count += 1
-            else:
-                # Fall back to cost x 2
-                base_cost, _, _ = get_unit_price_new_system(row, 100)
-                if not base_cost:
-                    continue
-                client_price = base_cost * 2
-                cost_filter_count += 1
+            client_price = calculate_catalog_client_price(row)['client_price']
+            if not client_price:
+                # No usable price (missing cost data) - exclude from a price-filtered view
+                continue
 
             # Check if price is within range
             if min_budget and min_budget > 0 and client_price < min_budget:
@@ -2945,10 +2937,7 @@ with tab1:
             budget_range_str = f"${min_budget:.0f}+"
         elif max_budget and max_budget > 0:
             budget_range_str = f"up to ${max_budget:.0f}"
-        filter_details = f"Price filter ({budget_range_str}): using MSRP for {msrp_filter_count} products"
-        if cost_filter_count > 0:
-            filter_details += f", estimated price (cost x2) for {cost_filter_count} products without MSRP"
-        st.caption(filter_details)
+        st.caption(f"Price filter ({budget_range_str}): matched against each product's client price shown below")
 
     # Display success message if a product was just added
     if 'show_success_message' in st.session_state and st.session_state.show_success_message:
@@ -3250,32 +3239,16 @@ with tab1:
             for idx, row in filtered_df.iterrows():
                 product_data = row
 
-                # Calculate cost and client price for display using new pricing logic
-                preliminary_cost, _, _ = get_unit_price_new_system(product_data, 100)
-
-                # Use new pricing engine to get PBP MSRP
-                pricing_result = calculate_pbp_msrp(product_data.to_dict(), quantity=100)
-                pbp_msrp = pricing_result['pbp_msrp']
-
-                # Calculate MOQ based on PBP MSRP (not hardcoded 100% markup)
-                moq_result = calculate_moq(pbp_msrp, product_data) if pbp_msrp else None
-                estimated_moq = moq_result['moq'] if moq_result else None
-                moq_display_text = moq_result['display_text'] if moq_result else ""
-                moq_cost, _, _ = get_unit_price_new_system(product_data, estimated_moq) if estimated_moq else (None, None, None)
-
-                # Get PBP MSRP at MOQ quantity (for accurate pricing)
-                if estimated_moq:
-                    moq_pricing_result = calculate_pbp_msrp(product_data.to_dict(), quantity=estimated_moq)
-                    moq_client_price = moq_pricing_result['pbp_msrp']
-
-                    # Calculate actual markup percentage being used
-                    if moq_cost and moq_cost > 0:
-                        actual_markup = ((moq_client_price / moq_cost) - 1) * 100
-                    else:
-                        actual_markup = 0.0
-                else:
-                    moq_client_price = None
-                    actual_markup = 0.0
+                # Calculate the client price shown to the user. This is the SAME
+                # calculation the price-range filter uses (single source of truth),
+                # so the displayed price and the filtered price always agree.
+                catalog_pricing = calculate_catalog_client_price(product_data)
+                estimated_moq = catalog_pricing['estimated_moq']
+                moq_display_text = catalog_pricing['moq_display_text']
+                moq_cost = catalog_pricing['moq_cost']
+                moq_client_price = catalog_pricing['client_price']
+                actual_markup = catalog_pricing['actual_markup']
+                moq_method_used = catalog_pricing['method_used']
 
                 # Compact row with all essential info
                 col1, col2, col3, col4, col5 = st.columns([3, 1.5, 1, 1.2, 1.5])
@@ -3371,8 +3344,8 @@ with tab1:
 
                 # Show pricing method and cost basis (new schema fields)
                 # Use the actual method from calculate_pbp_msrp result (includes fallback info)
-                if estimated_moq and moq_pricing_result:
-                    pricing_method_display = moq_pricing_result.get('method_used', 'Standard markup')
+                if estimated_moq:
+                    pricing_method_display = moq_method_used
                 else:
                     pricing_logic = get_column_value(product_data, 'Pricing Logic', None)
                     pricing_method_display = pricing_logic if pricing_logic else "Standard markup"

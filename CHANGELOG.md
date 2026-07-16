@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [8.5.4] - 2026-07-16
+
+### Fixed
+- **Price Range Filter (Tab 1):** The proposal price filter now matches the client price shown next to each product. A team member filtering for "gifts under $30" was getting products that display above $30. The filter used a simpler "Vendor MSRP, or cost x2 at quantity 100" estimate that ignored add-ons (e.g. "MSRP + % of cost" methods) and used a different quantity/tier than the price actually shown, so it consistently under-estimated and let over-budget products through. The filter and the catalog display now share one calculation (`calculate_catalog_client_price`), applying the product's real pricing method at its MOQ quantity, so a product's shown price and its filtered price always agree
+
+### Added
+- **`calculate_catalog_client_price()` (`src/pricing_engine.py`):** Single source of truth for the client-facing price shown in the Tab 1 catalog and used by the price-range filter. Test: `scripts/features/test_price_filter_matches_display.py`
+
 ## [8.5.3] - 2026-07-10
 
 ### Fixed

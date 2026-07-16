@@ -595,6 +595,85 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
     }
 
 
+def calculate_catalog_client_price(product_data, base_quantity=100):
+    """
+    Calculate the client-facing price shown for a product in the Tab 1 catalog.
+
+    This is the SINGLE SOURCE OF TRUTH for both the catalog display and the
+    price-range filter, so a product's shown price and its filtered price always
+    match. Previously the filter used a simpler "Vendor MSRP or cost x2" estimate
+    that ignored add-ons and used a different quantity, letting products priced
+    above the client's max budget slip through the filter.
+
+    The price is computed at the product's MOQ quantity using the product's real
+    pricing method (via calculate_pbp_msrp), matching what the catalog displays.
+
+    Args:
+        product_data: Product row (pandas Series or dict) from the spreadsheet
+        base_quantity: Quantity used to size the MOQ estimate (default 100)
+
+    Returns:
+        dict: {
+            'client_price': float or None,   # Price shown to client (at MOQ) - use this to filter
+            'estimated_moq': int or None,    # Calculated minimum order quantity
+            'moq_display_text': str,         # Rich MOQ text for display
+            'moq_cost': float or None,       # PBP per-unit cost at MOQ quantity
+            'actual_markup': float,          # Effective markup % at MOQ
+            'method_used': str               # Pricing method applied
+        }
+    """
+    # Imported here (not at module top) to avoid a circular import with helpers
+    from src.helpers import calculate_moq
+
+    # Accept both pandas Series and plain dicts
+    product_dict = product_data.to_dict() if hasattr(product_data, 'to_dict') else dict(product_data)
+
+    # Step 1: preliminary price at base quantity, used only to size the MOQ
+    preliminary = calculate_pbp_msrp(product_dict, quantity=base_quantity)
+    preliminary_price = preliminary['pbp_msrp']
+
+    if not preliminary_price:
+        return {
+            'client_price': None,
+            'estimated_moq': None,
+            'moq_display_text': '',
+            'moq_cost': None,
+            'actual_markup': 0.0,
+            'method_used': preliminary.get('method_used', 'Standard markup')
+        }
+
+    # Step 2: calculate the MOQ from that preliminary price
+    moq_result = calculate_moq(preliminary_price, product_data)
+    estimated_moq = moq_result['moq'] if moq_result else None
+    moq_display_text = moq_result['display_text'] if moq_result else ''
+
+    # Step 3: recompute the price AND cost at the MOQ quantity - this is the
+    # number the catalog actually shows and the number we filter on
+    if estimated_moq:
+        moq_pricing = calculate_pbp_msrp(product_dict, quantity=estimated_moq)
+        client_price = moq_pricing['pbp_msrp']
+        moq_cost, _, _ = get_unit_price_new_system(product_data, estimated_moq)
+        method_used = moq_pricing.get('method_used', preliminary.get('method_used', 'Standard markup'))
+        if moq_cost and moq_cost > 0:
+            actual_markup = ((client_price / moq_cost) - 1) * 100
+        else:
+            actual_markup = 0.0
+    else:
+        client_price = preliminary_price
+        moq_cost = None
+        actual_markup = 0.0
+        method_used = preliminary.get('method_used', 'Standard markup')
+
+    return {
+        'client_price': client_price,
+        'estimated_moq': estimated_moq,
+        'moq_display_text': moq_display_text,
+        'moq_cost': moq_cost,
+        'actual_markup': actual_markup,
+        'method_used': method_used
+    }
+
+
 def calculate_vendor_markup(product_data, per_item_cost):
     """
     Calculate vendor's implied markup percentage.
