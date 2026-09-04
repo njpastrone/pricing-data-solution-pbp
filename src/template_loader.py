@@ -13,6 +13,10 @@ import os
 from pathlib import Path
 
 
+# Google Drive folder holding the product slide templates ("latest").
+# Override with the TEMPLATE_FOLDER_ID env var if the folder ever moves.
+TEMPLATE_FOLDER_ID = os.getenv('TEMPLATE_FOLDER_ID', '1NRGfKlBZNHLmWdD39ppcWbdY8HHXIYv6')
+
 # PowerPoint template configuration (intro/outro only - product templates are discovered dynamically)
 TEMPLATE_CONFIG = {
     'intro_outro': {
@@ -112,11 +116,14 @@ def find_file_in_drive(filename):
 def list_available_templates():
     """
     Query Google Drive for all available product slide templates.
-    Searches for files matching '*All Slides*.pptx'.
+
+    Looks inside the templates folder (TEMPLATE_FOLDER_ID). Files shared with the
+    service account by sharing their parent folder do NOT show up in a Drive-wide
+    name search, so the folder must be queried by ID.
 
     Returns:
         list: List of dicts sorted newest-first:
-              [{'name': 'February All Slides.pptx', 'file_id': '...', 'modified_time': '...'}]
+              [{'name': 'July2026 All Slides.pptx', 'file_id': '...', 'modified_time': '...'}]
               Returns empty list on error.
     """
     try:
@@ -125,11 +132,16 @@ def list_available_templates():
         creds = get_drive_credentials()
         drive_service = build('drive', 'v3', credentials=creds)
 
-        # Search for files matching the pattern
-        query = "name contains 'All Slides' and mimeType='application/vnd.openxmlformats-officedocument.presentationml.presentation' and trashed=false"
+        # Everything in the templates folder that is a PowerPoint file
+        query = (
+            f"'{TEMPLATE_FOLDER_ID}' in parents and "
+            "mimeType='application/vnd.openxmlformats-officedocument.presentationml.presentation' and "
+            "trashed=false"
+        )
         results = drive_service.files().list(
             q=query,
-            spaces='drive',
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
             fields='files(id, name, modifiedTime)',
             orderBy='modifiedTime desc'
         ).execute()

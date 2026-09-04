@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [8.5.5] - 2026-09-04
+
+### Fixed
+- **PowerPoint Template Discovery:** The template dropdown now lists the decks in the shared "latest" Drive folder (July2026, June2026, May2026) instead of three stale files. It searched all of Drive for filenames containing "All Slides", but files the service account reaches by *inheriting a folder share* do not appear in a Drive-wide name search -- only the older decks that had been shared file-by-file (April/March/November) came back. `list_available_templates()` now queries the folder by ID. Folder is `TEMPLATE_FOLDER_ID` in `src/template_loader.py`, overridable by an env var of the same name
+- **Notes Placement on Invoice/PO:** Internal (PBP team, bookkeeping) and external (partners, clients) notes plus dropshipping instructions now appear at the top of the generated invoice/PO -- directly under the title in the HTML, and as the first rows of the CSV -- instead of at the bottom. Requested by accounting, who read the notes first
+
+### Changed
+- Adding a new slide deck no longer needs a per-file Drive share: drop the .pptx in the "latest" folder and click Refresh under the template selector
+
 ## [8.5.4] - 2026-07-16
 
 ### Fixed

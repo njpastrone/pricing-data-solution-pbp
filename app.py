@@ -9900,36 +9900,34 @@ with tab4:
             }])
             invoice_complete = pd.concat([invoice_complete, total_row], ignore_index=True)
 
-        # Add notes section
-        notes_row = pd.DataFrame([{
-            'PARTNER': '',
-            'DESCRIPTION (Invoice)': '',
-            'DESCRIPTION (PO)': '',
-            'QTY': '',
-            'IN-HANDS from Partner': '',
-            'COST/UNIT': '',
-            'TOTAL COST': '',
-            'SELL PRICE/UNIT': '',
-            'TOTAL SELL PRICE': ''
-        }])
-        invoice_complete = pd.concat([invoice_complete, notes_row], ignore_index=True)
-
-        # Add notes content
+        # Notes go at the top of the file (accounting reads them first)
         if notes_content:
+            notes_rows = pd.DataFrame([
+                {col: (note.replace('**', '').replace('\n', ' ') if col == 'DESCRIPTION (Invoice)' else "")
+                 for col in invoice_complete.columns}
+                for note in notes_content
+            ] + [{col: "" for col in invoice_complete.columns}])
+            invoice_complete = pd.concat([notes_rows, invoice_complete], ignore_index=True)
+
+        # Build notes block (shown at the top of the invoice/PO)
+        notes_html = ""
+        if st.session_state.dropshipping_notes:
+            notes_html += f"""
+    <div class="notes-section">
+        <div class="notes-header">DROPSHIPPING INSTRUCTIONS</div>
+        <p>{st.session_state.dropshipping_notes.replace(chr(10), '<br/>')}</p>
+    </div>"""
+        if notes_content:
+            notes_html += """
+    <div class="notes-section">
+        <div class="notes-header">NOTES</div>"""
             for note in notes_content:
-                notes_row = pd.DataFrame([{
-                    'PARTNER': '',
-                    'DESCRIPTION (Invoice)': note.replace('**', '').replace('\n', ' '),
-                    'DESCRIPTION (PO)': '',
-                    'QTY': '',
-                    'IN-HANDS from Partner': '',
-                    'COST/UNIT': '',
-                    'TOTAL COST': '',
-    
-                    'SELL PRICE/UNIT': '',
-                    'TOTAL SELL PRICE': ''
-                }])
-                invoice_complete = pd.concat([invoice_complete, notes_row], ignore_index=True)
+                label = note.split(':')[0] if ':' in note else 'Note'
+                body = note.split(':', 1)[1] if ':' in note else note
+                notes_html += f"""
+        <p><strong>{label}:</strong> {body}</p>"""
+            notes_html += """
+    </div>"""
 
         # Generate HTML Invoice/PO Form
         html_invoice = f"""<!DOCTYPE html>
@@ -9952,7 +9950,7 @@ with tab4:
 </head>
 <body>
     <h2>INVOICE AND PURCHASE ORDER REQUEST FORM</h2>
-
+{notes_html}
     <h3>1. Client/Company Information</h3>
     <table>
         <tr>
@@ -10102,25 +10100,6 @@ with tab4:
 
         html_invoice += """
     </table>"""
-
-        # Add dropshipping notes section (appears in Invoice only, not PO)
-        if st.session_state.dropshipping_notes:
-            html_invoice += f"""
-    <div class="notes-section">
-        <div class="notes-header">DROPSHIPPING INSTRUCTIONS</div>
-        <p>{st.session_state.dropshipping_notes.replace(chr(10), '<br/>')}</p>
-    </div>"""
-
-        # Add notes if any
-        if notes_content:
-            html_invoice += """
-    <div class="notes-section">
-        <div class="notes-header">NOTES</div>"""
-            for note in notes_content:
-                html_invoice += f"""
-        <p><strong>{note.split(':')[0] if ':' in note else 'Note'}:</strong> {note.split(':', 1)[1] if ':' in note else note}</p>"""
-            html_invoice += """
-    </div>"""
 
         # Add product photos if any exist (per-product structure)
         product_photos_meta = st.session_state.get('product_photo_metadata', {})
