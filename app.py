@@ -8143,7 +8143,7 @@ with tab3:
             for i, photo in enumerate(current_photos):
                 with cols[i % 4]:
                     photo.seek(0)
-                    st.image(photo, caption=photo.name, use_column_width=True)
+                    st.image(photo, caption=photo.name)
 
         # Summary of all products with photos
         products_with_photos = {k: v for k, v in st.session_state.product_photos.items() if v}
@@ -10211,7 +10211,7 @@ with tab4:
                     for pi, photo in enumerate(photos):
                         with photo_cols[pi % 4]:
                             photo.seek(0)
-                            st.image(photo, caption=photo.name, use_column_width=True)
+                            st.image(photo, caption=photo.name)
                             photo.seek(0)
                             st.download_button(
                                 label=f"Download",
@@ -10229,7 +10229,7 @@ with tab4:
                             from src.drive_helper import download_photo
                             photo_bytes = download_photo(meta['file_id'])
                             if photo_bytes:
-                                st.image(photo_bytes, caption=meta['filename'], use_column_width=True)
+                                st.image(photo_bytes, caption=meta['filename'])
                                 st.download_button(
                                     label=f"Download",
                                     data=photo_bytes,
