@@ -1715,6 +1715,7 @@ with st.sidebar:
         csv_content = output.getvalue()
 
         st.download_button(
+            on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
             label="Download Order (CSV)",
             data=csv_content,
             file_name=f"order_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
@@ -1729,6 +1730,7 @@ with st.sidebar:
         csv_pricing = st.session_state.df_template.to_csv(index=False)
 
         st.download_button(
+            on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
             label="Download Pricing Data (CSV)",
             data=csv_pricing,
             file_name=f"pricing_data_{datetime.now().strftime('%Y%m%d')}.csv",
@@ -2722,6 +2724,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
             st.warning("**Note:** PowerPoint may show a 'repair presentation' warning when opening the file. This is normal - click 'Repair' to proceed. The content will display correctly.")
 
             st.download_button(
+                on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
                 label="Download PowerPoint Presentation",
                 data=st.session_state.generated_pptx,
                 file_name=st.session_state.generated_pptx_filename,
@@ -3933,6 +3936,7 @@ with tab1:
                         # Add download button for this product's proposal table
                         proposal_csv = proposal_table.to_csv(index=False)
                         st.download_button(
+                            on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
                             label=f"Download Product {idx} Proposal (CSV)",
                             data=proposal_csv,
                             file_name=f"proposal_product_{idx}_{item['product_data']['Product/Service'].replace(' ', '_')}.csv",
@@ -4818,6 +4822,7 @@ with tab2:
     
         with col1:
             st.download_button(
+                on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
                 label="Download HTML Form",
                 data=html_form,
                 file_name=f"client_order_form_{datetime.now().strftime('%Y%m%d')}.html",
@@ -4852,6 +4857,7 @@ with tab2:
     Payment Preference: [ ] ACH  [ ] Check  [ ] Credit Card (3% processing fee)
     """
             st.download_button(
+                on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
                 label="Download TXT (Backup)",
                 data=client_form_text,
                 file_name="client_order_form.txt",
@@ -4897,6 +4903,7 @@ with tab2:
             client_form_csv = "\n".join(csv_lines)
     
             st.download_button(
+                on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
                 label="Download CSV (Backup)",
                 data=client_form_csv,
                 file_name=f"client_order_form_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
@@ -5414,6 +5421,7 @@ with tab3:
                             if file_bytes:
                                 st.download_button(
                                     f"Download: {fname}",
+                                    on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
                                     data=file_bytes,
                                     file_name=fname,
                                     key=f"download_dropship_file_{idx}"
@@ -8060,6 +8068,7 @@ with tab3:
         # Add download button for order summary
         summary_csv = summary_df.to_csv(index=False)
         st.download_button(
+            on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
             label="Download Order Summary (CSV)",
             data=summary_csv,
             file_name=f"order_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
@@ -10163,6 +10172,7 @@ with tab4:
         with col1:
             invoice_csv = invoice_complete.to_csv(index=False)
             st.download_button(
+                on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
                 label="Download as CSV",
                 data=invoice_csv,
                 file_name=f"invoice_po_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
@@ -10173,6 +10183,7 @@ with tab4:
 
         with col2:
             st.download_button(
+                on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
                 label="Download as HTML",
                 data=html_invoice,
                 file_name=f"invoice_po_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
@@ -10214,6 +10225,7 @@ with tab4:
                             st.image(photo, caption=photo.name)
                             photo.seek(0)
                             st.download_button(
+                                on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
                                 label=f"Download",
                                 data=photo.read(),
                                 file_name=photo.name,
@@ -10231,6 +10243,7 @@ with tab4:
                             if photo_bytes:
                                 st.image(photo_bytes, caption=meta['filename'])
                                 st.download_button(
+                                    on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
                                     label=f"Download",
                                     data=photo_bytes,
                                     file_name=meta['filename'],
@@ -11176,6 +11189,7 @@ with tab5:
             # CSV export
             csv = summary_df.to_csv(index=False)
             st.download_button(
+                on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
                 label="Download CSV",
                 data=csv,
                 file_name=f"exec_pricing_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
