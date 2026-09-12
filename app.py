@@ -5935,6 +5935,11 @@ with tab3:
     st.header("Option B: Import from Proposal (Tab 1)")
     st.markdown("**Use this if:** You created a proposal in Tab 1 and want to bring those products into an order")
 
+    # Confirmation of the last import. A toast alone is easy to miss: it fades after
+    # a few seconds and "2. Current Order" is further down the page.
+    if st.session_state.get('proposal_import_message'):
+        st.success(st.session_state.pop('proposal_import_message'))
+
     if len(st.session_state.proposal_products) > 0:
         # Display proposal source information
         proposal_info_msg = f"**{len(st.session_state.proposal_products)} product(s) available**"
@@ -5977,7 +5982,11 @@ with tab3:
                 if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
                     st.session_state.partner_shipping = max_pbp_shipping
 
-                st.toast(f"Imported all {imported_count} product(s) from proposal!")
+                st.session_state.proposal_import_message = (
+                    f"Imported {imported_count} product(s) from the proposal. "
+                    f"Order now has {len(st.session_state.order_items)} product(s) - "
+                    "scroll down to '2. Current Order' to edit them."
+                )
                 st.rerun()
 
         with col2:
@@ -6045,7 +6054,11 @@ with tab3:
                     if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
                         st.session_state.partner_shipping = max_pbp_shipping
 
-                    st.toast(f"Added {len(selected_proposal_indices)} product(s) to order!")
+                    st.session_state.proposal_import_message = (
+                        f"Added {len(selected_proposal_indices)} product(s) to the order. "
+                        f"Order now has {len(st.session_state.order_items)} product(s) - "
+                        "scroll down to '2. Current Order' to edit them."
+                    )
                     st.rerun()
             else:
                 st.caption("Select at least one product above to add to order.")
