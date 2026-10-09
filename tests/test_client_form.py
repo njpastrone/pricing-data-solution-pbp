@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import gspread
 
-from src.client_form import generate_session_token, load_proposal_for_client, _serialize_form_data, _deserialize_form_data, submit_form, DRAFTS_SHEET_NAME
+from src.client_form import generate_session_token, load_proposal_for_client, _serialize_form_data, _deserialize_form_data, submit_form, DRAFTS_SHEET_NAME, _open_worksheet, _open_drafts_sheet
 from src.forms_config import GOOGLE_FORM_CONFIG, find_response_column
 from src.forms_helper import parse_form_response
 
@@ -113,11 +113,15 @@ SAMPLE_FORM = {
 
 def _mock_sheets(response_headers, drafts_exists=True):
     """Build a fake gspread client with a response sheet and a drafts sheet."""
+    # Forget worksheets cached by an earlier test
+    _open_worksheet.clear()
+    _open_drafts_sheet.clear()
+
     response_ws = MagicMock()
     response_ws.row_values.return_value = list(response_headers)
 
     drafts_ws = MagicMock()
-    drafts_ws.get_all_values.return_value = [['Proposal_ID', 'Session_ID']]
+    drafts_ws.get.return_value = [['Proposal_ID', 'Session_ID']]  # ID columns A:B
 
     response_book = MagicMock()
     response_book.worksheet.return_value = response_ws
@@ -225,9 +229,9 @@ def test_submit_form_retries_backup_without_file():
 def test_submit_form_retry_keeps_stored_draft_file():
     """A form-only retry must not wipe a file already saved in the draft."""
     client, response_ws, drafts_ws, _ = _mock_sheets(LIVE_HEADERS)
-    drafts_ws.get_all_values.return_value = [
+    drafts_ws.get.return_value = [
         ['Proposal_ID', 'Session_ID'],
-        ['PROP_1', 'sess1', '{}', 'c3RvcmVk', 'addresses.xlsx', 'd', 'd', 'draft'],
+        ['PROP_1', 'sess1'],
     ]
     drafts_ws.update.side_effect = [Exception("429 rate limit"), None, None]
     with patch('src.client_form.connect_to_sheets', return_value=client):
@@ -249,6 +253,53 @@ def test_submit_form_creates_drafts_tab_if_missing():
     assert success, msg
     drafts_book.add_worksheet.assert_any_call(title=DRAFTS_SHEET_NAME, rows=100, cols=8)
     assert _backup_json(drafts_ws) == SAMPLE_FORM
+
+
+def _quota_error():
+    """A gspread APIError like the real 'Quota exceeded ... Read requests per minute' (HTTP 429)."""
+    response = MagicMock()
+    response.json.return_value = {'error': {'code': 429, 'message': 'Quota exceeded', 'status': 'RESOURCE_EXHAUSTED'}}
+    return gspread.exceptions.APIError(response)
+
+
+def test_submit_form_retries_after_quota_error():
+    """A 429 on the response write waits and retries; exactly one row lands."""
+    client, response_ws, drafts_ws, _ = _mock_sheets(LIVE_HEADERS)
+    response_ws.row_values.side_effect = [_quota_error(), list(LIVE_HEADERS)]
+    response_ws.append_row.side_effect = [_quota_error(), None]  # 429 = rejected, nothing written
+    with patch('src.client_form.connect_to_sheets', return_value=client), \
+         patch('src.client_form.time.sleep') as fake_sleep:
+        success, msg = submit_form('PROP_1', 'sess1', SAMPLE_FORM)
+
+    assert success, msg
+    assert response_ws.append_row.call_count == 2  # first try rejected, second accepted
+    assert fake_sleep.call_count == 2
+    assert _backup_json(drafts_ws) == SAMPLE_FORM
+
+
+def test_submit_form_fails_loudly_when_quota_never_clears():
+    """If every retry hits the quota, submit reports failure but the backup is kept."""
+    client, response_ws, drafts_ws, _ = _mock_sheets(LIVE_HEADERS)
+    response_ws.append_row.side_effect = _quota_error()
+    with patch('src.client_form.connect_to_sheets', return_value=client), \
+         patch('src.client_form.time.sleep'):
+        success, msg = submit_form('PROP_1', 'sess1', SAMPLE_FORM)
+
+    assert not success
+    assert 'Quota exceeded' in msg
+    assert _backup_json(drafts_ws) == SAMPLE_FORM
+    drafts_ws.update_cell.assert_not_called()  # draft is NOT marked submitted
+
+
+def test_submit_form_does_not_reopen_sheets_every_time():
+    """Spreadsheets are opened once and reused, saving read quota on later submits."""
+    client, response_ws, _, _ = _mock_sheets(LIVE_HEADERS)
+    with patch('src.client_form.connect_to_sheets', return_value=client):
+        submit_form('PROP_1', 'sess1', SAMPLE_FORM)
+        submit_form('PROP_2', 'sess2', SAMPLE_FORM)
+
+    assert client.open_by_key.call_count == 2  # response sheet + drafts sheet, once each
+    assert response_ws.append_row.call_count == 2
 
 
 def test_parse_form_response_reads_live_headers():
@@ -287,5 +338,8 @@ if __name__ == "__main__":
     test_submit_form_retries_backup_without_file()
     test_submit_form_retry_keeps_stored_draft_file()
     test_submit_form_creates_drafts_tab_if_missing()
+    test_submit_form_retries_after_quota_error()
+    test_submit_form_fails_loudly_when_quota_never_clears()
+    test_submit_form_does_not_reopen_sheets_every_time()
     test_parse_form_response_reads_live_headers()
     print("All tests passed!")

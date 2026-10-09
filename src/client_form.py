@@ -12,10 +12,12 @@ Created: 2026-05-24
 """
 
 import json
+import time
 import uuid
 import base64
 from datetime import datetime
 import gspread
+import streamlit as st
 from src.data_loader import connect_to_sheets, DATASET_CONFIGS
 from src.forms_config import GOOGLE_FORM_CONFIG, RESPONSE_COLUMNS, MAX_PRODUCT_LINES, find_response_column
 
@@ -25,6 +27,37 @@ DRAFTS_SHEET_NAME = "client_form_drafts"
 
 # Base64 chunk size (same as drive_helper.py)
 CHUNK_SIZE = 40000
+
+# Google Sheets allows about 60 read requests per minute for our service account,
+# shared by the live app and any local copy. When Google answers "quota exceeded"
+# (HTTP 429) we wait and try again instead of failing.
+QUOTA_RETRY_WAITS = [2, 4, 8, 16]  # seconds between attempts
+
+
+def _retry_on_quota(action):
+    """
+    Run action(); if Google says "quota exceeded" (HTTP 429), wait and retry.
+
+    A 429 means Google rejected the request without applying it, so retrying
+    a write (like append_row) cannot create a duplicate row.
+    """
+    for wait in QUOTA_RETRY_WAITS:
+        try:
+            return action()
+        except gspread.exceptions.APIError as e:
+            if getattr(e, 'code', None) != 429:
+                raise
+            print(f"Google Sheets quota hit, retrying in {wait}s")
+            time.sleep(wait)
+    return action()  # Last try: any error now goes to the caller
+
+
+# ponytail: handles are cached until the app restarts; a renamed tab needs a restart
+@st.cache_resource(show_spinner=False)
+def _open_worksheet(spreadsheet_id, sheet_name):
+    """Open a worksheet once and reuse it (each open costs 2 read requests)."""
+    spreadsheet = _retry_on_quota(lambda: connect_to_sheets().open_by_key(spreadsheet_id))
+    return _retry_on_quota(lambda: spreadsheet.worksheet(sheet_name))
 
 
 def generate_session_token():
@@ -52,11 +85,8 @@ def load_proposal_for_client(proposal_id):
         Returns None if proposal not found or error.
     """
     try:
-        client = connect_to_sheets()
-        spreadsheet = client.open_by_key(DATASET_CONFIGS['saved_proposals']['spreadsheet_id'])
-        sheet = spreadsheet.worksheet('Sheet1')
-
-        all_values = sheet.get_all_values()
+        sheet = _open_worksheet(DATASET_CONFIGS['saved_proposals']['spreadsheet_id'], 'Sheet1')
+        all_values = _retry_on_quota(sheet.get_all_values)
 
         # Find row with matching proposal_id
         for row in all_values[1:]:  # Skip header
@@ -101,6 +131,25 @@ def _deserialize_form_data(json_string):
         return {}
 
 
+@st.cache_resource(show_spinner=False)
+def _open_drafts_sheet():
+    """Open (or create) the client_form_drafts sheet once and reuse it. Raises on error."""
+    spreadsheet = _retry_on_quota(
+        lambda: connect_to_sheets().open_by_key(DATASET_CONFIGS['saved_orders']['spreadsheet_id'])
+    )
+    try:
+        return _retry_on_quota(lambda: spreadsheet.worksheet(DRAFTS_SHEET_NAME))
+    except gspread.exceptions.WorksheetNotFound:
+        sheet = spreadsheet.add_worksheet(title=DRAFTS_SHEET_NAME, rows=100, cols=8)
+        headers = [
+            'Proposal_ID', 'Session_ID', 'Draft_Data_JSON',
+            'File_Data_Base64', 'File_Name', 'Created_Date',
+            'Updated_Date', 'Status'
+        ]
+        sheet.update('A1:H1', [headers])
+        return sheet
+
+
 def _get_drafts_sheet():
     """
     Get or create the client_form_drafts sheet.
@@ -109,25 +158,19 @@ def _get_drafts_sheet():
         gspread.Worksheet or None
     """
     try:
-        client = connect_to_sheets()
-        spreadsheet = client.open_by_key(DATASET_CONFIGS['saved_orders']['spreadsheet_id'])
-
-        try:
-            sheet = spreadsheet.worksheet(DRAFTS_SHEET_NAME)
-        except gspread.exceptions.WorksheetNotFound:
-            sheet = spreadsheet.add_worksheet(title=DRAFTS_SHEET_NAME, rows=100, cols=8)
-            headers = [
-                'Proposal_ID', 'Session_ID', 'Draft_Data_JSON',
-                'File_Data_Base64', 'File_Name', 'Created_Date',
-                'Updated_Date', 'Status'
-            ]
-            sheet.update('A1:H1', [headers])
-
-        return sheet
-
+        return _open_drafts_sheet()
     except Exception as e:
         print(f"Error accessing drafts sheet: {e}")
         return None
+
+
+def _find_draft_row(sheet, proposal_id, session_id):
+    """Return the sheet row number of this draft, or None. Reads only the two ID columns."""
+    id_rows = _retry_on_quota(lambda: sheet.get('A:B'))
+    for i, row in enumerate(id_rows[1:], start=2):
+        if len(row) >= 2 and row[0] == proposal_id and row[1] == session_id:
+            return i
+    return None
 
 
 def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=None):
@@ -158,27 +201,22 @@ def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=Non
             file_b64 = base64.b64encode(file_data).decode('utf-8')
 
         # Check if draft already exists for this proposal+session
-        all_values = sheet.get_all_values()
-        existing_row = None
-        for i, row in enumerate(all_values[1:], start=2):
-            if len(row) >= 2 and row[0] == proposal_id and row[1] == session_id:
-                existing_row = i
-                break
+        existing_row = _find_draft_row(sheet, proposal_id, session_id)
 
         if existing_row:
             # Update existing draft (preserve Created_Date in column F).
             # Without new file data, keep the stored file as it is.
             if file_data:
-                sheet.update(f'C{existing_row}:E{existing_row}', [[json_data, file_b64, file_name or '']])
+                _retry_on_quota(lambda: sheet.update(f'C{existing_row}:E{existing_row}', [[json_data, file_b64, file_name or '']]))
             else:
-                sheet.update(f'C{existing_row}', [[json_data]])
-            sheet.update(f'G{existing_row}:H{existing_row}', [[now, 'draft']])
+                _retry_on_quota(lambda: sheet.update(f'C{existing_row}', [[json_data]]))
+            _retry_on_quota(lambda: sheet.update(f'G{existing_row}:H{existing_row}', [[now, 'draft']]))
         else:
             # Create new draft
-            sheet.append_row([
+            _retry_on_quota(lambda: sheet.append_row([
                 proposal_id, session_id, json_data,
                 file_b64, file_name or '', now, now, 'draft'
-            ])
+            ]))
 
         return True, "Draft saved"
 
@@ -209,7 +247,7 @@ def load_draft(proposal_id, session_id):
         if sheet is None:
             return None
 
-        all_values = sheet.get_all_values()
+        all_values = _retry_on_quota(sheet.get_all_values)
 
         for row in all_values[1:]:
             if len(row) >= 8 and row[0] == proposal_id and row[1] == session_id:
@@ -265,13 +303,11 @@ def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=No
         return False, f"Your order could not be saved ({backup_msg}). Please try again in a minute."
 
     try:
-        client_obj = connect_to_sheets()
-        sheet_id = GOOGLE_FORM_CONFIG['response_sheet_id']
-        spreadsheet = client_obj.open_by_key(sheet_id)
-        worksheet = spreadsheet.worksheet(GOOGLE_FORM_CONFIG['response_sheet_name'])
+        worksheet = _open_worksheet(GOOGLE_FORM_CONFIG['response_sheet_id'], GOOGLE_FORM_CONFIG['response_sheet_name'])
 
-        # Get headers to build row in correct column order
-        headers = worksheet.row_values(1)
+        # Get headers to build row in correct column order.
+        # Read fresh on every submit: headers being out of date is what lost items before.
+        headers = _retry_on_quota(lambda: worksheet.row_values(1))
         if not headers:
             return False, "Response sheet has no headers"
 
@@ -335,10 +371,10 @@ def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=No
                 # Add new column if it doesn't exist yet
                 headers.append(RESPONSE_COLUMNS['dropshipping_file'])
                 row.append(file_name)
-                worksheet.update_cell(1, len(headers), RESPONSE_COLUMNS['dropshipping_file'])
+                _retry_on_quota(lambda: worksheet.update_cell(1, len(headers), RESPONSE_COLUMNS['dropshipping_file']))
 
-        # Append response row
-        worksheet.append_row(row)
+        # Append response row (the last step, so a failure above never leaves a partial row)
+        _retry_on_quota(lambda: worksheet.append_row(row))
 
         # Mark the backup copy as submitted
         _mark_draft_submitted(proposal_id, session_id)
@@ -356,11 +392,9 @@ def _mark_draft_submitted(proposal_id, session_id):
         if sheet is None:
             return
 
-        all_values = sheet.get_all_values()
-        for i, row in enumerate(all_values[1:], start=2):
-            if len(row) >= 2 and row[0] == proposal_id and row[1] == session_id:
-                sheet.update_cell(i, 8, 'submitted')
-                break
+        draft_row = _find_draft_row(sheet, proposal_id, session_id)
+        if draft_row:
+            _retry_on_quota(lambda: sheet.update_cell(draft_row, 8, 'submitted'))
     except Exception:
         pass  # Non-critical — form was already submitted successfully
 
@@ -397,7 +431,7 @@ def retrieve_file_by_proposal(proposal_id):
         if sheet is None:
             return None, None
 
-        all_values = sheet.get_all_values()
+        all_values = _retry_on_quota(sheet.get_all_values)
         # Find most recent draft with a file for this proposal
         best_row = None
         for row in all_values[1:]:

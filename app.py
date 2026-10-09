@@ -353,14 +353,18 @@ def _render_client_form_page(proposal_id, session_id):
         st.error("Invalid form link (missing session). Please contact your PBP representative.")
         return
 
-    # Load proposal
-    proposal = load_proposal_for_client(proposal_id)
-    if proposal is None:
-        st.error("This form is no longer available. Please contact your PBP representative.")
-        return
-
-    # Load existing draft (if client is returning)
-    draft = load_draft(proposal_id, session_id)
+    # Load the proposal and any saved draft ONCE per visit. Streamlit reruns this
+    # page on every click, and Google Sheets allows only ~60 reads per minute
+    # (shared with the main app), so re-reading them each time hits the quota.
+    loaded_key = f"cf_loaded_{proposal_id}_{session_id}"
+    if loaded_key not in st.session_state:
+        proposal = load_proposal_for_client(proposal_id)
+        if proposal is None:
+            st.error("This form is no longer available. Please contact your PBP representative.")
+            return
+        # Load existing draft (if client is returning)
+        st.session_state[loaded_key] = (proposal, load_draft(proposal_id, session_id))
+    proposal, draft = st.session_state[loaded_key]
     saved_data = draft['form_data'] if draft else {}
 
     # --- Header ---
