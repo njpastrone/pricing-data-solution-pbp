@@ -207,6 +207,21 @@ def test_submit_form_stops_if_backup_fails():
     response_ws.append_row.assert_not_called()
 
 
+def test_submit_form_retries_backup_without_file():
+    """A file too big for a sheet cell must not block the order."""
+    client, response_ws, drafts_ws, _ = _mock_sheets(LIVE_HEADERS)
+    drafts_ws.append_row.side_effect = [Exception("cell over 50000 characters"), None]
+    with patch('src.client_form.connect_to_sheets', return_value=client):
+        success, msg = submit_form('PROP_1', 'sess1', SAMPLE_FORM, b'x' * 60000, 'addresses.xlsx')
+
+    assert success, msg
+    response_ws.append_row.assert_called_once()
+    retry_row = drafts_ws.append_row.call_args[0][0]
+    assert json.loads(retry_row[2]) == SAMPLE_FORM
+    assert retry_row[3] == ''
+    assert retry_row[4] == 'addresses.xlsx'
+
+
 def test_submit_form_creates_drafts_tab_if_missing():
     """The backup tab is created when it doesn't exist yet."""
     client, response_ws, drafts_ws, drafts_book = _mock_sheets(LIVE_HEADERS, drafts_exists=False)

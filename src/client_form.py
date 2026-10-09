@@ -238,6 +238,8 @@ def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=No
 
     Safety rules (a client's order must never be silently lost):
     1. A full copy of the form is saved to the drafts sheet FIRST.
+       If the uploaded file is too big for a sheet cell, the copy is saved
+       without the file (the form answers are always kept).
     2. If any filled-in field has no matching column in the response sheet,
        nothing is written there and an error is returned.
 
@@ -253,6 +255,8 @@ def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=No
     """
     # Step 1: Back up the complete submission before anything else
     backup_ok, backup_msg = save_draft(proposal_id, session_id, form_data, file_data, file_name)
+    if not backup_ok and file_data:
+        backup_ok, backup_msg = save_draft(proposal_id, session_id, form_data, None, file_name)
     if not backup_ok:
         return False, f"Your order could not be saved ({backup_msg}). Please try again in a minute."
 
