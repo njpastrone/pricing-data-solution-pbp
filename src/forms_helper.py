@@ -18,6 +18,7 @@ from src.forms_config import (
     ALL_ENTRY_IDS,
     RESPONSE_COLUMNS,
     MAX_PRODUCT_LINES,
+    find_response_column,
 )
 
 
@@ -182,8 +183,12 @@ def parse_form_response(response_row):
         3
     """
     # Helper function to safely get value
+    headers = list(response_row.keys())
+
     def get_value(key, default=''):
-        col_name = RESPONSE_COLUMNS.get(key, key)
+        col_name = find_response_column(headers, key)
+        if col_name is None:
+            return default
         value = response_row.get(col_name, default)
         # Convert empty strings to default
         return value if value and str(value).strip() else default

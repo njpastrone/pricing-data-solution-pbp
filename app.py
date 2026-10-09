@@ -74,6 +74,7 @@ from src.template_loader import (
     list_available_templates,
     TEMPLATE_CONFIG
 )
+from src.forms_config import MAX_PRODUCT_LINES
 from src.client_form import (
     load_proposal_for_client,
     load_draft,
@@ -426,8 +427,9 @@ def _render_client_form_page(proposal_id, session_id):
 
     saved_products = saved_data.get('products', [])
 
-    # Determine how many item slots to show (saved items + 1 empty, max = number of products)
-    max_items = len(product_names)
+    # Determine how many item slots to show (saved items + 1 empty).
+    # Max = number of products, but never more than the response sheet's item columns.
+    max_items = min(len(product_names), MAX_PRODUCT_LINES)
     # Initialize item count in session state
     if 'cf_item_count' not in st.session_state:
         st.session_state.cf_item_count = max(len(saved_products), 1)

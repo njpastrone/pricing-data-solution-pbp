@@ -17,7 +17,7 @@ import base64
 from datetime import datetime
 import gspread
 from src.data_loader import connect_to_sheets, DATASET_CONFIGS
-from src.forms_config import GOOGLE_FORM_CONFIG, RESPONSE_COLUMNS
+from src.forms_config import GOOGLE_FORM_CONFIG, RESPONSE_COLUMNS, MAX_PRODUCT_LINES, find_response_column
 
 
 # Sheet name for client form drafts
@@ -236,6 +236,11 @@ def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=No
     Writes data in the same column format as the Google Form so that
     Tab 3's import (parse_form_response) works without changes.
 
+    Safety rules (a client's order must never be silently lost):
+    1. A full copy of the form is saved to the drafts sheet FIRST.
+    2. If any filled-in field has no matching column in the response sheet,
+       nothing is written there and an error is returned.
+
     Args:
         proposal_id (str): Proposal ID
         session_id (str): Session token
@@ -246,6 +251,11 @@ def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=No
     Returns:
         tuple: (success: bool, message: str)
     """
+    # Step 1: Back up the complete submission before anything else
+    backup_ok, backup_msg = save_draft(proposal_id, session_id, form_data, file_data, file_name)
+    if not backup_ok:
+        return False, f"Your order could not be saved ({backup_msg}). Please try again in a minute."
+
     try:
         client_obj = connect_to_sheets()
         sheet_id = GOOGLE_FORM_CONFIG['response_sheet_id']
@@ -257,97 +267,72 @@ def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=No
         if not headers:
             return False, "Response sheet has no headers"
 
-        # Build a row matching the header columns
-        row = [''] * len(headers)
-
-        # Timestamp
-        timestamp_col = RESPONSE_COLUMNS.get('timestamp', 'Timestamp')
-        if timestamp_col in headers:
-            row[headers.index(timestamp_col)] = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
-
-        # Client info
+        # Step 2: Collect every field as (RESPONSE_COLUMNS key, value)
         client_info = form_data.get('client_info', {})
-        field_map = {
-            'client_type': client_info.get('client_type', ''),
-            'company_name': client_info.get('company_name', ''),
-            'contact_name': client_info.get('contact_name', ''),
-            'contact_email': client_info.get('contact_email', ''),
-            'contact_phone': client_info.get('contact_phone', ''),
-        }
-
-        for key, value in field_map.items():
-            col_name = RESPONSE_COLUMNS.get(key)
-            if col_name and col_name in headers:
-                row[headers.index(col_name)] = value
-
-        # Products
-        products = form_data.get('products', [])
-        for i, product in enumerate(products[:10], start=1):
-            name_col = RESPONSE_COLUMNS.get(f'line_{i}_name')
-            qty_col = RESPONSE_COLUMNS.get(f'line_{i}_qty')
-            notes_col = RESPONSE_COLUMNS.get(f'line_{i}_notes')
-
-            if name_col and name_col in headers:
-                row[headers.index(name_col)] = product.get('name', '')
-            if qty_col and qty_col in headers:
-                row[headers.index(qty_col)] = str(product.get('quantity', ''))
-            if notes_col and notes_col in headers:
-                row[headers.index(notes_col)] = product.get('customization_notes', '')
-
-        # Shipping info
         shipping = form_data.get('shipping_info', {})
-        shipping_map = {
-            'shipping_address': shipping.get('shipping_address', ''),
-            'billing_address': shipping.get('billing_address', ''),
-            'drop_shipping': shipping.get('drop_shipping', ''),
-            'drop_shipping_instructions': shipping.get('drop_shipping_instructions', ''),
-            'in_hands_date': shipping.get('in_hands_date', ''),
-        }
-
-        for key, value in shipping_map.items():
-            col_name = RESPONSE_COLUMNS.get(key)
-            if col_name and col_name in headers:
-                row[headers.index(col_name)] = value
-
-        # Payment info
         payment = form_data.get('payment_info', {})
-        payment_map = {
-            'impact_cards': payment.get('impact_cards', ''),
-            'impact_card_selection': payment.get('impact_card_selection', ''),
-            'payment_preference': payment.get('payment_preference', ''),
-            'payment_method': payment.get('payment_method', ''),
-        }
+        fields = [
+            ('timestamp', datetime.now().strftime("%m/%d/%Y %H:%M:%S")),
+            ('client_type', client_info.get('client_type', '')),
+            ('company_name', client_info.get('company_name', '')),
+            ('contact_name', client_info.get('contact_name', '')),
+            ('contact_email', client_info.get('contact_email', '')),
+            ('contact_phone', client_info.get('contact_phone', '')),
+            ('shipping_address', shipping.get('shipping_address', '')),
+            ('billing_address', shipping.get('billing_address', '')),
+            ('drop_shipping', shipping.get('drop_shipping', '')),
+            ('drop_shipping_instructions', shipping.get('drop_shipping_instructions', '')),
+            ('in_hands_date', shipping.get('in_hands_date', '')),
+            ('impact_cards', payment.get('impact_cards', '')),
+            ('impact_card_selection', payment.get('impact_card_selection', '')),
+            ('payment_preference', payment.get('payment_preference', '')),
+            ('payment_method', payment.get('payment_method', '')),
+            ('special_requests', form_data.get('notes', '')),
+        ]
 
-        for key, value in payment_map.items():
-            col_name = RESPONSE_COLUMNS.get(key)
-            if col_name and col_name in headers:
+        products = form_data.get('products', [])
+        if len(products) > MAX_PRODUCT_LINES:
+            return False, f"Too many products: the form holds at most {MAX_PRODUCT_LINES} items."
+        for i, product in enumerate(products, start=1):
+            fields.append((f'line_{i}_name', product.get('name', '')))
+            fields.append((f'line_{i}_qty', str(product.get('quantity', ''))))
+            fields.append((f'line_{i}_notes', product.get('customization_notes', '')))
+
+        # Step 3: Place each value in its column; remember any that have nowhere to go
+        row = [''] * len(headers)
+        unmatched = []
+        for key, value in fields:
+            if not str(value).strip():
+                continue
+            col_name = find_response_column(headers, key)
+            if col_name is None:
+                unmatched.append(RESPONSE_COLUMNS.get(key, key))
+            else:
                 row[headers.index(col_name)] = value
 
-        # Special requests
-        notes = form_data.get('notes', '')
-        notes_col = RESPONSE_COLUMNS.get('special_requests')
-        if notes_col and notes_col in headers:
-            row[headers.index(notes_col)] = notes
+        if unmatched:
+            print(f"Client form submit blocked for {proposal_id}: no sheet column for {unmatched}")
+            return False, (
+                "We could not record your order because our order sheet is missing some fields "
+                f"({', '.join(unmatched)}). Your answers are still on this page and a copy has been "
+                "saved. Please contact Peace by Piece so we can fix this and complete your order."
+            )
 
         # Dropshipping file name (if uploaded)
         if file_name:
-            file_col = RESPONSE_COLUMNS.get('dropshipping_file', 'Dropshipping File Name')
-            if file_col in headers:
+            file_col = find_response_column(headers, 'dropshipping_file')
+            if file_col:
                 row[headers.index(file_col)] = file_name
             else:
                 # Add new column if it doesn't exist yet
-                headers.append(file_col)
+                headers.append(RESPONSE_COLUMNS['dropshipping_file'])
                 row.append(file_name)
-                worksheet.update_cell(1, len(headers), file_col)
+                worksheet.update_cell(1, len(headers), RESPONSE_COLUMNS['dropshipping_file'])
 
         # Append response row
         worksheet.append_row(row)
 
-        # Save file to drafts sheet (so exec can download it later)
-        if file_data and file_name:
-            save_draft(proposal_id, session_id, form_data, file_data, file_name)
-
-        # Mark draft as submitted
+        # Mark the backup copy as submitted
         _mark_draft_submitted(proposal_id, session_id)
 
         return True, "Order submitted successfully!"

@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [Unreleased] - 2026-10-09
+
+### Fixed
+- **Client Order Form Lost Gift Items:** Submitting the in-app client order form saved client and shipping info but no items. The live response sheet's item columns are named "Gift Item 1 - Product Name" / "Gift 1 Quantity" / "Gift 1 Customization Notes" (not "Product Line 1 - ..."), and the drop-ship and impact-card questions were reworded too; values with no exactly matching column were silently skipped. New `find_response_column()` (`src/forms_config.py`) matches headers tolerantly (case, spaces, `*`, dashes, and item columns by line number) and is used by both submit and the Tab 3 import, so existing Google Form responses now import their items as well
+- **No More Silent Submit Failures:** `submit_form()` now saves a full backup copy of the form to the `client_form_drafts` tab (saved_orders spreadsheet) before writing anything, and refuses to submit -- showing the client an error while keeping their answers -- if any filled-in field has no column in the response sheet. The client form is capped at 10 items (the sheet's item columns)
+- Tests: `tests/test_client_form.py` (mocked sheets, includes a header-mismatch case)
+
 ## [8.5.5] - 2026-09-04
 
 ### Fixed

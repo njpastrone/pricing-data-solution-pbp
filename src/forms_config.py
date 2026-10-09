@@ -10,6 +10,8 @@ Created: 2026-01-20
 Form: PBP Client Order Form - Master
 """
 
+import re
+
 # ============================================================
 # GOOGLE FORM URLS
 # ============================================================
@@ -197,6 +199,55 @@ RESPONSE_COLUMNS = {
     # File upload tracking (added for in-app client form)
     'dropshipping_file': 'Dropshipping File Name',
 }
+
+# Other names the live response sheet uses for the same field.
+# (The Google Form questions were reworded after RESPONSE_COLUMNS was written.)
+# Product lines don't need aliases here - find_response_column() matches them
+# by line number, e.g. "Gift Item 1 - Product Name" or "Gift 1 Quantity".
+COLUMN_ALIASES = {
+    'drop_shipping': ['Will this order be drop-shipped to individual recipients? *'],
+    'impact_cards': ['Impact Cards Add-Ons'],
+}
+
+
+def _normalize_header(text):
+    """Lowercase, drop '*' and punctuation, collapse spaces: 'Gift 1 - Quantity *' -> 'gift 1 quantity'."""
+    return re.sub(r'[^a-z0-9]+', ' ', str(text).lower()).strip()
+
+
+def find_response_column(headers, key):
+    """
+    Find the header in the response sheet that holds a form field.
+
+    Tolerates small wording differences (case, spaces, '*', dashes) and
+    renamed product columns ("Product Line 1 - Quantity", "Gift 1 Quantity",
+    "Gift Item 1 - Quantity" all count as line 1 quantity).
+
+    Args:
+        headers (list): Header names from the sheet's first row
+        key (str): Field key from RESPONSE_COLUMNS (e.g. 'company_name', 'line_3_qty')
+
+    Returns:
+        str or None: The matching header exactly as written in the sheet, or None
+    """
+    # 1. Known names (canonical + aliases), ignoring case/spaces/'*'
+    known_names = [RESPONSE_COLUMNS.get(key, key)] + COLUMN_ALIASES.get(key, [])
+    wanted = {_normalize_header(name) for name in known_names}
+    for header in headers:
+        if _normalize_header(header) in wanted:
+            return header
+
+    # 2. Product lines: "<anything> <line number> <name|quantity|notes>"
+    line_match = re.fullmatch(r'line_(\d+)_(name|qty|notes)', key)
+    if not line_match:
+        return None
+    line_number, field = line_match.groups()
+    field_words = {'name': 'name', 'qty': 'quantity', 'notes': 'notes'}
+    for header in headers:
+        header_match = re.fullmatch(r'(?:product line|gift item|gift|item|line) (\d+) (.*)', _normalize_header(header))
+        if header_match and header_match.group(1) == line_number and field_words[field] in header_match.group(2):
+            return header
+    return None
 
 # ============================================================
 # FIELD VALIDATION RULES
