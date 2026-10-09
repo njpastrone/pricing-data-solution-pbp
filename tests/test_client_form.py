@@ -222,6 +222,24 @@ def test_submit_form_retries_backup_without_file():
     assert retry_row[4] == 'addresses.xlsx'
 
 
+def test_submit_form_retry_keeps_stored_draft_file():
+    """A form-only retry must not wipe a file already saved in the draft."""
+    client, response_ws, drafts_ws, _ = _mock_sheets(LIVE_HEADERS)
+    drafts_ws.get_all_values.return_value = [
+        ['Proposal_ID', 'Session_ID'],
+        ['PROP_1', 'sess1', '{}', 'c3RvcmVk', 'addresses.xlsx', 'd', 'd', 'draft'],
+    ]
+    drafts_ws.update.side_effect = [Exception("429 rate limit"), None, None]
+    with patch('src.client_form.connect_to_sheets', return_value=client):
+        success, msg = submit_form('PROP_1', 'sess1', SAMPLE_FORM, b'stored', 'addresses.xlsx')
+
+    assert success, msg
+    response_ws.append_row.assert_called_once()
+    retry_range, retry_values = drafts_ws.update.call_args_list[1][0]
+    assert retry_range == 'C2'
+    assert json.loads(retry_values[0][0]) == SAMPLE_FORM
+
+
 def test_submit_form_creates_drafts_tab_if_missing():
     """The backup tab is created when it doesn't exist yet."""
     client, response_ws, drafts_ws, drafts_book = _mock_sheets(LIVE_HEADERS, drafts_exists=False)
@@ -266,6 +284,8 @@ if __name__ == "__main__":
     test_submit_form_writes_items_to_live_headers()
     test_submit_form_fails_loudly_on_header_mismatch()
     test_submit_form_stops_if_backup_fails()
+    test_submit_form_retries_backup_without_file()
+    test_submit_form_retry_keeps_stored_draft_file()
     test_submit_form_creates_drafts_tab_if_missing()
     test_parse_form_response_reads_live_headers()
     print("All tests passed!")

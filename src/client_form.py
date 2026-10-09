@@ -166,8 +166,12 @@ def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=Non
                 break
 
         if existing_row:
-            # Update existing draft (preserve Created_Date in column F)
-            sheet.update(f'C{existing_row}:E{existing_row}', [[json_data, file_b64, file_name or '']])
+            # Update existing draft (preserve Created_Date in column F).
+            # Without new file data, keep the stored file as it is.
+            if file_data:
+                sheet.update(f'C{existing_row}:E{existing_row}', [[json_data, file_b64, file_name or '']])
+            else:
+                sheet.update(f'C{existing_row}', [[json_data]])
             sheet.update(f'G{existing_row}:H{existing_row}', [[now, 'draft']])
         else:
             # Create new draft
