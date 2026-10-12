@@ -12,12 +12,14 @@ Created: 2026-05-24
 """
 
 import json
+import time
 import uuid
 import base64
 from datetime import datetime
 import gspread
+import streamlit as st
 from src.data_loader import connect_to_sheets, DATASET_CONFIGS
-from src.forms_config import GOOGLE_FORM_CONFIG, RESPONSE_COLUMNS
+from src.forms_config import GOOGLE_FORM_CONFIG, RESPONSE_COLUMNS, MAX_PRODUCT_LINES, find_response_column
 
 
 # Sheet name for client form drafts
@@ -25,6 +27,37 @@ DRAFTS_SHEET_NAME = "client_form_drafts"
 
 # Base64 chunk size (same as drive_helper.py)
 CHUNK_SIZE = 40000
+
+# Google Sheets allows about 60 read requests per minute for our service account,
+# shared by the live app and any local copy. When Google answers "quota exceeded"
+# (HTTP 429) we wait and try again instead of failing.
+QUOTA_RETRY_WAITS = [2, 4, 8, 16]  # seconds between attempts
+
+
+def _retry_on_quota(action):
+    """
+    Run action(); if Google says "quota exceeded" (HTTP 429), wait and retry.
+
+    A 429 means Google rejected the request without applying it, so retrying
+    a write (like append_row) cannot create a duplicate row.
+    """
+    for wait in QUOTA_RETRY_WAITS:
+        try:
+            return action()
+        except gspread.exceptions.APIError as e:
+            if getattr(e, 'code', None) != 429:
+                raise
+            print(f"Google Sheets quota hit, retrying in {wait}s")
+            time.sleep(wait)
+    return action()  # Last try: any error now goes to the caller
+
+
+# ponytail: handles are cached until the app restarts; a renamed tab needs a restart
+@st.cache_resource(show_spinner=False)
+def _open_worksheet(spreadsheet_id, sheet_name):
+    """Open a worksheet once and reuse it (each open costs 2 read requests)."""
+    spreadsheet = _retry_on_quota(lambda: connect_to_sheets().open_by_key(spreadsheet_id))
+    return _retry_on_quota(lambda: spreadsheet.worksheet(sheet_name))
 
 
 def generate_session_token():
@@ -52,11 +85,8 @@ def load_proposal_for_client(proposal_id):
         Returns None if proposal not found or error.
     """
     try:
-        client = connect_to_sheets()
-        spreadsheet = client.open_by_key(DATASET_CONFIGS['saved_proposals']['spreadsheet_id'])
-        sheet = spreadsheet.worksheet('Sheet1')
-
-        all_values = sheet.get_all_values()
+        sheet = _open_worksheet(DATASET_CONFIGS['saved_proposals']['spreadsheet_id'], 'Sheet1')
+        all_values = _retry_on_quota(sheet.get_all_values)
 
         # Find row with matching proposal_id
         for row in all_values[1:]:  # Skip header
@@ -101,6 +131,25 @@ def _deserialize_form_data(json_string):
         return {}
 
 
+@st.cache_resource(show_spinner=False)
+def _open_drafts_sheet():
+    """Open (or create) the client_form_drafts sheet once and reuse it. Raises on error."""
+    spreadsheet = _retry_on_quota(
+        lambda: connect_to_sheets().open_by_key(DATASET_CONFIGS['saved_orders']['spreadsheet_id'])
+    )
+    try:
+        return _retry_on_quota(lambda: spreadsheet.worksheet(DRAFTS_SHEET_NAME))
+    except gspread.exceptions.WorksheetNotFound:
+        sheet = spreadsheet.add_worksheet(title=DRAFTS_SHEET_NAME, rows=100, cols=8)
+        headers = [
+            'Proposal_ID', 'Session_ID', 'Draft_Data_JSON',
+            'File_Data_Base64', 'File_Name', 'Created_Date',
+            'Updated_Date', 'Status'
+        ]
+        sheet.update('A1:H1', [headers])
+        return sheet
+
+
 def _get_drafts_sheet():
     """
     Get or create the client_form_drafts sheet.
@@ -109,25 +158,19 @@ def _get_drafts_sheet():
         gspread.Worksheet or None
     """
     try:
-        client = connect_to_sheets()
-        spreadsheet = client.open_by_key(DATASET_CONFIGS['saved_orders']['spreadsheet_id'])
-
-        try:
-            sheet = spreadsheet.worksheet(DRAFTS_SHEET_NAME)
-        except gspread.exceptions.WorksheetNotFound:
-            sheet = spreadsheet.add_worksheet(title=DRAFTS_SHEET_NAME, rows=100, cols=8)
-            headers = [
-                'Proposal_ID', 'Session_ID', 'Draft_Data_JSON',
-                'File_Data_Base64', 'File_Name', 'Created_Date',
-                'Updated_Date', 'Status'
-            ]
-            sheet.update('A1:H1', [headers])
-
-        return sheet
-
+        return _open_drafts_sheet()
     except Exception as e:
         print(f"Error accessing drafts sheet: {e}")
         return None
+
+
+def _find_draft_row(sheet, proposal_id, session_id):
+    """Return the sheet row number of this draft, or None. Reads only the two ID columns."""
+    id_rows = _retry_on_quota(lambda: sheet.get('A:B'))
+    for i, row in enumerate(id_rows[1:], start=2):
+        if len(row) >= 2 and row[0] == proposal_id and row[1] == session_id:
+            return i
+    return None
 
 
 def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=None):
@@ -158,23 +201,22 @@ def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=Non
             file_b64 = base64.b64encode(file_data).decode('utf-8')
 
         # Check if draft already exists for this proposal+session
-        all_values = sheet.get_all_values()
-        existing_row = None
-        for i, row in enumerate(all_values[1:], start=2):
-            if len(row) >= 2 and row[0] == proposal_id and row[1] == session_id:
-                existing_row = i
-                break
+        existing_row = _find_draft_row(sheet, proposal_id, session_id)
 
         if existing_row:
-            # Update existing draft (preserve Created_Date in column F)
-            sheet.update(f'C{existing_row}:E{existing_row}', [[json_data, file_b64, file_name or '']])
-            sheet.update(f'G{existing_row}:H{existing_row}', [[now, 'draft']])
+            # Update existing draft (preserve Created_Date in column F).
+            # Without new file data, keep the stored file as it is.
+            if file_data:
+                _retry_on_quota(lambda: sheet.update(f'C{existing_row}:E{existing_row}', [[json_data, file_b64, file_name or '']]))
+            else:
+                _retry_on_quota(lambda: sheet.update(f'C{existing_row}', [[json_data]]))
+            _retry_on_quota(lambda: sheet.update(f'G{existing_row}:H{existing_row}', [[now, 'draft']]))
         else:
             # Create new draft
-            sheet.append_row([
+            _retry_on_quota(lambda: sheet.append_row([
                 proposal_id, session_id, json_data,
                 file_b64, file_name or '', now, now, 'draft'
-            ])
+            ]))
 
         return True, "Draft saved"
 
@@ -205,7 +247,7 @@ def load_draft(proposal_id, session_id):
         if sheet is None:
             return None
 
-        all_values = sheet.get_all_values()
+        all_values = _retry_on_quota(sheet.get_all_values)
 
         for row in all_values[1:]:
             if len(row) >= 8 and row[0] == proposal_id and row[1] == session_id:
@@ -236,6 +278,13 @@ def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=No
     Writes data in the same column format as the Google Form so that
     Tab 3's import (parse_form_response) works without changes.
 
+    Safety rules (a client's order must never be silently lost):
+    1. A full copy of the form is saved to the drafts sheet FIRST.
+       If the uploaded file is too big for a sheet cell, the copy is saved
+       without the file (the form answers are always kept).
+    2. If any filled-in field has no matching column in the response sheet,
+       nothing is written there and an error is returned.
+
     Args:
         proposal_id (str): Proposal ID
         session_id (str): Session token
@@ -246,108 +295,88 @@ def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=No
     Returns:
         tuple: (success: bool, message: str)
     """
-    try:
-        client_obj = connect_to_sheets()
-        sheet_id = GOOGLE_FORM_CONFIG['response_sheet_id']
-        spreadsheet = client_obj.open_by_key(sheet_id)
-        worksheet = spreadsheet.worksheet(GOOGLE_FORM_CONFIG['response_sheet_name'])
+    # Step 1: Back up the complete submission before anything else
+    backup_ok, backup_msg = save_draft(proposal_id, session_id, form_data, file_data, file_name)
+    if not backup_ok and file_data:
+        backup_ok, backup_msg = save_draft(proposal_id, session_id, form_data, None, file_name)
+    if not backup_ok:
+        return False, f"Your order could not be saved ({backup_msg}). Please try again in a minute."
 
-        # Get headers to build row in correct column order
-        headers = worksheet.row_values(1)
+    try:
+        worksheet = _open_worksheet(GOOGLE_FORM_CONFIG['response_sheet_id'], GOOGLE_FORM_CONFIG['response_sheet_name'])
+
+        # Get headers to build row in correct column order.
+        # Read fresh on every submit: headers being out of date is what lost items before.
+        headers = _retry_on_quota(lambda: worksheet.row_values(1))
         if not headers:
             return False, "Response sheet has no headers"
 
-        # Build a row matching the header columns
-        row = [''] * len(headers)
-
-        # Timestamp
-        timestamp_col = RESPONSE_COLUMNS.get('timestamp', 'Timestamp')
-        if timestamp_col in headers:
-            row[headers.index(timestamp_col)] = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
-
-        # Client info
+        # Step 2: Collect every field as (RESPONSE_COLUMNS key, value)
         client_info = form_data.get('client_info', {})
-        field_map = {
-            'client_type': client_info.get('client_type', ''),
-            'company_name': client_info.get('company_name', ''),
-            'contact_name': client_info.get('contact_name', ''),
-            'contact_email': client_info.get('contact_email', ''),
-            'contact_phone': client_info.get('contact_phone', ''),
-        }
-
-        for key, value in field_map.items():
-            col_name = RESPONSE_COLUMNS.get(key)
-            if col_name and col_name in headers:
-                row[headers.index(col_name)] = value
-
-        # Products
-        products = form_data.get('products', [])
-        for i, product in enumerate(products[:10], start=1):
-            name_col = RESPONSE_COLUMNS.get(f'line_{i}_name')
-            qty_col = RESPONSE_COLUMNS.get(f'line_{i}_qty')
-            notes_col = RESPONSE_COLUMNS.get(f'line_{i}_notes')
-
-            if name_col and name_col in headers:
-                row[headers.index(name_col)] = product.get('name', '')
-            if qty_col and qty_col in headers:
-                row[headers.index(qty_col)] = str(product.get('quantity', ''))
-            if notes_col and notes_col in headers:
-                row[headers.index(notes_col)] = product.get('customization_notes', '')
-
-        # Shipping info
         shipping = form_data.get('shipping_info', {})
-        shipping_map = {
-            'shipping_address': shipping.get('shipping_address', ''),
-            'billing_address': shipping.get('billing_address', ''),
-            'drop_shipping': shipping.get('drop_shipping', ''),
-            'drop_shipping_instructions': shipping.get('drop_shipping_instructions', ''),
-            'in_hands_date': shipping.get('in_hands_date', ''),
-        }
-
-        for key, value in shipping_map.items():
-            col_name = RESPONSE_COLUMNS.get(key)
-            if col_name and col_name in headers:
-                row[headers.index(col_name)] = value
-
-        # Payment info
         payment = form_data.get('payment_info', {})
-        payment_map = {
-            'impact_cards': payment.get('impact_cards', ''),
-            'impact_card_selection': payment.get('impact_card_selection', ''),
-            'payment_preference': payment.get('payment_preference', ''),
-            'payment_method': payment.get('payment_method', ''),
-        }
+        fields = [
+            ('timestamp', datetime.now().strftime("%m/%d/%Y %H:%M:%S")),
+            ('client_type', client_info.get('client_type', '')),
+            ('company_name', client_info.get('company_name', '')),
+            ('contact_name', client_info.get('contact_name', '')),
+            ('contact_email', client_info.get('contact_email', '')),
+            ('contact_phone', client_info.get('contact_phone', '')),
+            ('shipping_address', shipping.get('shipping_address', '')),
+            ('billing_address', shipping.get('billing_address', '')),
+            ('drop_shipping', shipping.get('drop_shipping', '')),
+            ('drop_shipping_instructions', shipping.get('drop_shipping_instructions', '')),
+            ('in_hands_date', shipping.get('in_hands_date', '')),
+            ('impact_cards', payment.get('impact_cards', '')),
+            ('impact_card_selection', payment.get('impact_card_selection', '')),
+            ('payment_preference', payment.get('payment_preference', '')),
+            ('payment_method', payment.get('payment_method', '')),
+            ('special_requests', form_data.get('notes', '')),
+        ]
 
-        for key, value in payment_map.items():
-            col_name = RESPONSE_COLUMNS.get(key)
-            if col_name and col_name in headers:
+        products = form_data.get('products', [])
+        if len(products) > MAX_PRODUCT_LINES:
+            return False, f"Too many products: the form holds at most {MAX_PRODUCT_LINES} items."
+        for i, product in enumerate(products, start=1):
+            fields.append((f'line_{i}_name', product.get('name', '')))
+            fields.append((f'line_{i}_qty', str(product.get('quantity', ''))))
+            fields.append((f'line_{i}_notes', product.get('customization_notes', '')))
+
+        # Step 3: Place each value in its column; remember any that have nowhere to go
+        row = [''] * len(headers)
+        unmatched = []
+        for key, value in fields:
+            if not str(value).strip():
+                continue
+            col_name = find_response_column(headers, key)
+            if col_name is None:
+                unmatched.append(RESPONSE_COLUMNS.get(key, key))
+            else:
                 row[headers.index(col_name)] = value
 
-        # Special requests
-        notes = form_data.get('notes', '')
-        notes_col = RESPONSE_COLUMNS.get('special_requests')
-        if notes_col and notes_col in headers:
-            row[headers.index(notes_col)] = notes
+        if unmatched:
+            print(f"Client form submit blocked for {proposal_id}: no sheet column for {unmatched}")
+            return False, (
+                "We could not record your order because our order sheet is missing some fields "
+                f"({', '.join(unmatched)}). Your answers are still on this page and a copy has been "
+                "saved. Please contact Peace by Piece so we can fix this and complete your order."
+            )
 
         # Dropshipping file name (if uploaded)
         if file_name:
-            file_col = RESPONSE_COLUMNS.get('dropshipping_file', 'Dropshipping File Name')
-            if file_col in headers:
+            file_col = find_response_column(headers, 'dropshipping_file')
+            if file_col:
                 row[headers.index(file_col)] = file_name
             else:
                 # Add new column if it doesn't exist yet
-                headers.append(file_col)
+                headers.append(RESPONSE_COLUMNS['dropshipping_file'])
                 row.append(file_name)
-                worksheet.update_cell(1, len(headers), file_col)
+                _retry_on_quota(lambda: worksheet.update_cell(1, len(headers), RESPONSE_COLUMNS['dropshipping_file']))
 
-        # Append response row
-        worksheet.append_row(row)
+        # Append response row (the last step, so a failure above never leaves a partial row)
+        _retry_on_quota(lambda: worksheet.append_row(row))
 
-        # Save file to drafts sheet (so exec can download it later)
-        if file_data and file_name:
-            save_draft(proposal_id, session_id, form_data, file_data, file_name)
-
-        # Mark draft as submitted
+        # Mark the backup copy as submitted
         _mark_draft_submitted(proposal_id, session_id)
 
         return True, "Order submitted successfully!"
@@ -363,11 +392,9 @@ def _mark_draft_submitted(proposal_id, session_id):
         if sheet is None:
             return
 
-        all_values = sheet.get_all_values()
-        for i, row in enumerate(all_values[1:], start=2):
-            if len(row) >= 2 and row[0] == proposal_id and row[1] == session_id:
-                sheet.update_cell(i, 8, 'submitted')
-                break
+        draft_row = _find_draft_row(sheet, proposal_id, session_id)
+        if draft_row:
+            _retry_on_quota(lambda: sheet.update_cell(draft_row, 8, 'submitted'))
     except Exception:
         pass  # Non-critical — form was already submitted successfully
 
@@ -404,7 +431,7 @@ def retrieve_file_by_proposal(proposal_id):
         if sheet is None:
             return None, None
 
-        all_values = sheet.get_all_values()
+        all_values = _retry_on_quota(sheet.get_all_values)
         # Find most recent draft with a file for this proposal
         best_row = None
         for row in all_values[1:]:

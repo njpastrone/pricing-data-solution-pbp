@@ -74,6 +74,7 @@ from src.template_loader import (
     list_available_templates,
     TEMPLATE_CONFIG
 )
+from src.forms_config import MAX_PRODUCT_LINES
 from src.client_form import (
     load_proposal_for_client,
     load_draft,
@@ -352,14 +353,18 @@ def _render_client_form_page(proposal_id, session_id):
         st.error("Invalid form link (missing session). Please contact your PBP representative.")
         return
 
-    # Load proposal
-    proposal = load_proposal_for_client(proposal_id)
-    if proposal is None:
-        st.error("This form is no longer available. Please contact your PBP representative.")
-        return
-
-    # Load existing draft (if client is returning)
-    draft = load_draft(proposal_id, session_id)
+    # Load the proposal and any saved draft ONCE per visit. Streamlit reruns this
+    # page on every click, and Google Sheets allows only ~60 reads per minute
+    # (shared with the main app), so re-reading them each time hits the quota.
+    loaded_key = f"cf_loaded_{proposal_id}_{session_id}"
+    if loaded_key not in st.session_state:
+        proposal = load_proposal_for_client(proposal_id)
+        if proposal is None:
+            st.error("This form is no longer available. Please contact your PBP representative.")
+            return
+        # Load existing draft (if client is returning)
+        st.session_state[loaded_key] = (proposal, load_draft(proposal_id, session_id))
+    proposal, draft = st.session_state[loaded_key]
     saved_data = draft['form_data'] if draft else {}
 
     # --- Header ---
@@ -426,8 +431,9 @@ def _render_client_form_page(proposal_id, session_id):
 
     saved_products = saved_data.get('products', [])
 
-    # Determine how many item slots to show (saved items + 1 empty, max = number of products)
-    max_items = len(product_names)
+    # Determine how many item slots to show (saved items + 1 empty).
+    # Max = number of products, but never more than the response sheet's item columns.
+    max_items = min(len(product_names), MAX_PRODUCT_LINES)
     # Initialize item count in session state
     if 'cf_item_count' not in st.session_state:
         st.session_state.cf_item_count = max(len(saved_products), 1)
