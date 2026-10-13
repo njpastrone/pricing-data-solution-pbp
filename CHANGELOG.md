@@ -13,6 +13,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Changed (2026-10-13)
 - **Client Order Form Never Shows a Sheets Error:** Submit now saves the order to the `client_form_drafts` backup tab first (status `pending_sync`, retried for about 1-2 minutes), shows the client "Order received", and copies it into Form Responses on a background thread with retries (10/30/60/120s). The backup tab is the source of truth. If the copy still fails, the main app retries every pending order once per staff session (`retry_pending_syncs()`) and shows a sidebar warning for orders pending more than 10 minutes (e.g. a missing sheet column, which no longer blocks the client). Syncing is idempotent: the submit time is stored in the backup and used as the response Timestamp, and a row already in Form Responses is never written twice. The client only sees an error (with no technical detail) if the backup itself cannot be saved
+- **Client Form Review Fixes:** A one-off Sheets error during the backup save no longer drops the drop-ship file (the file is left out only when it is too big for a sheet cell, decided once before retrying). A received order (pending or submitted) is never rewritten, so a second Submit from an old tab cannot add a second Form Responses row. The staff "pending sync" warning now shows the reason (e.g. a missing column) and says to refresh to re-check
 
 ## [8.5.5] - 2026-09-04
 

@@ -5,6 +5,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import json
+import base64
 from unittest.mock import MagicMock, patch
 
 import gspread
@@ -331,7 +332,11 @@ def test_stuck_order_is_reported_to_staff():
     with patch('src.client_form.connect_to_sheets', return_value=client):
         stuck = retry_pending_syncs()
 
-    assert stuck == [{'proposal_id': 'PROP_1', 'company_name': 'Acme Corp', 'submitted_at': '01/01/2026 09:00:00'}]
+    assert len(stuck) == 1
+    assert stuck[0]['proposal_id'] == 'PROP_1'
+    assert stuck[0]['company_name'] == 'Acme Corp'
+    assert stuck[0]['submitted_at'] == '01/01/2026 09:00:00'
+    assert 'Product Line 1 - Product Name' in stuck[0]['reason']  # staff can see why
     assert len(response.rows) == 1  # nothing written
 
 
@@ -400,17 +405,39 @@ def test_submit_form_retries_backup_without_file():
     assert drafts.rows[1][4] == 'addresses.xlsx'
 
 
-def test_submit_form_retry_keeps_stored_draft_file():
-    """A form-only retry must not wipe a file already saved in the draft."""
+def test_submit_form_too_big_file_keeps_stored_draft_file():
+    """Leaving out a too-big file must not wipe a file already saved in the draft."""
     stored = ['PROP_1', 'sess1', '{}', 'c3RvcmVk', 'addresses.xlsx', 'created', 'updated', 'draft']
     client, response, drafts, _ = _mock_sheets(LIVE_HEADERS, draft_rows=[stored])
-    drafts.fail['update'] = [Exception("429 rate limit")]
-    success, msg = _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM, b'new', 'addresses.xlsx')
+    success, msg = _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM, b'x' * 60000, 'addresses.xlsx')
 
     assert success, msg
     assert len(_response_rows(response)) == 1
     assert _backup(drafts)[0] == SAMPLE_FORM
     assert drafts.rows[1][3] == 'c3RvcmVk'  # stored file kept
+
+
+def test_transient_error_keeps_dropship_file():
+    """One Sheets error while saving must not silently drop the drop-ship file (it is retried with it)."""
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    drafts.fail['append_row'] = [Exception("503 Service Unavailable")]
+    success, msg = _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM, b'name,address', 'addr.csv')
+
+    assert success and msg == "Order received"
+    assert base64.b64decode(drafts.rows[1][3]) == b'name,address'
+    assert drafts.rows[1][4] == 'addr.csv'
+
+
+def test_resubmit_after_synced_does_not_duplicate():
+    """Submitting again (e.g. from an old browser tab) after the order synced adds no second row."""
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
+    first_backup = list(drafts.rows[1])
+    success, msg = _submit(client, 'PROP_1', 'sess1', dict(SAMPLE_FORM, notes='Changed my mind'))
+
+    assert success and msg == "Order received"
+    assert len(_response_rows(response)) == 1
+    assert drafts.rows[1] == first_backup  # received order left untouched
 
 
 def test_submit_form_creates_drafts_tab_if_missing():
@@ -490,11 +517,14 @@ if __name__ == "__main__":
     test_background_sync_retries_until_it_succeeds()
     test_repeated_sync_does_not_duplicate_rows()
     test_stuck_order_is_reported_to_staff()
+    test_save_progress_does_not_undo_a_received_order()
     test_submit_form_header_mismatch_keeps_order_pending()
     test_submit_form_fails_if_backup_never_saves()
     test_submit_form_backup_retries_after_sheets_error()
     test_submit_form_retries_backup_without_file()
-    test_submit_form_retry_keeps_stored_draft_file()
+    test_submit_form_too_big_file_keeps_stored_draft_file()
+    test_transient_error_keeps_dropship_file()
+    test_resubmit_after_synced_does_not_duplicate()
     test_submit_form_creates_drafts_tab_if_missing()
     test_submit_form_retries_after_quota_error()
     test_submit_form_does_not_reopen_sheets_every_time()

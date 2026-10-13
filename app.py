@@ -1099,7 +1099,8 @@ with st.sidebar:
         st.warning(
             f"Client order pending sync: {stuck['company_name'] or 'Unknown company'} "
             f"({stuck['proposal_id']}, received {stuck['submitted_at']}). It is safe in the "
-            "client_form_drafts tab but not yet in Form Responses."
+            f"client_form_drafts tab but not yet in Form Responses. Reason: {stuck['reason']}. "
+            "Refresh the page to re-check."
         )
 
     # Section 0: Data Source Information

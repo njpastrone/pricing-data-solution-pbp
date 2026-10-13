@@ -29,6 +29,9 @@ DRAFTS_SHEET_NAME = "client_form_drafts"
 # Base64 chunk size (same as drive_helper.py)
 CHUNK_SIZE = 40000
 
+# Google Sheets refuses any single cell longer than this
+SHEET_CELL_LIMIT = 50000
+
 # Google Sheets allows about 60 read requests per minute for our service account,
 # shared by the live app and any local copy. When Google answers "quota exceeded"
 # (HTTP 429) we wait and try again instead of failing.
@@ -244,9 +247,10 @@ def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=Non
         # Check if draft already exists for this proposal+session
         existing = _find_backup(_read_backup_rows(sheet), proposal_id, session_id)
 
-        # A plain "Save Progress" (e.g. from an old browser tab) must never
-        # turn a received order back into a draft
-        if existing and status == STATUS_DRAFT and existing['status'] in (STATUS_PENDING, STATUS_SUBMITTED):
+        # Once an order is received it is never rewritten: a "Save Progress" or a
+        # second Submit from an old browser tab must not turn it back into a draft
+        # or give it a new submit time (which would add a second Form Responses row)
+        if existing and existing['status'] in (STATUS_PENDING, STATUS_SUBMITTED):
             return True, "Order already received"
 
         if existing:
@@ -348,12 +352,16 @@ def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=No
     # so every later sync attempt writes (and recognises) the very same row.
     backup = dict(form_data, submitted_at=datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
 
+    # A file too big for one sheet cell can never be saved there, so it is left
+    # out (the file name is still kept). Any other error is retried WITH the file.
+    if file_data and len(base64.b64encode(file_data)) > SHEET_CELL_LIMIT:
+        print(f"Client form file for {proposal_id} is too big for the backup tab; saving the order without it")
+        file_data = None
+
     # Step 1: Save the order to the backup tab, retrying for about 1-2 minutes
     backup_ok = False
     for wait in BACKUP_RETRY_WAITS + [None]:
         backup_ok, backup_msg = save_draft(proposal_id, session_id, backup, file_data, file_name, STATUS_PENDING)
-        if not backup_ok and file_data:
-            backup_ok, backup_msg = save_draft(proposal_id, session_id, backup, None, file_name, STATUS_PENDING)
         if backup_ok or wait is None:
             break
         print(f"Client form backup failed for {proposal_id}, retrying in {wait}s: {backup_msg}")
@@ -515,7 +523,7 @@ def retry_pending_syncs():
 
     Returns:
         list of dict: orders still stuck after STUCK_AFTER_MINUTES
-            ({'proposal_id', 'company_name', 'submitted_at'}), for a staff warning
+            ({'proposal_id', 'company_name', 'submitted_at', 'reason'}), for a staff warning
     """
     drafts = _get_drafts_sheet()
     if drafts is None:
@@ -545,6 +553,7 @@ def retry_pending_syncs():
                 'proposal_id': row['proposal_id'],
                 'company_name': form_data.get('client_info', {}).get('company_name', ''),
                 'submitted_at': submitted_at,
+                'reason': msg,
             })
     return stuck
 
