@@ -131,7 +131,7 @@ Pre-filled from what the exec entered in Tab 2. Client can edit if needed.
 | File_Name | Original filename of uploaded file |
 | Created_Date | When draft was first created |
 | Updated_Date | Last save timestamp |
-| Status | "draft" or "submitted" |
+| Status | "draft", "pending_sync" (received, not yet in Form Responses), or "submitted" |
 
 ### Response Sheet Integration
 
@@ -178,7 +178,7 @@ Handles all client form logic, keeping `app.py` focused on UI:
 - `load_proposal_for_client(proposal_id)` -- loads proposal data, returns product list (no pricing info)
 - `load_draft(proposal_id, session_id)` -- loads saved draft from sheets
 - `save_draft(proposal_id, session_id, form_data, file_data)` -- writes/updates draft
-- `submit_form(proposal_id, session_id, form_data, file_data)` -- writes to response sheet, marks draft as submitted
+- `submit_form(proposal_id, session_id, form_data, file_data)` -- saves the order to the drafts tab as pending_sync, then syncs it to the response sheet in the background (see CHANGELOG, 2026-10-13)
 - `generate_session_token()` -- creates unique session ID for link
 - `store_uploaded_file(file_bytes, filename)` -- converts to base64 for storage
 - `retrieve_uploaded_file(proposal_id, session_id)` -- returns file bytes + filename for download
