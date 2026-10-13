@@ -57,7 +57,7 @@ Exec (Tab 2)                    Client (form page)                  Exec (Tab 3)
      |                                |-- Save Progress (optional)       |
      |                                |   (writes to drafts sheet)       |
      |                                |-- Submit Order                   |
-     |                                |   (writes to Form Responses 1)  |
+     |                                |   (backup tab, then Form Resp.) |
      |                                |                                  |
      |                                |                                  |-- Load Responses
      |                                |                                  |-- Import (same as today)
@@ -189,7 +189,7 @@ Handles all client form logic, keeping `app.py` focused on UI:
 |----------|----------|
 | Proposal deleted after link sent | Friendly error: "This form is no longer available. Please contact your PBP representative." |
 | Proposal products updated | Client sees updated product list (live data) |
-| Client submits twice | Each submit creates a new response row. Exec sees both in Tab 3. |
+| Client submits twice | Same session: the received order is never rewritten, so only one response row. A different session creates its own row. |
 | File upload too large | Streamlit's default 200MB limit enforced |
 | Client leaves without saving | Unsaved data lost. "Save Progress" is the safety net. |
 | Link shared/forwarded | Works -- anyone with the link can fill it out (same as Google Forms) |
