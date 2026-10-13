@@ -182,12 +182,34 @@ def _get_drafts_sheet():
         return None
 
 
-def _find_draft_row(sheet, proposal_id, session_id):
-    """Return the sheet row number of this draft, or None. Reads only the two ID columns."""
-    id_rows = _retry_on_quota(lambda: sheet.get('A:B'))
-    for i, row in enumerate(id_rows[1:], start=2):
-        if len(row) >= 2 and row[0] == proposal_id and row[1] == session_id:
-            return i
+def _read_backup_rows(sheet):
+    """
+    Read every backup row, skipping the large file column (D) to save quota.
+
+    Returns:
+        list of dict: {'row_number', 'proposal_id', 'session_id', 'json', 'file_name', 'status'}
+    """
+    ids_and_json, rest = _retry_on_quota(lambda: sheet.batch_get(['A:C', 'E:H']))
+    rows = []
+    for i in range(1, len(ids_and_json)):
+        a_to_c = list(ids_and_json[i]) + [''] * 3
+        e_to_h = (list(rest[i]) if i < len(rest) else []) + [''] * 4
+        rows.append({
+            'row_number': i + 1,
+            'proposal_id': a_to_c[0],
+            'session_id': a_to_c[1],
+            'json': a_to_c[2],
+            'file_name': e_to_h[0],
+            'status': e_to_h[3],
+        })
+    return rows
+
+
+def _find_backup(rows, proposal_id, session_id):
+    """Return the backup row (from _read_backup_rows) for this proposal+session, or None."""
+    for row in rows:
+        if row['proposal_id'] == proposal_id and row['session_id'] == session_id:
+            return row
     return None
 
 
@@ -220,9 +242,15 @@ def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=Non
             file_b64 = base64.b64encode(file_data).decode('utf-8')
 
         # Check if draft already exists for this proposal+session
-        existing_row = _find_draft_row(sheet, proposal_id, session_id)
+        existing = _find_backup(_read_backup_rows(sheet), proposal_id, session_id)
 
-        if existing_row:
+        # A plain "Save Progress" (e.g. from an old browser tab) must never
+        # turn a received order back into a draft
+        if existing and status == STATUS_DRAFT and existing['status'] in (STATUS_PENDING, STATUS_SUBMITTED):
+            return True, "Order already received"
+
+        if existing:
+            existing_row = existing['row_number']
             # Update existing draft (preserve Created_Date in column F).
             # Without new file data, keep the stored file as it is.
             if file_data:
@@ -434,24 +462,27 @@ def sync_submission(proposal_id, session_id):
     Returns:
         tuple: (success: bool, message: str)
     """
+    drafts = _get_drafts_sheet()
+    if drafts is None:
+        return False, "Failed to connect to drafts sheet"
+    try:
+        backup = _find_backup(_read_backup_rows(drafts), proposal_id, session_id)
+    except Exception as e:
+        return False, f"Error syncing form: {str(e)}"
+    if backup is None:
+        return False, "No backup found"
+    return _sync_backup_row(drafts, backup)
+
+
+def _sync_backup_row(drafts, backup):
+    """Copy one already-read backup row (from _read_backup_rows) into Form Responses."""
     with _sync_lock:
         try:
-            drafts = _get_drafts_sheet()
-            if drafts is None:
-                return False, "Failed to connect to drafts sheet"
-
-            backup_row_number, backup = None, None
-            for i, row in enumerate(_retry_on_quota(drafts.get_all_values)[1:], start=2):
-                if len(row) >= 8 and row[0] == proposal_id and row[1] == session_id:
-                    backup_row_number, backup = i, row
-                    break
-            if backup is None:
-                return False, "No backup found"
-            if backup[7] == STATUS_SUBMITTED:
+            if backup['status'] == STATUS_SUBMITTED:
                 return True, "Already submitted"
 
-            form_data = _deserialize_form_data(backup[2])
-            file_name = backup[4] or None
+            form_data = _deserialize_form_data(backup['json'])
+            file_name = backup['file_name'] or None
 
             worksheet = _open_worksheet(GOOGLE_FORM_CONFIG['response_sheet_id'], GOOGLE_FORM_CONFIG['response_sheet_name'])
             # Read fresh every time: headers being out of date is what lost items before
@@ -470,7 +501,7 @@ def sync_submission(proposal_id, session_id):
                     _retry_on_quota(lambda: worksheet.update_cell(1, len(row), RESPONSE_COLUMNS['dropshipping_file']))
                 _retry_on_quota(lambda: worksheet.append_row(row))
 
-            _retry_on_quota(lambda: drafts.update_cell(backup_row_number, 8, STATUS_SUBMITTED))
+            _retry_on_quota(lambda: drafts.update_cell(backup['row_number'], 8, STATUS_SUBMITTED))
             return True, "Synced"
 
         except Exception as e:
@@ -490,20 +521,20 @@ def retry_pending_syncs():
     if drafts is None:
         return []
     try:
-        rows = _retry_on_quota(drafts.get_all_values)[1:]
+        rows = _read_backup_rows(drafts)
     except Exception as e:
         print(f"Could not check pending client form orders: {e}")
         return []
 
     stuck = []
     for row in rows:
-        if len(row) < 8 or row[7] != STATUS_PENDING:
+        if row['status'] != STATUS_PENDING:
             continue
-        ok, msg = sync_submission(row[0], row[1])
+        ok, msg = _sync_backup_row(drafts, row)
         if ok:
             continue
-        print(f"Form Responses sync still pending for {row[0]}: {msg}")
-        form_data = _deserialize_form_data(row[2])
+        print(f"Form Responses sync still pending for {row['proposal_id']}: {msg}")
+        form_data = _deserialize_form_data(row['json'])
         submitted_at = form_data.get('submitted_at', '')
         try:
             age_minutes = (datetime.now() - datetime.strptime(submitted_at, "%m/%d/%Y %H:%M:%S")).total_seconds() / 60
@@ -511,7 +542,7 @@ def retry_pending_syncs():
             age_minutes = STUCK_AFTER_MINUTES  # unknown age: warn anyway
         if age_minutes >= STUCK_AFTER_MINUTES:
             stuck.append({
-                'proposal_id': row[0],
+                'proposal_id': row['proposal_id'],
                 'company_name': form_data.get('client_info', {}).get('company_name', ''),
                 'submitted_at': submitted_at,
             })

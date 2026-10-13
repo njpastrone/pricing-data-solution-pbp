@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import gspread
 
 from src.client_form import (generate_session_token, load_proposal_for_client, _serialize_form_data, _deserialize_form_data,
-                             submit_form, sync_submission, retry_pending_syncs, DRAFTS_SHEET_NAME, BACKUP_RETRY_WAITS,
+                             submit_form, save_draft, sync_submission, retry_pending_syncs, DRAFTS_SHEET_NAME, BACKUP_RETRY_WAITS,
                              STATUS_PENDING, STATUS_SUBMITTED, _open_worksheet, _open_drafts_sheet)
 from src.forms_config import GOOGLE_FORM_CONFIG, find_response_column
 from src.forms_helper import parse_form_response
@@ -128,9 +128,13 @@ class FakeSheet:
         self._maybe_fail('get_all_values')
         return [list(r) for r in self.rows]
 
-    def get(self, cell_range):  # only 'A:B' is used
-        self._maybe_fail('get')
-        return [r[:2] for r in self.rows]
+    def batch_get(self, ranges):  # whole-column ranges like 'A:C'
+        self._maybe_fail('batch_get')
+        result = []
+        for cell_range in ranges:
+            first, last = (ord(c) - ord('A') for c in cell_range.split(':'))
+            result.append([r[first:last + 1] for r in self.rows])
+        return result
 
     def row_values(self, number):
         return list(self.rows[number - 1])
@@ -329,6 +333,23 @@ def test_stuck_order_is_reported_to_staff():
 
     assert stuck == [{'proposal_id': 'PROP_1', 'company_name': 'Acme Corp', 'submitted_at': '01/01/2026 09:00:00'}]
     assert len(response.rows) == 1  # nothing written
+
+
+def test_save_progress_does_not_undo_a_received_order():
+    """'Save Progress' from an old browser tab must not turn a pending order back into a draft."""
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    response.fail['get_all_values'] = [Exception("503 Service Unavailable")]
+    _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
+    assert _backup(drafts)[1] == STATUS_PENDING
+
+    with patch('src.client_form.connect_to_sheets', return_value=client):
+        success, _ = save_draft('PROP_1', 'sess1', dict(SAMPLE_FORM, notes='old tab'))
+        assert success
+        assert _backup(drafts) == (SAMPLE_FORM, STATUS_PENDING)
+        retry_pending_syncs()
+
+    assert len(_response_rows(response)) == 1
+    assert _backup(drafts) == (SAMPLE_FORM, STATUS_SUBMITTED)
 
 
 def test_submit_form_header_mismatch_keeps_order_pending():
