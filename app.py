@@ -368,7 +368,7 @@ def _render_client_form_page(proposal_id, session_id):
     saved_data = draft['form_data'] if draft else {}
 
     # --- Header ---
-    st.title("Piece by Piece International Order Form")
+    st.title("Peace by Piece International Order Form")
 
     # Check if already submitted (from draft status or session state)
     already_submitted = (draft and draft.get('status') == 'submitted') or st.session_state.get('cf_submitted')
