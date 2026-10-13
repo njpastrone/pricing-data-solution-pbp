@@ -81,7 +81,10 @@ from src.client_form import (
     save_draft,
     submit_form,
     generate_session_token,
-    retrieve_file_by_proposal
+    retrieve_file_by_proposal,
+    retry_pending_syncs,
+    STATUS_PENDING,
+    STATUS_SUBMITTED
 )
 
 # ============================================================
@@ -371,9 +374,9 @@ def _render_client_form_page(proposal_id, session_id):
     st.title("Piece by Piece International Order Form")
 
     # Check if already submitted (from draft status or session state)
-    already_submitted = (draft and draft.get('status') == 'submitted') or st.session_state.get('cf_submitted')
+    already_submitted = (draft and draft.get('status') in (STATUS_PENDING, STATUS_SUBMITTED)) or st.session_state.get('cf_submitted')
     if already_submitted:
-        st.success("This order has been submitted. Your PBP representative will be in touch.")
+        st.success("Order received. Your PBP representative will be in touch.")
         st.info("If you need to make changes, please contact your PBP representative directly.")
         return
 
@@ -1084,8 +1087,20 @@ if need_reload:
 # ============================================================
 # SIDEBAR - APP INFORMATION
 # ============================================================
+# Client orders not yet copied into Form Responses: retry once per browser session
+if 'stuck_client_orders' not in st.session_state:
+    st.session_state.stuck_client_orders = retry_pending_syncs()
+
 with st.sidebar:
     st.markdown("## Instructions & Tools")
+
+    # Staff alert: received client orders that still could not reach Form Responses
+    for stuck in st.session_state.stuck_client_orders:
+        st.warning(
+            f"Client order pending sync: {stuck['company_name'] or 'Unknown company'} "
+            f"({stuck['proposal_id']}, received {stuck['submitted_at']}). It is safe in the "
+            "client_form_drafts tab but not yet in Form Responses."
+        )
 
     # Section 0: Data Source Information
     st.markdown("### Data Source")

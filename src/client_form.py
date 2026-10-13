@@ -14,6 +14,7 @@ Created: 2026-05-24
 import json
 import time
 import uuid
+import threading
 import base64
 from datetime import datetime
 import gspread
@@ -32,6 +33,23 @@ CHUNK_SIZE = 40000
 # shared by the live app and any local copy. When Google answers "quota exceeded"
 # (HTTP 429) we wait and try again instead of failing.
 QUOTA_RETRY_WAITS = [2, 4, 8, 16]  # seconds between attempts
+
+# Saving the client's backup copy is retried for about 1-2 minutes before we give up.
+BACKUP_RETRY_WAITS = [5, 10, 20, 30]  # seconds between attempts
+
+# Copying a received order into Form Responses is retried in the background.
+SYNC_RETRY_WAITS = [10, 30, 60, 120]  # seconds between attempts
+
+# An order still waiting to be copied after this long is flagged to staff.
+STUCK_AFTER_MINUTES = 10
+
+# Draft statuses in the backup tab (column H)
+STATUS_DRAFT = 'draft'
+STATUS_PENDING = 'pending_sync'   # order received, not yet in Form Responses
+STATUS_SUBMITTED = 'submitted'    # order is in Form Responses
+
+# ponytail: one lock per app process; fine while the app runs as a single Render instance
+_sync_lock = threading.Lock()
 
 
 def _retry_on_quota(action):
@@ -173,7 +191,7 @@ def _find_draft_row(sheet, proposal_id, session_id):
     return None
 
 
-def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=None):
+def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=None, status=STATUS_DRAFT):
     """
     Save or update a form draft in Google Sheets.
 
@@ -183,6 +201,7 @@ def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=Non
         form_data (dict): All form field values
         file_data (bytes or None): Uploaded file bytes
         file_name (str or None): Original filename
+        status (str): Status to store (draft, or pending_sync on submit)
 
     Returns:
         tuple: (success: bool, message: str)
@@ -210,12 +229,12 @@ def save_draft(proposal_id, session_id, form_data, file_data=None, file_name=Non
                 _retry_on_quota(lambda: sheet.update(f'C{existing_row}:E{existing_row}', [[json_data, file_b64, file_name or '']]))
             else:
                 _retry_on_quota(lambda: sheet.update(f'C{existing_row}', [[json_data]]))
-            _retry_on_quota(lambda: sheet.update(f'G{existing_row}:H{existing_row}', [[now, 'draft']]))
+            _retry_on_quota(lambda: sheet.update(f'G{existing_row}:H{existing_row}', [[now, status]]))
         else:
             # Create new draft
             _retry_on_quota(lambda: sheet.append_row([
                 proposal_id, session_id, json_data,
-                file_b64, file_name or '', now, now, 'draft'
+                file_b64, file_name or '', now, now, status
             ]))
 
         return True, "Draft saved"
@@ -273,17 +292,16 @@ def load_draft(proposal_id, session_id):
 
 def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=None):
     """
-    Submit the completed form to the Form Responses 1 sheet.
+    Receive the client's completed order.
 
-    Writes data in the same column format as the Google Form so that
-    Tab 3's import (parse_form_response) works without changes.
-
-    Safety rules (a client's order must never be silently lost):
-    1. A full copy of the form is saved to the drafts sheet FIRST.
-       If the uploaded file is too big for a sheet cell, the copy is saved
-       without the file (the form answers are always kept).
-    2. If any filled-in field has no matching column in the response sheet,
-       nothing is written there and an error is returned.
+    A client never sees a Google Sheets error (their order must never be lost):
+    1. The full order is saved to the backup tab (client_form_drafts) with
+       status "pending_sync", retrying for about 1-2 minutes. If the uploaded
+       file is too big for a sheet cell, the copy is saved without the file.
+    2. The client is told "Order received".
+    3. The order is copied into Form Responses in the background
+       (see sync_submission). If that keeps failing, the main app retries
+       on its next run and warns staff about stuck orders.
 
     Args:
         proposal_id (str): Proposal ID
@@ -295,108 +313,209 @@ def submit_form(proposal_id, session_id, form_data, file_data=None, file_name=No
     Returns:
         tuple: (success: bool, message: str)
     """
-    # Step 1: Back up the complete submission before anything else
-    backup_ok, backup_msg = save_draft(proposal_id, session_id, form_data, file_data, file_name)
-    if not backup_ok and file_data:
-        backup_ok, backup_msg = save_draft(proposal_id, session_id, form_data, None, file_name)
+    if len(form_data.get('products', [])) > MAX_PRODUCT_LINES:
+        return False, f"Too many products: the form holds at most {MAX_PRODUCT_LINES} items."
+
+    # The submit time is the Form Responses timestamp; it is kept in the backup
+    # so every later sync attempt writes (and recognises) the very same row.
+    backup = dict(form_data, submitted_at=datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
+
+    # Step 1: Save the order to the backup tab, retrying for about 1-2 minutes
+    backup_ok = False
+    for wait in BACKUP_RETRY_WAITS + [None]:
+        backup_ok, backup_msg = save_draft(proposal_id, session_id, backup, file_data, file_name, STATUS_PENDING)
+        if not backup_ok and file_data:
+            backup_ok, backup_msg = save_draft(proposal_id, session_id, backup, None, file_name, STATUS_PENDING)
+        if backup_ok or wait is None:
+            break
+        print(f"Client form backup failed for {proposal_id}, retrying in {wait}s: {backup_msg}")
+        time.sleep(wait)
+
     if not backup_ok:
-        return False, f"Your order could not be saved ({backup_msg}). Please try again in a minute."
+        print(f"Client form backup gave up for {proposal_id}: {backup_msg}")
+        return False, "We could not save your order right now. Please wait a minute and press Submit again."
 
+    # Step 2: Copy it into Form Responses without making the client wait
+    _sync_in_background(proposal_id, session_id)
+    return True, "Order received"
+
+
+def _sync_in_background(proposal_id, session_id):
+    """Run sync_submission on a background thread, retrying with growing waits."""
+    def run():
+        for wait in SYNC_RETRY_WAITS + [None]:
+            ok, msg = sync_submission(proposal_id, session_id)
+            if ok or wait is None:
+                break
+            print(f"Form Responses sync failed for {proposal_id}, retrying in {wait}s: {msg}")
+            time.sleep(wait)
+        if not ok:
+            print(f"Form Responses sync still pending for {proposal_id}; the app will retry on its next run")
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def _build_response_row(headers, form_data, file_name):
+    """
+    Build the Form Responses row in the same column format as the Google Form,
+    so Tab 3's import (parse_form_response) works without changes.
+
+    Returns:
+        tuple: (row, unmatched field labels, whether the file-name column must be added)
+    """
+    client_info = form_data.get('client_info', {})
+    shipping = form_data.get('shipping_info', {})
+    payment = form_data.get('payment_info', {})
+    fields = [
+        ('timestamp', form_data.get('submitted_at', '')),
+        ('client_type', client_info.get('client_type', '')),
+        ('company_name', client_info.get('company_name', '')),
+        ('contact_name', client_info.get('contact_name', '')),
+        ('contact_email', client_info.get('contact_email', '')),
+        ('contact_phone', client_info.get('contact_phone', '')),
+        ('shipping_address', shipping.get('shipping_address', '')),
+        ('billing_address', shipping.get('billing_address', '')),
+        ('drop_shipping', shipping.get('drop_shipping', '')),
+        ('drop_shipping_instructions', shipping.get('drop_shipping_instructions', '')),
+        ('in_hands_date', shipping.get('in_hands_date', '')),
+        ('impact_cards', payment.get('impact_cards', '')),
+        ('impact_card_selection', payment.get('impact_card_selection', '')),
+        ('payment_preference', payment.get('payment_preference', '')),
+        ('payment_method', payment.get('payment_method', '')),
+        ('special_requests', form_data.get('notes', '')),
+    ]
+    for i, product in enumerate(form_data.get('products', []), start=1):
+        fields.append((f'line_{i}_name', product.get('name', '')))
+        fields.append((f'line_{i}_qty', str(product.get('quantity', ''))))
+        fields.append((f'line_{i}_notes', product.get('customization_notes', '')))
+
+    # Place each value in its column; remember any that have nowhere to go
+    row = [''] * len(headers)
+    unmatched = []
+    for key, value in fields:
+        if not str(value).strip():
+            continue
+        col_name = find_response_column(headers, key)
+        if col_name is None:
+            unmatched.append(RESPONSE_COLUMNS.get(key, key))
+        else:
+            row[headers.index(col_name)] = value
+
+    # Dropshipping file name (if uploaded)
+    add_file_column = False
+    if file_name:
+        file_col = find_response_column(headers, 'dropshipping_file')
+        if file_col:
+            row[headers.index(file_col)] = file_name
+        else:
+            add_file_column = True
+            row.append(file_name)
+
+    return row, unmatched, add_file_column
+
+
+# ponytail: two identical orders submitted in the same second count as one; add a hidden ID column if that ever matters
+def _row_already_present(existing_rows, row):
+    """True if a sheet row already holds every filled-in value of row (same timestamp included)."""
+    for existing in existing_rows:
+        if all(value == '' or (i < len(existing) and existing[i] == value) for i, value in enumerate(row)):
+            return True
+    return False
+
+
+def sync_submission(proposal_id, session_id):
+    """
+    Copy one received order from the backup tab into Form Responses.
+
+    Safe to run any number of times: if the row is already in Form Responses
+    (an earlier attempt wrote it but could not mark the backup), it is not
+    written again. The backup is marked "submitted" once the row is there.
+
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    with _sync_lock:
+        try:
+            drafts = _get_drafts_sheet()
+            if drafts is None:
+                return False, "Failed to connect to drafts sheet"
+
+            backup_row_number, backup = None, None
+            for i, row in enumerate(_retry_on_quota(drafts.get_all_values)[1:], start=2):
+                if len(row) >= 8 and row[0] == proposal_id and row[1] == session_id:
+                    backup_row_number, backup = i, row
+                    break
+            if backup is None:
+                return False, "No backup found"
+            if backup[7] == STATUS_SUBMITTED:
+                return True, "Already submitted"
+
+            form_data = _deserialize_form_data(backup[2])
+            file_name = backup[4] or None
+
+            worksheet = _open_worksheet(GOOGLE_FORM_CONFIG['response_sheet_id'], GOOGLE_FORM_CONFIG['response_sheet_name'])
+            # Read fresh every time: headers being out of date is what lost items before
+            all_rows = _retry_on_quota(worksheet.get_all_values)
+            if not all_rows or not all_rows[0]:
+                return False, "Response sheet has no headers"
+            headers = all_rows[0]
+
+            row, unmatched, add_file_column = _build_response_row(headers, form_data, file_name)
+            if unmatched:
+                # Nothing is written; the order stays pending and staff are warned
+                return False, f"Response sheet has no column for {unmatched}"
+
+            if not _row_already_present(all_rows[1:], row):
+                if add_file_column:
+                    _retry_on_quota(lambda: worksheet.update_cell(1, len(row), RESPONSE_COLUMNS['dropshipping_file']))
+                _retry_on_quota(lambda: worksheet.append_row(row))
+
+            _retry_on_quota(lambda: drafts.update_cell(backup_row_number, 8, STATUS_SUBMITTED))
+            return True, "Synced"
+
+        except Exception as e:
+            return False, f"Error syncing form: {str(e)}"
+
+
+def retry_pending_syncs():
+    """
+    Retry every received order not yet copied into Form Responses.
+    Called by the main app when it starts.
+
+    Returns:
+        list of dict: orders still stuck after STUCK_AFTER_MINUTES
+            ({'proposal_id', 'company_name', 'submitted_at'}), for a staff warning
+    """
+    drafts = _get_drafts_sheet()
+    if drafts is None:
+        return []
     try:
-        worksheet = _open_worksheet(GOOGLE_FORM_CONFIG['response_sheet_id'], GOOGLE_FORM_CONFIG['response_sheet_name'])
-
-        # Get headers to build row in correct column order.
-        # Read fresh on every submit: headers being out of date is what lost items before.
-        headers = _retry_on_quota(lambda: worksheet.row_values(1))
-        if not headers:
-            return False, "Response sheet has no headers"
-
-        # Step 2: Collect every field as (RESPONSE_COLUMNS key, value)
-        client_info = form_data.get('client_info', {})
-        shipping = form_data.get('shipping_info', {})
-        payment = form_data.get('payment_info', {})
-        fields = [
-            ('timestamp', datetime.now().strftime("%m/%d/%Y %H:%M:%S")),
-            ('client_type', client_info.get('client_type', '')),
-            ('company_name', client_info.get('company_name', '')),
-            ('contact_name', client_info.get('contact_name', '')),
-            ('contact_email', client_info.get('contact_email', '')),
-            ('contact_phone', client_info.get('contact_phone', '')),
-            ('shipping_address', shipping.get('shipping_address', '')),
-            ('billing_address', shipping.get('billing_address', '')),
-            ('drop_shipping', shipping.get('drop_shipping', '')),
-            ('drop_shipping_instructions', shipping.get('drop_shipping_instructions', '')),
-            ('in_hands_date', shipping.get('in_hands_date', '')),
-            ('impact_cards', payment.get('impact_cards', '')),
-            ('impact_card_selection', payment.get('impact_card_selection', '')),
-            ('payment_preference', payment.get('payment_preference', '')),
-            ('payment_method', payment.get('payment_method', '')),
-            ('special_requests', form_data.get('notes', '')),
-        ]
-
-        products = form_data.get('products', [])
-        if len(products) > MAX_PRODUCT_LINES:
-            return False, f"Too many products: the form holds at most {MAX_PRODUCT_LINES} items."
-        for i, product in enumerate(products, start=1):
-            fields.append((f'line_{i}_name', product.get('name', '')))
-            fields.append((f'line_{i}_qty', str(product.get('quantity', ''))))
-            fields.append((f'line_{i}_notes', product.get('customization_notes', '')))
-
-        # Step 3: Place each value in its column; remember any that have nowhere to go
-        row = [''] * len(headers)
-        unmatched = []
-        for key, value in fields:
-            if not str(value).strip():
-                continue
-            col_name = find_response_column(headers, key)
-            if col_name is None:
-                unmatched.append(RESPONSE_COLUMNS.get(key, key))
-            else:
-                row[headers.index(col_name)] = value
-
-        if unmatched:
-            print(f"Client form submit blocked for {proposal_id}: no sheet column for {unmatched}")
-            return False, (
-                "We could not record your order because our order sheet is missing some fields "
-                f"({', '.join(unmatched)}). Your answers are still on this page and a copy has been "
-                "saved. Please contact Peace by Piece so we can fix this and complete your order."
-            )
-
-        # Dropshipping file name (if uploaded)
-        if file_name:
-            file_col = find_response_column(headers, 'dropshipping_file')
-            if file_col:
-                row[headers.index(file_col)] = file_name
-            else:
-                # Add new column if it doesn't exist yet
-                headers.append(RESPONSE_COLUMNS['dropshipping_file'])
-                row.append(file_name)
-                _retry_on_quota(lambda: worksheet.update_cell(1, len(headers), RESPONSE_COLUMNS['dropshipping_file']))
-
-        # Append response row (the last step, so a failure above never leaves a partial row)
-        _retry_on_quota(lambda: worksheet.append_row(row))
-
-        # Mark the backup copy as submitted
-        _mark_draft_submitted(proposal_id, session_id)
-
-        return True, "Order submitted successfully!"
-
+        rows = _retry_on_quota(drafts.get_all_values)[1:]
     except Exception as e:
-        return False, f"Error submitting form: {str(e)}"
+        print(f"Could not check pending client form orders: {e}")
+        return []
 
-
-def _mark_draft_submitted(proposal_id, session_id):
-    """Mark a draft's status as 'submitted'."""
-    try:
-        sheet = _get_drafts_sheet()
-        if sheet is None:
-            return
-
-        draft_row = _find_draft_row(sheet, proposal_id, session_id)
-        if draft_row:
-            _retry_on_quota(lambda: sheet.update_cell(draft_row, 8, 'submitted'))
-    except Exception:
-        pass  # Non-critical — form was already submitted successfully
+    stuck = []
+    for row in rows:
+        if len(row) < 8 or row[7] != STATUS_PENDING:
+            continue
+        ok, msg = sync_submission(row[0], row[1])
+        if ok:
+            continue
+        print(f"Form Responses sync still pending for {row[0]}: {msg}")
+        form_data = _deserialize_form_data(row[2])
+        submitted_at = form_data.get('submitted_at', '')
+        try:
+            age_minutes = (datetime.now() - datetime.strptime(submitted_at, "%m/%d/%Y %H:%M:%S")).total_seconds() / 60
+        except ValueError:
+            age_minutes = STUCK_AFTER_MINUTES  # unknown age: warn anyway
+        if age_minutes >= STUCK_AFTER_MINUTES:
+            stuck.append({
+                'proposal_id': row[0],
+                'company_name': form_data.get('client_info', {}).get('company_name', ''),
+                'submitted_at': submitted_at,
+            })
+    return stuck
 
 
 def retrieve_uploaded_file(proposal_id, session_id):
