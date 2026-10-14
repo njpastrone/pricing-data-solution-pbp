@@ -1,4 +1,4 @@
-"""Tests for src/client_form.py"""
+"""Tests for pbp/sheets/client_form.py"""
 
 import sys
 import os
@@ -10,9 +10,10 @@ from unittest.mock import MagicMock, patch
 
 import gspread
 
-from src.client_form import (generate_session_token, load_proposal_for_client, _serialize_form_data, _deserialize_form_data,
-                             submit_form, save_draft, sync_submission, retry_pending_syncs, DRAFTS_SHEET_NAME, BACKUP_RETRY_WAITS,
-                             STATUS_PENDING, STATUS_SUBMITTED, _open_worksheet, _open_drafts_sheet)
+from pbp.sheets.client_form import (generate_session_token, load_proposal_for_client, _serialize_form_data, _deserialize_form_data,
+                                    submit_form, save_draft, sync_submission, retry_pending_syncs, DRAFTS_SHEET_NAME, BACKUP_RETRY_WAITS,
+                                    STATUS_PENDING, STATUS_SUBMITTED)
+from pbp.sheets import gateway
 from pbp.core.forms_config import GOOGLE_FORM_CONFIG, find_response_column
 from pbp.core.forms_helper import parse_form_response
 
@@ -170,9 +171,7 @@ DRAFT_HEADERS = ['Proposal_ID', 'Session_ID', 'Draft_Data_JSON', 'File_Data_Base
 
 def _mock_sheets(response_headers, drafts_exists=True, draft_rows=()):
     """Build a fake gspread client with a response sheet and a drafts (backup) sheet."""
-    # Forget worksheets cached by an earlier test
-    _open_worksheet.clear()
-    _open_drafts_sheet.clear()
+    gateway.reset()  # forget worksheets cached by an earlier test
 
     response = FakeSheet([response_headers])
     drafts = FakeSheet([DRAFT_HEADERS] + [list(r) for r in draft_rows])
@@ -198,9 +197,9 @@ def _mock_sheets(response_headers, drafts_exists=True, draft_rows=()):
 
 def _submit(client, *args):
     """Submit with the background sync run right away (one attempt), and no real sleeping."""
-    with patch('src.client_form.connect_to_sheets', return_value=client), \
-         patch('src.client_form.time.sleep'), \
-         patch('src.client_form._sync_in_background', side_effect=sync_submission):
+    with patch('pbp.sheets.gateway.connect', return_value=client), \
+         patch('pbp.sheets.client_form.time.sleep'), patch('pbp.sheets.gateway.time.sleep'), \
+         patch('pbp.sheets.client_form._sync_in_background', side_effect=sync_submission):
         return submit_form(*args)
 
 
@@ -274,7 +273,7 @@ def test_pending_order_syncs_on_next_app_run():
     _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
     assert _backup(drafts)[1] == STATUS_PENDING
 
-    with patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch('pbp.sheets.gateway.connect', return_value=client):
         stuck = retry_pending_syncs()
         retry_pending_syncs()  # a second run finds nothing left to do
 
@@ -296,9 +295,9 @@ def test_background_sync_retries_until_it_succeeds():
         def start(self):
             self.target()
 
-    with patch('src.client_form.connect_to_sheets', return_value=client), \
-         patch('src.client_form.time.sleep'), \
-         patch('src.client_form.threading.Thread', RunNow):
+    with patch('pbp.sheets.gateway.connect', return_value=client), \
+         patch('pbp.sheets.client_form.time.sleep'), patch('pbp.sheets.gateway.time.sleep'), \
+         patch('pbp.sheets.client_form.threading.Thread', RunNow):
         success, msg = submit_form('PROP_1', 'sess1', SAMPLE_FORM)
 
     assert success
@@ -314,7 +313,7 @@ def test_repeated_sync_does_not_duplicate_rows():
     assert len(_response_rows(response)) == 1
     assert _backup(drafts)[1] == STATUS_PENDING  # marking failed
 
-    with patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch('pbp.sheets.gateway.connect', return_value=client):
         assert sync_submission('PROP_1', 'sess1')[0]
         assert sync_submission('PROP_1', 'sess1')[0]
         retry_pending_syncs()
@@ -329,7 +328,7 @@ def test_stuck_order_is_reported_to_staff():
     pending = ['PROP_1', 'sess1', json.dumps(old_form), '', '', '', '', STATUS_PENDING]
     headers_without_items = [h for h in LIVE_HEADERS if 'Gift' not in h]
     client, response, _, _ = _mock_sheets(headers_without_items, draft_rows=[pending])
-    with patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch('pbp.sheets.gateway.connect', return_value=client):
         stuck = retry_pending_syncs()
 
     assert len(stuck) == 1
@@ -347,7 +346,7 @@ def test_save_progress_does_not_undo_a_received_order():
     _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
     assert _backup(drafts)[1] == STATUS_PENDING
 
-    with patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch('pbp.sheets.gateway.connect', return_value=client):
         success, _ = save_draft('PROP_1', 'sess1', dict(SAMPLE_FORM, notes='old tab'))
         assert success
         assert _backup(drafts) == (SAMPLE_FORM, STATUS_PENDING)
@@ -371,9 +370,9 @@ def test_submit_form_header_mismatch_keeps_order_pending():
 def test_submit_form_fails_if_backup_never_saves():
     """No backup, no 'Order received': the client is asked to retry, without technical detail."""
     client, response, _, _ = _mock_sheets(LIVE_HEADERS)
-    with patch('src.client_form.connect_to_sheets', return_value=client), \
-         patch('src.client_form._get_drafts_sheet', return_value=None), \
-         patch('src.client_form.time.sleep') as fake_sleep:
+    with patch('pbp.sheets.gateway.connect', return_value=client), \
+         patch('pbp.sheets.client_form._get_drafts_sheet', return_value=None), \
+         patch('pbp.sheets.gateway.time.sleep'), patch('pbp.sheets.client_form.time.sleep') as fake_sleep:
         success, msg = submit_form('PROP_1', 'sess1', SAMPLE_FORM)
 
     assert not success

@@ -75,7 +75,7 @@ from src.template_loader import (
     TEMPLATE_CONFIG
 )
 from pbp.core.forms_config import MAX_PRODUCT_LINES
-from src.client_form import (
+from pbp.sheets.client_form import (
     load_proposal_for_client,
     load_draft,
     save_draft,
@@ -4451,7 +4451,7 @@ with tab2:
                 save_draft(saved_proposal_id, token, prefill_data)
 
             # Build URL
-            base_url = "https://pbp-order-management-system.onrender.com/"
+            base_url = os.getenv("CLIENT_FORM_BASE_URL", "https://pbp-order-management-system.onrender.com/")
             form_link = f"{base_url}?client_form={saved_proposal_id}&session={token}"
             st.session_state.generated_client_form_link = form_link
             st.rerun()

@@ -67,50 +67,12 @@ def connect_to_sheets():
     Connect to Google Sheets using service account credentials.
     Cached so we don't reconnect on every rerun.
 
-    Returns:
-        gspread.Client: Authorized gspread client
-
-    Raises:
-        Exception: If connection fails or credentials are invalid
-
-    Note:
-        Supports two authentication methods:
-        1. Streamlit secrets (local): st.secrets["gcp_service_account"]
-        2. Environment variables (Render): GCP_* environment variables
+    Credentials come from pbp.settings (GCP_* environment variables on Render,
+    or .streamlit/secrets.toml locally); the connection itself is shared with
+    the web app through pbp.sheets.gateway.
     """
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
-    ]
-
-    # Try environment variables first (Render deployment)
-    if os.getenv("GCP_PROJECT_ID"):
-        # Fix private key newlines (environment variables lose \n characters)
-        private_key = os.getenv("GCP_PRIVATE_KEY", "").replace("\\n", "\n")
-
-        creds_info = {
-            "type": os.getenv("GCP_TYPE"),
-            "project_id": os.getenv("GCP_PROJECT_ID"),
-            "private_key_id": os.getenv("GCP_PRIVATE_KEY_ID"),
-            "private_key": private_key,
-            "client_email": os.getenv("GCP_CLIENT_EMAIL"),
-            "client_id": os.getenv("GCP_CLIENT_ID"),
-            "auth_uri": os.getenv("GCP_AUTH_URI"),
-            "token_uri": os.getenv("GCP_TOKEN_URI"),
-            "auth_provider_x509_cert_url": os.getenv("GCP_AUTH_PROVIDER_X509_CERT_URL"),
-            "client_x509_cert_url": os.getenv("GCP_CLIENT_X509_CERT_URL"),
-            "universe_domain": os.getenv("GCP_UNIVERSE_DOMAIN")
-        }
-        creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-    # Fall back to Streamlit secrets (local development)
-    else:
-        try:
-            creds_info = st.secrets["gcp_service_account"]
-            creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-        except Exception as e:
-            raise Exception(f"No Google Cloud credentials found. Please configure either GCP_* environment variables or st.secrets['gcp_service_account']. Error: {e}")
-
-    return gspread.authorize(creds)
+    from pbp.sheets import gateway
+    return gateway.connect()
 
 
 @st.cache_data(ttl=300, show_spinner="Loading pricing data from Google Sheets...")  # Cache data for 5 minutes

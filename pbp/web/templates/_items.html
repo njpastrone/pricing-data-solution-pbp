@@ -1,0 +1,25 @@
+<div id="items">
+  {% for row in item_rows %}
+  <fieldset class="item">
+    <legend>Item {{ loop.index }}</legend>
+    <label>Product
+      <select name="product_{{ loop.index0 }}">
+        <option value="">-- Select a product --</option>
+        {% for product in proposal.products %}
+        <option value="{{ product.name }}" {% if product.name == row.name %}selected{% endif %}>{{ product.name }}{% if product.partner %} ({{ product.partner }}){% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="grid">
+      <label>Quantity *<input type="number" min="1" name="quantity_{{ loop.index0 }}" value="{{ row.quantity }}"></label>
+      <label>Customization Notes<input name="notes_{{ loop.index0 }}" value="{{ row.customization_notes }}" placeholder="Optional: describe any customization needed"></label>
+    </div>
+  </fieldset>
+  {% endfor %}
+  {% if item_rows|length < max_items %}
+  <button type="submit" name="action" value="add_item" class="secondary"
+          hx-post="/form/{{ proposal_id }}/items?session={{ session_id }}" hx-include="#order-form" hx-target="#items" hx-swap="outerHTML">
+    + Add Another Item
+  </button>
+  {% endif %}
+</div>

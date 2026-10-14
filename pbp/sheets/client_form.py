@@ -18,9 +18,9 @@ import threading
 import base64
 from datetime import datetime
 import gspread
-import streamlit as st
-from src.data_loader import connect_to_sheets, DATASET_CONFIGS
-from pbp.core.forms_config import GOOGLE_FORM_CONFIG, RESPONSE_COLUMNS, MAX_PRODUCT_LINES, find_response_column
+from pbp import settings
+from pbp.sheets import gateway
+from pbp.core.forms_config import RESPONSE_COLUMNS, MAX_PRODUCT_LINES, find_response_column
 
 
 # Sheet name for client form drafts
@@ -31,11 +31,6 @@ CHUNK_SIZE = 40000
 
 # Google Sheets refuses any single cell longer than this
 SHEET_CELL_LIMIT = 50000
-
-# Google Sheets allows about 60 read requests per minute for our service account,
-# shared by the live app and any local copy. When Google answers "quota exceeded"
-# (HTTP 429) we wait and try again instead of failing.
-QUOTA_RETRY_WAITS = [2, 4, 8, 16]  # seconds between attempts
 
 # Saving the client's backup copy is retried for about 1-2 minutes before we give up.
 BACKUP_RETRY_WAITS = [5, 10, 20, 30]  # seconds between attempts
@@ -51,34 +46,19 @@ STATUS_DRAFT = 'draft'
 STATUS_PENDING = 'pending_sync'   # order received, not yet in Form Responses
 STATUS_SUBMITTED = 'submitted'    # order is in Form Responses
 
-# ponytail: one lock per app process; fine while the app runs as a single Render instance
+# Columns of the client_form_drafts (backup) tab
+DRAFT_HEADERS = [
+    'Proposal_ID', 'Session_ID', 'Draft_Data_JSON',
+    'File_Data_Base64', 'File_Name', 'Created_Date',
+    'Updated_Date', 'Status'
+]
+
+# ponytail: one lock per app process; fine while the app runs as a single instance
 _sync_lock = threading.Lock()
 
-
-def _retry_on_quota(action):
-    """
-    Run action(); if Google says "quota exceeded" (HTTP 429), wait and retry.
-
-    A 429 means Google rejected the request without applying it, so retrying
-    a write (like append_row) cannot create a duplicate row.
-    """
-    for wait in QUOTA_RETRY_WAITS:
-        try:
-            return action()
-        except gspread.exceptions.APIError as e:
-            if getattr(e, 'code', None) != 429:
-                raise
-            print(f"Google Sheets quota hit, retrying in {wait}s")
-            time.sleep(wait)
-    return action()  # Last try: any error now goes to the caller
-
-
-# ponytail: handles are cached until the app restarts; a renamed tab needs a restart
-@st.cache_resource(show_spinner=False)
-def _open_worksheet(spreadsheet_id, sheet_name):
-    """Open a worksheet once and reuse it (each open costs 2 read requests)."""
-    spreadsheet = _retry_on_quota(lambda: connect_to_sheets().open_by_key(spreadsheet_id))
-    return _retry_on_quota(lambda: spreadsheet.worksheet(sheet_name))
+# Quota back-off and cached worksheet handles live in pbp.sheets.gateway
+_retry_on_quota = gateway.retry_on_quota
+_open_worksheet = gateway.open_worksheet
 
 
 def generate_session_token():
@@ -106,7 +86,7 @@ def load_proposal_for_client(proposal_id):
         Returns None if proposal not found or error.
     """
     try:
-        sheet = _open_worksheet(DATASET_CONFIGS['saved_proposals']['spreadsheet_id'], 'Sheet1')
+        sheet = _open_worksheet(settings.SAVED_PROPOSALS_SHEET_ID, 'Sheet1')
         all_values = _retry_on_quota(sheet.get_all_values)
 
         # Find row with matching proposal_id
@@ -152,23 +132,9 @@ def _deserialize_form_data(json_string):
         return {}
 
 
-@st.cache_resource(show_spinner=False)
 def _open_drafts_sheet():
     """Open (or create) the client_form_drafts sheet once and reuse it. Raises on error."""
-    spreadsheet = _retry_on_quota(
-        lambda: connect_to_sheets().open_by_key(DATASET_CONFIGS['saved_orders']['spreadsheet_id'])
-    )
-    try:
-        return _retry_on_quota(lambda: spreadsheet.worksheet(DRAFTS_SHEET_NAME))
-    except gspread.exceptions.WorksheetNotFound:
-        sheet = spreadsheet.add_worksheet(title=DRAFTS_SHEET_NAME, rows=100, cols=8)
-        headers = [
-            'Proposal_ID', 'Session_ID', 'Draft_Data_JSON',
-            'File_Data_Base64', 'File_Name', 'Created_Date',
-            'Updated_Date', 'Status'
-        ]
-        sheet.update('A1:H1', [headers])
-        return sheet
+    return gateway.open_worksheet(settings.SAVED_ORDERS_SHEET_ID, DRAFTS_SHEET_NAME, create_with_headers=DRAFT_HEADERS)
 
 
 def _get_drafts_sheet():
@@ -492,7 +458,7 @@ def _sync_backup_row(drafts, backup):
             form_data = _deserialize_form_data(backup['json'])
             file_name = backup['file_name'] or None
 
-            worksheet = _open_worksheet(GOOGLE_FORM_CONFIG['response_sheet_id'], GOOGLE_FORM_CONFIG['response_sheet_name'])
+            worksheet = _open_worksheet(settings.FORM_RESPONSES_SHEET_ID, settings.FORM_RESPONSES_SHEET_NAME)
             # Read fresh every time: headers being out of date is what lost items before
             all_rows = _retry_on_quota(worksheet.get_all_values)
             if not all_rows or not all_rows[0]:
@@ -519,7 +485,7 @@ def _sync_backup_row(drafts, backup):
 def retry_pending_syncs():
     """
     Retry every received order not yet copied into Form Responses.
-    Called by the main app when it starts.
+    Called by the Streamlit app when it starts and by the web app's sync loop.
 
     Returns:
         list of dict: orders still stuck after STUCK_AFTER_MINUTES

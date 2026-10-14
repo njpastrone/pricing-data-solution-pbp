@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Peace by Piece International Order Form</h1>
+<p class="muted">Proposal: {{ proposal.proposal_name }}{% if draft and draft.updated_date %} &middot; Draft saved {{ draft.updated_date }}{% endif %}</p>
+
+{% if message %}<div class="notice success">{{ message }}</div>{% endif %}
+{% for error in errors %}<div class="notice error">{{ error }}</div>{% endfor %}
+
+<form id="order-form" method="post" action="/form/{{ proposal_id }}?session={{ session_id }}" enctype="multipart/form-data">
+
+  <section>
+    <h2>1. Your Information</h2>
+    <p class="muted">Please verify that all this information is correct and up to date and make any necessary changes.</p>
+    {% set client = data.get('client_info', {}) %}
+    <div class="grid">
+      <label>Type
+        <select name="client_type">
+          <option {% if client.get('client_type', 'New') == 'New' %}selected{% endif %}>New</option>
+          <option {% if client.get('client_type') == 'Existing' %}selected{% endif %}>Existing</option>
+        </select>
+      </label>
+      <label>Contact Name *<input name="contact_name" value="{{ client.get('contact_name', '') }}"></label>
+      <label>Company Name *<input name="company_name" value="{{ client.get('company_name', '') }}"></label>
+      <label>Contact Email *<input type="email" name="contact_email" value="{{ client.get('contact_email', '') }}"></label>
+      <label>Contact Phone<input name="contact_phone" value="{{ client.get('contact_phone', '') }}"></label>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. Products &amp; Quantities</h2>
+    <p class="muted">Select the products you would like to order and enter the quantity for each.</p>
+    {% include "_items.html" %}
+  </section>
+
+  <section>
+    <h2>3. Shipping &amp; Delivery</h2>
+    {% set shipping = data.get('shipping_info', {}) %}
+    {% set dropship = shipping.get('drop_shipping', 'No') == 'Yes' %}
+    <label>Will this order be dropshipped or shipped to an individual address? *
+      <select name="drop_shipping" id="drop_shipping">
+        <option value="No" {% if not dropship %}selected{% endif %}>Shipped to one address</option>
+        <option value="Yes" {% if dropship %}selected{% endif %}>Yes, dropshipped to multiple addresses</option>
+      </select>
+    </label>
+    <div id="dropship-details" {% if not dropship %}hidden{% endif %}>
+      <p class="muted">Please upload a spreadsheet of addresses and indicate what you want dropshipped to each location.</p>
+      <label>Upload Dropshipping Address File (.xlsx, .csv)
+        <input type="file" name="dropship_file" accept=".xlsx,.csv">
+      </label>
+      {% if draft and draft.file_name %}<p class="muted">Previously uploaded: {{ draft.file_name }}</p>{% endif %}
+      <label>Additional Dropshipping Instructions
+        <textarea name="drop_shipping_instructions" rows="3" placeholder="Any special instructions for dropshipping">{{ shipping.get('drop_shipping_instructions', '') }}</textarea>
+      </label>
+    </div>
+    <label>Shipping Address *<textarea name="shipping_address" rows="3">{{ shipping.get('shipping_address', '') }}</textarea></label>
+    <label>Billing Address (if different from shipping)<textarea name="billing_address" rows="3">{{ shipping.get('billing_address', '') }}</textarea></label>
+    <label>In-Hands Date (when do you need this order?) *
+      <input type="date" name="in_hands_date" value="{{ shipping.get('in_hands_date', '') }}">
+    </label>
+  </section>
+
+  <section>
+    <h2>4. Payment &amp; Preferences</h2>
+    {% set payment = data.get('payment_info', {}) %}
+    <label>Would you like Impact Cards included?
+      <select name="impact_cards">
+        <option {% if payment.get('impact_cards', 'Yes')|lower != 'no' %}selected{% endif %}>Yes</option>
+        <option {% if payment.get('impact_cards', 'Yes')|lower == 'no' %}selected{% endif %}>No</option>
+      </select>
+    </label>
+    <label>Payment Preference *
+      <select name="payment_preference">
+        {% for option in payment_preferences %}<option {% if payment.get('payment_preference', 'Net 30') == option %}selected{% endif %}>{{ option }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Payment Method *
+      <select name="payment_method">
+        {% for option in payment_methods %}<option {% if payment.get('payment_method', 'ACH') == option %}selected{% endif %}>{{ option }}</option>{% endfor %}
+      </select>
+    </label>
+  </section>
+
+  <section>
+    <h2>5. Additional Notes</h2>
+    <label>Special Requests, Notes, or Questions<textarea name="notes" rows="3">{{ data.get('notes', '') }}</textarea></label>
+  </section>
+
+  <div class="actions">
+    <button type="submit" name="action" value="save">Save Progress</button>
+    <button type="submit" name="action" value="submit" class="primary">Submit Order</button>
+  </div>
+</form>
+
+<script>
+  // Show the drop-shipping upload only when the client chooses dropshipping (the server ignores it otherwise)
+  document.getElementById('drop_shipping').addEventListener('change', function () {
+    document.getElementById('dropship-details').hidden = this.value !== 'Yes';
+  });
+</script>
+{% endblock %}
