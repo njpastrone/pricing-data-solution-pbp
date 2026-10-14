@@ -69,6 +69,10 @@ async def lifespan(app):
         task.cancel()
 
 
+if settings.DEMO:
+    from pbp import demo
+    demo.install()
+
 app = FastAPI(title="Peace by Piece Order Form", lifespan=lifespan, docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 app.include_router(staff.router)

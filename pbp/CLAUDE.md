@@ -7,6 +7,7 @@ FastAPI app can both import them. Phase 0 only moved files and changed imports.
 
 ## Layout
 
+- `pbp/demo.py`: `PBP_DEMO=1` swaps the Sheets/Drive gateway for in-memory sample data (partners, products, proposals, orders, a client form submission); nothing reaches Google.
 - `pbp/settings.py`: environment-driven configuration (spreadsheet IDs with env overrides, `CLIENT_FORM_BASE_URL`, credentials lookup).
 - `pbp/sheets/gateway.py`: the one Google Sheets connection, cached worksheet handles, quota back-off. Both apps use it.
 - `pbp/sheets/client_form.py`: client order form logic (drafts, submit, backup-then-sync). Framework-free since phase 1.
