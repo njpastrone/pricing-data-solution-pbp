@@ -5,6 +5,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased] - 2026-10-09
 
+### Fixed (2026-10-14)
+- **Product Photo Attached 5 Times:** Uploading one photo in Tab 3 "Product Photos" attached it repeatedly (up to the 5-photo cap). Streamlit re-sends the file uploader's value on every rerun and each rerun appended it again. New `add_product_photos()` (`src/helpers.py`) skips photos already attached (same name and size). Test: `tests/test_product_photos.py`
+- **Client Form No Longer Asks for Payment Terms:** The "Payment Preference" (Net 30 / Net 60 / Due on Receipt) dropdown was removed from the client order form; payment terms are set by PBP staff in Tab 3/Tab 4. "Payment Method" (ACH, Credit Card, Check, Other) stays. The Form Responses column is left blank and Tab 3 import falls back to Net 30 as before
+
 ### Fixed
 - **Client Order Form Lost Gift Items:** Submitting the in-app client order form saved client and shipping info but no items. The live response sheet's item columns are named "Gift Item 1 - Product Name" / "Gift 1 Quantity" / "Gift 1 Customization Notes" (not "Product Line 1 - ..."), and the drop-ship and impact-card questions were reworded too; values with no exactly matching column were silently skipped. New `find_response_column()` (`src/forms_config.py`) matches headers tolerantly (case, spaces, `*`, dashes, and item columns by line number) and is used by both submit and the Tab 3 import, so existing Google Form responses now import their items as well
 - **No More Silent Submit Failures:** `submit_form()` now saves a full backup copy of the form to the `client_form_drafts` tab (saved_orders spreadsheet) before writing anything (if the drop-ship file is too big for a sheet cell, the copy is saved without it; a form-only save never wipes a previously stored file), and flags any filled-in field that has no column in the response sheet (now a staff alert, not a client error; see Changed below). The client form is capped at 10 items (the sheet's item columns)
