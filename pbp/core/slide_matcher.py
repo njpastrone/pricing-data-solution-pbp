@@ -296,7 +296,7 @@ class SlideMatcher:
         """
         # Step 0: Check confirmed matches from Google Sheets FIRST (highest priority)
         try:
-            from src.match_memory import get_confirmed_match
+            from pbp.sheets.match_memory import get_confirmed_match
             confirmed_match = get_confirmed_match(gs_product_name, dataset, template_name=template_name)
 
             if confirmed_match:

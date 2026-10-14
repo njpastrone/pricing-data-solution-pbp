@@ -161,8 +161,10 @@ pricing-data-solution-pbp/
 
 The app is being rebuilt as a FastAPI + HTMX service in `pbp/web/`. It reads and writes the
 same Google Sheets as the Streamlit app, so work moves freely between the two. Done so far:
-the client order form (phase 1) and the staff order editor plus invoice/PO accounting
-screens, i.e. Tabs 3 and 4 (phase 2). Staff log in at `/login` with the same `APP_PASSWORD`.
+the client order form (phase 1), the staff order editor plus invoice/PO accounting screens,
+i.e. Tabs 3 and 4 (phase 2), and the proposal generator with PowerPoint match review and
+generation plus the client form link, i.e. Tabs 1 and 2 (phase 3). Staff log in at `/login`
+with the same `APP_PASSWORD`.
 
 Run it locally (needs Google credentials: `.streamlit/secrets.toml`, or the `GCP_*`
 variables, or `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json`):
@@ -170,7 +172,7 @@ variables, or `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json`):
 ```bash
 pip install -r requirements.txt
 uvicorn pbp.web.app:app --reload --port 8000
-# staff:  http://localhost:8000/orders   (log in with APP_PASSWORD)
+# staff:  http://localhost:8000/proposals/current and /orders   (log in with APP_PASSWORD)
 # client form link from Tab 2 with the host swapped, e.g.
 #   http://localhost:8000/?client_form=PROP_20260524_143022&session=abc123def456
 # health: http://localhost:8000/internal/health
@@ -178,7 +180,8 @@ uvicorn pbp.web.app:app --reload --port 8000
 
 Set `APP_PASSWORD` for the staff login (without it the legacy local fallback applies). The
 working order lives in server memory per browser session until you save it to the
-saved_orders sheet, exactly like the Streamlit app.
+saved_orders sheet, exactly like the Streamlit app. PowerPoint templates are downloaded from
+Drive once per process into `PBP_TEMPLATE_CACHE_DIR` (default `/tmp/pbp-templates`).
 
 To make Tab 2 generate links that point at the new app, run the Streamlit app with
 `CLIENT_FORM_BASE_URL=http://localhost:8000/` (on Render this is the cutover switch).

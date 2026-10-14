@@ -1,0 +1,103 @@
+<div id="review">
+  <h2>Step 1. Review product matches</h2>
+  <p><strong>Match summary:</strong> {{ ready }} ready to use, {{ review }} need your confirmation ({{ rows|length }} products).</p>
+  <table class="data">
+    <tr><th>Product</th><th>Matched slide</th><th>Source</th><th class="num">Conf%</th><th>Status</th><th>Actions</th></tr>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.gs_name }}</td>
+      <td>{% if r.status == 'skipped' %}(Skipped){% elif r.slide %}{{ r.slide }}{% else %}(No match){% endif %}</td>
+      <td>{{ r.source }}</td>
+      <td class="num">{% if r.kind != 'exact' and r.confidence %}{{ r.confidence }}%{% else %}-{% endif %}</td>
+      <td>{{ 'Review' if r.status == 'review' else 'Done' }}</td>
+      <td>
+        <form method="post" action="/proposals/current/pptx/decide" hx-post="/proposals/current/pptx/decide" hx-target="#review" hx-swap="outerHTML" class="inline">
+          <input type="hidden" name="gs_name" value="{{ r.gs_name }}">
+          {% if r.status == 'review' and r.kind == 'fuzzy' %}<button class="small primary" name="action" value="confirm">Confirm</button>{% endif %}
+          <button class="small" name="action" value="change">Change</button>
+        </form>
+      </td>
+    </tr>
+    {% if r.changing %}
+    <tr><td colspan="6">
+      <div class="card">
+        <strong>{{ 'Alternatives for' if r.alternatives else 'Search a slide for' }} {{ r.gs_name }}</strong>
+        {% for alt_name, score in r.alternatives %}
+        <form method="post" action="/proposals/current/pptx/decide" hx-post="/proposals/current/pptx/decide" hx-target="#review" hx-swap="outerHTML" class="row">
+          <input type="hidden" name="gs_name" value="{{ r.gs_name }}"><input type="hidden" name="slide" value="{{ alt_name }}">
+          <div>{{ loop.index }}. {{ alt_name }} ({{ score }}% confidence)</div><button class="small" name="action" value="use">Use</button>
+        </form>
+        {% endfor %}
+        <form method="post" action="/proposals/current/pptx/decide" hx-post="/proposals/current/pptx/decide" hx-target="#review" hx-swap="outerHTML" class="row">
+          <input type="hidden" name="gs_name" value="{{ r.gs_name }}">
+          <label>Search slide names<input name="query" value="{{ search.get(r.gs_name, '') }}" placeholder="e.g., 'honey', 'short sleeve tee'"></label>
+          <button class="small" name="action" value="search">Search</button>
+        </form>
+        {% if search.get(r.gs_name) %}
+        {% for slide_name in names if search.get(r.gs_name)|lower in slide_name|lower %}{% if loop.index <= 15 %}
+        <form method="post" action="/proposals/current/pptx/decide" hx-post="/proposals/current/pptx/decide" hx-target="#review" hx-swap="outerHTML" class="row">
+          <input type="hidden" name="gs_name" value="{{ r.gs_name }}"><input type="hidden" name="slide" value="{{ slide_name }}">
+          <div>{{ slide_name }}</div><button class="small" name="action" value="use">Use</button>
+        </form>
+        {% endif %}{% else %}<p class="hint">No slides found. Try different keywords.</p>{% endfor %}
+        {% endif %}
+        <form method="post" action="/proposals/current/pptx/decide" hx-post="/proposals/current/pptx/decide" hx-target="#review" hx-swap="outerHTML" class="row">
+          <input type="hidden" name="gs_name" value="{{ r.gs_name }}">
+          <button class="small" name="action" value="skip">Skip this product</button>
+          <button class="small" name="action" value="cancel">Cancel</button>
+        </form>
+      </div>
+    </td></tr>
+    {% endif %}
+    {% endfor %}
+  </table>
+
+  {% if pending %}
+  <div class="notice error">Please review {{ pending|length }} pending match(es) before generating the PowerPoint: {{ pending|join(', ') }}</div>
+  {% elif not confirmed %}
+  <div class="notice error">No usable matches. Confirm or search a slide for at least one product.</div>
+  {% else %}
+  <div class="notice success">Ready to generate PowerPoint with {{ confirmed|length }} product(s).</div>
+
+  <form method="post" action="/proposals/current/pptx/options" hx-post="/proposals/current/pptx/options" hx-trigger="change" hx-target="#review" hx-swap="outerHTML">
+    {% if groups %}
+    <h2>Multi-variant products detected</h2>
+    <p class="hint">Multiple products matched to the same slide; these are typically size or flavor variants.</p>
+    {% for g in groups %}
+    <div class="card">
+      <h3>{{ g.slide }} ({{ g.products|length }} variants) - {{ 'Consistent' if g.consistent else 'Variable' }} pricing</h3>
+      <ul class="hint">{% for p in g.products %}<li>{{ p }}{% if loop.index0 < g.pricing|length %} - MOQ {{ g.pricing[loop.index0].moq }}, {{ g.pricing[loop.index0].client_price|money }}{% endif %}</li>{% endfor %}</ul>
+      {% if g.partners|length > 1 %}<p class="warn">These products are from different partners: {{ g.partners|join(', ') }}. Creating separate slides is recommended.</p>{% endif %}
+      {% set current = variant_prefs.get(g.slide, g.default) %}
+      {% for option in g.options %}<label class="check"><input type="radio" name="variant__{{ g.slide }}" value="{{ option }}" {% if current == option %}checked{% endif %}> {{ option }}</label>{% endfor %}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <h2>Step 2. Impact slides</h2>
+    {% if partners %}
+    <p class="hint">{% for partner in partners %}{{ partner }}: {{ impact.get(partner, {}).get('slide_title') or 'no impact slide' }}{% if not loop.last %} | {% endif %}{% endfor %}</p>
+    <details><summary>Customize impact slides (optional)</summary>
+      {% for partner in partners %}
+      <label>{{ partner }}
+        <select name="impact__{{ partner }}">
+          <option value="None - Skip impact slide" {% if not impact.get(partner, {}).get('slide_title') %}selected{% endif %}>None - Skip impact slide</option>
+          {% for s in all_impacts %}<option {% if impact.get(partner, {}).get('slide_title') == s.slide_title %}selected{% endif %}>{{ s.slide_title }}</option>{% endfor %}
+        </select>
+      </label>
+      {% endfor %}
+    </details>
+    {% else %}<p class="muted">No products selected; add products to see impact slides.</p>{% endif %}
+    <noscript><button class="small">Apply</button></noscript>
+  </form>
+
+  <h2>Step 3. Generate</h2>
+  <form method="post" action="/proposals/current/pptx/generate" hx-post="/proposals/current/pptx/generate" hx-target="#pptx-job" hx-swap="outerHTML" class="row">
+    <label>Client name (for the file name)<input name="client_name" value="{{ meta.loaded_proposal_name or '' }}" placeholder="Client"></label>
+    <button class="small primary">Generate PowerPoint presentation</button>
+  </form>
+  <form method="post" action="/proposals/current/pptx/reset" class="inline"><button class="small">Reset confirmations</button></form>
+  {% endif %}
+
+  {% with job = job, summary = summary %}{% include "_pptx_job.html" %}{% endwith %}
+</div>

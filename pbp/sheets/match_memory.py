@@ -18,11 +18,17 @@ Storage Structure (saved_matches spreadsheet):
 - Template_Name: Name of the template file (e.g., "February All Slides.pptx")
 """
 
-import json
+import threading
+import time
 from datetime import datetime
-import streamlit as st
-from src.data_loader import connect_to_sheets, DATASET_CONFIGS
+
+from pbp import settings
 from pbp.core.match_manager import normalize_for_storage
+from pbp.sheets import gateway
+
+CACHE_SECONDS = 60
+_cache = {"loaded_at": 0.0, "rows": []}
+_lock = threading.Lock()
 
 
 def _get_matches_sheet():
@@ -31,8 +37,7 @@ def _get_matches_sheet():
     Not cached - use sparingly.
     """
     try:
-        client = connect_to_sheets()
-        spreadsheet = client.open_by_key(DATASET_CONFIGS['saved_matches']['spreadsheet_id'])
+        spreadsheet = gateway.connect().open_by_key(settings.SAVED_MATCHES_SHEET_ID)
 
         # Get Sheet1 (should already exist)
         try:
@@ -46,39 +51,39 @@ def _get_matches_sheet():
 
         return sheet
     except Exception as e:
-        st.error(f"Error accessing matches sheet: {str(e)}")
+        print(f"Error accessing matches sheet: {str(e)}")
         return None
 
 
-@st.cache_data(ttl=60, show_spinner=False)  # Cache raw data for 1 minute
 def _load_all_matches_data():
     """
-    Internal helper to load all match data from Google Sheets.
-    Cached to minimize API calls.
-
-    Returns:
-        list: All rows from the sheet (including header)
+    All rows of the matches sheet (header included), cached for CACHE_SECONDS
+    per process. Call _load_all_matches_data.clear() after a write.
     """
+    with _lock:
+        if _cache["rows"] and time.time() - _cache["loaded_at"] < CACHE_SECONDS:
+            return _cache["rows"]
     try:
-        # Direct access inside cache to ensure caching works properly
-        client = connect_to_sheets()
-        spreadsheet = client.open_by_key(DATASET_CONFIGS['saved_matches']['spreadsheet_id'])
-
+        spreadsheet = gateway.connect().open_by_key(settings.SAVED_MATCHES_SHEET_ID)
         try:
             sheet = spreadsheet.worksheet('Sheet1')
         except Exception:
-            # Return empty if sheet doesn't exist (will be created on first save)
-            return []
-
-        all_values = sheet.get_all_values()
-        return all_values
+            return []  # created on first save
+        rows = gateway.retry_on_quota(sheet.get_all_values)
     except Exception as e:
-        error_msg = str(e)
-        if "429" in error_msg or "Quota exceeded" in error_msg:
-            print("Google Sheets rate limit reached. Data will be cached. Wait 60 seconds and refresh.")
-        else:
-            print(f"Error loading matches data: {error_msg}")
+        print(f"Error loading matches data: {e}")
         return []
+    with _lock:
+        _cache.update(loaded_at=time.time(), rows=rows)
+    return rows
+
+
+def _clear_matches_cache():
+    with _lock:
+        _cache.update(loaded_at=0.0, rows=[])
+
+
+_load_all_matches_data.clear = _clear_matches_cache
 
 
 def generate_match_id():
@@ -283,7 +288,7 @@ def load_all_confirmed_matches(dataset=None, template_name=None):
         return matches
 
     except Exception as e:
-        st.error(f"Error loading confirmed matches: {str(e)}")
+        print(f"Error loading confirmed matches: {str(e)}")
         return []
 
 

@@ -1,0 +1,20 @@
+<div id="pptx-job" {% if job and job.status == 'running' %}hx-get="/proposals/current/pptx/job" hx-trigger="every 1s" hx-swap="outerHTML"{% endif %}>
+  {% if job %}
+    {% if job.status == 'running' %}
+    <div class="notice">Generating: {{ job.step }}...</div>
+    {% elif job.status == 'failed' %}
+    <div class="notice error">PowerPoint generation failed: {{ job.error }}. Check that all products have valid pricing data and try again.</div>
+    {% else %}
+    <div class="notice success">PowerPoint generated in {{ '%.1f'|format(job.seconds) }} seconds: {{ job.product_count }} product(s), {{ job.filename }}</div>
+    <p class="hint"><strong>Final step:</strong> in PowerPoint, move the 8 intro slides (grouped together after the products) to the beginning. PowerPoint may show a "repair presentation" warning when opening the file; click Repair.</p>
+    {% if summary %}
+    <p class="hint">Table updates: {{ summary.auto_updated }} auto-updated, {{ summary.unchanged }} unchanged{% if summary.needs_review %}, <strong>{{ summary.needs_review }} need review</strong>{% endif %}.</p>
+    <details {% if summary.needs_review %}open{% endif %}><summary>Table processing details</summary>
+      {% for r in job.reports %}<p><strong>[{{ {'auto_updated': 'Updated', 'needs_review': 'Review', 'unchanged': 'OK'}.get(r.status, r.status) }}] {{ r.slide_name }}</strong>
+        {% if r.status != 'unchanged' %}{% for a in r.actions %}<br><span class="hint">Cell {{ a.cell }}: {% if a.action == 'auto_updated' %}{{ a.old }} to {{ a.new }}{% else %}{{ a.reason }}{% endif %}</span>{% endfor %}{% endif %}</p>{% endfor %}
+    </details>
+    {% endif %}
+    <a href="/proposals/current/pptx/download"><button type="button" class="primary small">Download PowerPoint presentation</button></a>
+    {% endif %}
+  {% endif %}
+</div>
