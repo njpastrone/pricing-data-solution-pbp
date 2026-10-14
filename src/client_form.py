@@ -23,7 +23,7 @@ from email.message import EmailMessage
 import gspread
 import streamlit as st
 from src.data_loader import connect_to_sheets, DATASET_CONFIGS
-from src.forms_config import GOOGLE_FORM_CONFIG, RESPONSE_COLUMNS, MAX_PRODUCT_LINES, find_response_column
+from pbp.core.forms_config import GOOGLE_FORM_CONFIG, RESPONSE_COLUMNS, MAX_PRODUCT_LINES, find_response_column
 
 
 # Sheet name for client form drafts

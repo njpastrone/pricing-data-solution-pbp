@@ -11,8 +11,8 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from src.data_loader import load_pricing_data
-from src.pricing_engine import calculate_pbp_msrp
-from src.helpers import get_column_value, get_pricing_logic
+from pbp.core.pricing_engine import calculate_pbp_msrp
+from pbp.core.helpers import get_column_value, get_pricing_logic
 
 print("=" * 80)
 print("PHASE 5 TEST - REAL DATASET (44-Column Schema)")

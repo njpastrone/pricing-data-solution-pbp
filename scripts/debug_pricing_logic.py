@@ -10,7 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.data_loader import load_pricing_data
-from src.helpers import get_column_value, get_pricing_logic, get_other_addon_percent, get_shipping_addon_percent
+from pbp.core.helpers import get_column_value, get_pricing_logic, get_other_addon_percent, get_shipping_addon_percent
 
 st.title("Debug: Pricing Logic Column Check")
 

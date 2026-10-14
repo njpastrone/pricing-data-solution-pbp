@@ -108,7 +108,7 @@ else:
     print(f"\n   ❌ Product name is EMPTY - this is the problem!")
 
 # Show what the URL parameter would look like
-from src.forms_config import ALL_ENTRY_IDS
+from pbp.core.forms_config import ALL_ENTRY_IDS
 import urllib.parse
 
 print("\n7. Testing URL generation (first product only)...")

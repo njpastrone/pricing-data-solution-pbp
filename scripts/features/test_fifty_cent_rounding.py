@@ -8,7 +8,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.helpers import round_to_nearest_fifty_cents, apply_marketing_rounding
+from pbp.core.helpers import round_to_nearest_fifty_cents, apply_marketing_rounding
 
 def test_fifty_cent_rounding():
     """Test the round_to_nearest_fifty_cents function with various scenarios."""

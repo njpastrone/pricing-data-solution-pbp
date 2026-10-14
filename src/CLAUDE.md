@@ -138,7 +138,7 @@ tier = determine_tier_number(50, tier_data)  # Returns None if invalid
 ### Dataset Handling
 Two datasets supported:
 1. **Demo**: `master_pricing_template_10_14` (19 products, 4 partners)
-2. **Real**: `master_pricing` (133 products, 4 partners)
+2. **Real**: `master_pricing` (302 products, 33 partners as of 2026-10-13)
 
 Functions check `st.session_state.selected_dataset` for context.
 
@@ -370,7 +370,7 @@ rapidfuzz==3.10.1
 
 ### Memory Usage
 - PowerPoint template: 43MB (downloads once per session)
-- Pandas DataFrames: ~1-2MB for real dataset (133 products)
+- Pandas DataFrames: ~1-2MB for real dataset (302 products)
 - Total app memory: ~500MB-800MB (well under 2GB limit)
 
 ### Page Load Time
@@ -426,7 +426,7 @@ HTML form import uses `st.file_uploader()`:
 
 ## Links & Resources
 
-- **Production App**: https://pricing-data-solution-pbp.onrender.com
+- **Production App**: https://pbp-order-management-system.onrender.com
 - **Main README**: [/README.md](../README.md)
 - **Documentation Index**: [/docs/README.md](../docs/README.md)
 - **Active Development**: [/ACTIVE_DEVELOPMENT_TODO.md](../ACTIVE_DEVELOPMENT_TODO.md)

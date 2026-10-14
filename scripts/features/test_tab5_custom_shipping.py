@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import pandas as pd
 from src.data_loader import load_pricing_data
-from src.helpers import clean_price, get_column_value, get_shipping_costs
-from src.pricing_engine import get_unit_price_new_system
+from pbp.core.helpers import clean_price, get_column_value, get_shipping_costs
+from pbp.core.pricing_engine import get_unit_price_new_system
 
 print("Testing Tab 5 Customization & Shipping Data Import")
 print("=" * 80)

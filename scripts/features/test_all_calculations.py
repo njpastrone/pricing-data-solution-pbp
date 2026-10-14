@@ -13,12 +13,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Import the pricing engine and helpers
-from src.pricing_engine import (
+from pbp.core.pricing_engine import (
     get_unit_price_new_system,
     calculate_product_quote,
     calculate_customization_costs
 )
-from src.helpers import (
+from pbp.core.helpers import (
     apply_marketing_rounding,
     calculate_markup_from_price
 )

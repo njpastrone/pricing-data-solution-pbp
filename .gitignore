@@ -1,6 +1,7 @@
 # Secrets and credentials - NEVER commit these
 .streamlit/secrets.toml
 *.json
+!tests/golden/snapshots/**/*.json
 *credentials*.json
 
 # Python

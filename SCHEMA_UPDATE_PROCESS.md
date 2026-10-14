@@ -17,7 +17,7 @@ This document provides a systematic process for updating the data model/schema i
 
 2. **Understand Current Schema:**
    - Identify all column names in use (old and new canonical names)
-   - Review `get_column_value()` helper function in `src/helpers.py`
+   - Review `get_column_value()` helper function in `pbp/core/helpers.py`
    - Check backward compatibility mappings
    - Note any deprecated column names still supported
 
@@ -56,9 +56,9 @@ This document provides a systematic process for updating the data model/schema i
 3. **Key Files to Check (in priority order):**
    - `app.py` - Main application (all tabs)
    - `src/data_loader.py` - Data loading from Google Sheets
-   - `src/helpers.py` - Utility functions and column mappings
-   - `src/pricing_engine.py` - Pricing calculations
-   - `src/pptx_generator.py` - PowerPoint generation
+   - `pbp/core/helpers.py` - Utility functions and column mappings
+   - `pbp/core/pricing_engine.py` - Pricing calculations
+   - `pbp/core/pptx_generator.py` - PowerPoint generation
    - `schema_reference.md` - Schema documentation
    - `README.md` - Documentation
    - `CLAUDE.md` - Project context
@@ -108,7 +108,7 @@ This document provides a systematic process for updating the data model/schema i
 **Make changes systematically:**
 
 1. **Start with Core Helpers:**
-   - Update `get_column_value()` in `src/helpers.py` first
+   - Update `get_column_value()` in `pbp/core/helpers.py` first
    - Add new canonical name
    - Add old name to fallback list
    - Update docstrings
@@ -169,7 +169,7 @@ This document provides a systematic process for updating the data model/schema i
    - Updated documentation
 
    Files changed:
-   - src/helpers.py (column mapping)
+   - pbp/core/helpers.py (column mapping)
    - app.py (display logic)
    - schema_reference.md (documentation)
    ```
@@ -222,7 +222,7 @@ This document provides a systematic process for updating the data model/schema i
 
 ## Key Functions to Update
 
-### `get_column_value()` in src/helpers.py
+### `get_column_value()` in pbp/core/helpers.py
 **This is the central function for column name mapping.**
 
 **Update pattern:**
@@ -296,8 +296,8 @@ grep -r "Customization Setup Fee" --include="*.md" docs/
 
 **Results found in:**
 - app.py (lines 450, 890, 1200, 2100)
-- src/pricing_engine.py (lines 120, 340)
-- src/helpers.py (line 85)
+- pbp/core/pricing_engine.py (lines 120, 340)
+- pbp/core/helpers.py (line 85)
 - schema_reference.md (line 45)
 - README.md (line 210)
 
@@ -339,7 +339,7 @@ st.number_input("Client Price: Customization Setup Fee", ...)
 ## [7.5.0] - 2026-01-19
 ### Schema Changes
 - **Column Renamed:** "Customization Setup Fee" → "Client Price: Customization Setup Fee"
-  - Updated get_column_value() mapping in src/helpers.py
+  - Updated get_column_value() mapping in pbp/core/helpers.py
   - Updated UI labels in app.py (4 locations)
   - Updated pricing_engine.py calculations (2 locations)
   - Maintained backward compatibility for old spreadsheets
@@ -373,8 +373,8 @@ grep -rn -e "pattern1" -e "pattern2" --include="*.py" .
 # Core application files
 app.py
 src/data_loader.py
-src/helpers.py
-src/pricing_engine.py
+pbp/core/helpers.py
+pbp/core/pricing_engine.py
 
 # Documentation files
 schema_reference.md

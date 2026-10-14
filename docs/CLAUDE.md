@@ -388,7 +388,7 @@ Include version context for time-sensitive info:
 
 ### To understand pricing calculations:
 1. Read `planning/METHODOLOGY_LOGIC.md` (comprehensive)
-2. Check `src/pricing_engine.py` for implementation
+2. Check `pbp/core/pricing_engine.py` for implementation
 3. Run `scripts/features/test_bidirectional_pricing.py` for examples
 
 ### To understand data structure:
@@ -404,7 +404,7 @@ Include version context for time-sensitive info:
 ### To understand PowerPoint automation:
 1. Read `powerpoint/PHASE_2_COMPLETION_SUMMARY.md` (overview)
 2. Read `powerpoint/PHASE_1_COMPLETION_SUMMARY.md` (technical details)
-3. Check `src/slide_matcher.py` and `src/pptx_generator.py`
+3. Check `pbp/core/slide_matcher.py` and `pbp/core/pptx_generator.py`
 
 ### To plan new features:
 1. Check `meetings/STAKEHOLDER_MEETING_NOTES.md` for priorities
@@ -507,4 +507,4 @@ Include version context for time-sensitive info:
 - **Changelog:** [../CHANGELOG.md](../CHANGELOG.md)
 - **Source Code:** [../src/README.md](../src/README.md)
 - **Test Scripts:** [../scripts/README.md](../scripts/README.md)
-- **Production App:** https://pricing-data-solution-pbp.onrender.com
+- **Production App:** https://pbp-order-management-system.onrender.com

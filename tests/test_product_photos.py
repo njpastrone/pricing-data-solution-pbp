@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from types import SimpleNamespace
 
-from src.helpers import add_product_photos
+from pbp.core.helpers import add_product_photos
 
 
 def _photo(name, size=100):

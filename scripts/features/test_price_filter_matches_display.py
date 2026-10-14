@@ -17,12 +17,12 @@ import os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from src.pricing_engine import (
+from pbp.core.pricing_engine import (
     calculate_pbp_msrp,
     calculate_catalog_client_price,
     get_unit_price_new_system,
 )
-from src.helpers import calculate_moq, clean_price, get_column_value
+from pbp.core.helpers import calculate_moq, clean_price, get_column_value
 
 
 def old_filter_price(row):

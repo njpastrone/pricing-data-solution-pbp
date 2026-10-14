@@ -13,8 +13,8 @@ import gspread
 from src.client_form import (generate_session_token, load_proposal_for_client, _serialize_form_data, _deserialize_form_data,
                              submit_form, save_draft, sync_submission, retry_pending_syncs, DRAFTS_SHEET_NAME, BACKUP_RETRY_WAITS,
                              STATUS_PENDING, STATUS_SUBMITTED, _open_worksheet, _open_drafts_sheet)
-from src.forms_config import GOOGLE_FORM_CONFIG, find_response_column
-from src.forms_helper import parse_form_response, mark_response_imported, form_response_to_order
+from pbp.core.forms_config import GOOGLE_FORM_CONFIG, find_response_column
+from pbp.core.forms_helper import parse_form_response, mark_response_imported, form_response_to_order
 
 
 def test_generate_session_token_is_unique():

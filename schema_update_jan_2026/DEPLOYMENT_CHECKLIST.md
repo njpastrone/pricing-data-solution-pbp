@@ -73,7 +73,7 @@ git push origin v8.0.0
 ## Post-Deployment Validation
 
 ### Smoke Tests (Production)
-- [ ] App loads successfully at https://pricing-data-solution-pbp.onrender.com
+- [ ] App loads successfully at https://pbp-order-management-system.onrender.com
 - [ ] Dataset selector works (Demo and Real)
 - [ ] Tab navigation functional
 - [ ] Add product to proposal (Tab 1)

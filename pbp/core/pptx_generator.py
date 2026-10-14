@@ -14,7 +14,7 @@ import pandas as pd
 import math
 import re
 import gc  # For memory optimization
-from src.helpers import get_column_value, calculate_moq, round_to_nearest_fifty_cents
+from pbp.core.helpers import get_column_value, calculate_moq, round_to_nearest_fifty_cents
 
 
 def get_slide_title(slide):
@@ -1368,7 +1368,7 @@ def create_complete_proposal_presentation(
         ...     get_unit_price_func
         ... )
     """
-    from src.slide_matcher import extract_unique_partners
+    from pbp.core.slide_matcher import extract_unique_partners
 
     # Load product template (we'll modify this)
     prs_product = Presentation(product_template_path)
