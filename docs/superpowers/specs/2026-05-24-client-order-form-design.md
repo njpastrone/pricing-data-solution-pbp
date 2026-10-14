@@ -99,7 +99,7 @@ Pre-filled from what the exec entered in Tab 2. Client can edit if needed.
 ### Section 4: Payment & Preferences
 - Impact Cards? (Yes/No)
 - Impact Card Selection (conditional on Yes)
-- Payment Preference * (Net 30, Net 60, etc.)
+- (Payment Preference removed 2026-10-14: payment terms are set by PBP staff, not the client)
 - Payment Method * (Credit Card, ACH, Check)
 
 ### Section 5: Additional Notes
