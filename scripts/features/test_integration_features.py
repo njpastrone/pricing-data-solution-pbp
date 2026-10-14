@@ -14,8 +14,8 @@ from datetime import date, datetime
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Import required modules
-from src.proposal_manager import save_proposal, load_all_proposals
-from src.order_manager import save_order, load_all_orders
+from pbp.sheets.proposal_manager import save_proposal, load_all_proposals
+from pbp.sheets.order_manager import save_order, load_all_orders
 from src.data_loader import load_pricing_data
 
 

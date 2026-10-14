@@ -1,0 +1,110 @@
+{% set rounding = order.order_fifty_cent_rounding %}
+<div class="item-card" id="item-{{ index }}">
+  {% if item.is_custom %}
+  <div class="item-head">
+    <div><h3>{{ item.product_name }}</h3><p class="hint">Custom line item: {{ item.custom_description }}. Quantity {{ item.quantity }}, {{ item.total_per_unit|money }} per unit, total {{ item.product_total|money }}.</p></div>
+    <form method="post" action="/orders/current/items/{{ index }}/remove"><button class="small danger">Remove</button></form>
+  </div>
+  {% else %}
+  {% set cp = svc.client_price_per_unit(item, rounding) %}
+  <form method="post" action="/orders/current/items/{{ index }}" hx-post="/orders/current/items/{{ index }}" hx-trigger="change delay:200ms" hx-target="#item-{{ index }}" hx-swap="outerHTML">
+    <div class="item-head">
+      <div>
+        <h3>{{ svc.display_name(item) }}{% if item.is_custom_product %}<span class="pill">Custom product</span>{% endif %}</h3>
+        <p class="hint">Partner: {{ item.partner }}{% if not item.is_custom_product %} | Origin: {{ item.country_of_origin_made_in or 'N/A' }}{% endif %}
+          {% if item.from_proposal_snapshot %} | Pricing preserved from proposal{% elif item.source == 'proposal' %} | Pricing recalculated from current spreadsheet{% endif %}</p>
+      </div>
+      <button class="small danger" formaction="/orders/current/items/{{ index }}/remove" formmethod="post">Remove</button>
+    </div>
+
+    <h4>Quantity &amp; Pricing</h4>
+    <div class="cols-4">
+      <label>Quantity<input type="number" min="1" name="quantity" value="{{ item.quantity }}"></label>
+      <div><label>PBP Cost</label><div>{{ item.base_price|money }}{% if item.tier_range and item.tier_range != 'No Tiers' %}<span class="hint">tier {{ item.tier_range }}</span>{% else %}<span class="hint">flat</span>{% endif %}</div></div>
+      <label>PBP MSRP (Client Price per unit)<input type="number" step="0.01" min="0.01" name="client_price" value="{{ '%.2f'|format(cp[0]) }}"></label>
+      <label>Markup %<input type="number" step="0.5" min="-50" name="markup_percent" value="{{ '%.1f'|format(item.markup_percent) }}"></label>
+    </div>
+    <p class="hint">Pricing method: {% if item.manual_override %}Manual override{% else %}{{ item.pricing_method or 'Standard markup' }}{% endif %}
+      {% if rounding and (cp[0] - cp[1])|abs > 0.01 %} | Rounded from {{ cp[1]|money }}{% endif %}
+      {% if item.quantity == 1 %} | <strong>WARNING: Qty = 1</strong>{% endif %}
+      {% set moq = svc.moq_warning(item) %}{% if moq %} | {{ moq }}{% endif %}</p>
+    {% set change = svc.price_change_from_proposal(item, rounding) %}
+    {% if change %}
+      {% if change[2] %}<p class="warn">Price changed from proposal ({{ change[0]|money }}/unit to {{ change[1]|money }}/unit). Reason: {{ change[2]|join(' | ') }}</p>
+      {% elif (change[0] - change[1])|abs > 0.01 %}<p class="warn">Price changed from proposal: quoted {{ change[0]|money }}/unit, current {{ change[1]|money }}/unit</p>
+      {% else %}<p class="ok">Matches quoted price: {{ change[0]|money }}/unit</p>{% endif %}
+    {% endif %}
+    {% if item.validation_warning and not item.manual_override %}<p class="warn">Pricing validation: {{ item.validation_warning }}. Enable manual override if this is intentional.</p>{% endif %}
+    {% if item.pricing_notes and not item.manual_override %}<p class="hint">Pricing information: {{ item.pricing_notes }}</p>{% endif %}
+    <label class="check"><input type="checkbox" name="manual_override" {% if item.manual_override %}checked{% endif %}> Enable manual price override</label>
+
+    <h4>Customization (Optional)</h4>
+    <p class="hint">{% if item.product_data.get('Customization Info') %}Available: {{ item.product_data.get('Customization Info') }}{% else %}No customization details from spreadsheet; set custom values below if needed{% endif %}</p>
+    <label class="check"><input type="checkbox" name="include_customization" {% if item.include_customization %}checked{% endif %}> Include customization</label>
+    <label>Customization description<input name="customization_description" value="{{ item.customization_description or '' }}" placeholder="e.g., Logo engraving on lid"></label>
+    {% if item.include_customization %}
+    <div class="cols-4">
+      <label>Setup fee (to client)<input type="number" step="1" min="0" name="customization_setup_fee" value="{{ item.customization_setup_fee or 0 }}"></label>
+      <label>Per-unit (to client)<input type="number" step="0.1" min="0" name="customization_per_unit" value="{{ item.customization_per_unit or 0 }}"></label>
+      <label>Setup fee (from partner)<input type="number" step="1" min="0" name="partner_customization_setup_fee" value="{{ item.partner_customization_setup_fee or 0 }}"></label>
+      <label>Per-unit (from partner)<input type="number" step="0.1" min="0" name="partner_customization_per_unit" value="{{ item.partner_customization_per_unit or 0 }}"></label>
+    </div>
+    <label class="check"><input type="checkbox" name="apply_custom_minimum" {% if item.apply_custom_minimum %}checked{% endif %}> Apply minimum quantity for customization</label>
+    {% if item.apply_custom_minimum %}
+    <label>Minimum customization quantity<input type="number" min="1" name="customization_minimum_qty" value="{{ item.customization_minimum_qty or [100, item.quantity]|max }}"></label>
+    {% if item.customization_minimum_qty > item.quantity %}<p class="hint">Charging for {{ item.customization_minimum_qty }} customization units (ordering {{ item.quantity }} product units)</p>{% endif %}
+    {% endif %}
+    <h5>Customization add-ons</h5>
+    {% for addon in item.customization_addons %}
+    <div class="card">
+      <div class="row">
+        <label>Option name<input name="addon_{{ loop.index0 }}_name" value="{{ addon.name }}" placeholder="e.g., Second Color"></label>
+        <button class="small danger" type="button" hx-post="/orders/current/items/{{ index }}/addons/{{ loop.index0 }}/remove" hx-target="#item-{{ index }}" hx-swap="outerHTML">Remove</button>
+      </div>
+      <div class="cols-4">
+        <label>Setup (to client)<input type="number" step="1" min="0" name="addon_{{ loop.index0 }}_client_setup" value="{{ addon.client_setup_fee or 0 }}"></label>
+        <label>Per unit (to client)<input type="number" step="0.1" min="0" name="addon_{{ loop.index0 }}_client_perunit" value="{{ addon.client_per_unit_cost or 0 }}"></label>
+        <label>Setup (from partner)<input type="number" step="1" min="0" name="addon_{{ loop.index0 }}_partner_setup" value="{{ addon.partner_setup_fee or 0 }}"></label>
+        <label>Per unit (from partner)<input type="number" step="0.1" min="0" name="addon_{{ loop.index0 }}_partner_perunit" value="{{ addon.partner_per_unit_cost or 0 }}"></label>
+      </div>
+    </div>
+    {% endfor %}
+    <button class="small" type="button" hx-post="/orders/current/items/{{ index }}/addons" hx-include="closest form" hx-target="#item-{{ index }}" hx-swap="outerHTML">Add customization option</button>
+    {% endif %}
+
+    {% if item.is_custom_product %}
+    <h4>Country &amp; Tariff</h4>
+    <div class="cols-3">
+      <label>Made in<input name="country_made_in" value="{{ item.country_of_origin_made_in }}" placeholder="e.g., USA, India"></label>
+      <label>Ships from<input name="country_ships_from" value="{{ item.country_of_origin_ships_from }}"></label>
+      <label>Tariff estimate (%)<input type="number" step="0.5" min="0" max="100" name="tariff_rate_percent" value="{{ item.tariff_rate_percent or 0 }}"></label>
+    </div>
+    {% endif %}
+
+    <h4>Kitting &amp; Packaging</h4>
+    <label class="check"><input type="checkbox" name="include_kitting" {% if item.include_kitting %}checked{% endif %}> Include kitting costs for this product</label>
+    {% if item.include_kitting %}
+    <div class="cols-4">
+      <label>Kitting quantity<input type="number" min="1" name="kitting_quantity" value="{{ item.kitting_quantity or 1 }}"></label>
+      <label>Kitting cost (PBP) $<input type="number" step="5" min="0" name="kitting_pbp_cost" value="{{ item.kitting_pbp_cost or 0 }}"></label>
+      <label>Kitting price (client) $<input type="number" step="5" min="0" name="kitting_client_price" value="{{ item.kitting_client_price or 0 }}"></label>
+      <label>Description<input name="kitting_description" value="{{ item.kitting_description }}" placeholder="e.g., Premium gift box"></label>
+    </div>
+    {% endif %}
+
+    <h4>Pricing breakdown</h4>
+    {% set qty = item.quantity %}
+    <table class="data">
+      <tr><th>Description</th><th class="num">Units</th><th class="num">PBP Cost (Per Unit)</th><th class="num">PBP Cost</th><th class="num">Client Price (Per Unit)</th><th class="num">Client Price</th></tr>
+      <tr><td>Base Product: {{ item.product_name }}</td><td class="num">{{ qty }}</td><td class="num">{{ item.base_price|money }}</td><td class="num">{{ item.product_subtotal|money }}</td><td class="num">{{ cp[0]|money }}</td><td class="num">{{ (cp[0] * qty)|money }}</td></tr>
+      {% if item.customization_setup_total > 0 %}<tr><td>Customization Setup{% if item.customization_description %}: {{ item.customization_description }}{% endif %}</td><td class="num">1</td><td class="num">{{ item.partner_customization_setup_total|money }}</td><td class="num">{{ item.partner_customization_setup_total|money }}</td><td class="num">{{ item.customization_setup_total|money }}</td><td class="num">{{ item.customization_setup_total|money }}</td></tr>{% endif %}
+      {% if item.customization_unit_total > 0 %}{% set cq = item.customization_minimum_qty if (item.apply_custom_minimum and item.customization_minimum_qty > qty) else qty %}
+      <tr><td>Customization Per-Unit{% if item.customization_description %}: {{ item.customization_description }}{% endif %}</td><td class="num">{{ cq }}</td><td class="num">{{ (item.partner_customization_unit_total / cq)|money }}</td><td class="num">{{ item.partner_customization_unit_total|money }}</td><td class="num">{{ (item.customization_unit_total / cq)|money }}</td><td class="num">{{ item.customization_unit_total|money }}</td></tr>{% endif %}
+      {% if item.include_kitting and (item.kitting_pbp_cost > 0 or item.kitting_client_price > 0) %}
+      <tr><td>Kitting: {{ item.kitting_description or 'Kitting' }}</td><td class="num">{{ item.kitting_quantity }}</td><td class="num">{{ item.kitting_pbp_cost|money }}</td><td class="num">{{ (item.kitting_pbp_cost * item.kitting_quantity)|money }}</td><td class="num">{{ item.kitting_client_price|money }}</td><td class="num">{{ (item.kitting_client_price * item.kitting_quantity)|money }}</td></tr>{% endif %}
+    </table>
+    <p class="hint"><strong>Totals:</strong> PBP Cost {{ (item.product_subtotal + item.partner_customization_setup_total + item.partner_customization_unit_total)|money }} | Client Price {{ item.product_total|money }} | Margin {{ (item.product_total - item.product_subtotal - item.partner_customization_setup_total - item.partner_customization_unit_total)|money }}</p>
+    <noscript><button type="submit" class="small">Apply changes</button></noscript>
+  </form>
+  {% endif %}
+</div>

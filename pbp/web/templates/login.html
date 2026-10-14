@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}PBP Order Management - Log in{% endblock %}
+{% block content %}
+<h1>Peace by Piece Order Management</h1>
+<p class="muted">Enter the team password to continue.</p>
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+<form method="post" action="/login">
+  <input type="hidden" name="next" value="{{ next }}">
+  <label>Password<input type="password" name="password" autofocus autocomplete="current-password"></label>
+  <div class="actions"><button type="submit" class="primary">Log in</button></div>
+</form>
+<p class="muted">This browser stays logged in for 30 days.</p>
+{% endblock %}

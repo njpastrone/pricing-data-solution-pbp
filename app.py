@@ -58,13 +58,13 @@ from pbp.core.pricing_engine import (
     calculate_order_total
 )
 from pbp.core.slide_matcher import SlideMatcher
-from src.proposal_manager import (
+from pbp.sheets.proposal_manager import (
     save_proposal,
     load_all_proposals,
     load_proposal_data,
     delete_proposal
 )
-from src.order_manager import (
+from pbp.sheets.order_manager import (
     save_current_order,
     load_all_orders,
     load_order_data,

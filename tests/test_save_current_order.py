@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import io
 
-import src.order_manager as order_manager
-from src.order_manager import ORDER_STATE_KEYS, save_current_order
+import pbp.sheets.order_manager as order_manager
+from pbp.sheets.order_manager import ORDER_STATE_KEYS, save_current_order
 
 
 def _state(**overrides):

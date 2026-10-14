@@ -6,7 +6,7 @@ Tests save, load, and delete operations.
 import sys
 sys.path.append('/Users/nicolopastrone/Desktop/Development Projects/pricing-data-solution-pbp')
 
-from src.proposal_manager import (
+from pbp.sheets.proposal_manager import (
     save_proposal,
     load_all_proposals,
     load_proposal_data,

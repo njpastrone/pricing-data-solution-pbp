@@ -17,7 +17,7 @@ from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 
 from pbp.core.forms_helper import parse_form_response, form_response_to_order, html_form_to_order, add_order_notes
-from src.order_manager import save_order, load_order_data
+from pbp.sheets.order_manager import save_order, load_order_data
 from pbp.core.helpers import convert_proposal_to_order
 from test_client_form import FakeSheet, LIVE_HEADERS, _mock_sheets, _submit
 
@@ -123,7 +123,7 @@ def test_imported_order_survives_save_and_load():
     order_data = {'client_info': order['client_info'], 'order_notes': notes, 'order_items': order['products']}
 
     sheet = FakeSheet([['Order_ID', 'Order_Name', 'Created_By', 'Created_Date', 'Dataset', 'Order_Data_JSON']])
-    with patch('src.order_manager.initialize_orders_sheet', return_value=sheet):
+    with patch('pbp.sheets.order_manager.initialize_orders_sheet', return_value=sheet):
         saved, _, order_id = save_order('Acme order', 'staff', order_data, 'demo')
         loaded_ok, loaded, _ = load_order_data(order_id)
 

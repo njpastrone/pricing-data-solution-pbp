@@ -1,0 +1,20 @@
+<div id="summary" {% if oob %}hx-swap-oob="true"{% endif %}>
+  <h2 id="summary-heading">4. Order Summary</h2>
+  {% if not order.order_items %}
+  <p class="muted">Add products to your order to see the total quote calculation.</p>
+  {% else %}
+  {% set warnings = [] %}
+  {% for item in order.order_items %}{% set w = svc.moq_warning(item) %}{% if w %}{% set _ = warnings.append(item.product_name ~ ': ' ~ w) %}{% endif %}{% endfor %}
+  {% if warnings %}<div class="notice error">Below Minimum Order Quantity: {{ warnings|join('; ') }}</div>{% endif %}
+  <table class="data">
+    <tr><th>Item</th><th class="num">Qty</th><th class="num">PBP Cost (Per Unit)</th><th class="num">PBP Cost</th><th class="num">Client Price (Per Unit)</th><th class="num">Client Price</th></tr>
+    {% for row in totals.rows %}
+    <tr class="{% if row[0] == 'TOTAL' %}total{% elif 'Subtotal' in row[0]|string %}subtotal{% endif %}">
+      {% for cell in row %}<td class="{% if loop.index > 1 %}num{% endif %}">{{ cell }}</td>{% endfor %}
+    </tr>
+    {% endfor %}
+  </table>
+  <div class="total-banner">Total Quote: {{ totals.total_quote|money }} ({{ totals.total_units }} total units @ {{ totals.avg_per_unit|money }} avg per unit)</div>
+  <a href="/orders/current/summary.csv"><button type="button" class="small">Download Order Summary (CSV)</button></a>
+  {% endif %}
+</div>

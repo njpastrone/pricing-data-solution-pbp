@@ -1,0 +1,91 @@
+{% extends "staff_base.html" %}
+{% block title %}Accounting - PBP{% endblock %}
+{% block content %}
+<h1>Execution &amp; Accounting{% if meta.loaded_order_name %} <span class="pill">{{ meta.loaded_order_name }}</span>{% endif %}</h1>
+{% if not order.order_items %}
+<p class="muted">No order found. Build an order in the <a href="/orders/current">order editor</a> first.</p>
+{% else %}
+
+<h2>1. Review &amp; Edit Order Information</h2>
+{% if invoice.warnings %}
+<div class="notice error">{{ invoice.warnings|length }} field(s) need attention: <ul>{% for w in invoice.warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>
+{% else %}<div class="notice success">All required fields complete - ready to generate Invoice/PO</div>{% endif %}
+
+<details {% if invoice.warnings %}open{% endif %}>
+  <summary>Client &amp; order information</summary>
+  {% include "_client.html" %}
+</details>
+
+<details>
+  <summary>Product descriptions and partner in-hands dates</summary>
+  <form method="post" action="/orders/current/accounting">
+    {% for item in order.order_items %}
+    <div class="row">
+      <label>{{ item.product_name }} - {{ item.partner }}
+        <input name="description_{{ loop.index0 }}" value="{{ item.edited_description }}" placeholder="{{ item.custom_description if item.is_custom else item.product_name ~ (' (Qty: ' ~ item.quantity ~ ')' if item.quantity > 1 else '') }}">
+      </label>
+      {% if not item.is_custom %}<label class="narrow">In-hands from partner<input name="partner_in_hands_{{ loop.index0 }}" value="{{ item.partner_in_hands_date or '' }}" placeholder="e.g., 2026-11-01"></label>{% endif %}
+    </div>
+    {% endfor %}
+    <button class="small">Save descriptions</button>
+  </form>
+</details>
+
+<details>
+  <summary>Partners + points of contact</summary>
+  <form method="post" action="/orders/current/accounting">
+    {% for partner in partners %}{% set c = order.partner_contacts_editable.get(partner, {}) %}
+    <div class="card">
+      <h3>{{ partner }}</h3>
+      <div class="cols-3">
+        <label>Contact name<input name="poc_name__{{ partner }}" value="{{ c.poc_name }}"></label>
+        <label>Contact email<input name="poc_email__{{ partner }}" value="{{ c.poc_email }}"></label>
+        <label>Contact phone<input name="poc_phone__{{ partner }}" value="{{ c.poc_phone }}"></label>
+      </div>
+      <label>Shipping instructions to PbP<textarea name="ship__{{ partner }}" rows="2" placeholder="e.g., Ship ground only, consolidate into one shipment.">{{ c.shipping_instructions }}</textarea></label>
+    </div>
+    {% else %}<p class="muted">No partners in order</p>{% endfor %}
+    {% if partners %}<button class="small">Save partner contacts</button>{% endif %}
+  </form>
+</details>
+
+<details>
+  <summary>Order settings</summary>
+  {% include "_settings.html" %}
+</details>
+
+<h2>2. Invoice and Purchase Order Request Form</h2>
+<h3>1. Client/Company Information</h3>
+<table class="data kv">{% for field, value in invoice.client_rows %}<tr><td>{{ field }}</td><td>{{ value }}</td></tr>{% endfor %}</table>
+
+<h3>2. Partners + Point of Contacts</h3>
+<table class="data">
+  <tr><th>Partner</th><th>Point of Contact</th><th>Shipping Instructions to PbP</th></tr>
+  {% for row in invoice.partner_rows %}<tr><td>{{ row.partner }}</td><td>{{ row.poc_name }} &lt;{{ row.poc_email }}&gt;</td><td>{{ row.shipping_instructions }}</td></tr>
+  {% else %}<tr><td colspan="3" class="muted">No partners in order</td></tr>{% endfor %}
+</table>
+
+<h3>3. Order Details</h3>
+<table class="data kv">{% for field, value in invoice.detail_rows %}<tr><td>{{ field }}</td><td>{{ value }}</td></tr>{% endfor %}</table>
+
+<h3>4. Invoice and Purchase Order Item Details</h3>
+<p class="hint">This cost-to-sell segment outlines our partners' cost, our sell price to client, and our partners' requested in-hands date.</p>
+<table class="data">
+  <tr><th>Partner</th><th>Description (Invoice)</th><th>Description (PO)</th><th class="num">Qty</th><th>In-Hands from Partner</th><th class="num">Cost/Unit</th><th class="num">Total Cost</th><th class="num">Sell Price/Unit</th><th class="num">Total Sell Price</th></tr>
+  {% for line in invoice.lines %}
+  <tr><td>{{ line['PARTNER'] }}</td><td style="white-space: pre;">{{ line['DESCRIPTION (Invoice)'] }}</td><td style="white-space: pre;">{{ line['DESCRIPTION (PO)'] }}</td><td class="num">{{ line['QTY'] }}</td><td>{{ line['IN-HANDS from Partner'] }}</td><td class="num">{{ line['COST/UNIT'] }}</td><td class="num">{{ line['TOTAL COST'] }}</td><td class="num">{{ line['SELL PRICE/UNIT'] }}</td><td class="num">{{ line['TOTAL SELL PRICE'] }}</td></tr>
+  {% endfor %}
+</table>
+<table class="data kv">{% for label, amount in invoice.totals_rows %}<tr class="{% if label == 'TOTAL' %}total{% endif %}"><td>{{ label }}</td><td class="num">{{ amount }}</td></tr>{% endfor %}</table>
+
+<h3>Notes</h3>
+{% for label, body in invoice.notes %}<p><strong>{{ label }}:</strong> {{ body }}</p>{% else %}<p class="muted">No notes added</p>{% endfor %}
+
+<h3>Download Invoice &amp; Purchase Order</h3>
+<div class="row">
+  <a href="/orders/current/invoice.csv"><button type="button" class="small primary">Download as CSV</button></a>
+  <a href="/orders/current/invoice.html"><button type="button" class="small">Download as HTML</button></a>
+</div>
+<p class="hint">CSV for spreadsheet import | HTML for an email-ready format</p>
+{% endif %}
+{% endblock %}

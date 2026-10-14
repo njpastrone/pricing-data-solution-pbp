@@ -6,6 +6,7 @@ behaves like the live app. Override with environment variables to point a
 local run at a copy of a spreadsheet instead of the production one.
 """
 
+import hashlib
 import json
 import os
 import pathlib
@@ -23,6 +24,13 @@ CLIENT_FORM_BASE_URL = os.getenv("CLIENT_FORM_BASE_URL", "https://pbp-order-mana
 
 # How often the web app re-tries copying received orders into Form Responses (0 disables the loop)
 SYNC_LOOP_SECONDS = int(os.getenv("PBP_SYNC_LOOP_SECONDS", "60"))
+
+# Staff login (same shared password as the Streamlit app; "pbp2026" is the legacy local fallback, flagged for removal)
+APP_PASSWORD = os.getenv("APP_PASSWORD") or "pbp2026"
+# Signs the staff session cookie; defaults to a value derived from the password so no new secret is needed
+SECRET_KEY = os.getenv("PBP_SECRET_KEY") or hashlib.sha256(("pbp-web:" + APP_PASSWORD).encode()).hexdigest()
+SESSION_DAYS = 30
+
 
 def _secrets_toml():
     """The local .streamlit/secrets.toml as a dict ({} when there is none)."""

@@ -1,7 +1,7 @@
 """
-PBP web app (FastAPI + HTMX). Phase 1: the client order form.
+PBP web app (FastAPI + HTMX): the client order form (phase 1) and staff order screens (phase 2).
 
-Routes:
+Routes (client form; staff screens live in staff.py):
   GET  /                        legacy link format ?client_form=ID&session=TOKEN -> redirect to /form/ID
   GET  /form/{proposal_id}      the order form (or "Order received" once submitted)
   POST /form/{proposal_id}      action=save | submit | add_item (works without JavaScript)
@@ -22,14 +22,13 @@ from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-
 from pbp import settings
 from pbp.core.forms_config import MAX_PRODUCT_LINES
 from pbp.sheets import client_form, gateway
+from pbp.web import staff
+from pbp.web.templating import templates
 
 HERE = pathlib.Path(__file__).parent
-templates = Jinja2Templates(directory=str(HERE / "templates"))
 log = logging.getLogger("pbp.web")
 
 # Choices shown in the form (same as the Streamlit client form)
@@ -72,6 +71,7 @@ async def lifespan(app):
 
 app = FastAPI(title="Peace by Piece Order Form", lifespan=lifespan, docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
+app.include_router(staff.router)
 
 
 # ----------------------------------------------------------------------------
