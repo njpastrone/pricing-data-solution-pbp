@@ -14,9 +14,9 @@ Orders are stored in the saved_orders spreadsheet with the following columns:
 import json
 import re
 from datetime import datetime, date
-import streamlit as st
 import gspread
-from src.data_loader import connect_to_sheets, DATASET_CONFIGS
+from pbp import settings
+from pbp.sheets import gateway
 
 
 def convert_dates_to_strings(obj):
@@ -76,8 +76,7 @@ def initialize_orders_sheet():
         gspread.Worksheet: The orders worksheet
     """
     try:
-        client = connect_to_sheets()
-        spreadsheet = client.open_by_key(DATASET_CONFIGS['saved_orders']['spreadsheet_id'])
+        spreadsheet = gateway.connect().open_by_key(settings.SAVED_ORDERS_SHEET_ID)
 
         # Try to get Sheet1, or create it if it doesn't exist
         try:
@@ -103,20 +102,7 @@ def initialize_orders_sheet():
         error_msg = str(e)
         # Only show rate limit message for actual rate limit errors (429 status code)
         if "429" in error_msg or "Quota exceeded" in error_msg:
-            st.warning("""
-            **Google Sheets is temporarily busy**
-
-            The app is making too many requests to Google Sheets. This usually happens when:
-            - Multiple users are using the app simultaneously
-            - You're refreshing the page frequently
-
-            **What to do:**
-            1. Wait 60 seconds before trying again
-            2. Avoid rapid page refreshes
-            3. Your data is safe - this is just a temporary limit
-
-            The limit will reset automatically in about 1 minute.
-            """)
+            print("Google Sheets is temporarily busy (quota exceeded); wait 60 seconds and try again")
         else:
             # For other errors, log to console but don't show in UI (too noisy)
             print(f"Error initializing orders sheet: {error_msg}")
@@ -364,7 +350,7 @@ def load_order_data(order_id):
         return False, None, None
 
     except Exception as e:
-        st.error(f"Error loading order data: {str(e)}")
+        print(f"Error loading order data: {str(e)}")
         return False, None, None
 
 

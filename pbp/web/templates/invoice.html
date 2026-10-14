@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 20px auto; padding: 20px; background-color: #ffffff; }
+        h2 { color: #2c3e50; background-color: #ffffff; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        h3 { color: #34495e; margin-top: 25px; margin-bottom: 10px; }
+        table { border-collapse: collapse; width: 100%; margin: 15px 0; background-color: #ffffff; }
+        th { background-color: #3498db !important; color: #ffffff !important; padding: 12px; text-align: left; font-weight: bold; border: 1px solid #2980b9; }
+        td { border: 1px solid #ddd; padding: 10px; background-color: #ffffff; color: #000000; }
+        td:first-child { background-color: #f8f9fa !important; color: #000000 !important; font-weight: 500; width: 30%; }
+        .notes-section { background-color: #e8f4f8; border: 1px solid #3498db; padding: 15px; margin: 15px 0; }
+        .notes-header { font-weight: bold; color: #2c3e50; margin-bottom: 10px; }
+        .right { text-align: right; } .center { text-align: center; }
+        .total-row td { background-color: #f8f9fa; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h2>INVOICE AND PURCHASE ORDER REQUEST FORM</h2>
+    <div class="notes-section">
+        <div class="notes-header">DROPSHIPPING INSTRUCTIONS</div>
+        <p>{{ invoice.dropshipping_notes }}</p>
+    </div>
+    {% if invoice.notes %}
+    <div class="notes-section">
+        <div class="notes-header">NOTES</div>
+        {% for label, body in invoice.notes %}<p><strong>{{ label }}:</strong> {{ body }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    <h3>1. Client/Company Information</h3>
+    <table>
+        {% for field, value in invoice.client_rows %}<tr><td>{{ field }}</td><td>{{ value.replace('\n', ', ') }}</td></tr>{% endfor %}
+    </table>
+
+    <h3>2. Partners + Point of Contacts</h3>
+    <table>
+        <tr><th>Partner</th><th>Point of Contact (POC)</th><th>Shipping Instructions to PbP</th></tr>
+        {% for row in invoice.partner_rows %}
+        <tr><td style="width: 30%;">{{ row.partner }}</td><td>{{ row.poc_name }} &lt;{{ row.poc_email }}&gt;</td><td style="white-space: pre-line;">{{ row.shipping_instructions }}</td></tr>
+        {% else %}
+        <tr><td colspan="3" style="text-align: center; color: #7f8c8d;">No partners in order</td></tr>
+        {% endfor %}
+    </table>
+
+    <h3>3. Order Details</h3>
+    <table>
+        {% for field, value in invoice.detail_rows %}<tr><td>{{ field }}</td><td>{{ value }}</td></tr>{% endfor %}
+    </table>
+
+    <h3>4. Invoice and Purchase Order Item Details</h3>
+    <p style="color: #7f8c8d; font-size: 0.9em; margin: 10px 0;">
+        This cost-to-sell segment outlines our partners' cost, our sell price to client,
+        and our partners' requested in-hands date.
+    </p>
+    <table>
+        <tr><th>Partner</th><th>Description (Invoice)</th><th>Description (PO)</th><th>Qty</th><th>In-Hands from Partner</th><th>Cost/Unit</th><th>Total Cost</th><th>Sell Price/Unit</th><th>Total Sell Price</th></tr>
+        {% for line in invoice.lines %}
+        <tr>
+            <td>{{ line['PARTNER'] }}</td>
+            <td>{{ line['DESCRIPTION (Invoice)'] }}</td>
+            <td>{{ line['DESCRIPTION (PO)'] }}</td>
+            <td class="center">{{ line['QTY'] }}</td>
+            <td>{{ line['IN-HANDS from Partner'] }}</td>
+            <td class="right">{{ line['COST/UNIT'] }}</td>
+            <td class="right">{{ line['TOTAL COST'] }}</td>
+            <td class="right">{{ line['SELL PRICE/UNIT'] }}</td>
+            <td class="right">{{ line['TOTAL SELL PRICE'] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <h3>Summary Totals</h3>
+    <table>
+        {% for label, amount in invoice.totals_rows %}
+        <tr{% if label == 'TOTAL' %} class="total-row"{% endif %}><td>{{ label }}</td><td class="right">{{ amount }}</td></tr>
+        {% endfor %}
+    </table>
+
+    {% if photo_blocks %}
+    <h3>Product Photos</h3>
+    {% for product, images in photo_blocks %}
+    <h4>{{ product }}</h4>
+    {% for name, src in images %}
+    <div style="margin-bottom: 20px;">
+        <p style="font-weight: bold; margin-bottom: 5px;">{{ name }}</p>
+        <img src="{{ src }}" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;" />
+    </div>
+    {% endfor %}
+    {% endfor %}
+    {% endif %}
+</body>
+</html>

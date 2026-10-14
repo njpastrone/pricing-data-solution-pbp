@@ -1,0 +1,84 @@
+{% set client = order.client_info %}
+<div id="client">
+  <h2>6. Client &amp; Order Information</h2>
+  <form method="post" action="/orders/current/client" hx-post="/orders/current/client" hx-target="#client" hx-swap="outerHTML">
+    <input type="hidden" name="return_to" value="/orders/current#client">
+    <div class="cols-3">
+      <div>
+        <label class="check"><input type="checkbox" name="is_new_client" {% if client.is_new_client %}checked{% endif %}> New client?</label>
+        <label>Company name<input name="company_name" value="{{ client.company_name }}" placeholder="e.g., Acme Corp"></label>
+        <label>Client PO number (optional)<input name="client_po" value="{{ client.client_po }}"></label>
+      </div>
+      <div>
+        <label>Billing address<textarea name="billing_address" rows="3">{{ client.billing_address }}</textarea></label>
+        <label>Shipping type
+          <select name="shipping_type" hx-post="/orders/current/client" hx-trigger="change" hx-include="closest form">
+            <option {% if client.shipping_type == 'One Location' %}selected{% endif %}>One Location</option>
+            <option {% if client.shipping_type == 'Drop Shipping' %}selected{% endif %}>Drop Shipping</option>
+          </select>
+        </label>
+        {% if client.shipping_type == 'One Location' %}
+        <label>Shipping address<textarea name="shipping_address" rows="3">{{ client.shipping_address }}</textarea></label>
+        {% else %}<p class="hint">Drop shipping details to be arranged separately</p>{% endif %}
+      </div>
+      <div>
+        <label>Payment terms
+          <select name="payment_timeline" hx-post="/orders/current/client" hx-trigger="change" hx-include="closest form">
+            {% set custom_terms = client.payment_timeline not in svc.PAYMENT_TERMS[:-1] %}
+            {% for option in svc.PAYMENT_TERMS %}<option {% if (custom_terms and option == 'Custom') or client.payment_timeline == option %}selected{% endif %}>{{ option }}</option>{% endfor %}
+          </select>
+        </label>
+        {% if custom_terms %}<label>Custom payment terms<input name="custom_payment_terms" value="{{ client.payment_timeline if client.payment_timeline != 'Custom' else '' }}" placeholder="e.g., Net 45, 2/10 Net 30"></label>{% endif %}
+        <label>Payment method
+          <select name="payment_preference">
+            {% for option in svc.PAYMENT_METHODS %}<option {% if client.payment_preference == option %}selected{% endif %}>{{ option }}</option>{% endfor %}
+            {% if client.payment_preference not in svc.PAYMENT_METHODS %}<option selected>{{ client.payment_preference }}</option>{% endif %}
+          </select>
+        </label>
+        <label>Ship method
+          <select name="ship_method">
+            {% for option in svc.SHIP_METHODS %}<option {% if client.ship_method == option %}selected{% endif %}>{{ option }}</option>{% endfor %}
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <h3>Contacts</h3>
+    {% for contact in client.contacts %}
+    <div class="card">
+      <div class="row">
+        <label>Name<input name="contact_name_{{ loop.index0 }}" value="{{ contact.name }}"></label>
+        <label>Email<input name="contact_email_{{ loop.index0 }}" value="{{ contact.email }}"></label>
+        <label>Phone<input name="contact_phone_{{ loop.index0 }}" value="{{ contact.phone }}"></label>
+        <label>Role
+          <select name="contact_role_{{ loop.index0 }}">
+            {% for role in svc.CONTACT_ROLES %}<option {% if contact.role == role %}selected{% endif %}>{{ role }}</option>{% endfor %}
+            {% if contact.role and contact.role not in svc.CONTACT_ROLES %}<option selected>{{ contact.role }}</option>{% endif %}
+          </select>
+        </label>
+        {% if client.contacts|length > 1 %}<button class="small danger" name="action" value="remove_contact_{{ loop.index0 }}">Remove</button>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    <button class="small" name="action" value="add_contact">Add another contact</button>
+
+    <h3>Dates &amp; Submission</h3>
+    <div class="cols-3">
+      <label>Client in-hands date<input type="date" name="client_in_hands_date" value="{{ client.client_in_hands_date|dateval }}"></label>
+      <label>PBP in-hands date<input type="date" name="pbp_in_hands_date" value="{{ client.pbp_in_hands_date|dateval }}"></label>
+      <div><label>Order submitted date</label><div>{{ client.order_submitted_date|dateval }}</div></div>
+      <label>Order submitted by<input name="order_submitted_by" value="{{ client.order_submitted_by }}" placeholder="Your name"></label>
+      <label>Cost submitted by<input name="cost_submitted_by" value="{{ client.cost_submitted_by }}" placeholder="Finance contact name"></label>
+      <label>Cost submitted date<input type="date" name="cost_submitted_date" value="{{ client.cost_submitted_date|dateval }}"></label>
+    </div>
+    <div class="actions">
+      <button class="small" name="action" value="save">Save client information</button>
+      {% if order.order_confirmed %}
+      <button class="small" name="action" value="edit">Edit order (unconfirm)</button>
+      {% else %}
+      <button class="small primary" name="action" value="confirm">Confirm order</button>
+      {% endif %}
+    </div>
+    {% if order.order_confirmed %}<p class="ok">Order confirmed. Go to Accounting to generate the Invoice &amp; Purchase Order.</p>{% endif %}
+  </form>
+</div>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}PBP Order Management{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/staff.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body class="staff">
+  <header class="topbar">
+    <a class="brand" href="/orders">Peace by Piece Order Management</a>
+    <nav>
+      <a href="/orders" {% if request.url.path == '/orders' %}class="active"{% endif %}>Orders</a>
+      <a href="/orders/current" {% if request.url.path == '/orders/current' %}class="active"{% endif %}>Order Editor</a>
+      <a href="/orders/current/accounting" {% if 'accounting' in request.url.path %}class="active"{% endif %}>Accounting</a>
+      <a href="/responses" {% if request.url.path == '/responses' %}class="active"{% endif %}>Client Form Responses</a>
+      <form method="post" action="/logout" class="inline"><button class="link">Log out</button></form>
+    </nav>
+  </header>
+  <main class="page wide">
+    {% for kind, message in flash|default([]) %}<div class="notice {{ kind }}">{{ message }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

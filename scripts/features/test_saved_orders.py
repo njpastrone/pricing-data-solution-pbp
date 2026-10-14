@@ -6,7 +6,7 @@ Tests save, load, and delete operations.
 import sys
 sys.path.append('/Users/nicolopastrone/Desktop/Development Projects/pricing-data-solution-pbp')
 
-from src.order_manager import (
+from pbp.sheets.order_manager import (
     save_order,
     load_all_orders,
     load_order_data,

@@ -1,0 +1,42 @@
+{% extends "staff_base.html" %}
+{% block title %}Client Form Responses - PBP{% endblock %}
+{% block content %}
+<h1>Client Form Responses</h1>
+<p class="hint">Submissions from the client order form (and the legacy Google Form). Importing adds the client details and matched products to the working order.</p>
+{% if error %}<div class="notice error">Could not load responses: {{ error }}</div>{% endif %}
+<div class="row">
+  <a href="/responses?show=all"><button type="button" class="small {% if show == 'all' %}primary{% endif %}">All</button></a>
+  <a href="/responses?show=new"><button type="button" class="small {% if show == 'new' %}primary{% endif %}">Not imported</button></a>
+  <a href="/responses?show=imported"><button type="button" class="small {% if show == 'imported' %}primary{% endif %}">Imported</button></a>
+</div>
+{% if not has_tracking and rows %}<p class="hint">Tracking columns not found in the response sheet; imports are not marked.</p>{% endif %}
+{% for r in rows %}
+<div class="card">
+  <h3>{{ r.client_info.company_name or 'Unknown Company' }} <span class="pill">{{ 'Imported' if r.imported else 'New' }}</span></h3>
+  <p class="hint">{{ r.metadata.timestamp or 'No timestamp' }}{% if r.imported and r.metadata.order_id %} | {{ r.metadata.order_id }}{% endif %}</p>
+  <div class="cols-3">
+    <div>
+      <strong>Client</strong>
+      <div class="hint">{{ r.client_info.client_type or 'N/A' }} | {{ r.client_info.contact_name or 'N/A' }} | {{ r.client_info.contact_email or 'N/A' }} | {{ r.client_info.contact_phone or '' }}</div>
+    </div>
+    <div>
+      <strong>Shipping &amp; payment</strong>
+      <div class="hint">In-hands {{ r.shipping_info.in_hands_date or 'N/A' }} | Drop-ship: {{ r.shipping_info.drop_shipping or 'No' }} | {{ r.payment_info.payment_preference or 'N/A' }} / {{ r.payment_info.payment_method or 'N/A' }}</div>
+      {% if r.file_name %}<div class="hint">Attached file: {{ r.file_name }}</div>{% endif %}
+    </div>
+    <div>
+      <strong>Products</strong>
+      <ul class="hint">{% for p in r.products %}<li>{{ p.name }} (Qty: {{ p.quantity }}){% if p.customization_notes %} - {{ p.customization_notes }}{% endif %}</li>{% endfor %}</ul>
+    </div>
+  </div>
+  {% if r.notes %}<p class="hint">Notes: {{ r.notes }}</p>{% endif %}
+  <form method="post" action="/responses/import" class="inline">
+    <input type="hidden" name="row_number" value="{{ r.row_number }}">
+    <button class="small {% if not r.imported %}primary{% endif %}">{{ 'Re-import this response' if r.imported else 'Import this response' }}</button>
+  </form>
+  {% if r.imported %}<span class="hint">Already imported; importing again adds the products to the current order.</span>{% endif %}
+</div>
+{% else %}
+{% if not error %}<p class="muted">No responses{% if show != 'all' %} match this filter{% endif %}.</p>{% endif %}
+{% endfor %}
+{% endblock %}

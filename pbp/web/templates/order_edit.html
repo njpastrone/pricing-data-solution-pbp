@@ -1,0 +1,120 @@
+{% extends "staff_base.html" %}
+{% block title %}Order Editor - PBP{% endblock %}
+{% block content %}
+<h1>Order &amp; Client Info{% if meta.loaded_order_name %} <span class="pill">{{ meta.loaded_order_name }}</span>{% endif %}</h1>
+{% if catalog_error %}<div class="notice error">Catalog unavailable: {{ catalog_error }}</div>{% endif %}
+
+<h2>1. Add Products</h2>
+<div class="card">
+  <h3>Option A: Import from a client form response</h3>
+  <p class="hint">Use this if the client submitted the order form link from Tab 2.</p>
+  <a href="/responses"><button type="button" class="small primary">Browse client form responses</button></a>
+</div>
+
+<div class="card">
+  <h3>Option B: Import from a saved proposal</h3>
+  {% if proposals %}
+  <form method="post" class="row" onsubmit="this.action='/orders/current/import-proposal/' + this.proposal.value;">
+    <label>Saved proposal
+      <select name="proposal">
+        {% for p in proposals %}<option value="{{ p.proposal_id }}">{{ p.name }} ({{ p.created_date[:10] }}{% if p.created_by %}, {{ p.created_by }}{% endif %})</option>{% endfor %}
+      </select>
+    </label>
+    <button class="small primary">Import all products from proposal</button>
+  </form>
+  {% else %}<p class="muted">No saved proposals found.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h3>Option C: Pick a product from the catalog</h3>
+  {% if partners %}
+  <form method="post" action="/orders/current/items" class="row">
+    <input type="hidden" name="action" value="catalog">
+    <label>Partner
+      <select name="partner" hx-get="/catalog/products" hx-trigger="change" hx-target="#product-select" hx-swap="outerHTML">
+        {% for partner in partners %}<option>{{ partner }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Product/Service{% with products = first_products %}{% include "_product_options.html" %}{% endwith %}</label>
+    <label class="narrow">Variant (optional)<input name="variant" placeholder="e.g., Large"></label>
+    <label class="check"><input type="checkbox" name="use_msrp" checked> Use MSRP pricing</label>
+    <button class="small primary">Add to order</button>
+  </form>
+  {% else %}<p class="muted">Catalog not loaded.</p>{% endif %}
+</div>
+
+<details>
+  <summary>Create custom product (advanced)</summary>
+  <p class="hint">One-off items, executive samples, or products pending catalog addition. Configure quantity, markup and customization after adding.</p>
+  <form method="post" action="/orders/current/items" class="row">
+    <input type="hidden" name="action" value="custom_product">
+    <label>Product name<input name="name" placeholder="e.g., Custom Gold Engraving"></label>
+    <label>Partner
+      <select name="partner"><option>Custom/Other</option>{% for partner in partners %}<option>{{ partner }}</option>{% endfor %}</select>
+    </label>
+    <label class="narrow">Base cost/unit $<input type="number" step="0.5" min="0.01" name="base_cost" value="10.00"></label>
+    <button class="small">Add to order</button>
+  </form>
+</details>
+
+<details>
+  <summary>Add custom line item (fixed-price service)</summary>
+  <form method="post" action="/orders/current/items" class="row">
+    <input type="hidden" name="action" value="custom_line">
+    <label>Product/Service name<input name="name" placeholder="e.g., Custom Engraving Service"></label>
+    <label class="narrow">Quantity<input type="number" min="1" name="quantity" value="1"></label>
+    <label>Description<input name="description" placeholder="e.g., Laser engraving on wooden items"></label>
+    <label class="narrow">Total price $<input type="number" step="10" min="0" name="total_price" value="0"></label>
+    <button class="small">Add custom item</button>
+  </form>
+</details>
+
+<h2 id="items">2. Current Order</h2>
+{% if not order.order_items %}
+<p class="muted">No products in order yet. Add products above to get started.</p>
+{% else %}
+<p class="hint">Edit settings for each product below. Changes update totals as you type.</p>
+{% for item in order.order_items %}{% with index = loop.index0 %}{% include "_item.html" %}{% endwith %}{% endfor %}
+<form method="post" action="/orders/current/clear" onsubmit="return confirm('Remove every product from the order?')"><button class="small danger">Clear entire order</button></form>
+{% endif %}
+
+{% include "_settings.html" %}
+{% include "_summary.html" %}
+
+<h2 id="photos">5. Product Photos</h2>
+{% if order.order_items %}
+<form method="post" action="/orders/current/photos" enctype="multipart/form-data" class="row">
+  <label>Product
+    <select name="product">{% for item in order.order_items %}<option>{{ item.product_name }}</option>{% endfor %}</select>
+  </label>
+  <label>Photos (up to 5 per product)<input type="file" name="photos" accept=".png,.jpg,.jpeg,.webp" multiple></label>
+  <button class="small">Upload</button>
+</form>
+{% for product, files in photos.items() if files %}
+<p><strong>{{ product }}</strong> ({{ files|length }} photo(s), uploaded this session)</p>
+<div class="photo-grid">
+  {% for f in files %}
+  <figure><img src="/orders/current/photos/{{ product|urlencode }}/{{ loop.index0 }}" alt=""><figcaption>{{ f.filename }}
+    <form method="post" action="/orders/current/photos/{{ product|urlencode }}/{{ loop.index0 }}/remove" class="inline"><button class="link danger">remove</button></form></figcaption></figure>
+  {% endfor %}
+</div>
+{% endfor %}
+{% for product, metas in order.product_photos.items() if metas %}
+<p><strong>{{ product }}</strong>: {{ metas|length }} saved photo(s) ({{ metas|map(attribute='filename')|join(', ') }})</p>
+{% endfor %}
+<p class="hint">Photos are kept for this session and stored with the order when you save it.</p>
+{% else %}<p class="muted">Add products to your order first, then you can upload photos for each product.</p>{% endif %}
+
+{% include "_client.html" %}
+
+<h2 id="save">Save Your Work</h2>
+{% if order.order_items %}
+<form method="post" action="/orders/current/save" class="row">
+  <label>Order name<input name="name" value="{{ meta.loaded_order_name or '' }}" placeholder="e.g., Client ABC Q1 2026 Order"></label>
+  <label>Your name (optional)<input name="created_by" placeholder="e.g., John Smith"></label>
+  <label class="check"><input type="checkbox" name="overwrite" {% if meta.loaded_order_name %}checked{% endif %}> Overwrite existing order with this name</label>
+  <button class="small primary">Save order</button>
+</form>
+<p class="hint">Saved orders appear on the Orders page for everyone; reload one any time.</p>
+{% else %}<p class="muted">Add products to your order to enable saving.</p>{% endif %}
+{% endblock %}

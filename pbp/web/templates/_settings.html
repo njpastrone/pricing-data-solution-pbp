@@ -1,0 +1,62 @@
+<div id="settings">
+  <h2>3. Order Settings</h2>
+  {% if not order.order_items %}
+  <p class="muted">Add products to your order first, then configure order settings here.</p>
+  {% else %}
+  <form method="post" action="/orders/current/settings" hx-post="/orders/current/settings" hx-trigger="change delay:200ms" hx-target="#settings" hx-swap="outerHTML">
+    <h3>Order Adjustments</h3>
+    <div class="cols-3">
+      <div>
+        <label>Client Discount
+          <select name="discount_option">
+            {% for option in svc.DISCOUNT_OPTIONS %}<option {% if svc.discount_option(order) == option %}selected{% endif %}>{{ option }}</option>{% endfor %}
+          </select>
+        </label>
+        {% if svc.discount_option(order) == 'Custom' %}<label>Custom discount %<input type="number" step="0.5" min="0" max="100" name="custom_discount" value="{{ order.order_discount_custom_value }}"></label>{% endif %}
+        {% if totals.products_subtotal > 10000 %}<p class="hint">Order value over $10,000: Volume Order Discount should apply.</p>{% endif %}
+      </div>
+      <div>
+        <label class="check"><input type="checkbox" name="fifty_cent_rounding" {% if order.order_fifty_cent_rounding %}checked{% endif %}> Round prices to nearest $0.50</label>
+        <label class="check"><input type="checkbox" name="marketing_rounding" {% if order.order_use_marketing_rounding %}checked{% endif %}> Apply marketing rounding (e.g., $60 to $59)</label>
+      </div>
+      <div>
+        <label class="check"><input type="checkbox" name="apply_cc_fee" {% if order.apply_cc_fee %}checked{% endif %}> Credit card fee</label>
+        {% if order.apply_cc_fee %}<label>CC fee %<input type="number" step="0.1" min="0" max="10" name="cc_fee_percent" value="{{ order.cc_fee_percent }}"></label>{% endif %}
+      </div>
+    </div>
+
+    <h3>Kitting &amp; Gift Set Pricing (Sale-wide)</h3>
+    <p class="hint">Costs for gift boxes or packaging that apply to the entire order. For product-specific kitting, use the product cards above.</p>
+    <div class="cols-3">
+      <label>Kitting cost (PBP) $<input type="number" step="10" min="0" name="kitting_pbp_cost" value="{{ order.kitting_pbp_cost }}"></label>
+      <label>Kitting price (client) $<input type="number" step="10" min="0" name="kitting_client_price" value="{{ order.kitting_client_price }}"></label>
+    </div>
+
+    <details>
+      <summary>Legacy: Shipping &amp; Tariffs (these costs are now included in product pricing)</summary>
+      <div class="cols-3">
+        <label>Shipping price to client $<input type="number" step="10" min="0" name="order_shipping" value="{{ order.order_shipping }}"></label>
+        <label>Shipping cost from partner $<input type="number" step="10" min="0" name="partner_shipping" value="{{ order.partner_shipping }}"></label>
+        <label>Estimated sales tax $<input type="number" step="5" min="0" name="sales_tax" value="{{ order.sales_tax }}"></label>
+      </div>
+      <p class="hint">Tariff total: {{ totals.tariff|money }}. Tariff is calculated on product cost (excludes markup, customization and shipping).</p>
+      {% for item in order.order_items if not item.is_custom %}
+      <div class="row">
+        <div>{{ item.product_name }} <span class="hint">{{ item.country_of_origin_made_in or item.country_of_origin or 'N/A' }}, {{ item.quantity }} units, base {{ item.tariff_base|money }}</span></div>
+        <label class="narrow">Tariff rate %<input type="number" step="0.5" min="0" max="100" name="tariff_rate_{{ loop.index0 }}" value="{{ item.tariff_rate_percent or 0 }}"></label>
+        <div class="narrow">= {{ item.tariff_amount|money }}</div>
+      </div>
+      {% endfor %}
+    </details>
+
+    <h3>Order Notes</h3>
+    <p class="hint">Internal notes stay within PBP; external notes are shared with partners or clients.</p>
+    <div class="cols-3" style="grid-template-columns: 1fr 1fr;">
+      {% for key, label in svc.NOTE_CATEGORIES %}
+      <label>{{ label }}<textarea name="{{ key }}" rows="3">{{ order.order_notes.get(key, '') }}</textarea></label>
+      {% endfor %}
+    </div>
+    <noscript><button type="submit" class="small">Apply settings</button></noscript>
+  </form>
+  {% endif %}
+</div>
