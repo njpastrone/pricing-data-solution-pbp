@@ -109,24 +109,20 @@ pricing-data-solution-pbp/
 ├── requirements.txt            # Python dependencies
 ├── CLAUDE.md                   # Project rules & AI context
 │
-├── src/                        # Modular code (14 modules, ~8,300 lines)
+├── pbp/                        # Shared core package (Streamlit app + future web app)
+│   ├── core/                  # helpers, pricing_engine, slide_matcher, pptx_generator,
+│   │                          # match_manager, forms_config, forms_helper
+│   └── sheets/                # drive_helper (photo storage via Google Sheets)
+│
+├── src/                        # Streamlit-coupled modules
 │   ├── data_loader.py         # Google Sheets data loading
-│   ├── helpers.py             # Utility functions, validation, HTML parsing
-│   ├── pricing_engine.py      # Pricing calculations and quote generation
 │   ├── client_form.py         # Client order form page (v8.4.0)
-│   ├── slide_matcher.py       # PowerPoint slide matching
-│   ├── pptx_generator.py      # PowerPoint generation
 │   ├── template_loader.py     # Cloud-based template loading
-│   ├── match_manager.py       # Manual match storage (JSON)
 │   ├── match_memory.py        # Confirmed match storage (Google Sheets)
 │   ├── proposal_manager.py    # Save/load/delete proposals
-│   ├── order_manager.py       # Save/load/delete orders
-│   ├── drive_helper.py        # Photo storage via Google Sheets (base64)
-│   ├── forms_config.py        # Google Forms configuration
-│   └── forms_helper.py        # Google Forms URL generation & import
+│   └── order_manager.py       # Save/load/delete orders
 │
-├── tests/                      # Unit tests
-│   └── test_client_form.py    # Client form module tests
+├── tests/                      # Unit tests + golden parity tests (tests/golden/)
 │
 ├── docs/                       # Documentation (organized by topic)
 │   ├── planning/              # Requirements, pricing logic, data structure
