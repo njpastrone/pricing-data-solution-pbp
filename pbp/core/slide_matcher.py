@@ -12,6 +12,7 @@ Dependencies:
 - rapidfuzz: Fast string matching (auto-installed with thefuzz)
 """
 
+import logging
 from thefuzz import fuzz, process
 from typing import Optional, Dict, List, Tuple
 import re
@@ -310,8 +311,7 @@ class SlideMatcher:
                     match_method=f"Previously confirmed ({confirmed_match['match_type']})"
                 )
         except Exception as e:
-            # Log error if lookup fails
-            print(f"Error looking up confirmed match for '{gs_product_name}': {str(e)}")
+            logging.warning("Confirmed match lookup failed for '%s': %s", gs_product_name, e)
 
         # Step 1: Check manual matches from JSON (legacy system)
         manual_match_data = get_manual_match(gs_product_name, match_category="product")

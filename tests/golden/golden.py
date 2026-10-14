@@ -15,18 +15,20 @@ Two modes:
    Reads every row of the saved_orders and saved_proposals sheets and writes
    one JSON file per order/proposal under tests/golden/snapshots/. Each file
    holds the pricing inputs (client details stripped) plus the expected
-   outputs. Nothing is ever written to Google Sheets: the client is built with
+   outputs. Snapshots hold internal cost data, so they are generated locally
+   and kept out of git (tests/golden/snapshots/ is in .gitignore). Nothing is ever written to Google Sheets: the client is built with
    read-only scopes, so a write would be rejected by Google itself.
 
    Credentials come from the same GCP_* environment variables the app uses on
    Render, or from GOLDEN_SERVICE_ACCOUNT_JSON=/path/to/service-account.json.
 
-2. COMPARE (offline, runs in CI):
+2. COMPARE (offline, on the machine that holds the snapshots):
 
        python -m pytest tests/golden -q
 
    tests/golden/test_golden.py recomputes every snapshot from its stored
-   inputs and fails if anything differs.
+   inputs and fails if anything differs. Without snapshots (e.g. in CI) the
+   snapshot tests are skipped and only the synthetic self-check runs.
 
 What is covered: unit prices, tiers, quotes, MOQ and tariff per order line;
 split totals per order; proposal pricing and PBP MSRP per proposal line; the
@@ -70,16 +72,16 @@ To generate the golden baselines (one-time, before phase 1 of the migration star
      writes possible) and writes tests/golden/snapshots/orders/*.json and
      tests/golden/snapshots/proposals/*.json. Expect a few minutes: one PowerPoint
      deck is generated per proposal.
-  3. Check the snapshots contain no client details (client_info, order_notes and
-     partner_shipping are stripped automatically), then commit them:
-       git add tests/golden/snapshots && git commit -m "test: golden baselines"
-  4. From then on `python -m pytest tests/golden -q` fails on any pricing or
-     PowerPoint change, and CI runs it on every PR.
+  3. Keep the snapshots local: tests/golden/snapshots/ is in .gitignore and must
+     never be committed (client_info, order_notes, partner_shipping and
+     product_photos are stripped, but internal costs and markups remain).
+  4. From then on `python -m pytest tests/golden -q` on that machine fails on any
+     pricing or PowerPoint change. Re-run it on each later phase's branch.
 """
 
 # Order keys that hold client details rather than pricing inputs. Stripped
-# before a snapshot is written so no personal data lands in the repo.
-ORDER_KEYS_TO_STRIP = ("client_info", "order_notes", "partner_shipping")
+# before a snapshot is written so no personal data lands in the snapshot.
+ORDER_KEYS_TO_STRIP = ("client_info", "order_notes", "partner_shipping", "product_photos")
 
 
 def plain(value):

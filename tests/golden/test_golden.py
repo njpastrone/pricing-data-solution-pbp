@@ -46,7 +46,7 @@ def test_proposal_pptx_unchanged(path):
 
 # ----------------------------------------------------------------------------
 # Self-check on a synthetic order and proposal, so the snapshot machinery is
-# exercised even before real snapshots are committed.
+# exercised even where no real snapshots exist (e.g. CI).
 # ----------------------------------------------------------------------------
 
 SAMPLE_PRODUCT = {
