@@ -39,6 +39,9 @@ APP_PASSWORD = os.getenv("APP_PASSWORD") or "pbp2026"
 SECRET_KEY = os.getenv("PBP_SECRET_KEY") or hashlib.sha256(("pbp-web:" + APP_PASSWORD).encode()).hexdigest()
 SESSION_DAYS = 30
 
+# PBP_DEMO=1 runs the whole app against in-memory sample data (no Google Sheets or Drive); see pbp/demo.py
+DEMO = os.getenv("PBP_DEMO", "").strip().lower() in ("1", "true", "yes")
+
 
 def _secrets_toml():
     """The local .streamlit/secrets.toml as a dict ({} when there is none)."""

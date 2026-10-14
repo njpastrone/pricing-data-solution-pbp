@@ -169,8 +169,16 @@ Tool plus Reset session (phase 4). The legacy Google Form and HTML order form pa
 ported (deprecated; the client form link replaces them). Staff log in at `/login` with the same
 `APP_PASSWORD`.
 
-Run it locally (needs Google credentials: `.streamlit/secrets.toml`, or the `GCP_*`
-variables, or `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json`):
+Try it without any credentials (in-memory sample data, nothing touches Google):
+
+```bash
+pip install -r requirements.txt
+PBP_DEMO=1 uvicorn pbp.web.app:app --port 8765
+# http://localhost:8765/login  (password: APP_PASSWORD, or pbp2026 if unset)
+```
+
+Run it against the real Sheets and Drive (needs Google credentials: `.streamlit/secrets.toml`,
+or the `GCP_*` variables, or `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json`):
 
 ```bash
 pip install -r requirements.txt
