@@ -21,7 +21,7 @@ from pbp.core.forms_config import (
     MAX_PRODUCT_LINES,
     find_response_column,
 )
-from src.client_form import STATUS_PENDING
+from pbp.sheets.client_form import STATUS_PENDING
 
 
 def generate_prefilled_form_url(client_info, products):

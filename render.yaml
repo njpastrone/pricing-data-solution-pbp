@@ -1,0 +1,46 @@
+# Render Blueprint: two web services from one repository during the Streamlit migration.
+#
+# NOT YET APPLIED. Creating a Blueprint instance from this file in the Render dashboard
+# is a deliberate step (outside working hours; manual deploys and render.yaml edits
+# bypass build filters). Until then the existing dashboard-created Streamlit service
+# keeps deploying from start.sh exactly as before.
+#
+# Build filters keep the deploys apart (safety rule 2): a push to pbp/web/ never
+# redeploys the legacy app (which would reset every staff session), and a hot-fix to
+# app.py never redeploys the new app. Neither service sets a root directory, because
+# both need pbp/ at the repo root (safety rule 3).
+services:
+  - type: web
+    name: pbp-streamlit            # legacy app (today: pbp-order-management-system)
+    runtime: python
+    plan: standard
+    buildCommand: pip install -r requirements.txt
+    startCommand: bash start.sh
+    buildFilter:
+      ignoredPaths:
+        - pbp/web/**
+        - tests/**
+        - docs/**
+    envVars:
+      - key: APP_PASSWORD
+        sync: false
+      - key: CLIENT_FORM_BASE_URL   # flip to the pbp-web URL to cut the client form over; flip back to roll back
+        sync: false
+
+  - type: web
+    name: pbp-web                  # new FastAPI + HTMX app
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn pbp.web.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /internal/health
+    buildFilter:
+      ignoredPaths:
+        - app.py
+        - start.sh
+        - .streamlit/**
+        - tests/**
+        - docs/**
+    envVars:
+      - key: PBP_SYNC_LOOP_SECONDS
+        value: "60"

@@ -87,7 +87,7 @@ from pbp.core.forms_helper import (
     build_submissions_list,
     submission_matches_search
 )
-from src.client_form import (
+from pbp.sheets.client_form import (
     load_proposal_for_client,
     load_draft,
     save_draft,
@@ -4830,7 +4830,8 @@ with tab2:
                 save_draft(saved_proposal_id, token, prefill_data)
 
             # Build URL
-            form_link = f"{APP_URL}?client_form={saved_proposal_id}&session={token}"
+            base_url = os.getenv("CLIENT_FORM_BASE_URL", APP_URL)
+            form_link = f"{base_url}?client_form={saved_proposal_id}&session={token}"
             st.session_state.generated_client_form_link = form_link
             st.rerun()
 

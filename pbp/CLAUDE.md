@@ -5,16 +5,16 @@ generator, slide matcher, forms helper/config, manual-match storage (`pbp/core/`
 and photo storage (`pbp/sheets/`) here so the Streamlit app and the future
 FastAPI app can both import them. Phase 0 only moved files and changed imports.
 
-## Known phase-1 work (still Streamlit-coupled)
+## Layout
 
-- `pbp/sheets/drive_helper.py` imports `connect_to_sheets` and `DATASET_CONFIGS`
-  from `src.data_loader`, which uses `st.cache_resource` / `st.secrets`.
-  Phase 1 moves the Sheets connection into `pbp/sheets/`.
+- `pbp/settings.py`: environment-driven configuration (spreadsheet IDs with env overrides, `CLIENT_FORM_BASE_URL`, credentials lookup).
+- `pbp/sheets/gateway.py`: the one Google Sheets connection, cached worksheet handles, quota back-off. Both apps use it.
+- `pbp/sheets/client_form.py`: client order form logic (drafts, submit, backup-then-sync). Framework-free since phase 1.
+- `pbp/web/`: the FastAPI + HTMX app. Phase 1 serves the client order form; later phases add staff screens.
+
+## Known remaining Streamlit coupling
+
 - `pbp/core/slide_matcher.py` imports `get_confirmed_match` from
   `src.match_memory` (which imports streamlit) inside `find_match`. If that
   lookup fails it logs a warning and falls back to manual/automatic matching.
-  Phase 1 moves confirmed-match storage into `pbp/sheets/`.
-- `pbp/core/forms_helper.py` imports `STATUS_PENDING` from `src.client_form`
-  (which imports streamlit). Phase 1 moves `client_form` into `pbp/sheets/`.
-
-Until these are done, importing these three modules pulls in Streamlit.
+  Phase 3 moves confirmed-match storage into `pbp/sheets/`.

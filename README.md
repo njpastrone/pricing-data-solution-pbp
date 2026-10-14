@@ -158,6 +158,31 @@ pricing-data-solution-pbp/
 
 ---
 
+## New web app (Streamlit migration, in progress)
+
+The client order form now also runs as a FastAPI + HTMX app in `pbp/web/`. It reads and
+writes the same Google Sheets as the Streamlit app, so links made in Tab 2 work on either.
+
+Run it locally (needs Google credentials: `.streamlit/secrets.toml`, or the `GCP_*`
+variables, or `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json`):
+
+```bash
+pip install -r requirements.txt
+uvicorn pbp.web.app:app --reload --port 8000
+# then open a link from Tab 2 with the host swapped, e.g.
+#   http://localhost:8000/?client_form=PROP_20260524_143022&session=abc123def456
+# health: http://localhost:8000/internal/health
+```
+
+To make Tab 2 generate links that point at the new app, run the Streamlit app with
+`CLIENT_FORM_BASE_URL=http://localhost:8000/` (on Render this is the cutover switch).
+
+Optional overrides so a local run never touches production tabs: `PBP_SAVED_ORDERS_SHEET_ID`
+(drafts/backup tab lives here), `PBP_FORM_RESPONSES_SHEET_ID`, `PBP_SAVED_PROPOSALS_SHEET_ID`.
+`PBP_SYNC_LOOP_SECONDS=0` disables the background Form Responses sync loop.
+
+Tests: `python -m pytest tests -q` (all Google Sheets access is faked).
+
 ## Deployment
 
 **Live URL:** https://pbp-order-management-system.onrender.com

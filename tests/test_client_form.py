@@ -1,4 +1,4 @@
-"""Tests for src/client_form.py"""
+"""Tests for pbp/sheets/client_form.py"""
 
 import sys
 import os
@@ -10,9 +10,10 @@ from unittest.mock import MagicMock, patch
 
 import gspread
 
-from src.client_form import (generate_session_token, load_proposal_for_client, _serialize_form_data, _deserialize_form_data,
-                             submit_form, save_draft, sync_submission, retry_pending_syncs, DRAFTS_SHEET_NAME, BACKUP_RETRY_WAITS,
-                             STATUS_PENDING, STATUS_SUBMITTED, _open_worksheet, _open_drafts_sheet)
+from pbp.sheets.client_form import (generate_session_token, load_proposal_for_client, _serialize_form_data, _deserialize_form_data,
+                                    submit_form, save_draft, sync_submission, retry_pending_syncs, DRAFTS_SHEET_NAME, BACKUP_RETRY_WAITS,
+                                    STATUS_PENDING, STATUS_SUBMITTED)
+from pbp.sheets import gateway
 from pbp.core.forms_config import GOOGLE_FORM_CONFIG, find_response_column
 from pbp.core.forms_helper import parse_form_response, mark_response_imported, form_response_to_order
 
@@ -177,9 +178,7 @@ DRAFT_HEADERS = ['Proposal_ID', 'Session_ID', 'Draft_Data_JSON', 'File_Data_Base
 
 def _mock_sheets(response_headers, drafts_exists=True, draft_rows=(), response=None):
     """Build a fake gspread client with a response sheet and a drafts (backup) sheet."""
-    # Forget worksheets cached by an earlier test
-    _open_worksheet.clear()
-    _open_drafts_sheet.clear()
+    gateway.reset()  # forget worksheets cached by an earlier test
 
     response = response or FakeSheet([response_headers])
     drafts = FakeSheet([DRAFT_HEADERS] + [list(r) for r in draft_rows])
@@ -203,9 +202,9 @@ def _mock_sheets(response_headers, drafts_exists=True, draft_rows=(), response=N
 
 def _submit(client, *args):
     """Submit with the background sync run right away (one attempt), and no real sleeping."""
-    with patch('src.client_form.connect_to_sheets', return_value=client), \
-         patch('src.client_form.time.sleep'), \
-         patch('src.client_form._sync_in_background', side_effect=sync_submission):
+    with patch('pbp.sheets.gateway.connect', return_value=client), \
+         patch('pbp.sheets.client_form.time.sleep'), patch('pbp.sheets.gateway.time.sleep'), \
+         patch('pbp.sheets.client_form._sync_in_background', side_effect=sync_submission):
         return submit_form(*args)
 
 
@@ -279,7 +278,7 @@ def test_pending_order_syncs_on_next_app_run():
     _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
     assert _backup(drafts)[1] == STATUS_PENDING
 
-    with patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch('pbp.sheets.gateway.connect', return_value=client):
         stuck = retry_pending_syncs()
         retry_pending_syncs()  # a second run finds nothing left to do
 
@@ -301,9 +300,9 @@ def test_background_sync_retries_until_it_succeeds():
         def start(self):
             self.target()
 
-    with patch('src.client_form.connect_to_sheets', return_value=client), \
-         patch('src.client_form.time.sleep'), \
-         patch('src.client_form.threading.Thread', RunNow):
+    with patch('pbp.sheets.gateway.connect', return_value=client), \
+         patch('pbp.sheets.client_form.time.sleep'), patch('pbp.sheets.gateway.time.sleep'), \
+         patch('pbp.sheets.client_form.threading.Thread', RunNow):
         success, msg = submit_form('PROP_1', 'sess1', SAMPLE_FORM)
 
     assert success
@@ -319,7 +318,7 @@ def test_repeated_sync_does_not_duplicate_rows():
     assert len(_response_rows(response)) == 1
     assert _backup(drafts)[1] == STATUS_PENDING  # marking failed
 
-    with patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch('pbp.sheets.gateway.connect', return_value=client):
         assert sync_submission('PROP_1', 'sess1')[0]
         assert sync_submission('PROP_1', 'sess1')[0]
         retry_pending_syncs()
@@ -334,7 +333,7 @@ def test_stuck_order_is_reported_to_staff():
     pending = ['PROP_1', 'sess1', json.dumps(old_form), '', '', '', '', STATUS_PENDING]
     headers_without_items = [h for h in LIVE_HEADERS if 'Gift' not in h]
     client, response, _, _ = _mock_sheets(headers_without_items, draft_rows=[pending])
-    with patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch('pbp.sheets.gateway.connect', return_value=client):
         stuck = retry_pending_syncs()
 
     assert len(stuck) == 1
@@ -352,7 +351,7 @@ def test_save_progress_does_not_undo_a_received_order():
     _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
     assert _backup(drafts)[1] == STATUS_PENDING
 
-    with patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch('pbp.sheets.gateway.connect', return_value=client):
         success, _ = save_draft('PROP_1', 'sess1', dict(SAMPLE_FORM, notes='old tab'))
         assert success
         assert _backup(drafts) == (SAMPLE_FORM, STATUS_PENDING)
@@ -376,9 +375,9 @@ def test_submit_form_header_mismatch_keeps_order_pending():
 def test_submit_form_fails_if_backup_never_saves():
     """No backup, no 'Order received': the client is asked to retry, without technical detail."""
     client, response, _, _ = _mock_sheets(LIVE_HEADERS)
-    with patch('src.client_form.connect_to_sheets', return_value=client), \
-         patch('src.client_form._get_drafts_sheet', return_value=None), \
-         patch('src.client_form.time.sleep') as fake_sleep:
+    with patch('pbp.sheets.gateway.connect', return_value=client), \
+         patch('pbp.sheets.client_form._get_drafts_sheet', return_value=None), \
+         patch('pbp.sheets.gateway.time.sleep'), patch('pbp.sheets.client_form.time.sleep') as fake_sleep:
         success, msg = submit_form('PROP_1', 'sess1', SAMPLE_FORM)
 
     assert not success
@@ -567,7 +566,7 @@ def test_parse_form_response_reads_live_headers():
 
 def test_response_row_keeps_payment_preference_column_blank():
     """The Form Responses sheet still has the payment preference column; it is left blank."""
-    from src.client_form import _build_response_row
+    from pbp.sheets.client_form import _build_response_row
     headers = ['Timestamp', 'Payment Preference *', 'Payment Method *']
     form_data = {'payment_info': {'payment_preference': '', 'payment_method': 'ACH'}}
     row, _, _ = _build_response_row(headers, form_data, None)
@@ -669,7 +668,7 @@ class FakeSMTP:
 def _submit_with_email(client, settings=NOTIFY_SETTINGS, fail=None):
     """Submit SAMPLE_FORM with fake email settings and a fake mail server."""
     FakeSMTP.sent, FakeSMTP.fail = [], fail
-    with patch.dict(os.environ, settings), patch('src.client_form.smtplib.SMTP', FakeSMTP):
+    with patch.dict(os.environ, settings), patch('pbp.sheets.client_form.smtplib.SMTP', FakeSMTP):
         return _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
 
 
@@ -690,8 +689,8 @@ def test_submitted_order_emails_the_team_once():
     assert 'https://pbp-order-management-system.onrender.com/' in body
 
     # Later syncs (another submit click, the app's next-run retry) send nothing more
-    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('src.client_form.smtplib.SMTP', FakeSMTP), \
-         patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('pbp.sheets.client_form.smtplib.SMTP', FakeSMTP), \
+         patch('pbp.sheets.gateway.connect', return_value=client):
         sync_submission('PROP_1', 'sess1')
         retry_pending_syncs()
     assert len(FakeSMTP.sent) == 1
@@ -704,26 +703,26 @@ def test_pending_order_emails_only_when_it_reaches_form_responses():
     _submit_with_email(client)
     assert FakeSMTP.sent == []
 
-    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('src.client_form.smtplib.SMTP', FakeSMTP), \
-         patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('pbp.sheets.client_form.smtplib.SMTP', FakeSMTP), \
+         patch('pbp.sheets.gateway.connect', return_value=client):
         retry_pending_syncs()
     assert len(FakeSMTP.sent) == 1
 
 
 def test_stale_pending_row_sends_no_second_email():
     """Retry read the row as pending, then another sync copied and emailed it first: retry sends nothing more."""
-    from src import client_form
+    from pbp.sheets import client_form
     client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
     response.fail['update'] = [Exception("503 Service Unavailable")]
     _submit_with_email(client)
     assert FakeSMTP.sent == []
 
-    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('src.client_form.smtplib.SMTP', FakeSMTP), \
-         patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('pbp.sheets.client_form.smtplib.SMTP', FakeSMTP), \
+         patch('pbp.sheets.gateway.connect', return_value=client):
         stale_rows = client_form._read_backup_rows(drafts)
         sync_submission('PROP_1', 'sess1')
         assert len(FakeSMTP.sent) == 1
-        with patch('src.client_form._read_backup_rows', return_value=stale_rows):
+        with patch('pbp.sheets.client_form._read_backup_rows', return_value=stale_rows):
             retry_pending_syncs()
     assert len(FakeSMTP.sent) == 1
     assert len(_response_rows(response)) == 1
@@ -731,7 +730,7 @@ def test_stale_pending_row_sends_no_second_email():
 
 def test_email_failure_never_fails_the_order():
     """Mail server down: client still sees 'Order received', the order is synced, and staff are warned."""
-    from src.client_form import failed_notifications
+    from pbp.sheets.client_form import failed_notifications
     failed_notifications.clear()
     client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
     assert _submit_with_email(client, fail=OSError("connection refused")) == (True, "Order received")
@@ -745,13 +744,13 @@ def test_email_failure_never_fails_the_order():
 
 def test_bad_email_header_never_fails_the_sync():
     """A company name with a line break cannot go in an email subject: the order still syncs and staff are warned."""
-    from src.client_form import failed_notifications
+    from pbp.sheets.client_form import failed_notifications
     failed_notifications.clear()
     client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
     form = json.loads(json.dumps(SAMPLE_FORM))
     form['client_info']['company_name'] = 'Acme\nCorp'
     FakeSMTP.sent, FakeSMTP.fail = [], None
-    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('src.client_form.smtplib.SMTP', FakeSMTP):
+    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('pbp.sheets.client_form.smtplib.SMTP', FakeSMTP):
         assert _submit(client, 'PROP_1', 'sess1', form) == (True, "Order received")
 
     assert FakeSMTP.sent == []

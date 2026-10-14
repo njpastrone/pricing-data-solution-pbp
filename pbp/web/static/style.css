@@ -1,0 +1,33 @@
+:root {
+  --ink: #1f2933;
+  --muted: #6b7280;
+  --line: #d9dee3;
+  --accent: #0066cc;
+  --ok-bg: #e6f4ea; --ok-ink: #1e6b36;
+  --err-bg: #fdecea; --err-ink: #a12622;
+  --bg: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --ink: #e5e7eb; --muted: #9ca3af; --line: #374151; --bg: #111827; --ok-bg: #11311c; --ok-ink: #9be3b0; --err-bg: #3a1413; --err-ink: #f5b5b1; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.page { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+h2 { font-size: 1.15rem; margin: 0 0 4px; }
+section { border-top: 1px solid var(--line); padding: 20px 0; }
+.muted { color: var(--muted); margin: 0 0 12px; }
+label { display: block; margin: 12px 0 0; font-weight: 600; }
+input, select, textarea { display: block; width: 100%; margin-top: 4px; padding: 8px 10px; font: inherit; font-weight: 400; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+input[type="file"] { padding: 6px 0; border: 0; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+@media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+fieldset.item { border: 1px solid var(--line); border-radius: 8px; padding: 4px 14px 14px; margin: 12px 0; }
+legend { font-weight: 600; padding: 0 6px; }
+.actions { display: flex; gap: 12px; margin-top: 8px; }
+button { flex: 1; padding: 12px; font: inherit; font-weight: 600; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.secondary { flex: none; width: auto; margin-top: 8px; }
+.notice { padding: 12px 14px; border-radius: 6px; margin: 12px 0; }
+.notice.success { background: var(--ok-bg); color: var(--ok-ink); }
+.notice.error { background: var(--err-bg); color: var(--err-ink); }

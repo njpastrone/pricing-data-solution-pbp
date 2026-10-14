@@ -12,7 +12,8 @@ Sheet structure: Photo_ID | Order_ID | Product_Name | Photo_Index | Filename | C
 import base64
 import uuid
 import gspread
-from src.data_loader import connect_to_sheets
+from pbp import settings
+from pbp.sheets import gateway
 
 # Maximum characters per cell (Google Sheets limit is 50,000, we use 40,000 for safety)
 CHUNK_SIZE = 40000
@@ -29,9 +30,7 @@ def _get_photos_sheet():
         gspread.Worksheet or None
     """
     try:
-        from src.data_loader import DATASET_CONFIGS
-        client = connect_to_sheets()
-        spreadsheet = client.open_by_key(DATASET_CONFIGS['saved_orders']['spreadsheet_id'])
+        spreadsheet = gateway.connect().open_by_key(settings.SAVED_ORDERS_SHEET_ID)
 
         try:
             sheet = spreadsheet.worksheet(PHOTOS_SHEET_NAME)

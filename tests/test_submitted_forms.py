@@ -17,7 +17,7 @@ import pytest
 
 from streamlit.testing.v1 import AppTest
 
-from src.client_form import load_received_orders
+from pbp.sheets.client_form import load_received_orders
 from pbp.core.forms_helper import build_submissions_list, load_form_responses, submission_matches_search
 from test_client_form import FakeSheet, LIVE_HEADERS, SAMPLE_FORM, _mock_sheets, _submit
 from test_form_to_order import FULL_FORM, _app_function_source
@@ -50,17 +50,17 @@ def _two_synced_and_one_stuck():
     response = FakeSheet([LIVE_HEADERS, [google_form_row[h] for h in LIVE_HEADERS]])
     client, response, drafts, _ = _mock_sheets(LIVE_HEADERS, response=response)
 
-    with patch('src.client_form.datetime', _at(9)):
+    with patch('pbp.sheets.client_form.datetime', _at(9)):
         assert _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM, b'name,address', 'addresses.csv')[0]
 
     stuck_form = dict(FULL_FORM, client_info=dict(FULL_FORM['client_info'], company_name='Stuck Co'),
                       payment_info=dict(FULL_FORM['payment_info'], accounting_contact_type='Email',
                                         accounting_contact='ap@stuck.com'))
     response.fail['update'] = [Exception("Sheets is down")]
-    with patch('src.client_form.datetime', _at(10)):
+    with patch('pbp.sheets.client_form.datetime', _at(10)):
         assert _submit(client, 'PROP_2', 'sess2', stuck_form)[0]
 
-    with patch('src.client_form.connect_to_sheets', return_value=client):
+    with patch('pbp.sheets.gateway.connect', return_value=client):
         received = load_received_orders()
     return build_submissions_list(_records(response), received)
 
@@ -107,7 +107,7 @@ def test_submitted_backups_missing_from_form_responses_are_not_listed_as_pending
 def test_backup_tab_read_failure_raises_instead_of_hiding_pending_orders():
     client, _, drafts, _ = _mock_sheets(LIVE_HEADERS)
     drafts.fail['batch_get'] = [Exception("Sheets is down")]
-    with patch('src.client_form.connect_to_sheets', return_value=client), pytest.raises(Exception, match="Sheets is down"):
+    with patch('pbp.sheets.gateway.connect', return_value=client), pytest.raises(Exception, match="Sheets is down"):
         load_received_orders()
 
 
