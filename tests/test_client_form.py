@@ -505,6 +505,16 @@ def test_parse_form_response_reads_live_headers():
     assert parsed['payment_info']['impact_cards'] == 'No'
 
 
+def test_response_row_keeps_payment_preference_column_blank():
+    """The Form Responses sheet still has the payment preference column; it is left blank."""
+    from src.client_form import _build_response_row
+    headers = ['Timestamp', 'Payment Preference *', 'Payment Method *']
+    form_data = {'payment_info': {'payment_preference': '', 'payment_method': 'ACH'}}
+    row, _, _ = _build_response_row(headers, form_data, None)
+    assert row[1] == ''
+    assert row[2] == 'ACH'
+
+
 if __name__ == "__main__":
     test_generate_session_token_is_unique()
     test_generate_session_token_is_url_safe()
@@ -529,4 +539,5 @@ if __name__ == "__main__":
     test_submit_form_retries_after_quota_error()
     test_submit_form_does_not_reopen_sheets_every_time()
     test_parse_form_response_reads_live_headers()
+    test_response_row_keeps_payment_preference_column_blank()
     print("All tests passed!")

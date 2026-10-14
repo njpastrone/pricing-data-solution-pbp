@@ -1795,3 +1795,37 @@ def format_pricing_breakdown_row(description, units, pbp_per_unit, pbp_total, cl
 
     # Return in the new logical order: Description, Units, PBP Per Unit, PBP Total, Client Per Unit, Client Total
     return [description, units_str, pbp_per_unit_str, pbp_str, client_per_unit_str, client_str]
+
+
+MAX_PHOTOS_PER_PRODUCT = 5
+
+
+def add_product_photos(existing, uploaded, max_photos=MAX_PHOTOS_PER_PRODUCT):
+    """
+    Merge newly uploaded photos into a product's photo list without duplicates.
+
+    Streamlit keeps the file uploader's value across reruns, so the same upload
+    is handed back on every click. Without this check the same photo was
+    appended again on each rerun until the 5-photo cap was reached.
+
+    Args:
+        existing (list): Photos already attached (objects with .name and .size)
+        uploaded (list): Photos currently in the uploader widget
+        max_photos (int): Cap per product
+
+    Returns:
+        tuple: (merged photo list, number of photos skipped because of the cap)
+    """
+    merged = list(existing)
+    seen = {(p.name, p.size) for p in merged}
+    skipped = 0
+    for photo in uploaded or []:
+        key = (photo.name, photo.size)
+        if key in seen:
+            continue
+        if len(merged) >= max_photos:
+            skipped += 1
+            continue
+        merged.append(photo)
+        seen.add(key)
+    return merged, skipped

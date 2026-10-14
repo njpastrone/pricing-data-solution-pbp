@@ -42,7 +42,9 @@ from src.helpers import (
     get_shipping_costs,
     format_shipping_display,
     get_column_value,
-    get_tariff_rate
+    get_tariff_rate,
+    add_product_photos,
+    MAX_PHOTOS_PER_PRODUCT
 )
 from src.pricing_engine import (
     determine_tier_number,
@@ -575,15 +577,6 @@ def _render_client_form_page(proposal_id, session_id):
         key="cf_impact_cards"
     )
 
-    payment_pref_options = ["Net 30", "Net 60", "Due on Receipt", "Other"]
-    saved_pref = saved_payment.get('payment_preference', 'Net 30')
-    payment_pref = st.selectbox(
-        "Payment Preference *",
-        options=payment_pref_options,
-        index=payment_pref_options.index(saved_pref) if saved_pref in payment_pref_options else 0,
-        key="cf_payment_pref"
-    )
-
     payment_method_options = ["ACH", "Credit Card", "Check", "Other"]
     saved_method = saved_payment.get('payment_method', 'ACH')
     payment_method = st.selectbox(
@@ -628,7 +621,7 @@ def _render_client_form_page(proposal_id, session_id):
             'payment_info': {
                 'impact_cards': impact_cards,
                 'impact_card_selection': '',
-                'payment_preference': payment_pref,
+                'payment_preference': '',  # Payment terms are set by PBP staff, not the client
                 'payment_method': payment_method,
             },
             'notes': special_requests,
@@ -5424,7 +5417,7 @@ with tab3:
                         st.markdown("**Order Details:**")
                         st.write(f"- Products: {format_product_summary(response_data['products'])}")
                         st.write(f"- In-Hands: {response_data['shipping_info'].get('in_hands_date', 'N/A')}")
-                        st.write(f"- Payment: {response_data['payment_info'].get('payment_preference', 'N/A')}")
+                        st.write(f"- Payment Method: {response_data['payment_info'].get('payment_method') or 'N/A'}")
 
                     st.markdown("**Products:**")
                     for product in response_data['products']:
@@ -5494,7 +5487,7 @@ with tab3:
                             'shipping_type': 'Drop Shipping' if drop_shipping == 'Yes' else 'One Location',
                             'ship_method': 'Ground',
                             'shipping_address': response_data['shipping_info'].get('shipping_address', ''),
-                            'payment_timeline': response_data['payment_info'].get('payment_preference', 'Net 30'),
+                            'payment_timeline': response_data['payment_info'].get('payment_preference') or 'Net 30',
                             'payment_preference': response_data['payment_info'].get('payment_method', 'Check'),
                             'client_in_hands_date': in_hands_date,
                             'order_submitted_by': '',
@@ -8138,7 +8131,7 @@ with tab3:
     # ============================================================
     st.divider()
     st.header("5. Product Photos")
-    st.caption("Upload photos for specific products (e.g., product images, mockups, artwork). Up to 5 photos per product.")
+    st.caption(f"Upload photos for specific products (e.g., product images, mockups, artwork). Up to {MAX_PHOTOS_PER_PRODUCT} photos per product.")
 
     if 'product_photos' not in st.session_state:
         st.session_state.product_photos = {}
@@ -8156,7 +8149,7 @@ with tab3:
 
         # Show current photo count for selected product
         current_photos = st.session_state.product_photos.get(selected_product, [])
-        remaining = 5 - len(current_photos)
+        remaining = MAX_PHOTOS_PER_PRODUCT - len(current_photos)
 
         if remaining > 0:
             uploaded_photos = st.file_uploader(
@@ -8167,17 +8160,15 @@ with tab3:
             )
 
             if uploaded_photos:
-                # Add new photos up to the cap of 5
+                # Add new photos up to the cap, skipping ones already attached
+                # (the uploader re-sends its files on every rerun)
                 existing = st.session_state.product_photos.get(selected_product, [])
-                space_left = 5 - len(existing)
-                new_photos = uploaded_photos[:space_left]
-
-                if new_photos:
-                    st.session_state.product_photos[selected_product] = existing + new_photos
-                    if len(uploaded_photos) > space_left:
-                        st.warning(f"Only added {space_left} photo(s) - maximum 5 per product reached.")
+                merged, skipped = add_product_photos(existing, uploaded_photos)
+                st.session_state.product_photos[selected_product] = merged
+                if skipped:
+                    st.warning(f"Skipped {skipped} photo(s) - maximum {MAX_PHOTOS_PER_PRODUCT} per product reached.")
         else:
-            st.info(f"{selected_product} already has 5 photos (maximum).")
+            st.info(f"{selected_product} already has {MAX_PHOTOS_PER_PRODUCT} photos (maximum).")
 
         # Display photos for selected product
         current_photos = st.session_state.product_photos.get(selected_product, [])
