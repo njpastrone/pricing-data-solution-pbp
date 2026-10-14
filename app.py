@@ -43,7 +43,8 @@ from src.helpers import (
     format_shipping_display,
     get_column_value,
     get_tariff_rate,
-    add_product_photos
+    add_product_photos,
+    MAX_PHOTOS_PER_PRODUCT
 )
 from src.pricing_engine import (
     determine_tier_number,
@@ -8130,7 +8131,7 @@ with tab3:
     # ============================================================
     st.divider()
     st.header("5. Product Photos")
-    st.caption("Upload photos for specific products (e.g., product images, mockups, artwork). Up to 5 photos per product.")
+    st.caption(f"Upload photos for specific products (e.g., product images, mockups, artwork). Up to {MAX_PHOTOS_PER_PRODUCT} photos per product.")
 
     if 'product_photos' not in st.session_state:
         st.session_state.product_photos = {}
@@ -8148,7 +8149,7 @@ with tab3:
 
         # Show current photo count for selected product
         current_photos = st.session_state.product_photos.get(selected_product, [])
-        remaining = 5 - len(current_photos)
+        remaining = MAX_PHOTOS_PER_PRODUCT - len(current_photos)
 
         if remaining > 0:
             uploaded_photos = st.file_uploader(
@@ -8159,15 +8160,15 @@ with tab3:
             )
 
             if uploaded_photos:
-                # Add new photos up to the cap of 5, skipping ones already attached
+                # Add new photos up to the cap, skipping ones already attached
                 # (the uploader re-sends its files on every rerun)
                 existing = st.session_state.product_photos.get(selected_product, [])
                 merged, skipped = add_product_photos(existing, uploaded_photos)
                 st.session_state.product_photos[selected_product] = merged
                 if skipped:
-                    st.warning(f"Skipped {skipped} photo(s) - maximum 5 per product reached.")
+                    st.warning(f"Skipped {skipped} photo(s) - maximum {MAX_PHOTOS_PER_PRODUCT} per product reached.")
         else:
-            st.info(f"{selected_product} already has 5 photos (maximum).")
+            st.info(f"{selected_product} already has {MAX_PHOTOS_PER_PRODUCT} photos (maximum).")
 
         # Display photos for selected product
         current_photos = st.session_state.product_photos.get(selected_product, [])
