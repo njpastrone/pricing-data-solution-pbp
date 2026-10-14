@@ -438,4 +438,4 @@ streamlit run app.py
 - **CLAUDE.md:** [CLAUDE.md](CLAUDE.md) (AI-friendly context)
 - **Documentation:** [../docs/README.md](../docs/README.md)
 - **Methodology:** [../docs/planning/METHODOLOGY_LOGIC.md](../docs/planning/METHODOLOGY_LOGIC.md)
-- **Production:** https://pricing-data-solution-pbp.onrender.com
+- **Production:** https://pbp-order-management-system.onrender.com

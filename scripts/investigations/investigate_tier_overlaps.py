@@ -12,7 +12,7 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.data_loader import load_pricing_data
-from src.helpers import parse_tier_info, get_column_value
+from pbp.core.helpers import parse_tier_info, get_column_value
 
 st.title("Tier Overlap Investigation")
 st.markdown("This script checks for overlapping tier ranges in the pricing data.")

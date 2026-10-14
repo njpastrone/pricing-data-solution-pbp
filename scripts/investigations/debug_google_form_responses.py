@@ -21,7 +21,7 @@ sys.path.insert(0, str(project_root))
 import streamlit as st
 import pandas as pd
 from src.data_loader import connect_to_sheets
-from src.forms_config import GOOGLE_FORM_CONFIG, RESPONSE_COLUMNS
+from pbp.core.forms_config import GOOGLE_FORM_CONFIG, RESPONSE_COLUMNS
 
 st.title("🔍 Google Form Response Debugger")
 st.caption("Diagnose issues with loading form responses")

@@ -6,7 +6,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.helpers import calculate_markup_from_price
+from pbp.core.helpers import calculate_markup_from_price
 
 st.set_page_config(page_title="Test Bidirectional Editing", layout="wide")
 

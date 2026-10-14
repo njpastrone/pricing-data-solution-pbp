@@ -11,7 +11,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 from src.data_loader import load_pricing_data
-from src.helpers import parse_tier_info, get_column_value
+from pbp.core.helpers import parse_tier_info, get_column_value
 import pandas as pd
 
 def debug_tiered_detection(dataset_name='real'):

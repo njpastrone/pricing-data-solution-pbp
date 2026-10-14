@@ -13,9 +13,9 @@ import pandas as pd
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from src.helpers import calculate_moq
-from src.pricing_engine import get_unit_price_new_system
-from src.pptx_generator import calculate_proposal_pricing
+from pbp.core.helpers import calculate_moq
+from pbp.core.pricing_engine import get_unit_price_new_system
+from pbp.core.pptx_generator import calculate_proposal_pricing
 
 # ============================================================
 # TEST DATA SETUP

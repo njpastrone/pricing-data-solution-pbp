@@ -648,7 +648,7 @@ def convert_proposal_to_order(proposal_item, get_unit_price_func, calculate_tari
         dict: Order item compatible with st.session_state.order_items
 
     Example:
-        >>> from src.pricing_engine import get_unit_price_new_system
+        >>> from pbp.core.pricing_engine import get_unit_price_new_system
         >>> order_item = convert_proposal_to_order(proposal_item, get_unit_price_new_system, calculate_product_tariff)
     """
     product_data = proposal_item.get('product_data', {})
@@ -844,7 +844,7 @@ def calculate_pricing_snapshot(product_data, markup_percent, quantity=100, disco
 
     # Import get_unit_price_new_system if not provided
     if get_unit_price_func is None:
-        from src.pricing_engine import get_unit_price_new_system
+        from pbp.core.pricing_engine import get_unit_price_new_system
         get_unit_price_func = get_unit_price_new_system
 
     # Convert to Series if dict

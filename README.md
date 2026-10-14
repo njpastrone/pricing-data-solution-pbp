@@ -2,7 +2,7 @@
 
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
-**Status:** IN PRODUCTION - https://pricing-data-solution-pbp.onrender.com
+**Status:** IN PRODUCTION - https://pbp-order-management-system.onrender.com
 **Version:** 8.4.0
 **Last Updated:** 2026-05-27
 
@@ -150,7 +150,7 @@ pricing-data-solution-pbp/
 
 **Datasets:** Switchable between Demo and Real data (sidebar selector)
 - **Demo:** `master_pricing_template_10_14` (19 products, 4 partners)
-- **Real:** `master_pricing` (133 products, 4 partners)
+- **Real:** `master_pricing` (302 products, 33 partners as of 2026-10-13)
 
 **Schema:** v8.1.0, 45 columns. See [schema_reference.md](schema_reference.md) for complete definition.
 
@@ -163,7 +163,7 @@ pricing-data-solution-pbp/
 
 ## Deployment
 
-**Live URL:** https://pricing-data-solution-pbp.onrender.com
+**Live URL:** https://pbp-order-management-system.onrender.com
 
 - **Platform:** Render Standard tier (2GB RAM, $25/month)
 - **Auto-deploy:** Connected to GitHub (deploys on push to main)

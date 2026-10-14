@@ -24,7 +24,7 @@ import copy  # For deep copying client info during backup/restore
 
 # Import extracted modules
 from src.data_loader import load_pricing_data, DATASET_CONFIGS
-from src.helpers import (
+from pbp.core.helpers import (
     clean_price,
     apply_marketing_rounding,
     round_to_nearest_five,
@@ -44,7 +44,7 @@ from src.helpers import (
     get_column_value,
     get_tariff_rate
 )
-from src.pricing_engine import (
+from pbp.core.pricing_engine import (
     determine_tier_number,
     get_unit_price_new_system,
     get_price_for_quantity,
@@ -55,7 +55,7 @@ from src.pricing_engine import (
     calculate_product_quote,
     calculate_order_total
 )
-from src.slide_matcher import SlideMatcher
+from pbp.core.slide_matcher import SlideMatcher
 from src.proposal_manager import (
     save_proposal,
     load_all_proposals,
@@ -74,7 +74,7 @@ from src.template_loader import (
     list_available_templates,
     TEMPLATE_CONFIG
 )
-from src.forms_config import MAX_PRODUCT_LINES
+from pbp.core.forms_config import MAX_PRODUCT_LINES
 from src.client_form import (
     load_proposal_for_client,
     load_draft,
@@ -2325,7 +2325,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
         # ============================================================
         # VARIANT DETECTION AND GROUPING (v6.13)
         # ============================================================
-        from src.pptx_generator import detect_variant_groups, check_pricing_consistency, calculate_proposal_pricing
+        from pbp.core.pptx_generator import detect_variant_groups, check_pricing_consistency, calculate_proposal_pricing
 
         # Detect if multiple products match to same slide (variant groups)
         variant_groups, single_products = detect_variant_groups(confirmed_matches)
@@ -2444,7 +2444,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
         st.subheader("Step 2: Impact Slides")
 
         # Import impact slide functions
-        from src.slide_matcher import extract_unique_partners, resolve_impact_slides, find_all_impact_slides
+        from pbp.core.slide_matcher import extract_unique_partners, resolve_impact_slides, find_all_impact_slides
         from src.data_loader import load_impact_slide_mapping
 
         # Extract unique partners from proposal
@@ -2576,7 +2576,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
                         st.info("Memory optimization enabled - using direct download mode")
 
                     # Import generator functions
-                    from src.pptx_generator import (
+                    from pbp.core.pptx_generator import (
                         create_complete_proposal_presentation,
                         download_presentation
                     )
@@ -3028,7 +3028,7 @@ with tab1:
                 if new_count_all > 0:
                     if st.button(f"Add All {new_count_all}", type="secondary", use_container_width=True, key="add_all_products_button"):
                         # Add all new products to proposal with new pricing logic
-                        from src.helpers import calculate_pricing_snapshot
+                        from pbp.core.helpers import calculate_pricing_snapshot
                         added_count = 0
                         failed_products = []
 
@@ -3142,7 +3142,7 @@ with tab1:
                     if new_count > 0:
                         if st.button(f"Add {new_count} Products", type="primary", use_container_width=True, key="bulk_add_button"):
                             # Add all new products to proposal with new pricing logic
-                            from src.helpers import calculate_pricing_snapshot
+                            from pbp.core.helpers import calculate_pricing_snapshot
                             added_count = 0
                             failed_products = []
 
@@ -3319,7 +3319,7 @@ with tab1:
                                 markup = 100.0
 
                             # Calculate pricing snapshot to preserve pricing when importing to orders
-                            from src.helpers import calculate_pricing_snapshot
+                            from pbp.core.helpers import calculate_pricing_snapshot
                             pricing_snapshot = calculate_pricing_snapshot(
                                 product_data,
                                 markup,
@@ -3381,7 +3381,7 @@ with tab1:
                 # Show MSRP if available
                 msrp_raw = get_column_value(product_data, 'Vendor Published MSRP', 'MSRP', '')
                 if msrp_raw and str(msrp_raw).strip() and str(msrp_raw).strip() not in ['nan', '', '0', '0.0']:
-                    from src.helpers import clean_price
+                    from pbp.core.helpers import clean_price
                     msrp_value = clean_price(msrp_raw)
                     if msrp_value and msrp_value > 0:
                         st.caption(f"Vendor MSRP: ${msrp_value:.2f}/unit")
@@ -4134,7 +4134,7 @@ with tab1:
                     else:
                         # Extract product names from PowerPoint
                         with st.spinner("Analyzing PowerPoint slides..."):
-                            from src.pptx_generator import get_slide_title
+                            from pbp.core.pptx_generator import get_slide_title
                             prs = Presentation(pptx_template)
 
                             pptx_product_names = []
@@ -4485,7 +4485,7 @@ with tab2:
         has_proposal_products = len(st.session_state.proposal_products) > 0
 
         # Import forms helper
-        from src.forms_helper import generate_prefilled_form_url
+        from pbp.core.forms_helper import generate_prefilled_form_url
 
         # Initialize manual form products list (for when no proposal exists)
         if 'google_form_manual_products' not in st.session_state:
@@ -5314,8 +5314,8 @@ with tab3:
 
     # Import helpers
     from src.data_loader import connect_to_sheets
-    from src.forms_helper import load_form_responses, parse_form_response, mark_response_imported, format_product_summary
-    from src.forms_config import RESPONSE_COLUMNS
+    from pbp.core.forms_helper import load_form_responses, parse_form_response, mark_response_imported, format_product_summary
+    from pbp.core.forms_config import RESPONSE_COLUMNS
 
     if st.button("Load All Form Responses", key="load_google_form_responses"):
         with st.spinner("Loading responses from Google Sheets..."):
@@ -5504,8 +5504,8 @@ with tab3:
                         }
 
                         # Import products (using new pricing logic from Phase 1)
-                        from src.pricing_engine import get_unit_price_new_system, calculate_pbp_msrp
-                        from src.helpers import get_tariff_rate, calculate_product_tariff, get_shipping_costs, clean_price, get_column_value
+                        from pbp.core.pricing_engine import get_unit_price_new_system, calculate_pbp_msrp
+                        from pbp.core.helpers import get_tariff_rate, calculate_product_tariff, get_shipping_costs, clean_price, get_column_value
 
                         products_imported = 0
                         products_skipped = []
@@ -6031,7 +6031,7 @@ with tab3:
 
                 with col1:
                     # Display product name with variant (if applicable)
-                    from src.helpers import format_product_with_variant
+                    from pbp.core.helpers import format_product_with_variant
                     product_display_name = format_product_with_variant(
                         product_data.get('Product/Service', 'Unknown Product'),
                         prop_item.get('selected_variant')
@@ -6119,7 +6119,7 @@ with tab3:
             selected_product = st.selectbox("Select Product/Service", available_products, key="add_product_select")
 
     # Check if selected product has variants
-    from src.helpers import has_variants, parse_variant_types, is_inquire_variants
+    from pbp.core.helpers import has_variants, parse_variant_types, is_inquire_variants
     selected_product_data = df_template[
         (df_template["Partner"] == selected_partner) &
         (df_template["Product/Service"] == selected_product)
@@ -6186,7 +6186,7 @@ with tab3:
             default_per_unit = clean_price(default_per_unit_raw) or 0.0
 
             # Calculate pricing using new system (Phase 3)
-            from src.pricing_engine import calculate_pbp_msrp
+            from pbp.core.pricing_engine import calculate_pbp_msrp
 
             # Determine if using MSRP pricing
             use_msrp = st.session_state.order_use_msrp
@@ -6285,7 +6285,7 @@ with tab3:
                     st.session_state.partner_shipping = pbp_shipping_cost
 
                 # Set success message for deferred toast (include variant if applicable)
-                from src.helpers import format_product_with_variant
+                from pbp.core.helpers import format_product_with_variant
                 st.session_state.show_add_to_order_success = True
                 st.session_state.add_to_order_product_name = format_product_with_variant(
                     product_data.get('Product/Service', 'product'),
@@ -6513,7 +6513,7 @@ with tab3:
             col_header, col_remove = st.columns([5, 1])
             with col_header:
                 # Display product name with variant (if applicable)
-                from src.helpers import format_product_with_variant
+                from pbp.core.helpers import format_product_with_variant
                 product_display_name = format_product_with_variant(
                     item['product_name'],
                     item.get('selected_variant')
@@ -7234,7 +7234,7 @@ with tab3:
                 st.caption(f"**Product: {item['product_name']}**")
 
                 # Import helper function for formatting rows
-                from src.helpers import format_pricing_breakdown_row
+                from pbp.core.helpers import format_pricing_breakdown_row
 
                 breakdown_data = []
 
@@ -7361,7 +7361,7 @@ with tab3:
         if items_with_notes:
             with st.expander(f"Pricing Information ({len(items_with_notes)} product{'s' if len(items_with_notes) > 1 else ''})", expanded=False):
                 for item in items_with_notes:
-                    from src.helpers import format_product_with_variant
+                    from pbp.core.helpers import format_product_with_variant
                     product_display = format_product_with_variant(item['product_name'], item.get('selected_variant'))
                     st.markdown(f"**{product_display}**")
                     st.caption(item['pricing_notes'])
@@ -7372,7 +7372,7 @@ with tab3:
             st.warning(f"{len(items_with_warnings)} product{'s' if len(items_with_warnings) > 1 else ''} {'have' if len(items_with_warnings) > 1 else 'has'} pricing discrepancies")
             with st.expander("View Validation Details", expanded=False):
                 for item in items_with_warnings:
-                    from src.helpers import format_product_with_variant
+                    from pbp.core.helpers import format_product_with_variant
                     product_display = format_product_with_variant(item['product_name'], item.get('selected_variant'))
                     st.markdown(f"**{product_display}**")
                     st.caption(item['validation_warning'])
@@ -7840,7 +7840,7 @@ with tab3:
             st.warning("**The following products are below their Minimum Order Quantity:**\n" + "\n".join(below_moq_warnings))
 
         # Import helper functions
-        from src.helpers import calculate_split_totals
+        from pbp.core.helpers import calculate_split_totals
 
         # Calculate split totals
         split_totals = calculate_split_totals(st.session_state.order_items, fifty_cent_rounding=st.session_state.order_fifty_cent_rounding)
@@ -9573,7 +9573,7 @@ with tab4:
                 partner = item['partner']
 
                 # Display product name with variant (if applicable)
-                from src.helpers import format_product_with_variant
+                from pbp.core.helpers import format_product_with_variant
                 product_name = format_product_with_variant(
                     item['product_name'],
                     item.get('selected_variant')
@@ -10181,7 +10181,7 @@ with tab4:
                 # Fall back to Drive photos (loaded from saved order)
                 elif prod_name in product_photos_meta and product_photos_meta[prod_name]:
                     for meta in product_photos_meta[prod_name]:
-                        from src.drive_helper import download_photo as dl_photo
+                        from pbp.sheets.drive_helper import download_photo as dl_photo
                         photo_bytes = dl_photo(meta['file_id'])
                         if photo_bytes:
                             b64 = base64.b64encode(photo_bytes).decode()
@@ -10273,7 +10273,7 @@ with tab4:
                     photo_cols = st.columns(min(len(photos_meta), 4))
                     for pi, meta in enumerate(photos_meta):
                         with photo_cols[pi % 4]:
-                            from src.drive_helper import download_photo
+                            from pbp.sheets.drive_helper import download_photo
                             photo_bytes = download_photo(meta['file_id'])
                             if photo_bytes:
                                 st.image(photo_bytes, caption=meta['filename'])
@@ -10507,7 +10507,7 @@ with tab5:
 
                             # Update markup if price changed
                             if abs(new_client_price - client_price) > 0.01:
-                                from src.helpers import calculate_markup_from_price
+                                from pbp.core.helpers import calculate_markup_from_price
                                 new_markup_calc = calculate_markup_from_price(base_cost, new_client_price)
                                 product['markup_percent'] = new_markup_calc
                                 preserve_tab_5()

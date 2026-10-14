@@ -32,7 +32,7 @@
 - **Notes at Top of Invoice/PO (v8.5.5):** Internal/external notes and dropshipping instructions moved to the top of the generated invoice/PO (HTML and CSV) for accounting
 
 **Recent Work (July 2026):**
-- **Price Range Filter Fix (v8.5.4):** Tab 1 price filter now matches the client price shown for each product. It previously used a "Vendor MSRP or cost x2 @ qty 100" estimate that ignored add-ons and tier/quantity, letting over-budget products (e.g. above $30) slip through. Filter and catalog display now share one calculation (`calculate_catalog_client_price` in `src/pricing_engine.py`)
+- **Price Range Filter Fix (v8.5.4):** Tab 1 price filter now matches the client price shown for each product. It previously used a "Vendor MSRP or cost x2 @ qty 100" estimate that ignored add-ons and tier/quantity, letting over-budget products (e.g. above $30) slip through. Filter and catalog display now share one calculation (`calculate_catalog_client_price` in `pbp/core/pricing_engine.py`)
 - **Team Bug Fixes and Partner Shipping Field (v8.5.1):**
   - Per-partner "Shipping Instructions to PbP" field in Tab 4, printed on invoice/PO
   - Tab 3 to Tab 4 carry-over fixed (Tab 4 editors seed from client_info; removed contact clobber)
@@ -182,7 +182,7 @@ See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
 - **Password Gate:** Main app requires password; client form links bypass the gate
 - **Data Source:** Google Sheets with dataset selector (Demo or Real)
   - **Demo Dataset:** master_pricing_template_10_14 (19 products, 4 partners - testing/development data)
-  - **Real Dataset:** master_pricing (133 products, 4 partners - production data READY)
+  - **Real Dataset:** master_pricing (302 products, 33 partners as of 2026-10-13 - production data READY)
   - **Required sheet structure:**
     - **Data**: Partner-product pricing data (header at row 6)
       - **Updated Schema (Jan 2026):** Now supports new canonical column names with backward compatibility
@@ -199,8 +199,8 @@ See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
     - **Partner-Specific Info**: Partner configuration reference (header at row 2)
 - **Code Structure:** Modular with helper functions in `src/` directory
   - `src/data_loader.py` - Google Sheets data loading and caching
-  - `src/helpers.py` - Utility functions, conversions, validation, HTML parsing
-  - `src/pricing_engine.py` - Pricing calculations and quote generation
+  - `pbp/core/helpers.py` - Utility functions, conversions, validation, HTML parsing
+  - `pbp/core/pricing_engine.py` - Pricing calculations and quote generation
   - `src/client_form.py` - Client order form page (session tokens, proposal loading, draft save/load, submission)
 - **Authentication:** Google Cloud service account + password gate for main app
 - **Pricing Model:** Flexible tiered or flat-rate pricing per product
@@ -444,21 +444,25 @@ pricing-data-solution-pbp/
 │       ├── tab2-improvements/   # Tab 2 UI redesign docs (9 files)
 │       └── [Other archived documents]
 │
-├── src/                        # Modular code (extracted from app.py)
+├── pbp/                        # Framework-free package (shared by Streamlit app and future web app)
+│   ├── core/
+│   │   ├── helpers.py         # Utility functions, conversions, validation
+│   │   ├── pricing_engine.py  # Pricing calculations and quote generation
+│   │   ├── slide_matcher.py   # PowerPoint slide matching (Phase 1)
+│   │   ├── pptx_generator.py  # PowerPoint generation (Phase 2)
+│   │   ├── match_manager.py   # Manual match storage (JSON-based)
+│   │   ├── forms_config.py    # Google Forms configuration (v7.6)
+│   │   └── forms_helper.py    # Google Forms URL generation & response import (v7.6)
+│   └── sheets/
+│       └── drive_helper.py    # Photo storage via Google Sheets (base64 chunked)
+│
+├── src/                        # Streamlit-coupled modules (still use st.cache_* / st.secrets)
 │   ├── data_loader.py         # Google Sheets data loading
-│   ├── helpers.py             # Utility functions, conversions, validation
-│   ├── pricing_engine.py      # Pricing calculations and quote generation
 │   ├── client_form.py         # Client order form page (v8.4.0)
-│   ├── slide_matcher.py       # PowerPoint slide matching (Phase 1)
-│   ├── pptx_generator.py      # PowerPoint generation (Phase 2)
 │   ├── template_loader.py     # Cloud-based PowerPoint template loading (v6.16)
-│   ├── match_manager.py       # Manual match storage (JSON-based)
 │   ├── match_memory.py        # Confirmed match storage (Google Sheets, v6.9)
 │   ├── proposal_manager.py    # Save/load/delete proposals (v6.6)
-│   ├── order_manager.py       # Save/load/delete orders (v6.7)
-│   ├── drive_helper.py        # Photo storage via Google Sheets (base64 chunked)
-│   ├── forms_config.py        # Google Forms configuration (v7.6)
-│   └── forms_helper.py        # Google Forms URL generation & response import (v7.6)
+│   └── order_manager.py       # Save/load/delete orders (v6.7)
 │
 ├── tests/                      # Unit tests
 │   └── test_client_form.py    # Client form module tests
