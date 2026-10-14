@@ -8,7 +8,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.helpers import calculate_markup_from_price
+from pbp.core.helpers import calculate_markup_from_price
 
 def test_calculate_markup_from_price():
     """Test the calculate_markup_from_price function with various scenarios."""

@@ -7,7 +7,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Test the clean_price function behavior
-from src.helpers import clean_price
+from pbp.core.helpers import clean_price
 
 # Test clean_price returns None for empty values
 test_values = [

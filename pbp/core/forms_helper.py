@@ -13,7 +13,7 @@ Created: 2026-01-20
 import urllib.parse
 from datetime import datetime
 import pandas as pd
-from src.forms_config import (
+from pbp.core.forms_config import (
     GOOGLE_FORM_CONFIG,
     ALL_ENTRY_IDS,
     RESPONSE_COLUMNS,

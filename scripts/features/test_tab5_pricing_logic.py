@@ -7,7 +7,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import required functions
-from src.helpers import clean_price, get_column_value
+from pbp.core.helpers import clean_price, get_column_value
 
 # Mock functions for testing
 def calculate_msrp_markup_mock(product_data):

@@ -148,7 +148,7 @@ When updating `November All Slides.pptx`:
 ### Font Preservation
 **Critical:** Template uses 15pt font throughout
 - Always preserve font size when updating cells
-- Code enforces this in `src/pptx_generator.py`
+- Code enforces this in `pbp/core/pptx_generator.py`
 
 ### Slide Numbering
 - Reference guide uses 1-indexed slide numbers
@@ -177,7 +177,7 @@ When updating `November All Slides.pptx`:
 - **PowerPoint Phase 2:** [../docs/powerpoint/PHASE_2_COMPLETION_SUMMARY.md](../docs/powerpoint/PHASE_2_COMPLETION_SUMMARY.md)
 - **Invoice Spec:** [../docs/planning/INVOICE_AND_PROPOSAL_SPEC.md](../docs/planning/INVOICE_AND_PROPOSAL_SPEC.md)
 - **Template Loader:** [../src/template_loader.py](../src/template_loader.py)
-- **PPTX Generator:** [../src/pptx_generator.py](../src/pptx_generator.py)
+- **PPTX Generator:** [../pbp/core/pptx_generator.py](../pbp/core/pptx_generator.py)
 
 ---
 

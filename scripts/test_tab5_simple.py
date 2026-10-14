@@ -10,8 +10,8 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.data_loader import load_data
-from src.pricing_engine import get_unit_price_new_system
-from src.helpers import clean_price, get_column_value
+from pbp.core.pricing_engine import get_unit_price_new_system
+from pbp.core.helpers import clean_price, get_column_value
 
 def main():
     st.set_page_config(page_title="Tab 5 Test", layout="wide")

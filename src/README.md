@@ -2,6 +2,8 @@
 
 This directory contains all business logic extracted from app.py for better organization and maintainability.
 
+**Note (Streamlit migration phase 0):** `helpers.py`, `pricing_engine.py`, `slide_matcher.py`, `pptx_generator.py`, `match_manager.py`, `forms_config.py` and `forms_helper.py` now live in `pbp/core/`, and `drive_helper.py` in `pbp/sheets/`. Their sections below still apply; see [../pbp/CLAUDE.md](../pbp/CLAUDE.md).
+
 **Last Updated:** 2024-12-20
 **Version:** 7.3.0 (Production Ready)
 
@@ -65,7 +67,7 @@ df_template, df_metadata, df_partner_info = load_pricing_data()
 
 **Usage:**
 ```python
-from src.helpers import clean_price, apply_marketing_rounding
+from pbp.core.helpers import clean_price, apply_marketing_rounding
 
 price = clean_price("$48.00")  # Returns 48.0
 rounded = apply_marketing_rounding(60.0)  # Returns 59.0
@@ -89,7 +91,7 @@ rounded = apply_marketing_rounding(60.0)  # Returns 59.0
 
 **Usage:**
 ```python
-from src.pricing_engine import calculate_product_quote
+from pbp.core.pricing_engine import calculate_product_quote
 
 quote = calculate_product_quote(
     row=product_row,
@@ -129,7 +131,7 @@ quote = calculate_product_quote(
 
 **Usage:**
 ```python
-from src.slide_matcher import match_products_to_slides
+from pbp.core.slide_matcher import match_products_to_slides
 
 matches = match_products_to_slides(
     proposal_items=products,
@@ -163,7 +165,7 @@ matches = match_products_to_slides(
 
 **Usage:**
 ```python
-from src.pptx_generator import generate_presentation
+from pbp.core.pptx_generator import generate_presentation
 
 pptx_path = generate_presentation(
     confirmed_matches=matches,
@@ -438,4 +440,4 @@ streamlit run app.py
 - **CLAUDE.md:** [CLAUDE.md](CLAUDE.md) (AI-friendly context)
 - **Documentation:** [../docs/README.md](../docs/README.md)
 - **Methodology:** [../docs/planning/METHODOLOGY_LOGIC.md](../docs/planning/METHODOLOGY_LOGIC.md)
-- **Production:** https://pricing-data-solution-pbp.onrender.com
+- **Production:** https://pbp-order-management-system.onrender.com

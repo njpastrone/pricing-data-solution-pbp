@@ -290,7 +290,7 @@ Each test should:
 ### Dataset Testing
 Always test with both:
 - **Demo:** 19 products, 4 partners
-- **Real:** 133 products, 4 partners
+- **Real:** 302 products, 33 partners as of 2026-10-13
 
 ### State Management
 Clear state between tests if needed:

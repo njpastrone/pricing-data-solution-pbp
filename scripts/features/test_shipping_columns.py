@@ -9,7 +9,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.data_loader import load_pricing_data
-from src.helpers import get_shipping_costs, format_shipping_display, clean_price
+from pbp.core.helpers import get_shipping_costs, format_shipping_display, clean_price
 
 def test_shipping_columns():
     """Test that shipping columns load correctly from both datasets"""

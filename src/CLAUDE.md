@@ -23,6 +23,8 @@ The `src/` directory contains all modular business logic extracted from the main
 3. **More readable** - app.py focuses on UI, src/ focuses on logic
 4. **More reusable** - Functions can be imported anywhere
 
+**Note (Streamlit migration phase 0):** `helpers.py`, `pricing_engine.py`, `slide_matcher.py`, `pptx_generator.py`, `match_manager.py`, `forms_config.py` and `forms_helper.py` now live in `pbp/core/`, and `drive_helper.py` in `pbp/sheets/`. Their sections below still apply; see [../pbp/CLAUDE.md](../pbp/CLAUDE.md).
+
 The modularization happened in **v6.18 (November 2024)** during the codebase simplification phase, reducing total lines by 49% while improving code quality.
 
 All modules follow these principles:
@@ -116,10 +118,10 @@ All modules follow these principles:
 ```python
 # In app.py
 from src.data_loader import load_pricing_data
-from src.helpers import clean_price, apply_marketing_rounding
-from src.pricing_engine import calculate_product_quote
-from src.slide_matcher import match_products_to_slides
-from src.pptx_generator import generate_presentation
+from pbp.core.helpers import clean_price, apply_marketing_rounding
+from pbp.core.pricing_engine import calculate_product_quote
+from pbp.core.slide_matcher import match_products_to_slides
+from pbp.core.pptx_generator import generate_presentation
 ```
 
 ### Error Handling
@@ -138,7 +140,7 @@ tier = determine_tier_number(50, tier_data)  # Returns None if invalid
 ### Dataset Handling
 Two datasets supported:
 1. **Demo**: `master_pricing_template_10_14` (19 products, 4 partners)
-2. **Real**: `master_pricing` (133 products, 4 partners)
+2. **Real**: `master_pricing` (302 products, 33 partners as of 2026-10-13)
 
 Functions check `st.session_state.selected_dataset` for context.
 
@@ -370,7 +372,7 @@ rapidfuzz==3.10.1
 
 ### Memory Usage
 - PowerPoint template: 43MB (downloads once per session)
-- Pandas DataFrames: ~1-2MB for real dataset (133 products)
+- Pandas DataFrames: ~1-2MB for real dataset (302 products)
 - Total app memory: ~500MB-800MB (well under 2GB limit)
 
 ### Page Load Time
@@ -426,7 +428,7 @@ HTML form import uses `st.file_uploader()`:
 
 ## Links & Resources
 
-- **Production App**: https://pricing-data-solution-pbp.onrender.com
+- **Production App**: https://pbp-order-management-system.onrender.com
 - **Main README**: [/README.md](../README.md)
 - **Documentation Index**: [/docs/README.md](../docs/README.md)
 - **Active Development**: [/ACTIVE_DEVELOPMENT_TODO.md](../ACTIVE_DEVELOPMENT_TODO.md)

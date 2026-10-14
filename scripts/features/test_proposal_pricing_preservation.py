@@ -23,8 +23,8 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.helpers import calculate_pricing_snapshot, convert_proposal_to_order, calculate_product_tariff
-from src.pricing_engine import get_unit_price_new_system
+from pbp.core.helpers import calculate_pricing_snapshot, convert_proposal_to_order, calculate_product_tariff
+from pbp.core.pricing_engine import get_unit_price_new_system
 
 st.title("Proposal Pricing Preservation - Test Suite")
 st.markdown("Testing pricing snapshot creation and usage in proposal-to-order conversion")

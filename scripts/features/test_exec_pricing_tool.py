@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 import pandas as pd
 from src.data_loader import load_pricing_data
-from src.pricing_engine import get_unit_price_new_system
-from src.helpers import clean_price, get_column_value, calculate_product_tariff, get_shipping_costs
+from pbp.core.pricing_engine import get_unit_price_new_system
+from pbp.core.helpers import clean_price, get_column_value, calculate_product_tariff, get_shipping_costs
 
 def test_pricing_table_calculation():
     """Test that pricing calculations match expected Tab 5 logic"""
@@ -51,7 +51,7 @@ def test_pricing_table_calculation():
     shipping_pbp, shipping_client = get_shipping_costs(test_row)
 
     # Calculate tariff (need to get rate first, then calculate amount)
-    from src.helpers import get_tariff_rate
+    from pbp.core.helpers import get_tariff_rate
     product_cost_at_100 = base_cost * 100
     tariff_base = product_cost_at_100 + (product_cost_at_100 * (markup / 100))
     tariff_rate_percent = get_tariff_rate(test_row.to_dict(), product_cost_at_100)
@@ -147,7 +147,7 @@ def test_import_structure():
 
     # Test order import (uses convert_proposal_to_order)
     print("\n2. Testing order import structure...")
-    from src.helpers import convert_proposal_to_order
+    from pbp.core.helpers import convert_proposal_to_order
 
     order_item = convert_proposal_to_order(
         proposal_item,

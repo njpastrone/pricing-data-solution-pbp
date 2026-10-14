@@ -36,7 +36,7 @@ When `client_form` is present, the app renders a clean, single-page form with no
 ### URL Format
 
 ```
-https://pricing-data-solution-pbp.onrender.com/?client_form=PROP_20260524_143022&session=abc123
+https://pbp-order-management-system.onrender.com/?client_form=PROP_20260524_143022&session=abc123
 ```
 
 - `client_form` = proposal ID (from `saved_proposals` sheet)

@@ -145,7 +145,7 @@ def upload_order_photos(order_id, photos_by_product):
     Returns:
         dict: {product_name: [{"file_id": "abc123", "filename": "photo.png"}, ...]}
     """
-    from src.drive_helper import upload_photo
+    from pbp.sheets.drive_helper import upload_photo
 
     photo_metadata = {}
 
@@ -394,7 +394,7 @@ def delete_order(order_id):
                         order_data = json.loads(row[5])
                         file_ids = get_photo_file_ids_from_order(order_data)
                         if file_ids:
-                            from src.drive_helper import delete_photos
+                            from pbp.sheets.drive_helper import delete_photos
                             deleted = delete_photos(file_ids)
                             print(f"Deleted {deleted}/{len(file_ids)} photos from Drive")
                     except Exception as e:

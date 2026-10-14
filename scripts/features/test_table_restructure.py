@@ -12,7 +12,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.helpers import calculate_split_totals, format_pricing_breakdown_row
+from pbp.core.helpers import calculate_split_totals, format_pricing_breakdown_row
 
 
 def test_calculate_split_totals():

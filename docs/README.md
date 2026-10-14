@@ -124,8 +124,8 @@ docs/
 2. **Phase 2 (Generation)** - Dynamic pricing tables, font preservation, one-click download
 
 **Key Files:**
-- `src/slide_matcher.py` - Matching engine
-- `src/pptx_generator.py` - Generation engine
+- `pbp/core/slide_matcher.py` - Matching engine
+- `pbp/core/pptx_generator.py` - Generation engine
 - `templates/November All Slides.pptx` - 339-slide template
 
 ---

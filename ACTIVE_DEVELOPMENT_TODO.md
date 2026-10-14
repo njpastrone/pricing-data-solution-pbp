@@ -156,6 +156,6 @@ streamlit run app.py
 ---
 
 ## Links
-- [Production App](https://pricing-data-solution-pbp.onrender.com)
+- [Production App](https://pbp-order-management-system.onrender.com)
 - [Stakeholder Notes](docs/meetings/STAKEHOLDER_MEETING_NOTES.md)
 - [Testing Checklist](docs/testing/TAB3_TAB4_TESTING_CHECKLIST.md)

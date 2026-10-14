@@ -4,7 +4,7 @@ Handles tier selection, price lookup, customization costs, and tariff calculatio
 """
 
 import pandas as pd
-from src.helpers import parse_tier_info, parse_tariff_rate, clean_price, get_column_value
+from pbp.core.helpers import parse_tier_info, parse_tariff_rate, clean_price, get_column_value
 
 
 def determine_tier_number(quantity, tier_info_string, has_tiers):
@@ -336,7 +336,7 @@ def calculate_product_quote(row, quantity, markup_percent, include_customization
     customization = calculate_customization_costs(row, quantity, include_customization, customization_minimum)
 
     # Calculate tariff (applies to product cost with markup, NOT customization)
-    from src.helpers import calculate_product_tariff
+    from pbp.core.helpers import calculate_product_tariff
     tariff_amount = calculate_product_tariff(product_cost_with_markup, tariff_rate_percent)
 
     # Calculate total
@@ -390,7 +390,7 @@ def calculate_pbp_msrp(product_data, quantity, user_markup_override=None):
         >>> result['method_used']
         'MSRP + % of cost'
     """
-    from src.helpers import (
+    from pbp.core.helpers import (
         get_pricing_logic,
         get_shipping_addon_percent,
         get_other_addon_percent,
@@ -623,7 +623,7 @@ def calculate_catalog_client_price(product_data, base_quantity=100):
         }
     """
     # Imported here (not at module top) to avoid a circular import with helpers
-    from src.helpers import calculate_moq
+    from pbp.core.helpers import calculate_moq
 
     # Accept both pandas Series and plain dicts
     product_dict = product_data.to_dict() if hasattr(product_data, 'to_dict') else dict(product_data)
@@ -696,7 +696,7 @@ def calculate_vendor_markup(product_data, per_item_cost):
         >>> calculate_vendor_markup(product_data, 4.0)
         {'vendor_markup_pct': 150.0, 'spreadsheet_value': 150.0, 'validation_status': 'match'}
     """
-    from src.helpers import get_column_value
+    from pbp.core.helpers import get_column_value
 
     vendor_msrp = get_column_value(product_data, 'Vendor Published MSRP', None, None)
 
@@ -766,7 +766,7 @@ def calculate_pbp_markup(pbp_msrp, per_item_cost, product_data):
         >>> calculate_pbp_markup(11.0, 4.0, product_data)
         {'pbp_markup_pct': 175.0, 'spreadsheet_value': 175.0, 'validation_status': 'match'}
     """
-    from src.helpers import get_column_value
+    from pbp.core.helpers import get_column_value
 
     if per_item_cost == 0:
         return {
@@ -835,7 +835,7 @@ def calculate_order_total(order_items, shipping=0.0, order_tariff=0.0,
             'grand_total': 1725
         }
     """
-    from src.helpers import apply_marketing_rounding
+    from pbp.core.helpers import apply_marketing_rounding
 
     summary = {}
 
