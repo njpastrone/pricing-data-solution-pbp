@@ -51,6 +51,32 @@ SNAPSHOT_DIR = os.path.join(REPO_ROOT, "tests", "golden", "snapshots")
 PRODUCT_TEMPLATE = os.path.join(REPO_ROOT, "templates", "November All Slides.pptx")
 INTRO_OUTRO_TEMPLATE = os.path.join(REPO_ROOT, "templates", "Intro_Outro_Slides_PbP_Proposals.pptx")
 
+NO_CREDENTIALS_HELP = """
+No Google credentials found, so no snapshots were generated.
+
+To generate the golden baselines (one-time, before phase 1 of the migration starts):
+
+  1. Get the read-only service-account key for the PBP Google Cloud project
+     (the same service account the app uses on Render). Either:
+       export GOLDEN_SERVICE_ACCOUNT_JSON=/path/to/service-account.json
+     or export the GCP_* variables exactly as they are set on Render
+     (GCP_TYPE, GCP_PROJECT_ID, GCP_PRIVATE_KEY_ID, GCP_PRIVATE_KEY, GCP_CLIENT_EMAIL,
+      GCP_CLIENT_ID, GCP_AUTH_URI, GCP_TOKEN_URI, GCP_AUTH_PROVIDER_X509_CERT_URL,
+      GCP_CLIENT_X509_CERT_URL, GCP_UNIVERSE_DOMAIN).
+  2. From the repository root, on the main branch:
+       pip install -r requirements.txt
+       python tests/golden/golden.py
+     This reads the saved_orders and saved_proposals sheets (read-only scope, no
+     writes possible) and writes tests/golden/snapshots/orders/*.json and
+     tests/golden/snapshots/proposals/*.json. Expect a few minutes: one PowerPoint
+     deck is generated per proposal.
+  3. Check the snapshots contain no client details (client_info, order_notes and
+     partner_shipping are stripped automatically), then commit them:
+       git add tests/golden/snapshots && git commit -m "test: golden baselines"
+  4. From then on `python -m pytest tests/golden -q` fails on any pricing or
+     PowerPoint change, and CI runs it on every PR.
+"""
+
 # Order keys that hold client details rather than pricing inputs. Stripped
 # before a snapshot is written so no personal data lands in the repo.
 ORDER_KEYS_TO_STRIP = ("client_info", "order_notes", "partner_shipping")
@@ -216,7 +242,7 @@ def _readonly_sheets_client():
         info["private_key"] = (info["private_key"] or "").replace("\\n", "\n")
         creds = Credentials.from_service_account_info(info, scopes=scopes)
     else:
-        sys.exit("No credentials: set GCP_* environment variables or GOLDEN_SERVICE_ACCOUNT_JSON=/path/to/key.json")
+        sys.exit(NO_CREDENTIALS_HELP)
     return gspread.authorize(creds)
 
 
