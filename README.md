@@ -163,8 +163,10 @@ The app is being rebuilt as a FastAPI + HTMX service in `pbp/web/`. It reads and
 same Google Sheets as the Streamlit app, so work moves freely between the two. Done so far:
 the client order form (phase 1), the staff order editor plus invoice/PO accounting screens,
 i.e. Tabs 3 and 4 (phase 2), and the proposal generator with PowerPoint match review and
-generation plus the client form link, i.e. Tabs 1 and 2 (phase 3). Staff log in at `/login`
-with the same `APP_PASSWORD`.
+generation plus the client form link, i.e. Tabs 1 and 2 (phase 3), and the Executive Pricing
+Tool plus Reset session (phase 4). The legacy Google Form and HTML order form paths are not
+ported (deprecated; the client form link replaces them). Staff log in at `/login` with the same
+`APP_PASSWORD`.
 
 Run it locally (needs Google credentials: `.streamlit/secrets.toml`, or the `GCP_*`
 variables, or `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json`):

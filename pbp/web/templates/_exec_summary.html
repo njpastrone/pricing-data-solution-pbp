@@ -1,0 +1,12 @@
+<div id="summary" {% if oob %}hx-swap-oob="true"{% endif %}>
+  <h2>4. Order Summary</h2>
+  {% if not scenario.products %}<p class="muted">Add products above to see the order summary.</p>
+  {% else %}
+  <table class="data">
+    <tr><th>Item</th><th class="num">Qty</th><th class="num">PBP Cost (Per Unit)</th><th class="num">PBP Cost</th><th class="num">Client Price (Per Unit)</th><th class="num">Client Price</th></tr>
+    {% for row in summary.rows %}<tr class="{% if row[0] == 'TOTAL' %}total{% elif 'Subtotal' in row[0] %}subtotal{% endif %}">{% for cell in row %}<td class="{% if loop.index > 1 %}num{% endif %}">{{ cell }}</td>{% endfor %}</tr>{% endfor %}
+  </table>
+  <div class="total-banner">Total quote {{ summary.total|money }} | Avg/unit {{ summary.avg_per_unit|money }} | True margin {{ summary.true_margin|money }} ({{ '%.1f'|format(summary.margin_percent) }}%)</div>
+  {% if summary.tariff_total > 0 or summary.shipping > 0 %}<p class="hint">Pass-through costs: shipping {{ summary.shipping|money }}, tariffs {{ summary.tariff_total|money }} (no markup)</p>{% endif %}
+  {% endif %}
+</div>

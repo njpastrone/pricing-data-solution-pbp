@@ -15,7 +15,8 @@ FastAPI app can both import them. Phase 0 only moved files and changed imports.
 - `pbp/sheets/match_memory.py`: confirmed product-to-slide matches (moved from `src/` in phase 3, no Streamlit); `pbp/sheets/templates.py`: PowerPoint templates from Drive, downloaded once per process, plus the impact slide mapping.
 - `pbp/services/order.py`: order building and pricing arithmetic (Tab 3) on the saved-order dict; `pbp/services/invoice.py`: the invoice/PO tables, CSV and HTML (Tab 4).
 - `pbp/services/proposal.py`: catalog filtering, proposal lines and MOQ tables (Tab 1); `pbp/services/pptx_jobs.py`: slide matching, review state and the background PowerPoint generation job.
-- `pbp/web/`: the FastAPI + HTMX app. `app.py` serves the client order form (phase 1); `staff.py` the login, order editor, client form responses and accounting screens (phase 2); `proposals.py` the proposal editor, PowerPoint review and client form link (phase 3). Working orders and proposals are held in process memory per staff session (`state.py`).
+- `pbp/services/exec_pricing.py`: the Executive Pricing Tool scenarios (Tab 5).
+- `pbp/web/`: the FastAPI + HTMX app. `app.py` serves the client order form (phase 1); `staff.py` the login, order editor, client form responses and accounting screens (phase 2); `proposals.py` the proposal editor, PowerPoint review and client form link (phase 3); `exec_tool.py` the Executive Pricing Tool and Reset session (phase 4). Working orders, proposals and scenarios are held in process memory per staff session (`state.py`).
 
 ## Streamlit coupling
 

@@ -1,0 +1,11 @@
+<div id="exec-settings">
+  <h2>3. Order Settings</h2>
+  <form method="post" action="/exec/settings" hx-post="/exec/settings" hx-trigger="change delay:200ms" hx-target="#exec-settings" hx-swap="outerHTML" class="cols-3">
+    <label>Shipping cost ($)<input type="number" min="0" step="10" name="shipping" value="{{ scenario.shipping }}"></label>
+    <div>
+      <label class="check"><input type="checkbox" name="cc_fee" {% if scenario.cc_fee %}checked{% endif %}> Credit card fee</label>
+      {% if scenario.cc_fee %}<label>CC fee %<input type="number" min="0" max="10" step="0.1" name="cc_fee_percent" value="{{ scenario.cc_fee_percent }}"></label>{% endif %}
+    </div>
+    <noscript><button class="small">Apply</button></noscript>
+  </form>
+</div>
