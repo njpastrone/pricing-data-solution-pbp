@@ -23,6 +23,8 @@ The `src/` directory contains all modular business logic extracted from the main
 3. **More readable** - app.py focuses on UI, src/ focuses on logic
 4. **More reusable** - Functions can be imported anywhere
 
+**Note (Streamlit migration phase 0):** `helpers.py`, `pricing_engine.py`, `slide_matcher.py`, `pptx_generator.py`, `match_manager.py`, `forms_config.py` and `forms_helper.py` now live in `pbp/core/`, and `drive_helper.py` in `pbp/sheets/`. Their sections below still apply; see [../pbp/CLAUDE.md](../pbp/CLAUDE.md).
+
 The modularization happened in **v6.18 (November 2024)** during the codebase simplification phase, reducing total lines by 49% while improving code quality.
 
 All modules follow these principles:
@@ -116,10 +118,10 @@ All modules follow these principles:
 ```python
 # In app.py
 from src.data_loader import load_pricing_data
-from src.helpers import clean_price, apply_marketing_rounding
-from src.pricing_engine import calculate_product_quote
-from src.slide_matcher import match_products_to_slides
-from src.pptx_generator import generate_presentation
+from pbp.core.helpers import clean_price, apply_marketing_rounding
+from pbp.core.pricing_engine import calculate_product_quote
+from pbp.core.slide_matcher import match_products_to_slides
+from pbp.core.pptx_generator import generate_presentation
 ```
 
 ### Error Handling

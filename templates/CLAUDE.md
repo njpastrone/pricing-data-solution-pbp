@@ -9,7 +9,7 @@ Purpose: PowerPoint templates and reference documents for automated generation
 ## Quick Context
 - **Primary responsibility**: Template files for PowerPoint generation and invoice formatting
 - **Key dependencies**: None (template files only)
-- **Used by**: src/pptx_generator.py, src/template_loader.py
+- **Used by**: pbp/core/pptx_generator.py, src/template_loader.py
 - **Technology stack**: PowerPoint (.pptx), Excel (.xlsx), PDF/Markdown references
 
 ---
@@ -118,7 +118,7 @@ Partner Y | "Partner Y Impact" | 67 | Option A, Option B
 
 **Notes:**
 - Updated November 5, 2025 (future date in filename is typo - should be 2024)
-- Used by `src/pptx_generator.py` for impact slide customization
+- Used by `pbp/core/pptx_generator.py` for impact slide customization
 
 ---
 
@@ -224,7 +224,7 @@ prs.save("output.pptx")
 3. Create pricing table (2×3, 2×4, or 3×4 format)
 4. Save template
 5. Upload to Google Drive (production)
-6. Update slide matching in `src/slide_matcher.py` if needed
+6. Update slide matching in `pbp/core/slide_matcher.py` if needed
 
 ### To update impact slides:
 1. Check `Impact Slide Reference Guide Nov 5 2025.xlsx`
@@ -239,7 +239,7 @@ prs.save("output.pptx")
 2. Add partner contact to Partner-Specific Info sheet
 3. Create impact slide in PowerPoint template
 4. Update `Impact Slide Reference Guide Nov 5 2025.xlsx`
-5. Update `src/pptx_generator.py` if custom logic needed
+5. Update `pbp/core/pptx_generator.py` if custom logic needed
 
 ---
 
@@ -381,4 +381,4 @@ Avoid opening template while app is running:
 - **PowerPoint Phase 1:** [../docs/powerpoint/PHASE_1_COMPLETION_SUMMARY.md](../docs/powerpoint/PHASE_1_COMPLETION_SUMMARY.md)
 - **Invoice Spec:** [../docs/planning/INVOICE_AND_PROPOSAL_SPEC.md](../docs/planning/INVOICE_AND_PROPOSAL_SPEC.md)
 - **Template Loader:** [../src/template_loader.py](../src/template_loader.py)
-- **PPTX Generator:** [../src/pptx_generator.py](../src/pptx_generator.py)
+- **PPTX Generator:** [../pbp/core/pptx_generator.py](../pbp/core/pptx_generator.py)

@@ -23,7 +23,7 @@ The Google Forms integration has been successfully implemented. Your executives 
 
 ## What Was Built
 
-### 1. New Configuration Module (`src/forms_config.py`)
+### 1. New Configuration Module (`pbp/core/forms_config.py`)
 **Purpose:** Centralized configuration for Google Forms integration
 
 **Contains:**
@@ -36,7 +36,7 @@ The Google Forms integration has been successfully implemented. Your executives 
 
 ---
 
-### 2. New Helper Module (`src/forms_helper.py`)
+### 2. New Helper Module (`pbp/core/forms_helper.py`)
 **Purpose:** Core business logic for forms integration
 
 **Functions:**
@@ -125,8 +125,8 @@ The Google Forms integration has been successfully implemented. Your executives 
 
 ### New Files (2)
 ```
-src/forms_config.py (250 lines)
-src/forms_helper.py (350 lines)
+pbp/core/forms_config.py (250 lines)
+pbp/core/forms_helper.py (350 lines)
 ```
 
 ### Modified Files (1)
@@ -318,7 +318,7 @@ docs/planning/GOOGLE_FORMS_IMPLEMENTATION_COMPLETE.md (this file)
 
 If you must restructure the form:
 1. Extract new entry IDs (use browser console script from guide)
-2. Update `src/forms_config.py` with new IDs
+2. Update `pbp/core/forms_config.py` with new IDs
 3. Test entire workflow
 
 ### Response Sheet Maintenance
@@ -338,7 +338,7 @@ If you must restructure the form:
 3. Service account doesn't have access to sheet
 
 **Solution:**
-- Verify `GOOGLE_FORM_CONFIG['response_sheet_id']` in `src/forms_config.py`
+- Verify `GOOGLE_FORM_CONFIG['response_sheet_id']` in `pbp/core/forms_config.py`
 - Check response sheet permissions (service account = Editor)
 - Open response sheet manually → verify row exists
 
@@ -353,7 +353,7 @@ If you must restructure the form:
 **Solution:**
 - Open generated URL in browser → View Page Source
 - Look for `entry.XXXXXX` parameters in URL
-- Compare to `src/forms_config.py` entry IDs
+- Compare to `pbp/core/forms_config.py` entry IDs
 - If mismatch, re-extract entry IDs from form
 
 ---
