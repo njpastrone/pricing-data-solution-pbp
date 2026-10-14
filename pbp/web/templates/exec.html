@@ -1,0 +1,36 @@
+{% extends "staff_base.html" %}
+{% block title %}Executive Pricing Tool - PBP{% endblock %}
+{% block content %}
+<h1>Executive Pricing Tool</h1>
+<p class="hint">Build and analyze pricing scenarios with detailed cost breakdowns. Nothing here is saved; import the result into a proposal or an order when it looks right.</p>
+{% if catalog_error %}<div class="notice error">Catalog unavailable: {{ catalog_error }}</div>{% endif %}
+
+<h2>1. Add Products</h2>
+{% if partners %}
+<form method="post" action="/exec/products" class="row">
+  <label>Partner
+    <select name="partner" hx-get="/catalog/products" hx-trigger="change" hx-target="#product-select" hx-swap="outerHTML">
+      {% for partner in partners %}<option>{{ partner }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Product{% with products = first_products %}{% include "_product_options.html" %}{% endwith %}</label>
+  <button class="small primary">Add product</button>
+</form>
+{% endif %}
+
+<h2 id="products">2. Product Configuration</h2>
+{% if not scenario.products %}<p class="muted">No products added yet. Use the selector above to add products.</p>{% endif %}
+{% for product in scenario.products %}{% with v = views[loop.index0], index = loop.index0 %}{% include "_exec_product.html" %}{% endwith %}{% endfor %}
+
+{% include "_exec_settings.html" %}
+{% include "_exec_summary.html" %}
+
+{% if scenario.products %}
+<h2>5. Import &amp; Export</h2>
+<div class="row">
+  <form method="post" action="/exec/import/proposal" class="inline"><button class="small primary">Import to proposal</button></form>
+  <form method="post" action="/exec/import/order" class="inline"><button class="small">Import to order</button></form>
+  <a href="/exec/summary.csv"><button type="button" class="small">Download CSV</button></a>
+</div>
+{% endif %}
+{% endblock %}

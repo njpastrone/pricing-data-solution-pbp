@@ -1,0 +1,56 @@
+<div class="item-card" id="exec-{{ index }}">
+  <form method="post" action="/exec/products/{{ index }}" hx-post="/exec/products/{{ index }}" hx-trigger="change delay:200ms" hx-target="#exec-{{ index }}" hx-swap="outerHTML">
+    <div class="item-head">
+      <div><h3>{{ product.product_name }}</h3><p class="hint">{{ product.partner }} | Tier: {{ v.tier_range or 'n/a' }} | PBP cost {{ v.base_cost|money }}/unit</p></div>
+      <button class="small danger" formaction="/exec/products/{{ index }}/remove" formmethod="post">Remove</button>
+    </div>
+    <div class="cols-4">
+      <label>Quantity<input type="number" min="1" max="10000" step="10" name="quantity" value="{{ product.quantity }}"></label>
+      <label>Markup %<input type="number" min="-50" max="500" step="5" name="markup_percent" value="{{ '%.1f'|format(product.markup_percent) }}"></label>
+      <label>Client price/unit<input type="number" min="0.01" step="1" name="client_price" value="{{ '%.2f'|format(v.client_price) }}"></label>
+      <div><label>Profit/unit</label><div>{{ v.margin_per_unit|money }} ({{ '%.1f'|format(v.margin_percent) }}% of price)</div></div>
+    </div>
+
+    <h4>Customization options</h4>
+    <label class="check"><input type="checkbox" name="include_customization" {% if product.include_customization %}checked{% endif %}> Include customization</label>
+    {% if product.include_customization %}
+    <div class="cols-4">
+      <label>Setup fee (client)<input type="number" min="0" step="10" name="custom_setup_fee" value="{{ product.custom_setup_fee }}"></label>
+      <label>Setup fee (PBP cost)<input type="number" min="0" step="10" name="pbp_setup_fee" value="{{ product.pbp_setup_fee }}"></label>
+      <label>Per unit (client)<input type="number" min="0" step="0.5" name="custom_per_unit" value="{{ product.custom_per_unit }}"></label>
+      <label>Per unit (PBP cost)<input type="number" min="0" step="0.5" name="pbp_per_unit_cost" value="{{ product.pbp_per_unit_cost }}"></label>
+    </div>
+    <p class="hint">Defaults come from the spreadsheet where present; PBP costs can be entered by hand.</p>
+    {% endif %}
+
+    <h4>Tariff options</h4>
+    <label class="check"><input type="checkbox" name="include_tariffs" {% if product.include_tariffs %}checked{% endif %}> Include tariffs (ships from: {{ v.country }})</label>
+    {% if product.include_tariffs %}
+    <p class="hint">Tariffs are calculated on commercial value (client price) and passed through without markup.
+      {% if v.sheet_dollar > 0 %}Spreadsheet default: {{ v.sheet_dollar|money }} for 100 units ({{ '%.1f'|format(v.default_rate) }}% of commercial value).{% elif v.sheet_percent > 0 %}Spreadsheet default: {{ '%.1f'|format(v.sheet_percent) }}%.{% else %}No default tariff specified.{% endif %}</p>
+    <div class="cols-3">
+      <label>Input method
+        <select name="tariff_input_method">
+          <option value="percentage" {% if product.tariff_input_method != 'dollar' %}selected{% endif %}>Percentage (% of commercial value)</option>
+          <option value="dollar" {% if product.tariff_input_method == 'dollar' %}selected{% endif %}>Dollar amount ($ per unit)</option>
+        </select>
+      </label>
+      {% if product.tariff_input_method == 'dollar' %}
+      <label>Tariff amount ($ per unit)<input type="number" min="0" step="1" name="tariff_dollar" value="{{ '%.2f'|format(v.tariff_per_unit) }}"></label>
+      {% else %}
+      <label>Tariff rate (% of commercial value)<input type="number" min="0" max="100" step="0.5" name="tariff_rate" value="{{ '%.1f'|format(v.tariff_rate) }}"></label>
+      {% endif %}
+      <div><label>Tariff (pass-through)</label><div>{{ v.tariff_per_unit|money }}/unit, {{ v.tariff_total|money }} total for {{ product.quantity }} units</div></div>
+    </div>
+    {% endif %}
+
+    <h4>Pricing breakdown</h4>
+    <p class="hint">Markup {{ '%.0f'|format(product.markup_percent) }}% | Margin/unit {{ v.margin_per_unit|money }} | Total margin {{ v.margin_total|money }}</p>
+    <table class="data">
+      <tr><th>Item</th><th class="num">Qty</th><th class="num">PBP Cost (Per Unit)</th><th class="num">PBP Cost</th><th class="num">Client Price (Per Unit)</th><th class="num">Client Price</th></tr>
+      {% for r in v.rows %}<tr><td>{{ r[0] }}</td><td class="num">{{ r[1] }}</td><td class="num">{{ r[2]|money }}</td><td class="num">{{ r[3]|money }}</td><td class="num">{{ r[4]|money }}</td><td class="num">{{ r[5]|money }}</td></tr>{% endfor %}
+    </table>
+    <p class="hint"><strong>Product subtotal:</strong> PBP cost {{ v.pbp_subtotal|money }} | Client price {{ v.client_subtotal|money }} | <strong>Margin {{ v.product_margin|money }} ({{ '%.1f'|format(v.product_margin_percent) }}%)</strong></p>
+    <noscript><button class="small">Apply</button></noscript>
+  </form>
+</div>
