@@ -18,6 +18,14 @@ SAVED_PROPOSALS_SHEET_ID = os.getenv("PBP_SAVED_PROPOSALS_SHEET_ID", "1njImhHbLM
 SAVED_ORDERS_SHEET_ID = os.getenv("PBP_SAVED_ORDERS_SHEET_ID", "1pXqBAQOeSvQi1ob8GLc70UhQsM0gwmczYfVWFRPjbao")
 FORM_RESPONSES_SHEET_ID = os.getenv("PBP_FORM_RESPONSES_SHEET_ID", "1MYpwnb9L0EC0XnsaLSEuaaJrsjGydcQbpuF1-3vlDSA")
 FORM_RESPONSES_SHEET_NAME = os.getenv("PBP_FORM_RESPONSES_SHEET_NAME", "Form Responses 1")
+SAVED_MATCHES_SHEET_ID = os.getenv("PBP_SAVED_MATCHES_SHEET_ID", "1cU5CW0ydE1BXDjy3TNkbm4TohZ9CA8jR6h4zQPY_9Io")
+IMPACT_SLIDE_MAPPING_SHEET_ID = os.getenv("PBP_IMPACT_SLIDE_MAPPING_SHEET_ID", "1MB5Loc4LcxOHF4vHTOFpW_XuwvErGHP7wNGD-nn4OVg")
+
+# Google Drive folder holding the "All Slides" PowerPoint templates (same variable the Streamlit app reads)
+TEMPLATE_FOLDER_ID = os.getenv("TEMPLATE_FOLDER_ID", "1NRGfKlBZNHLmWdD39ppcWbdY8HHXIYv6")
+INTRO_OUTRO_TEMPLATE = REPO_ROOT / "templates" / "Intro_Outro_Slides_PbP_Proposals.pptx"
+# Where downloaded templates are kept for the life of the process
+TEMPLATE_CACHE_DIR = pathlib.Path(os.getenv("PBP_TEMPLATE_CACHE_DIR", "/tmp/pbp-templates"))
 
 # Where Tab 2 of the Streamlit app points client form links (phase 1 cutover switch)
 CLIENT_FORM_BASE_URL = os.getenv("CLIENT_FORM_BASE_URL", "https://pbp-order-management-system.onrender.com/")

@@ -12,6 +12,7 @@
   <header class="topbar">
     <a class="brand" href="/orders">Peace by Piece Order Management</a>
     <nav>
+      <a href="/proposals/current" {% if request.url.path.startswith('/proposals') %}class="active"{% endif %}>Proposals</a>
       <a href="/orders" {% if request.url.path == '/orders' %}class="active"{% endif %}>Orders</a>
       <a href="/orders/current" {% if request.url.path == '/orders/current' %}class="active"{% endif %}>Order Editor</a>
       <a href="/orders/current/accounting" {% if 'accounting' in request.url.path %}class="active"{% endif %}>Accounting</a>

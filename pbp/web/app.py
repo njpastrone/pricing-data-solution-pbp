@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pbp import settings
 from pbp.core.forms_config import MAX_PRODUCT_LINES
 from pbp.sheets import client_form, gateway
-from pbp.web import staff
+from pbp.web import proposals, staff
 from pbp.web.templating import templates
 
 HERE = pathlib.Path(__file__).parent
@@ -72,6 +72,7 @@ async def lifespan(app):
 app = FastAPI(title="Peace by Piece Order Form", lifespan=lifespan, docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 app.include_router(staff.router)
+app.include_router(proposals.router)
 
 
 # ----------------------------------------------------------------------------

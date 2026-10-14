@@ -1,0 +1,57 @@
+{% extends "staff_base.html" %}
+{% block title %}Proposal Editor - PBP{% endblock %}
+{% block content %}
+<h1>Proposal Generator{% if meta.loaded_proposal_name %} <span class="pill">{{ meta.loaded_proposal_name }}</span>{% endif %}</h1>
+<p class="hint">Browse products, configure the proposal, generate the tables and the PowerPoint, then send the client their order form link.</p>
+
+<h2>1. Browse &amp; Filter Products</h2>
+{% include "_catalog.html" %}
+
+{% include "_proposal_items.html" %}
+
+<h2 id="pptx">3. Generate PowerPoint Proposal</h2>
+{% if not proposal.proposal_products %}
+<p class="muted">Add products to the proposal first.</p>
+{% else %}
+<form method="post" action="/proposals/current/pptx/template" class="row">
+  <label>Product slides template
+    <select name="file_id" onchange="this.form.submit()">
+      {% for t in templates %}<option value="{{ t.file_id }}" {% if selected_template and selected_template.file_id == t.file_id %}selected{% elif not selected_template and loop.first %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+      {% if not templates %}<option value="">No templates found in Google Drive</option>{% endif %}
+    </select>
+  </label>
+  <button class="small" name="refresh" value="1">Refresh list</button>
+</form>
+<form method="post" action="/proposals/current/pptx/match">
+  <button class="primary small" {% if not templates %}disabled{% endif %}>Review matches &amp; generate PowerPoint</button>
+</form>
+<p class="hint">The template is downloaded once and kept on the server; matching takes a few seconds.</p>
+{% endif %}
+
+<h2 id="form-link">4. Client Order Form Link</h2>
+{% if meta.loaded_proposal_id %}
+<form method="post" action="/proposals/current/form-link" class="row">
+  <label class="narrow">Type<select name="client_type"><option>New</option><option>Existing</option></select></label>
+  <label>Company<input name="company_name"></label>
+  <label>Contact name<input name="contact_name"></label>
+  <label>Contact email<input name="contact_email"></label>
+  <label class="narrow">Phone<input name="contact_phone"></label>
+  <button class="small primary">Generate client form link</button>
+</form>
+{% if meta.client_form_link %}
+<div class="card"><strong>Copy this link and send it to your client:</strong><div style="word-break: break-all;"><a href="{{ meta.client_form_link }}" target="_blank">{{ meta.client_form_link }}</a></div>
+<p class="hint">The client fills in the form without logging in; the submission appears under Client Form Responses for import into an order. Each click creates a new unique link.</p></div>
+{% endif %}
+{% else %}<p class="muted">Save the proposal first; the client form loads its products from the saved proposal.</p>{% endif %}
+
+<h2 id="save">Save Your Work</h2>
+{% if proposal.proposal_products %}
+<form method="post" action="/proposals/current/save" class="row">
+  <label>Proposal name<input name="name" value="{{ meta.loaded_proposal_name or '' }}" placeholder="e.g., Client ABC Winter Campaign"></label>
+  <label>Your name (optional)<input name="created_by"></label>
+  <label class="check"><input type="checkbox" name="overwrite" {% if meta.loaded_proposal_name %}checked{% endif %}> Overwrite existing proposal with this name</label>
+  <button class="small primary">Save proposal</button>
+</form>
+{% else %}<p class="muted">Add products to your proposal to enable saving.</p>{% endif %}
+<p class="hint">Next: import this proposal into an order from the <a href="/orders/current">order editor</a>.</p>
+{% endblock %}

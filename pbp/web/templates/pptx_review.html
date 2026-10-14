@@ -1,0 +1,7 @@
+{% extends "staff_base.html" %}
+{% block title %}PowerPoint Matches - PBP{% endblock %}
+{% block content %}
+<h1>Generate PowerPoint Proposal</h1>
+<p class="hint">Template: {{ pptx_template.name if pptx_template else "none" }} | <a href="/proposals/current#pptx">Back to the proposal</a></p>
+{% include "_pptx_review.html" %}
+{% endblock %}

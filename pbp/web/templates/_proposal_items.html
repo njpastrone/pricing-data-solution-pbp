@@ -1,0 +1,65 @@
+<div id="products">
+  <h2>2. Proposal Preview &amp; Settings</h2>
+  {% if not proposal.proposal_products %}
+  <p class="muted">No products added to proposal yet. Add products from the catalog above.</p>
+  {% else %}
+  <p class="ok">{{ proposal.proposal_products|length }} product(s) in proposal</p>
+  <form method="post" action="/proposals/current/settings" hx-post="/proposals/current/settings" hx-trigger="change delay:200ms" hx-target="#products" hx-swap="outerHTML">
+    <h3>Proposal settings</h3>
+    <div class="cols-3">
+      <div>
+        <label>Client discount
+          <select name="discount_option">{% for option in svc.DISCOUNT_OPTIONS %}<option {% if svc.discount_option(proposal) == option %}selected{% endif %}>{{ option }}</option>{% endfor %}</select>
+        </label>
+        {% if svc.discount_option(proposal) == 'Custom' %}<label>Custom discount %<input type="number" step="0.5" min="0" max="100" name="custom_discount" value="{{ proposal.proposal_discount_percent }}"></label>{% endif %}
+        <label>Client budget (optional, for volume pricing in the tables) $<input type="number" step="100" min="0" name="client_budget" value="{{ proposal.proposal_client_budget or '' }}"></label>
+      </div>
+      <div>
+        <label class="check"><input type="checkbox" name="use_msrp" {% if proposal.proposal_use_msrp %}checked{% endif %}> Use MSRP pricing when available (for products added from now on)</label>
+        <label class="check"><input type="checkbox" name="fifty_cent_rounding" {% if proposal.proposal_fifty_cent_rounding %}checked{% endif %}> Round prices to nearest $0.50</label>
+        <label class="check"><input type="checkbox" name="marketing_rounding" {% if proposal.proposal_marketing_rounding %}checked{% endif %}> Apply marketing rounding (e.g., $60 to $59)</label>
+      </div>
+    </div>
+    <noscript><button class="small">Apply settings</button></noscript>
+  </form>
+
+  <h3>Products in proposal</h3>
+  <table class="data">
+    <tr><th>Product</th><th class="num">PBP Cost</th><th class="num">Vendor MSRP</th><th>Pricing method</th><th class="num">PBP MSRP</th><th class="num">Markup %</th><th>Override</th><th></th></tr>
+    {% for entry in items %}{% set d = entry.display %}{% set item = entry.item %}
+    <tr>
+      <td>{{ d.name }}<div class="hint">Partner: {{ d.partner }}</div></td>
+      <td class="num">{{ d.base_cost|money if d.base_cost else '-' }}</td>
+      <td class="num">{{ d.msrp|money if d.msrp else '-' }}</td>
+      <td>{{ d.method }}</td>
+      <td class="num">
+        <form method="post" action="/proposals/current/items/{{ loop.index0 }}" hx-post="/proposals/current/items/{{ loop.index0 }}" hx-trigger="change delay:200ms" hx-target="#products" hx-swap="outerHTML" id="pitem-{{ loop.index0 }}">
+          {% if d.client_price %}<input type="number" step="0.01" min="0.01" name="client_price" value="{{ '%.2f'|format(d.client_price) }}" style="width: 110px;">
+          {% if d.rounded_note %}<div class="hint">Rounded from {{ d.unrounded|money }}</div>{% endif %}{% else %}-{% endif %}
+        </form>
+      </td>
+      <td class="num"><input form="pitem-{{ loop.index0 }}" type="number" step="0.5" min="-50" name="markup_percent" value="{{ '%.1f'|format(item.markup_percent) }}" style="width: 90px;"></td>
+      <td><input form="pitem-{{ loop.index0 }}" type="checkbox" name="manual_override" {% if item.manual_override %}checked{% endif %} style="width: auto;"></td>
+      <td class="num"><button form="pitem-{{ loop.index0 }}" class="small danger" name="action" value="remove" hx-post="/proposals/current/items/{{ loop.index0 }}" hx-include="#pitem-{{ loop.index0 }}" hx-vals='{"action": "remove"}' hx-target="#products" hx-swap="outerHTML">Remove</button></td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  {% if notes %}<details><summary>Pricing information ({{ notes|length }} product{{ 's' if notes|length != 1 }})</summary>{% for name, note in notes %}<p><strong>{{ name }}</strong><br><span class="hint">{{ note }}</span></p>{% endfor %}</details>{% endif %}
+  {% if warnings %}<div class="notice error">{{ warnings|length }} product{{ 's have' if warnings|length != 1 else ' has' }} pricing discrepancies: {% for name, w in warnings %}<div>{{ name }}: {{ w }}</div>{% endfor %}</div>{% endif %}
+
+  <h3>Proposal tables</h3>
+  <p class="hint">Each product in its own table with MOQ pricing (the numbers that go on the PowerPoint slides).</p>
+  {% for entry in items %}{% set t = entry.table %}
+  <div class="card">
+    <h3>Product {{ loop.index }}: {{ entry.display.name }}</h3>
+    {% if t %}
+    <table class="data"><tr>{% for col in t.columns %}<th>{{ col }}</th>{% endfor %}</tr><tr>{% for cell in t.row %}<td>{{ cell }}</td>{% endfor %}</tr></table>
+    <p class="hint">{{ t.moq_text }}</p>
+    <p class="hint"><strong>Customization available:</strong> {{ t.customization }}</p>
+    <a href="/proposals/current/tables/{{ loop.index0 }}.csv"><button type="button" class="small">Download table (CSV)</button></a>
+    {% else %}<p class="warn">Unable to calculate MOQ pricing for this product</p>{% endif %}
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>

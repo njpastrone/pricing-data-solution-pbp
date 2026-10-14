@@ -2157,7 +2157,7 @@ def show_match_review_ui(match_results, pptx_product_names, pptx_name_to_index=N
         Dict of confirmed matches {gs_product_name: pptx_product_name} or None if cancelled
     """
     # Import match memory functions
-    from src.match_memory import save_confirmed_match
+    from pbp.sheets.match_memory import save_confirmed_match
 
     # Get current dataset and template name for saving confirmations
     current_dataset = st.session_state.get('selected_dataset', 'real')
@@ -4537,7 +4537,7 @@ with tab1:
                         # Create matcher and run matching (pass dataset for confirmed match lookup)
                         with st.spinner("Matching products to slides..."):
                             # Clear cache to ensure fresh confirmed matches are loaded
-                            from src.match_memory import _load_all_matches_data
+                            from pbp.sheets.match_memory import _load_all_matches_data
                             _load_all_matches_data.clear()
 
                             matcher = SlideMatcher(pptx_product_names)

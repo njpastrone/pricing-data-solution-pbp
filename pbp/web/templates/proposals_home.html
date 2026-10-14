@@ -1,0 +1,30 @@
+{% extends "staff_base.html" %}
+{% block title %}Proposals - PBP{% endblock %}
+{% block content %}
+<h1>Proposals</h1>
+<div class="card">
+  <h3>Working proposal{% if meta.loaded_proposal_name %}: {{ meta.loaded_proposal_name }}{% endif %}</h3>
+  <p>{{ proposal.proposal_products|length }} product(s).</p>
+  <div class="row">
+    <a href="/proposals/current"><button type="button" class="primary small">Open proposal editor</button></a>
+    <form method="post" action="/proposals/new" class="inline" onsubmit="return confirm('Start a new empty proposal? Unsaved changes are lost.')"><button class="small">Start a new proposal</button></form>
+  </div>
+</div>
+<div class="card">
+  <h3>Saved proposals ({{ saved_proposals|length }})</h3>
+  {% if saved_proposals %}
+  <table class="data">
+    <tr><th>Name</th><th>Created by</th><th>Date</th><th>Dataset</th><th></th></tr>
+    {% for p in saved_proposals %}
+    <tr>
+      <td>{{ p.name }}</td><td>{{ p.created_by or 'Unknown' }}</td><td>{{ p.created_date[:10] }}</td><td>{{ p.dataset }}</td>
+      <td class="num">
+        <form method="post" action="/proposals/load/{{ p.proposal_id }}" class="inline"><button class="small">Load</button></form>
+        <form method="post" action="/proposals/delete/{{ p.proposal_id }}" class="inline" onsubmit="return confirm('Delete {{ p.name|e }}? This cannot be undone.')"><button class="small danger">Delete</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No saved proposals yet.</p>{% endif %}
+</div>
+{% endblock %}

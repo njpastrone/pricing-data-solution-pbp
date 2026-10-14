@@ -1,0 +1,71 @@
+<div id="catalog">
+  {% if catalog_error %}<div class="notice error">Catalog unavailable: {{ catalog_error }}</div>{% endif %}
+  <form method="get" action="/proposals/current" hx-get="/proposals/current" hx-trigger="change delay:300ms, keyup[key=='Enter'] from:input" hx-target="#catalog" hx-swap="outerHTML" hx-push-url="false">
+    <label>Search product names<input name="search" value="{{ filters.search }}" placeholder="Type to search product names..."></label>
+    <div class="cols-4">
+      <label>Min price ($)<input type="number" step="1" min="0" name="min_budget" value="{{ filters.min_budget or '' }}"></label>
+      <label>Max price ($)<input type="number" step="1" min="0" name="max_budget" value="{{ filters.max_budget or '' }}"></label>
+      <label>Partner/Maker
+        <select name="partners" multiple size="4">{% for p in partners %}<option {% if p in filters.partners %}selected{% endif %}>{{ p }}</option>{% endfor %}</select>
+      </label>
+      <label>Ships from
+        <select name="countries" multiple size="4">{% for c in countries %}<option {% if c in filters.countries %}selected{% endif %}>{{ c }}</option>{% endfor %}</select>
+      </label>
+    </div>
+    {% if filters.min_budget and filters.max_budget and filters.min_budget > filters.max_budget %}<p class="warn">Min price cannot be greater than Max price</p>{% endif %}
+    <div class="row">
+      <noscript><button class="small">Apply filters</button></noscript>
+      <a href="/proposals/current?clear=1"><button type="button" class="small">Clear all filters</button></a>
+    </div>
+  </form>
+  <p class="hint">{{ rows|length }} products match your filters{% if filters.min_budget or filters.max_budget %} (price filter matched against each product's client price shown below){% endif %}.</p>
+
+  {% if rows %}
+  <details>
+    <summary>Bulk actions: add all products from partner(s)</summary>
+    <div class="row">
+      <form method="post" action="/proposals/current/items" class="inline">
+        <input type="hidden" name="action" value="all_filtered">
+        <button class="small" {% if new_count == 0 %}disabled{% endif %}>Add all {{ new_count }} new filtered product(s)</button>
+      </form>
+      <form method="post" action="/proposals/current/items" class="row">
+        <input type="hidden" name="action" value="by_partner">
+        <label>Partner(s)<select name="bulk_partners" multiple size="3">{% for p in rows|map(attribute='partner')|unique|sort %}<option>{{ p }}</option>{% endfor %}</select></label>
+        <button class="small">Add all products of selected partner(s)</button>
+      </form>
+    </div>
+    <p class="hint">Products already in the proposal are skipped.</p>
+  </details>
+
+  <details {% if not in_proposal %}open{% endif %}>
+    <summary>Browse products ({{ rows|length }} available)</summary>
+    <table class="data">
+      <tr><th>Product</th><th>Partner</th><th class="num">Cost/Unit</th><th class="num">PBP MSRP</th><th></th></tr>
+      {% for r in rows %}
+      <tr>
+        <td><strong>{{ r.name }}</strong>
+          <div class="hint">Ships from: {{ r.ships_from }} | Made in: {{ r.made_in }} | Tiered: {{ r.tiered }} | {{ r.method }} | Cost basis: {{ r.cost_basis }}
+            {% if r.msrp %} | Vendor MSRP {{ r.msrp|money }}{% endif %}{% if r.shipping != 'No shipping data' %} | Shipping: {{ r.shipping }}{% endif %}</div>
+          {% if r.cost and r.client_price %}<div class="hint">Est. at {{ r.moq_text }}: {{ r.cost|money }} cost to {{ r.client_price|money }} client price ({{ '%.0f'|format(r.markup) }}% markup)</div>{% endif %}
+          {% if r.description %}<div class="hint">{{ r.description }}</div>{% endif %}
+        </td>
+        <td>{{ r.partner }}</td>
+        <td class="num">{{ r.cost|money if r.cost else '-' }}</td>
+        <td class="num">{{ r.client_price|money if r.client_price else '-' }}</td>
+        <td class="num">
+          {% if r.name in in_proposal %}<span class="pill">In proposal</span>
+          {% else %}
+          <form method="post" action="/proposals/current/items" class="inline">
+            <input type="hidden" name="product" value="{{ r.name }}"><input type="hidden" name="partner" value="{{ r.partner }}">
+            <button class="small primary">Add to proposal</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </details>
+  {% elif not catalog_error %}
+  <p class="muted">No products match your filters. Try adjusting the filter criteria above.</p>
+  {% endif %}
+</div>

@@ -193,7 +193,7 @@ def proposal_pptx_snapshot(proposal_data, dataset="real"):
         if title and title not in template_titles:
             template_titles.append(title)
 
-    with patch("src.match_memory.get_confirmed_match", return_value=None), \
+    with patch("pbp.sheets.match_memory.get_confirmed_match", return_value=None), \
          patch("pbp.core.slide_matcher.get_manual_match", return_value=None):
         results = SlideMatcher(template_titles).batch_match(gs_names, dataset=dataset)
 

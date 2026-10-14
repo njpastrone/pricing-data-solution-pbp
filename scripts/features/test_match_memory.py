@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 
-from src.match_memory import (
+from pbp.sheets.match_memory import (
     save_confirmed_match,
     load_all_confirmed_matches,
     get_confirmed_match,
