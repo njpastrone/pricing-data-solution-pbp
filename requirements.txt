@@ -1,11 +1,9 @@
-# Pinned 2026-10-13 to the versions a fresh install resolved (Python 3.13).
-# Update deliberately; unpinned installs previously drifted on every Render deploy.
 streamlit==1.63.0
 streamlit-local-storage==0.0.25
-gspread==6.2.1
-pandas==3.0.6
-google-auth==2.62.0
-google-api-python-client==2.201.0
-python-pptx==1.0.2
-thefuzz==0.22.1
-python-Levenshtein==0.27.5
+gspread
+pandas
+google-auth
+google-api-python-client
+python-pptx
+thefuzz
+python-Levenshtein

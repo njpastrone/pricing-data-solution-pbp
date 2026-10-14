@@ -12,7 +12,7 @@ from datetime import datetime
 
 # Path to manual matches JSON file
 MANUAL_MATCHES_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "data",
     "manual_matches.json"
 )

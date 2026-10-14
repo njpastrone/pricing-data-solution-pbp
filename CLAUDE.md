@@ -437,7 +437,7 @@ pricing-data-solution-pbp/
 │       ├── tab2-improvements/   # Tab 2 UI redesign docs (9 files)
 │       └── [Other archived documents]
 │
-├── pbp/                        # Framework-free package (shared by Streamlit app and future web app)
+├── pbp/                        # Shared core package for the Streamlit app and future web app (two Streamlit couplings left, see pbp/CLAUDE.md)
 │   ├── core/
 │   │   ├── helpers.py         # Utility functions, conversions, validation
 │   │   ├── pricing_engine.py  # Pricing calculations and quote generation
