@@ -40,6 +40,7 @@ Based on: `templates/TEMPLATE INVOICE AND PURCHASE ORDER REQUEST FORM-SHARED`
 | **Ship Method** | Shipping method | "Ground / Air / Freight / Other" |
 | **Payment Terms** | Payment timeline | "Net 30 / Net 60 / Due on Receipt / 50% Deposit" |
 | **Payment Method** | How client will pay | "Check / ACH / Credit Card / Wire Transfer" |
+| **Accounting Email or Platform** | Where invoices are sent (required on the client order form) | "Email: ap@acme.com" or "Accounting platform: BillPay.com" |
 | **Order Submitted by** | Person creating order | "Your Name" |
 | **Order Submitted Date** | Date order created | "2025-10-22" (auto-filled) |
 | **Cost Submitted by** | Person who verified costs | "Finance Contact" |
