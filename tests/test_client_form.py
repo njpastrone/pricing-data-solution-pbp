@@ -119,7 +119,8 @@ class FakeSheet:
 
     def __init__(self, rows, row_count=1000):
         self.rows = [list(r) for r in rows]
-        self.row_count = row_count  # grid size, like the real sheet
+        self.row_count = row_count  # grid size as cached on the handle, like gspread
+        self.grid_rows = row_count  # real grid size on Google's side
         self.fail = {}
 
     def _maybe_fail(self, method):
@@ -155,14 +156,14 @@ class FakeSheet:
         row.extend([''] * (col_number - len(row)))
         row[col_number - 1] = value
 
-    def add_rows(self, count):
-        self.row_count += count
+    def resize(self, rows):
+        self.row_count = self.grid_rows = rows
 
     def update(self, range_name, values):  # e.g. 'C2' or 'G2:H2'
         self._maybe_fail('update')
         first = range_name.split(':')[0]
         col_number = ord(first[0]) - ord('A') + 1
-        if int(first[1:]) > self.row_count:
+        if int(first[1:]) > self.grid_rows:
             raise Exception("exceeds grid limits")
         for offset, value in enumerate(values[0]):
             if len(str(value)) > 50000:
@@ -511,6 +512,17 @@ def test_sync_does_not_overwrite_when_sheet_has_table():
 def test_sync_adds_rows_when_grid_is_full():
     """A sheet with no empty rows left still takes the order (rows are added first)."""
     client, response, drafts, _ = _mock_sheets(LIVE_HEADERS, response=FakeSheet([LIVE_HEADERS], row_count=1))
+    _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
+
+    assert len(_response_rows(response)) == 1
+    assert _backup(drafts)[1] == STATUS_SUBMITTED
+
+
+def test_sync_works_when_cached_row_count_is_stale():
+    """Staff deleted rows while the app ran: the cached row_count is too high but the order still lands."""
+    sheet = FakeSheet([LIVE_HEADERS], row_count=1000)
+    sheet.grid_rows = 1
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS, response=sheet)
     _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
 
     assert len(_response_rows(response)) == 1
