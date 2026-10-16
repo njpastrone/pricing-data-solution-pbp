@@ -86,7 +86,8 @@ from src.client_form import (
     retrieve_file_by_proposal,
     retry_pending_syncs,
     STATUS_PENDING,
-    STATUS_SUBMITTED
+    STATUS_SUBMITTED,
+    DROPSHIP_TEMPLATE_CSV
 )
 
 # ============================================================
@@ -501,21 +502,50 @@ def _render_client_form_page(proposal_id, session_id):
 
     saved_shipping = saved_data.get('shipping_info', {})
 
-    # Drop-shipping question first (address depends on this choice)
+    # Drop-shipping question first (address depends on this choice).
+    # Saved as "Yes", "No", or the client's own words when they pick "Other".
+    drop_ship_options = ["Shipped to one address", "Yes, dropshipped to multiple addresses", "Other"]
+    saved_drop = saved_shipping.get('drop_shipping', '')
+    if saved_drop.lower() == 'yes':
+        drop_index = 1
+    elif saved_drop.lower() in ('', 'no'):
+        drop_index = 0
+    else:
+        drop_index = 2
     drop_shipping = st.selectbox(
         "Will this order be dropshipped or shipped to an individual address? *",
-        options=["Shipped to one address", "Yes, dropshipped to multiple addresses"],
-        index=1 if saved_shipping.get('drop_shipping', '').lower() == 'yes' else 0,
+        options=drop_ship_options,
+        index=drop_index,
         key="cf_drop_shipping"
     )
+
+    drop_shipping_other = ""
+    if drop_shipping == "Other":
+        drop_shipping_other = st.text_input(
+            "Please describe how this order should be shipped *",
+            value=saved_drop if drop_index == 2 else '',
+            key="cf_drop_shipping_other"
+        )
 
     drop_instructions = ""
     uploaded_file = None
     if drop_shipping == "Yes, dropshipped to multiple addresses":
-        st.caption("Please upload a spreadsheet of addresses and indicate what you want dropshipped to each location.")
+        st.info(
+            "You do not need a recipient spreadsheet right now. We will need one before your order ships: "
+            "download the template below, fill in one row per recipient, and send it to your PBP representative "
+            "(or upload it here) when it is ready."
+        )
+        st.download_button(
+            "Download Dropshipping Spreadsheet Template (.csv)",
+            data=DROPSHIP_TEMPLATE_CSV,
+            file_name="PBP Dropshipping Template.csv",
+            mime="text/csv",
+            on_click="ignore",
+            key="cf_dropship_template"
+        )
 
         uploaded_file = st.file_uploader(
-            "Upload Dropshipping Address File (.xlsx, .csv)",
+            "Upload Dropshipping Address File (optional, .xlsx or .csv)",
             type=["xlsx", "csv"],
             key="cf_file_upload"
         )
@@ -586,6 +616,22 @@ def _render_client_form_page(proposal_id, session_id):
         key="cf_payment_method"
     )
 
+    # Where invoices go: some clients use an email address, others an accounting platform
+    accounting_type_options = ["Email", "Accounting platform"]
+    saved_accounting_type = saved_payment.get('accounting_contact_type', 'Email')
+    accounting_type = st.radio(
+        "Where should we send invoices? *",
+        options=accounting_type_options,
+        index=accounting_type_options.index(saved_accounting_type) if saved_accounting_type in accounting_type_options else 0,
+        horizontal=True,
+        key="cf_accounting_type"
+    )
+    accounting_contact = st.text_input(
+        "Accounting Email Address *" if accounting_type == "Email" else "Accounting Platform (name and any account details) *",
+        value=saved_payment.get('accounting_contact', ''),
+        key="cf_accounting_contact"
+    )
+
     st.divider()
 
     # --- Section 5: Additional Notes ---
@@ -614,7 +660,7 @@ def _render_client_form_page(proposal_id, session_id):
             'shipping_info': {
                 'shipping_address': shipping_address,
                 'billing_address': billing_address,
-                'drop_shipping': 'Yes' if drop_shipping.startswith('Yes') else 'No',
+                'drop_shipping': drop_shipping_other.strip() if drop_shipping == 'Other' else ('Yes' if drop_shipping.startswith('Yes') else 'No'),
                 'drop_shipping_instructions': drop_instructions,
                 'in_hands_date': str(in_hands_date) if isinstance(in_hands_date, date) else '',
             },
@@ -623,6 +669,8 @@ def _render_client_form_page(proposal_id, session_id):
                 'impact_card_selection': '',
                 'payment_preference': '',  # Payment terms are set by PBP staff, not the client
                 'payment_method': payment_method,
+                'accounting_contact_type': accounting_type,
+                'accounting_contact': accounting_contact.strip(),
             },
             'notes': special_requests,
         }
@@ -659,6 +707,12 @@ def _render_client_form_page(proposal_id, session_id):
                 missing.append("Shipping Address")
             if not isinstance(in_hands_date, date):
                 missing.append("In-Hands Date")
+            if drop_shipping == "Other" and not drop_shipping_other.strip():
+                missing.append("Shipping description (Other)")
+            if not accounting_contact.strip():
+                missing.append("Accounting Email or Platform")
+            elif accounting_type == "Email" and '@' not in accounting_contact:
+                missing.append("a valid Accounting Email Address")
 
             if missing:
                 st.error(f"Please fill in required fields: {', '.join(missing)}")
@@ -5418,6 +5472,7 @@ with tab3:
                         st.write(f"- Products: {format_product_summary(response_data['products'])}")
                         st.write(f"- In-Hands: {response_data['shipping_info'].get('in_hands_date', 'N/A')}")
                         st.write(f"- Payment Method: {response_data['payment_info'].get('payment_method') or 'N/A'}")
+                        st.write(f"- Invoices To: {response_data['payment_info'].get('accounting_contact') or 'N/A'}")
 
                     st.markdown("**Products:**")
                     for product in response_data['products']:
@@ -5484,11 +5539,13 @@ with tab3:
                             'contacts': contacts,
                             'client_po': '',
                             'billing_address': response_data['shipping_info'].get('billing_address', ''),
-                            'shipping_type': 'Drop Shipping' if drop_shipping == 'Yes' else 'One Location',
+                            # "Other" answers are saved as the client's own words
+                            'shipping_type': {'Yes': 'Drop Shipping', 'No': 'One Location', '': 'One Location'}.get(drop_shipping, drop_shipping),
                             'ship_method': 'Ground',
                             'shipping_address': response_data['shipping_info'].get('shipping_address', ''),
                             'payment_timeline': response_data['payment_info'].get('payment_preference') or 'Net 30',
                             'payment_preference': response_data['payment_info'].get('payment_method', 'Check'),
+                            'accounting_contact': response_data['payment_info'].get('accounting_contact', ''),
                             'client_in_hands_date': in_hands_date,
                             'order_submitted_by': '',
                             'order_submitted_date': datetime.now().date(),
@@ -8235,13 +8292,17 @@ with tab3:
                 height=100
             )
 
+            shipping_type_options = ['One Location', 'Drop Shipping']
+            current_shipping_type = st.session_state.client_info['shipping_type']
+            if current_shipping_type not in shipping_type_options:
+                shipping_type_options.append(current_shipping_type)  # client typed "Other" on the order form
             st.session_state.client_info['shipping_type'] = st.selectbox(
                 "Shipping Type",
-                options=['One Location', 'Drop Shipping'],
-                index=0 if st.session_state.client_info['shipping_type'] == 'One Location' else 1
+                options=shipping_type_options,
+                index=shipping_type_options.index(current_shipping_type)
             )
 
-            if st.session_state.client_info['shipping_type'] == 'One Location':
+            if st.session_state.client_info['shipping_type'] != 'Drop Shipping':
                 st.session_state.client_info['shipping_address'] = st.text_area(
                     "Shipping Address",
                     value=st.session_state.client_info['shipping_address'],
@@ -8379,6 +8440,13 @@ with tab3:
                 "Payment Method",
                 options=payment_method_options,
                 index=payment_method_options.index(current_preference) if current_preference in payment_method_options else 0
+            )
+
+            st.session_state.client_info['accounting_contact'] = st.text_input(
+                "Accounting Email or Platform",
+                value=st.session_state.client_info.get('accounting_contact', ''),
+                placeholder="Email: ap@client.com  or  Accounting platform: BillPay.com",
+                help="Where invoices should be sent"
             )
 
         col5, col6 = st.columns(2)
@@ -8614,6 +8682,7 @@ with tab4:
             st.session_state['tab3_billing_address'] = _ci_sync.get('billing_address', '')
             st.session_state['tab3_shipping_address'] = _ci_sync.get('shipping_address', '')
             st.session_state['tab3_order_submitted_by'] = _ci_sync.get('order_submitted_by', '')
+            st.session_state['tab4_accounting_contact'] = _ci_sync.get('accounting_contact', '')
             st.session_state['tab3_cost_submitted_by'] = _ci_sync.get('cost_submitted_by', '')
             for _sync_idx, _sync_contact in enumerate(_ci_sync.get('contacts', [])):
                 st.session_state[f'tab4_contact_name_{_sync_idx}'] = _sync_contact.get('name', '')
@@ -8847,6 +8916,16 @@ with tab4:
                     index=payment_method_options.index(current_method) if current_method in payment_method_options else 0,
                     key="tab3_payment_method",
                     on_change=update_payment_method
+                )
+
+                def update_accounting_contact():
+                    st.session_state.client_info['accounting_contact'] = st.session_state.tab4_accounting_contact
+
+                st.text_input(
+                    "Accounting Email or Platform",
+                    key="tab4_accounting_contact",
+                    on_change=update_accounting_contact,
+                    help="Where invoices should be sent"
                 )
 
                 def update_order_submitted_by():
@@ -9459,6 +9538,10 @@ with tab4:
         # Payment Method
         payment_method = client_info.get('payment_preference', 'Not specified')
         order_details_data.append(["Payment Method", payment_method])
+
+        # Accounting Email or Platform (where invoices go)
+        accounting_contact = client_info.get('accounting_contact') or 'Not specified'
+        order_details_data.append(["Accounting Email or Platform", accounting_contact])
 
         # Order Submitted By + Date
         order_submitted_by = client_info.get('order_submitted_by', 'Not specified')
@@ -10073,6 +10156,10 @@ with tab4:
         <tr>
             <td>Payment Method</td>
             <td>{payment_method}</td>
+        </tr>
+        <tr>
+            <td>Accounting Email or Platform</td>
+            <td>{accounting_contact}</td>
         </tr>
         <tr>
             <td>Order Submitted By</td>

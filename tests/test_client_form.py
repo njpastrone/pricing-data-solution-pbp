@@ -575,8 +575,28 @@ def test_response_row_keeps_payment_preference_column_blank():
     assert row[2] == 'ACH'
 
 
+def test_accounting_contact_and_other_shipping_reach_form_responses():
+    """The accounting email/platform and a typed "Other" shipping answer land in Form Responses and import back."""
+    form = dict(SAMPLE_FORM,
+                shipping_info=dict(SAMPLE_FORM['shipping_info'], drop_shipping='Pick up at our warehouse'),
+                payment_info=dict(SAMPLE_FORM['payment_info'], accounting_contact_type='Accounting platform',
+                                  accounting_contact='BillPay.com'))
+    client, response, _, _ = _mock_sheets(LIVE_HEADERS)
+    _submit(client, 'PROP_1', 'sess1', form)
+
+    cell = _response_rows(response)[0]
+    accounting_header = 'Is there a specific platform or email address we need to send the invoice to (i.e. BillPay.com)?'
+    assert cell[accounting_header] == 'Accounting platform: BillPay.com'
+    assert cell['Will this order be drop-shipped to individual recipients? *'] == 'Pick up at our warehouse'
+
+    parsed = parse_form_response(cell)
+    assert parsed['payment_info']['accounting_contact'] == 'Accounting platform: BillPay.com'
+    assert parsed['shipping_info']['drop_shipping'] == 'Pick up at our warehouse'
+
+
 if __name__ == "__main__":
     test_generate_session_token_is_unique()
+    test_accounting_contact_and_other_shipping_reach_form_responses()
     test_generate_session_token_is_url_safe()
     test_serialize_form_data_roundtrip()
     test_deserialize_form_data_handles_empty()

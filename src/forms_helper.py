@@ -238,6 +238,7 @@ def parse_form_response(response_row):
         'impact_card_selection': get_value('impact_card_selection'),
         'payment_preference': get_value('payment_preference'),
         'payment_method': get_value('payment_method'),
+        'accounting_contact': get_value('accounting_contact'),
     }
 
     # Extract notes

@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased] - 2026-10-09
 
+### Changed (2026-10-16, client order form)
+- **Dropshipping Spreadsheet Is No Longer Expected Up Front:** Choosing "dropshipped to multiple addresses" now explains that a recipient spreadsheet will be needed before the order ships and offers a downloadable template ("PBP Dropshipping Template.csv": Recipient Name, Company, Street Address, City, State, ZIP, Country, Phone, Email, Item, Quantity, Notes; `DROPSHIP_TEMPLATE_CSV` in `src/client_form.py`). Uploading a file is still possible but optional
+- **"Other" Shipping Option:** The drop-shipping dropdown has an "Other" choice with a text box; the typed answer is what is saved to Form Responses and required on submit. Tab 3 import keeps it as the order's Shipping Type, and the Tab 3 Shipping Type dropdown keeps such custom values
+- **Required Accounting Email or Platform:** New required field (submit only, not Save Progress) asking where invoices go: an email address or an accounting platform. Saved to the existing Form Responses column "Is there a specific platform or email address we need to send the invoice to (i.e. BillPay.com)?" as e.g. "Email: ap@client.com", imported into the order (`client_info['accounting_contact']`), editable in Tab 3 and Tab 4, and printed on the invoice/PO Order Details
+- Test: `tests/test_client_form.py` (accounting field and "Other" shipping answer reach Form Responses and import back)
+
 ### Fixed (2026-10-16)
 - **Client Orders Overwrote Each Other in Form Responses:** Every client form submission was written over row 8 of "Form Responses 1", losing earlier orders. The tab had a Google Sheets Table over rows 1-7 and the sync used `append_row`, which lets Google pick the row. `_sync_backup_row()` (`src/client_form.py`) now writes to the row right after the last filled row, growing the grid and retrying once if Google reports the row is past the grid limit
 - **"Mark as Imported" Wrote Into Gift 4/5 Columns:** Tab 3 import tracking (Imported?, Order ID, Imported By, Import Date) went into the Gift 4/5 product columns because cell addresses were built with `chr(64 + col)`, which breaks past column Z. `mark_response_imported()` (`src/forms_helper.py`) now uses `gspread.utils.rowcol_to_a1`
