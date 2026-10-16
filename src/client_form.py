@@ -507,7 +507,12 @@ def _sync_backup_row(drafts, backup):
             if not _row_already_present(all_rows[1:], row):
                 if add_file_column:
                     _retry_on_quota(lambda: worksheet.update_cell(1, len(row), RESPONSE_COLUMNS['dropshipping_file']))
-                _retry_on_quota(lambda: worksheet.append_row(row))
+                # Write to the row right after the last filled row. append_row lets Google
+                # pick the row, and when the tab had a Sheets Table it kept picking row 8.
+                next_row = len(all_rows) + 1
+                if next_row > worksheet.row_count:
+                    _retry_on_quota(lambda: worksheet.add_rows(next_row - worksheet.row_count))
+                _retry_on_quota(lambda: worksheet.update(range_name=f'A{next_row}', values=[row]))
 
             _retry_on_quota(lambda: drafts.update_cell(backup['row_number'], 8, STATUS_SUBMITTED))
             return True, "Synced"

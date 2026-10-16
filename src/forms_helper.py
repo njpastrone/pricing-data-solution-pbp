@@ -13,6 +13,7 @@ Created: 2026-01-20
 import urllib.parse
 from datetime import datetime
 import pandas as pd
+from gspread.utils import rowcol_to_a1
 from src.forms_config import (
     GOOGLE_FORM_CONFIG,
     ALL_ENTRY_IDS,
@@ -317,22 +318,22 @@ def mark_response_imported(gc, row_index, order_id, imported_by=''):
         updates = []
         if imported_col:
             updates.append({
-                'range': f'{chr(64 + imported_col)}{row_index}',
+                'range': rowcol_to_a1(row_index, imported_col),
                 'values': [['TRUE']]
             })
         if order_id_col:
             updates.append({
-                'range': f'{chr(64 + order_id_col)}{row_index}',
+                'range': rowcol_to_a1(row_index, order_id_col),
                 'values': [[order_id]]
             })
         if imported_by_col:
             updates.append({
-                'range': f'{chr(64 + imported_by_col)}{row_index}',
+                'range': rowcol_to_a1(row_index, imported_by_col),
                 'values': [[imported_by]]
             })
         if import_date_col:
             updates.append({
-                'range': f'{chr(64 + import_date_col)}{row_index}',
+                'range': rowcol_to_a1(row_index, import_date_col),
                 'values': [[current_datetime]]
             })
 

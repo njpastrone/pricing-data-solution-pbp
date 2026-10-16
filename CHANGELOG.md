@@ -5,6 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased] - 2026-10-09
 
+### Fixed (2026-10-16)
+- **Client Orders Overwrote Each Other in Form Responses:** Every client form submission was written over row 8 of "Form Responses 1", losing earlier orders. The tab had a Google Sheets Table over rows 1-7 and the sync used `append_row`, which lets Google pick the row. `_sync_backup_row()` (`src/client_form.py`) now writes to the row right after the last filled row, adding grid rows first if the sheet is full
+- **"Mark as Imported" Wrote Into Gift 4/5 Columns:** Tab 3 import tracking (Imported?, Order ID, Imported By, Import Date) went into the Gift 4/5 product columns because cell addresses were built with `chr(64 + col)`, which breaks past column Z. `mark_response_imported()` (`src/forms_helper.py`) now uses `gspread.utils.rowcol_to_a1`
+- Tests: `tests/test_client_form.py` (a fake Table sheet whose `append_row` always hits row 8, a full grid, and the AX8..BA8 tracking ranges)
+
 ### Fixed (2026-10-14)
 - **Product Photo Attached 5 Times:** Uploading one photo in Tab 3 "Product Photos" attached it repeatedly (up to the 5-photo cap). Streamlit re-sends the file uploader's value on every rerun and each rerun appended it again. New `add_product_photos()` (`src/helpers.py`) skips photos already attached (same name and size). Test: `tests/test_product_photos.py`
 - **Client Form No Longer Asks for Payment Terms:** The "Payment Preference" (Net 30 / Net 60 / Due on Receipt) dropdown was removed from the client order form; payment terms are set by PBP staff in Tab 3/Tab 4. "Payment Method" (ACH, Credit Card, Check, Other) stays. The Form Responses column is left blank and Tab 3 import falls back to Net 30 as before

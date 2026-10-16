@@ -14,7 +14,7 @@ from src.client_form import (generate_session_token, load_proposal_for_client, _
                              submit_form, save_draft, sync_submission, retry_pending_syncs, DRAFTS_SHEET_NAME, BACKUP_RETRY_WAITS,
                              STATUS_PENDING, STATUS_SUBMITTED, _open_worksheet, _open_drafts_sheet)
 from src.forms_config import GOOGLE_FORM_CONFIG, find_response_column
-from src.forms_helper import parse_form_response
+from src.forms_helper import parse_form_response, mark_response_imported
 
 
 def test_generate_session_token_is_unique():
@@ -117,8 +117,9 @@ SAMPLE_FORM = {
 class FakeSheet:
     """A tiny in-memory worksheet. Put exceptions in fail['method'] to make the next calls fail."""
 
-    def __init__(self, rows):
+    def __init__(self, rows, row_count=1000):
         self.rows = [list(r) for r in rows]
+        self.row_count = row_count  # grid size, like the real sheet
         self.fail = {}
 
     def _maybe_fail(self, method):
@@ -154,10 +155,15 @@ class FakeSheet:
         row.extend([''] * (col_number - len(row)))
         row[col_number - 1] = value
 
-    def update(self, cell_range, values):  # e.g. 'C2' or 'G2:H2'
+    def add_rows(self, count):
+        self.row_count += count
+
+    def update(self, range_name, values):  # e.g. 'C2' or 'G2:H2'
         self._maybe_fail('update')
-        first = cell_range.split(':')[0]
+        first = range_name.split(':')[0]
         col_number = ord(first[0]) - ord('A') + 1
+        if int(first[1:]) > self.row_count:
+            raise Exception("exceeds grid limits")
         for offset, value in enumerate(values[0]):
             if len(str(value)) > 50000:
                 raise Exception("cell over 50000 characters")
@@ -168,26 +174,24 @@ DRAFT_HEADERS = ['Proposal_ID', 'Session_ID', 'Draft_Data_JSON', 'File_Data_Base
                  'File_Name', 'Created_Date', 'Updated_Date', 'Status']
 
 
-def _mock_sheets(response_headers, drafts_exists=True, draft_rows=()):
+def _mock_sheets(response_headers, drafts_exists=True, draft_rows=(), response=None):
     """Build a fake gspread client with a response sheet and a drafts (backup) sheet."""
     # Forget worksheets cached by an earlier test
     _open_worksheet.clear()
     _open_drafts_sheet.clear()
 
-    response = FakeSheet([response_headers])
+    response = response or FakeSheet([response_headers])
     drafts = FakeSheet([DRAFT_HEADERS] + [list(r) for r in draft_rows])
-    response_ws = MagicMock(wraps=response)
-    drafts_ws = MagicMock(wraps=drafts)
 
     response_book = MagicMock()
-    response_book.worksheet.return_value = response_ws
+    response_book.worksheet.return_value = response
 
     drafts_book = MagicMock()
     if drafts_exists:
-        drafts_book.worksheet.return_value = drafts_ws
+        drafts_book.worksheet.return_value = drafts
     else:
         drafts_book.worksheet.side_effect = gspread.exceptions.WorksheetNotFound(DRAFTS_SHEET_NAME)
-        drafts_book.add_worksheet.return_value = drafts_ws
+        drafts_book.add_worksheet.return_value = drafts
 
     client = MagicMock()
     client.open_by_key.side_effect = lambda key: (
@@ -270,7 +274,7 @@ def test_submit_form_sheets_down_client_still_sees_order_received():
 def test_pending_order_syncs_on_next_app_run():
     """A pending order is copied into Form Responses by the next-run retry, exactly once."""
     client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
-    response.fail['append_row'] = [Exception("503 Service Unavailable")]
+    response.fail['update'] = [Exception("503 Service Unavailable")]
     _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
     assert _backup(drafts)[1] == STATUS_PENDING
 
@@ -287,7 +291,7 @@ def test_pending_order_syncs_on_next_app_run():
 def test_background_sync_retries_until_it_succeeds():
     """The background sync keeps retrying; once Sheets is back, exactly one row lands."""
     client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
-    response.fail['append_row'] = [Exception("503"), Exception("503")]
+    response.fail['update'] = [Exception("503"), Exception("503")]
 
     class RunNow:
         def __init__(self, target, daemon):
@@ -463,7 +467,7 @@ def test_submit_form_retries_after_quota_error():
     """A 429 on the response write waits and retries; exactly one row lands."""
     client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
     response.fail['get_all_values'] = [_quota_error()]
-    response.fail['append_row'] = [_quota_error()]  # 429 = rejected, nothing written
+    response.fail['update'] = [_quota_error()]  # 429 = rejected, nothing written
     success, msg = _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
 
     assert success, msg
@@ -479,6 +483,50 @@ def test_submit_form_does_not_reopen_sheets_every_time():
 
     assert client.open_by_key.call_count == 2  # response sheet + drafts sheet, once each
     assert len(_response_rows(response)) == 2
+
+
+class TableSheet(FakeSheet):
+    """A response sheet with a Google Sheets Table over rows 1-7: append_row always lands on row 8."""
+
+    def append_row(self, row):
+        while len(self.rows) < 8:
+            self.rows.append([])
+        self.rows[7] = list(row)
+
+
+def test_sync_does_not_overwrite_when_sheet_has_table():
+    """Two orders both land in Form Responses; the second must not replace the first."""
+    old_rows = [[f'old {n}'] for n in range(2, 8)]
+    table = TableSheet([LIVE_HEADERS] + old_rows)
+    client, response, _, _ = _mock_sheets(LIVE_HEADERS, response=table)
+    first = dict(SAMPLE_FORM, client_info=dict(SAMPLE_FORM['client_info'], company_name='First Co'))
+    second = dict(SAMPLE_FORM, client_info=dict(SAMPLE_FORM['client_info'], company_name='Second Co'))
+    _submit(client, 'PROP_1', 'sess1', first)
+    _submit(client, 'PROP_2', 'sess2', second)
+
+    assert response.rows[1:7] == old_rows
+    assert [r['Company Name *'] for r in _response_rows(response)[6:]] == ['First Co', 'Second Co']
+
+
+def test_sync_adds_rows_when_grid_is_full():
+    """A sheet with no empty rows left still takes the order (rows are added first)."""
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS, response=FakeSheet([LIVE_HEADERS], row_count=1))
+    _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
+
+    assert len(_response_rows(response)) == 1
+    assert _backup(drafts)[1] == STATUS_SUBMITTED
+
+
+def test_mark_response_imported_targets_tracking_columns():
+    """Tracking values go to Imported?..Import Date (AX-BA), not the Gift 4/5 columns."""
+    worksheet = MagicMock()
+    worksheet.row_values.return_value = LIVE_HEADERS
+    gc = MagicMock()
+    gc.open_by_key.return_value.worksheet.return_value = worksheet
+
+    assert mark_response_imported(gc, 8, 'ORD-1', 'staff')
+    updates = worksheet.batch_update.call_args[0][0]
+    assert [u['range'] for u in updates] == ['AX8', 'AY8', 'AZ8', 'BA8']
 
 
 def test_parse_form_response_reads_live_headers():
