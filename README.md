@@ -57,8 +57,9 @@ streamlit run scripts/test_connection.py
 1. **Tab 1 (Proposal Generator):** Browse & filter products, configure proposal, generate PowerPoint
 2. **Tab 2 (Client Order Form):** Generate shareable Client Form Link, send to client
 3. **Client completes form:** Standalone in-app form (no login required), saves to Google Sheets
-4. **Tab 3 (Order & Client Info):** Import form response, configure order details
-5. **Tab 4 (Execution & Accounting):** Review order, generate invoice & PO, download exports
+4. **Submitted Order Forms tab:** View the submitted form and import it into Tab 3
+5. **Tab 3 (Order & Client Info):** Configure order details
+6. **Tab 4 (Execution & Accounting):** Review order, generate invoice & PO, download exports
 
 ---
 
