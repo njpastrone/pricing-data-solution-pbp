@@ -23,7 +23,7 @@ import time
 import copy  # For deep copying client info during backup/restore
 
 # Import extracted modules
-from src.data_loader import load_pricing_data, DATASET_CONFIGS
+from src.data_loader import load_pricing_data, connect_to_sheets, DATASET_CONFIGS
 from src.helpers import (
     clean_price,
     apply_marketing_rounding,
@@ -77,15 +77,25 @@ from src.template_loader import (
     TEMPLATE_CONFIG
 )
 from src.forms_config import MAX_PRODUCT_LINES
-from src.forms_helper import PAYMENT_METHODS
+from src.forms_helper import (
+    PAYMENT_METHODS,
+    load_form_responses,
+    form_response_to_order,
+    html_form_to_order,
+    add_order_notes,
+    mark_response_imported,
+    build_submissions_list,
+    submission_matches_search
+)
 from src.client_form import (
     load_proposal_for_client,
     load_draft,
     save_draft,
     submit_form,
     generate_session_token,
-    retrieve_file_by_proposal,
+    retrieve_uploaded_file,
     retry_pending_syncs,
+    load_received_orders,
     STATUS_PENDING,
     STATUS_SUBMITTED
 )
@@ -486,6 +496,217 @@ def order_notes_editor(tab):
                                      height=120, help=help_text)
                 if note:
                     st.caption(f"{len(note.split())} words")
+
+def import_form_response(response_data):
+    """
+    Add one submitted order form to the current order (Tab 3): client info, notes and products.
+    Used by the Submitted Order Forms tab.
+
+    Returns:
+        tuple: (number of products added, names of products not found in the catalog)
+    """
+    df_template = st.session_state.df_template
+    # One shared mapping decides where every form answer lands in the order
+    order_from_form = form_response_to_order(response_data)
+    st.session_state.client_info = order_from_form['client_info']
+    st.session_state.order_notes = add_order_notes(st.session_state.order_notes, order_from_form['order_notes'])
+    # Per-product widgets must start from the imported values, not old ones
+    clear_row_widget_state(ORDER_ROW_WIDGET_PREFIXES)
+
+    # Import products (using new pricing logic from Phase 1)
+    from src.pricing_engine import get_unit_price_new_system, calculate_pbp_msrp
+    from src.helpers import get_tariff_rate, calculate_product_tariff, get_shipping_costs, clean_price, get_column_value
+
+    products_imported = 0
+    products_skipped = []
+    max_pbp_shipping = 0.0
+
+    for product in order_from_form['products']:
+        product_name = product['name']
+
+        # Match product name to catalog (exact match, case-insensitive)
+        df_filtered = df_template[df_template['Product/Service'].str.lower().str.strip() == product_name.lower().strip()]
+
+        if not df_filtered.empty:
+            product_data = df_filtered.iloc[0].to_dict()
+            quantity = product['quantity']
+
+            # Check if this product was in the proposal - if so, use proposal markup
+            markup_percent = None
+            for prop_item in st.session_state.proposal_products:
+                if prop_item['product_data'].get('Product/Service', '').lower() == product_name.lower():
+                    markup_percent = prop_item['markup_percent']
+                    break
+
+            # Calculate pricing using new system (Phase 3)
+            pricing_result = calculate_pbp_msrp(product_data, quantity, user_markup_override=markup_percent)
+
+            # Extract pricing method and notes
+            pricing_method = pricing_result['method_used']
+            pricing_notes = get_column_value(product_data, 'Pricing Notes', '', '')
+
+            # Generate validation warning if mismatch
+            validation_warning = None
+            if pricing_result['validation_status'] == 'mismatch':
+                spreadsheet_val = pricing_result['spreadsheet_msrp']
+                calculated_val = pricing_result['pbp_msrp']
+                validation_warning = f"Price mismatch: Spreadsheet=${spreadsheet_val:.2f} | Calculated=${calculated_val:.2f}"
+
+            # Determine markup based on pricing method
+            if pricing_method == "Standard markup":
+                # Use markup from calculation or default
+                markup_percent = pricing_result['calculation_details'].get('markup_percent', 100.0)
+            else:
+                # MSRP-based method - calculate implied markup
+                base_cost = pricing_result['calculation_details']['per_item_cost']
+                pbp_msrp = pricing_result['pbp_msrp']
+                if base_cost > 0:
+                    markup_percent = ((pbp_msrp / base_cost) - 1) * 100
+                else:
+                    markup_percent = 100.0
+
+            markup_multiplier = markup_percent / 100.0
+
+            # Get base price for quantity
+            base_price_per_unit, tier_info, tier_num = get_unit_price_new_system(product_data, quantity)
+
+            # Calculate costs with calculated markup
+            product_cost_subtotal = base_price_per_unit * quantity
+            markup_amount = product_cost_subtotal * markup_multiplier
+            product_total = product_cost_subtotal + markup_amount
+
+            # Parse tariff
+            tariff_rate_percent = get_tariff_rate(product_data, product_cost_subtotal)
+            tariff_base = product_cost_subtotal
+            tariff_amount = calculate_product_tariff(tariff_base, tariff_rate_percent)
+
+            # Build order item (matching HTML import structure + Phase 3 new fields)
+            order_item = {
+                'product_name': product_data.get('Product/Service', 'Unknown Product'),
+                'product_ref': product_data.get('Purchase Description', ''),
+                'partner': product_data.get('Partner', 'Unknown Partner'),
+                'product_data': product_data,
+                'product_data_row': product_data,
+                'is_custom': False,
+                'quantity': quantity,
+                'base_price': base_price_per_unit,
+                'tier_range': tier_info if tier_info else '',
+                'tier_column': f'T{tier_num}' if tier_num else '',
+                'markup_percent': markup_percent,
+                'markup_amount': markup_amount,
+                'proposal_markup_percent': markup_percent,  # Track original markup for warning system
+                # Phase 3: New pricing fields
+                'pricing_method': pricing_method,
+                'pricing_notes': pricing_notes,
+                'validation_warning': validation_warning,
+                'manual_override': False,
+                # Client's customization notes from the form
+                'include_customization': False,
+                'customization_description': product['customization_description'],
+                'customization_setup_fee': float(clean_price(get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')) or 0.0),
+                'customization_per_unit': float(clean_price(get_column_value(product_data, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')) or 0.0),
+                'customization_setup_total': 0.0,
+                'customization_unit_total': 0.0,
+                'apply_custom_minimum': False,
+                'customization_minimum_qty': 0,
+                'product_subtotal': product_cost_subtotal,
+                'subtotal_before_markup': product_cost_subtotal,
+                'product_total': product_total,
+                'total_per_unit': product_total / quantity,  # Fix: divide by quantity for per-unit price
+                'quoted_price_per_unit': (product_cost_subtotal + markup_amount) / quantity,  # Fix: divide by quantity
+                'tariff_info': f"{product_data.get('Country', 'N/A')} - {tariff_rate_percent}%" if tariff_rate_percent > 0 else '',
+                'tariff_rate_percent': tariff_rate_percent,
+                'tariff_base': tariff_base,
+                'tariff_amount': tariff_amount,
+                'edited_description': '',
+                # Per-product kitting fields
+                'include_kitting': False,
+                'kitting_pbp_cost': 0.0,
+                'kitting_client_price': 0.0,
+                'kitting_description': '',
+                'kitting_quantity': 1
+            }
+
+            st.session_state.order_items.append(order_item)
+            products_imported += 1
+
+            # Track maximum PBP shipping cost
+            pbp_shipping, _ = get_shipping_costs(product_data)
+            max_pbp_shipping = max(max_pbp_shipping, pbp_shipping)
+        else:
+            products_skipped.append(product_name)
+
+    # Auto-populate partner shipping with the maximum cost found
+    if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
+        st.session_state.partner_shipping = max_pbp_shipping
+
+    return products_imported, products_skipped
+
+def submission_status(submission):
+    """Short status of a submitted order form: Waiting to sync, Imported or Not imported."""
+    if submission['pending']:
+        return "Waiting to sync"
+    return "Imported" if submission['imported'] else "Not imported"
+
+
+def show_answer(label, value):
+    """One form answer: bold label, then the client's text exactly as typed (line breaks kept)."""
+    st.markdown(f"**{label}**")
+    st.text(value if str(value).strip() else "-")
+
+
+def show_submission_details(submission):
+    """Show every answer of one submitted order form, laid out for reading (Submitted Order Forms tab)."""
+    data = submission['data']
+    client = data['client_info']
+    shipping = data['shipping_info']
+    payment = data['payment_info']
+    metadata = data['metadata']
+
+    st.subheader(client.get('company_name') or "Unknown company")
+    st.caption(f"Received {metadata.get('timestamp') or 'on an unknown date'} | {submission_status(submission)}")
+
+    st.markdown("#### Products")
+    if data['products']:
+        st.table(pd.DataFrame([{
+            'Product': product.get('name', ''),
+            'Quantity': product.get('quantity', ''),
+            'Customization notes': product.get('customization_notes', ''),
+        } for product in data['products']]))
+    else:
+        st.caption("No products on this form.")
+
+    col_client, col_shipping, col_payment = st.columns(3)
+    with col_client:
+        st.markdown("#### Client")
+        show_answer("Client type", client.get('client_type', ''))
+        show_answer("Company", client.get('company_name', ''))
+        show_answer("Contact name", client.get('contact_name', ''))
+        show_answer("Contact email", client.get('contact_email', ''))
+        show_answer("Contact phone", client.get('contact_phone', ''))
+    with col_shipping:
+        st.markdown("#### Shipping")
+        show_answer("Shipping address", shipping.get('shipping_address', ''))
+        show_answer("Billing address", shipping.get('billing_address') or "Same as shipping")
+        show_answer("In-hands date", shipping.get('in_hands_date', ''))
+        show_answer("Drop-shipped?", shipping.get('drop_shipping', ''))
+        show_answer("Drop-ship instructions", shipping.get('drop_shipping_instructions', ''))
+        show_answer("Drop-ship address file", shipping.get('dropshipping_file', ''))
+    with col_payment:
+        st.markdown("#### Payment and accounting")
+        show_answer("Payment method", payment.get('payment_method', ''))
+        show_answer("Payment preference", payment.get('payment_preference', ''))
+        # Orders still waiting to sync keep the client form's own accounting contact field
+        show_answer("Send invoice to", payment.get('invoice_platform') or payment.get('accounting_contact', ''))
+        show_answer("Impact cards", payment.get('impact_cards', ''))
+        show_answer("Impact card selection", payment.get('impact_card_selection', ''))
+
+    st.markdown("#### Notes")
+    st.text(data.get('notes') or "-")
+
+    if submission['imported']:
+        st.caption(f"Imported as {metadata.get('order_id') or 'an order'} {metadata.get('import_date', '')}")
+
 
 def _render_client_form_page(proposal_id, session_id):
     """
@@ -2958,10 +3179,11 @@ tab_list = st.tabs([
     "Client Order Form Generator",
     "Order & Client Info",
     "Execution & Accounting",
-    "Executive Pricing Tool"
+    "Executive Pricing Tool",
+    "Submitted Order Forms"
 ])
 
-tab1, tab2, tab3, tab4, tab5 = tab_list
+tab1, tab2, tab3, tab4, tab5, tab6 = tab_list
 
 # ============================================================
 # TAB 1: PROPOSAL GENERATOR
@@ -4614,7 +4836,7 @@ with tab2:
 **What's Next?**
 1. Copy the link above and send it to your client
 2. Client opens the link, fills out the form, and submits
-3. Go to **Tab 3 → Option A** to import the completed response
+3. Open the **Submitted Order Forms** tab to view and import the completed response
 """)
 
             st.caption("Each click of 'Generate' creates a new unique link. Multiple clients can use different links for the same proposal.")
@@ -4780,7 +5002,7 @@ with tab2:
             1. Copy the URL above
             2. Send it to your client (email, Slack, text message, etc.)
             3. Client opens the form → sees pre-filled info → completes remaining fields → submits
-            4. Go to **Tab 3 → Option A** to import the completed response
+            4. Open the **Submitted Order Forms** tab to view and import the completed response
             """)
 
     # ============================================================
@@ -5185,7 +5407,7 @@ with tab3:
 
     st.markdown("""
     **Choose how to add products to your order:**
-    1. **Option A:** Import from Google Form Response (if client submitted a form)
+    1. **Option A:** Import a submitted client order form (from the Submitted Order Forms tab)
     2. **Option B:** Import from Proposal (Tab 1) — most common workflow
     3. **Option C:** Manually select products and configure order
 
@@ -5372,324 +5594,11 @@ with tab3:
     st.divider()
 
     # ============================================================
-    # OPTION A: GOOGLE FORM RESPONSE IMPORT (RECOMMENDED)
+    # OPTION A: IMPORT A SUBMITTED CLIENT ORDER FORM
     # ============================================================
-    st.header("Option A: Import from Google Form Response (RECOMMENDED)")
-    st.markdown("**Use this if:** You sent a Google Form link from Tab 2 and client submitted their response")
-    st.caption("View and import client responses from your Google Form submissions")
-
-    # Import helpers
-    from src.data_loader import connect_to_sheets
-    from src.forms_helper import load_form_responses, parse_form_response, mark_response_imported, format_product_summary, form_response_to_order, html_form_to_order, add_order_notes
-    from src.forms_config import RESPONSE_COLUMNS
-
-    if st.button("Load All Form Responses", key="load_google_form_responses"):
-        with st.spinner("Loading responses from Google Sheets..."):
-            try:
-                gc = connect_to_sheets()
-                df_all = load_form_responses(gc)
-
-                if df_all.empty:
-                    st.info("No form responses found. Submit a form response to get started.")
-                else:
-                    st.success(f"Found **{len(df_all)}** response(s)")
-                    st.session_state.google_form_responses = df_all
-                    st.session_state.google_form_gc = gc
-
-            except Exception as e:
-                st.error(f"Error loading responses: {e}")
-                st.caption("**Tip:** Run the diagnostic script to troubleshoot: `streamlit run scripts/investigations/debug_google_form_responses.py`")
-                st.session_state.google_form_responses = None
-
-    # Show responses if loaded
-    if st.session_state.get('google_form_responses') is not None:
-        df_responses = st.session_state.google_form_responses
-
-        if not df_responses.empty:
-            # Add filter dropdown
-            col1, col2 = st.columns([1, 3])
-
-            with col1:
-                # Check if Imported? column exists
-                imported_col = RESPONSE_COLUMNS.get('imported', 'Imported?')
-                has_tracking = imported_col in df_responses.columns
-
-                if has_tracking:
-                    filter_option = st.selectbox(
-                        "Filter:",
-                        options=["All", "Not Imported", "Imported"],
-                        key="response_filter"
-                    )
-                else:
-                    st.info("**Note:** Tracking columns not found. Showing all responses.")
-                    filter_option = "All"
-
-            with col2:
-                # Count imported vs not imported
-                if has_tracking:
-                    imported_count = df_responses[df_responses[imported_col].isin(['TRUE', 'true', True])].shape[0]
-                    not_imported_count = len(df_responses) - imported_count
-                    st.caption(f"**Total:** {len(df_responses)} | **Not Imported:** {not_imported_count} | **Imported:** {imported_count}")
-                else:
-                    st.caption(f"**Total Responses:** {len(df_responses)}")
-
-            # Apply filter
-            if has_tracking and filter_option != "All":
-                if filter_option == "Not Imported":
-                    df_filtered = df_responses[~df_responses[imported_col].isin(['TRUE', 'true', True])]
-                else:  # Imported
-                    df_filtered = df_responses[df_responses[imported_col].isin(['TRUE', 'true', True])]
-            else:
-                df_filtered = df_responses
-
-            # Sort by timestamp (most recent first)
-            timestamp_col = RESPONSE_COLUMNS.get('timestamp', 'Timestamp')
-            if timestamp_col in df_filtered.columns:
-                df_filtered = df_filtered.sort_values(by=timestamp_col, ascending=False)
-
-            if df_filtered.empty:
-                st.info(f"No responses match filter: {filter_option}")
-            else:
-                st.markdown(f"#### {filter_option} Responses ({len(df_filtered)}):")
-
-            for idx, row in df_filtered.iterrows():
-                # Parse response
-                response_data = parse_form_response(row)
-
-                # Create expander for each response
-                company = response_data['client_info'].get('company_name', 'Unknown Company')
-                timestamp = response_data['metadata'].get('timestamp', 'No timestamp')
-
-                # Check import status
-                is_imported = False
-                order_id = None
-                if has_tracking:
-                    imported_value = response_data['metadata'].get('imported', '')
-                    is_imported = str(imported_value).upper() == 'TRUE'
-                    order_id = response_data['metadata'].get('order_id', '')
-
-                # Add visual indicator
-                if is_imported:
-                    status_icon = "[Imported]"
-                    status_text = f"(Already imported: {order_id})" if order_id else "(Already imported)"
-                else:
-                    status_icon = "[New]"
-                    status_text = "(Not yet imported)"
-
-                with st.expander(f"{status_icon} {company} - {timestamp} {status_text}", expanded=False):
-                    col1, col2 = st.columns(2)
-
-                    with col1:
-                        st.markdown("**Client Information:**")
-                        st.write(f"- Type: {response_data['client_info'].get('client_type', 'N/A')}")
-                        st.write(f"- Company: {response_data['client_info'].get('company_name', 'N/A')}")
-                        st.write(f"- Contact: {response_data['client_info'].get('contact_name', 'N/A')}")
-                        st.write(f"- Email: {response_data['client_info'].get('contact_email', 'N/A')}")
-
-                    with col2:
-                        st.markdown("**Order Details:**")
-                        st.write(f"- Products: {format_product_summary(response_data['products'])}")
-                        st.write(f"- In-Hands: {response_data['shipping_info'].get('in_hands_date', 'N/A')}")
-                        st.write(f"- Payment Method: {response_data['payment_info'].get('payment_method') or 'N/A'}")
-
-                    st.markdown("**Products:**")
-                    for product in response_data['products']:
-                        st.write(f"- {product['name']} (Qty: {product['quantity']})")
-                        if product.get('customization_notes'):
-                            st.caption(f"  Custom: {product['customization_notes']}")
-
-                    # Dropshipping file download (if submitted from in-app form)
-                    row_dict = row.to_dict() if hasattr(row, 'to_dict') else row
-                    dropshipping_filename = row_dict.get('Dropshipping File Name', '')
-                    if dropshipping_filename:
-                        st.markdown(f"**Attached File:** {dropshipping_filename}")
-                        proposal_id_from_session = st.session_state.get('loaded_proposal_id', '')
-                        if proposal_id_from_session:
-                            file_bytes, fname = retrieve_file_by_proposal(proposal_id_from_session)
-                            if file_bytes:
-                                st.download_button(
-                                    f"Download: {fname}",
-                                    on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
-                                    data=file_bytes,
-                                    file_name=fname,
-                                    key=f"download_dropship_file_{idx}"
-                                )
-                            else:
-                                st.caption("(File not available for download)")
-                        else:
-                            st.caption("(No proposal loaded — file cannot be retrieved)")
-
-                    # Import button with status-aware label and warning
-                    if is_imported:
-                        st.warning(f"**This response was already imported** ({order_id if order_id else 'previously'}). You can import it again to create a new order.")
-                        button_label = "Re-Import This Response"
-                        button_type = "secondary"
-                    else:
-                        button_label = "Import This Response"
-                        button_type = "primary"
-
-                    if st.button(button_label, key=f"import_google_response_{idx}", type=button_type):
-                        # One shared mapping decides where every form answer lands in the order
-                        order_from_form = form_response_to_order(response_data)
-                        st.session_state.client_info = order_from_form['client_info']
-                        st.session_state.order_notes = add_order_notes(st.session_state.order_notes, order_from_form['order_notes'])
-                        # Per-product widgets must start from the imported values, not old ones
-                        clear_row_widget_state(ORDER_ROW_WIDGET_PREFIXES)
-
-                        # Import products (using new pricing logic from Phase 1)
-                        from src.pricing_engine import get_unit_price_new_system, calculate_pbp_msrp
-                        from src.helpers import get_tariff_rate, calculate_product_tariff, get_shipping_costs, clean_price, get_column_value
-
-                        products_imported = 0
-                        products_skipped = []
-                        max_pbp_shipping = 0.0
-
-                        for product in order_from_form['products']:
-                            product_name = product['name']
-
-                            # Match product name to catalog (exact match, case-insensitive)
-                            df_filtered = df_template[df_template['Product/Service'].str.lower().str.strip() == product_name.lower().strip()]
-
-                            if not df_filtered.empty:
-                                product_data = df_filtered.iloc[0].to_dict()
-                                quantity = product['quantity']
-
-                                # Check if this product was in the proposal - if so, use proposal markup
-                                markup_percent = None
-                                for prop_item in st.session_state.proposal_products:
-                                    if prop_item['product_data'].get('Product/Service', '').lower() == product_name.lower():
-                                        markup_percent = prop_item['markup_percent']
-                                        break
-
-                                # Calculate pricing using new system (Phase 3)
-                                pricing_result = calculate_pbp_msrp(product_data, quantity, user_markup_override=markup_percent)
-
-                                # Extract pricing method and notes
-                                pricing_method = pricing_result['method_used']
-                                pricing_notes = get_column_value(product_data, 'Pricing Notes', '', '')
-
-                                # Generate validation warning if mismatch
-                                validation_warning = None
-                                if pricing_result['validation_status'] == 'mismatch':
-                                    spreadsheet_val = pricing_result['spreadsheet_msrp']
-                                    calculated_val = pricing_result['pbp_msrp']
-                                    validation_warning = f"Price mismatch: Spreadsheet=${spreadsheet_val:.2f} | Calculated=${calculated_val:.2f}"
-
-                                # Determine markup based on pricing method
-                                if pricing_method == "Standard markup":
-                                    # Use markup from calculation or default
-                                    markup_percent = pricing_result['calculation_details'].get('markup_percent', 100.0)
-                                else:
-                                    # MSRP-based method - calculate implied markup
-                                    base_cost = pricing_result['calculation_details']['per_item_cost']
-                                    pbp_msrp = pricing_result['pbp_msrp']
-                                    if base_cost > 0:
-                                        markup_percent = ((pbp_msrp / base_cost) - 1) * 100
-                                    else:
-                                        markup_percent = 100.0
-
-                                markup_multiplier = markup_percent / 100.0
-
-                                # Get base price for quantity
-                                base_price_per_unit, tier_info, tier_num = get_unit_price_new_system(product_data, quantity)
-
-                                # Calculate costs with calculated markup
-                                product_cost_subtotal = base_price_per_unit * quantity
-                                markup_amount = product_cost_subtotal * markup_multiplier
-                                product_total = product_cost_subtotal + markup_amount
-
-                                # Parse tariff
-                                tariff_rate_percent = get_tariff_rate(product_data, product_cost_subtotal)
-                                tariff_base = product_cost_subtotal
-                                tariff_amount = calculate_product_tariff(tariff_base, tariff_rate_percent)
-
-                                # Build order item (matching HTML import structure + Phase 3 new fields)
-                                order_item = {
-                                    'product_name': product_data.get('Product/Service', 'Unknown Product'),
-                                    'product_ref': product_data.get('Purchase Description', ''),
-                                    'partner': product_data.get('Partner', 'Unknown Partner'),
-                                    'product_data': product_data,
-                                    'product_data_row': product_data,
-                                    'is_custom': False,
-                                    'quantity': quantity,
-                                    'base_price': base_price_per_unit,
-                                    'tier_range': tier_info if tier_info else '',
-                                    'tier_column': f'T{tier_num}' if tier_num else '',
-                                    'markup_percent': markup_percent,
-                                    'markup_amount': markup_amount,
-                                    'proposal_markup_percent': markup_percent,  # Track original markup for warning system
-                                    # Phase 3: New pricing fields
-                                    'pricing_method': pricing_method,
-                                    'pricing_notes': pricing_notes,
-                                    'validation_warning': validation_warning,
-                                    'manual_override': False,
-                                    # Client's customization notes from the form
-                                    'include_customization': False,
-                                    'customization_description': product['customization_description'],
-                                    'customization_setup_fee': float(clean_price(get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')) or 0.0),
-                                    'customization_per_unit': float(clean_price(get_column_value(product_data, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')) or 0.0),
-                                    'customization_setup_total': 0.0,
-                                    'customization_unit_total': 0.0,
-                                    'apply_custom_minimum': False,
-                                    'customization_minimum_qty': 0,
-                                    'product_subtotal': product_cost_subtotal,
-                                    'subtotal_before_markup': product_cost_subtotal,
-                                    'product_total': product_total,
-                                    'total_per_unit': product_total / quantity,  # Fix: divide by quantity for per-unit price
-                                    'quoted_price_per_unit': (product_cost_subtotal + markup_amount) / quantity,  # Fix: divide by quantity
-                                    'tariff_info': f"{product_data.get('Country', 'N/A')} - {tariff_rate_percent}%" if tariff_rate_percent > 0 else '',
-                                    'tariff_rate_percent': tariff_rate_percent,
-                                    'tariff_base': tariff_base,
-                                    'tariff_amount': tariff_amount,
-                                    'edited_description': '',
-                                    # Per-product kitting fields
-                                    'include_kitting': False,
-                                    'kitting_pbp_cost': 0.0,
-                                    'kitting_client_price': 0.0,
-                                    'kitting_description': '',
-                                    'kitting_quantity': 1
-                                }
-
-                                st.session_state.order_items.append(order_item)
-                                products_imported += 1
-
-                                # Track maximum PBP shipping cost
-                                pbp_shipping, _ = get_shipping_costs(product_data)
-                                max_pbp_shipping = max(max_pbp_shipping, pbp_shipping)
-                            else:
-                                products_skipped.append(product_name)
-
-                        # Auto-populate partner shipping with the maximum cost found
-                        if max_pbp_shipping > 0 and st.session_state.partner_shipping == 0:
-                            st.session_state.partner_shipping = max_pbp_shipping
-
-                        # Mark as imported (only if tracking columns exist)
-                        if has_tracking:
-                            gc = st.session_state.google_form_gc
-                            # Find actual row number in original df_responses (not filtered/sorted)
-                            timestamp_col = RESPONSE_COLUMNS.get('timestamp', 'Timestamp')
-                            current_timestamp = response_data['metadata'].get('timestamp', '')
-
-                            # Find matching row in original dataframe
-                            original_row_idx = df_responses[df_responses[timestamp_col] == current_timestamp].index[0]
-                            row_index = original_row_idx + 2  # +2 because: +1 for header, +1 for 1-indexed
-
-                            order_id = f"IMPORTED-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-                            mark_response_imported(gc, row_index, order_id)
-                        else:
-                            st.info("**Note:** Tracking columns not found in response sheet. Import successful but not marked as imported.")
-
-                        # Show results
-                        if products_imported > 0:
-                            st.toast(f"Imported {products_imported} product(s) from {company}")
-
-                        if products_skipped:
-                            st.warning(f"Could not match {len(products_skipped)} product(s): {', '.join(products_skipped)}")
-
-                        st.info("**Next:** Scroll down to Section 2 to configure your order")
-
-                        # Rerun to show imported products in Section 2
-                        st.rerun()
+    st.header("Option A: Import a Submitted Client Order Form (RECOMMENDED)")
+    st.markdown("**Use this if:** The client submitted an order form (form link or Google Form from Tab 2)")
+    st.info("Open the **Submitted Order Forms** tab, select the order and press **Import into Tab 3**.")
 
     st.divider()
 
@@ -9295,7 +9204,7 @@ with tab4:
         invoice_df = pd.DataFrame(invoice_line_items)
         st.dataframe(
             invoice_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "PARTNER": st.column_config.TextColumn("PARTNER", width="small"),
@@ -10328,7 +10237,7 @@ with tab5:
 
             with col3:
                 # Quick add button
-                if st.button("Add", type="primary", use_container_width=True,
+                if st.button("Add", type="primary", width="stretch",
                            disabled=not quick_product, key="exec_quick_add"):
                     if quick_product:
                         # Check if already added
@@ -10682,3 +10591,113 @@ with tab5:
                 mime="text/csv",
                 use_container_width=True
             )
+
+# ============================================================
+# TAB 6: SUBMITTED ORDER FORMS (staff view of every client order form)
+# ============================================================
+with tab6:
+    st.header("Submitted Order Forms")
+    st.caption("Every client order form submitted so far, newest first. Select one to read all of its answers or import it into Tab 3.")
+
+    # Loaded on request only: reading the sheets on every rerun would use up the Google Sheets quota
+    load_label = "Refresh" if 'submitted_forms' in st.session_state else "Load Submitted Order Forms"
+    if st.button(load_label, key="load_submitted_forms"):
+        with st.spinner("Loading submitted order forms..."):
+            try:
+                responses = load_form_responses(connect_to_sheets())
+                received = load_received_orders()
+            except Exception as e:
+                responses = None
+                st.error(f"Could not read the submitted order forms from Google Sheets: {e}")
+            if responses is not None:
+                st.session_state.submitted_forms = build_submissions_list(responses.to_dict('records'), received)
+                st.session_state.submitted_forms_loads = st.session_state.get('submitted_forms_loads', 0) + 1
+                st.session_state.pop('submitted_form_file', None)
+        if responses is not None:
+            st.rerun()
+
+    import_message = st.session_state.pop('submitted_form_import_message', None)
+    if import_message:
+        st.success(import_message['success'])
+        if import_message['skipped']:
+            st.warning(f"Could not match {len(import_message['skipped'])} product(s) to the catalog: {', '.join(import_message['skipped'])}")
+
+    submissions = st.session_state.get('submitted_forms')
+    if submissions is None:
+        st.info("Press the button to load the submitted order forms.")
+    elif not submissions:
+        st.info("No submitted order forms found. If you expected some, press Refresh in a minute.")
+    else:
+        col_search, col_filter = st.columns([3, 1])
+        with col_search:
+            search = st.text_input("Search", placeholder="Company, contact, email, date or product", key="submitted_forms_search")
+        with col_filter:
+            status_filter = st.selectbox("Show", ["All", "Not imported", "Imported"], key="submitted_forms_filter")
+
+        shown = [
+            submission for submission in submissions
+            if submission_matches_search(submission, search)
+            and (status_filter == "All" or submission['imported'] == (status_filter == "Imported"))
+        ]
+        st.caption(f"Showing {len(shown)} of {len(submissions)} submitted order forms")
+
+        if shown:
+            table = pd.DataFrame([{
+                'Received': submission['data']['metadata'].get('timestamp', ''),
+                'Company': submission['data']['client_info'].get('company_name', ''),
+                'Contact': submission['data']['client_info'].get('contact_name', ''),
+                'Items': len(submission['data']['products']),
+                'Status': submission_status(submission),
+            } for submission in shown])
+            # A new key whenever the list changes, so an old selection never points at a different order
+            selection = st.dataframe(
+                table, hide_index=True, width="stretch",
+                on_select="rerun", selection_mode="single-row",
+                key=f"submitted_forms_table_{st.session_state.get('submitted_forms_loads', 0)}_{search}_{status_filter}",
+            )
+            if not selection.selection.rows:
+                st.caption("Select a row to see the full order form.")
+            else:
+                submission = shown[selection.selection.rows[0]]
+                st.divider()
+                show_submission_details(submission)
+
+                # The client's drop-ship address file is kept in the backup tab; fetch it only when asked
+                file_name = submission['data']['shipping_info'].get('dropshipping_file', '')
+                file_key = (submission['proposal_id'], submission['session_id'])
+                if file_name and submission['session_id']:
+                    stored_file = st.session_state.get('submitted_form_file')
+                    if stored_file and stored_file['key'] == file_key:
+                        if stored_file['data']:
+                            st.download_button(f"Download {stored_file['name']}", data=stored_file['data'],
+                                               file_name=stored_file['name'], on_click="ignore",
+                                               key="download_submitted_form_file")
+                        else:
+                            st.caption("The address file could not be found in the backup tab.")
+                    elif st.button("Get drop-ship address file", key="get_submitted_form_file"):
+                        file_data, stored_name = retrieve_uploaded_file(*file_key)
+                        st.session_state.submitted_form_file = {'key': file_key, 'data': file_data, 'name': stored_name or file_name}
+                        st.rerun()
+
+                if submission['pending']:
+                    st.info("This order is still being copied into Form Responses. It can be imported once it is there: press Refresh in a few minutes.")
+                else:
+                    if submission['imported']:
+                        st.warning("This order form was already imported. Importing it again adds its products to the current order once more.")
+                    import_label = "Import Again into Tab 3" if submission['imported'] else "Import into Tab 3"
+                    if st.button(import_label, type="secondary" if submission['imported'] else "primary", key="import_submitted_form"):
+                        products_added, products_skipped = import_form_response(submission['data'])
+                        order_id = f"IMPORTED-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+                        try:
+                            marked = mark_response_imported(connect_to_sheets(), submission['sheet_row'], order_id)
+                        except Exception:
+                            marked = False
+                        if marked:
+                            submission['imported'] = True
+                            submission['data']['metadata']['order_id'] = order_id
+                        company = submission['data']['client_info'].get('company_name') or 'the client'
+                        success = f"Imported {products_added} product(s) from {company}. Open the Order & Client Info tab to finish the order."
+                        if not marked:
+                            success += " (It could not be marked as imported in Form Responses.)"
+                        st.session_state.submitted_form_import_message = {'success': success, 'skipped': products_skipped}
+                        st.rerun()
