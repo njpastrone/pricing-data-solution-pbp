@@ -11,12 +11,15 @@ Handles in-app client-facing order forms:
 Created: 2026-05-24
 """
 
+import os
 import json
+import smtplib
 import time
 import uuid
 import threading
 import base64
 from datetime import datetime
+from email.message import EmailMessage
 import gspread
 import streamlit as st
 from src.data_loader import connect_to_sheets, DATASET_CONFIGS
@@ -50,6 +53,13 @@ STUCK_AFTER_MINUTES = 10
 STATUS_DRAFT = 'draft'
 STATUS_PENDING = 'pending_sync'   # order received, not yet in Form Responses
 STATUS_SUBMITTED = 'submitted'    # order is in Form Responses
+
+# Staff app address, used in client form links and the team order email
+APP_URL = "https://pbp-order-management-system.onrender.com/"
+
+# Order emails that could not be sent, shown to staff in the sidebar.
+# ponytail: kept in memory, so the list empties when the app restarts
+failed_notifications = []
 
 # ponytail: one lock per app process; fine while the app runs as a single Render instance
 _sync_lock = threading.Lock()
@@ -489,6 +499,7 @@ def sync_submission(proposal_id, session_id):
 
 def _sync_backup_row(drafts, backup):
     """Copy one already-read backup row (from _read_backup_rows) into Form Responses."""
+    wrote_row = False
     with _sync_lock:
         try:
             if backup['status'] == STATUS_SUBMITTED:
@@ -522,12 +533,83 @@ def _sync_backup_row(drafts, backup):
                         raise
                     _retry_on_quota(lambda: worksheet.resize(rows=next_row))
                     _retry_on_quota(lambda: worksheet.update(range_name=f'A{next_row}', values=[row]))
+                wrote_row = True
 
             _retry_on_quota(lambda: drafts.update_cell(backup['row_number'], 8, STATUS_SUBMITTED))
-            return True, "Synced"
+            result = (True, "Synced")
 
         except Exception as e:
-            return False, f"Error syncing form: {str(e)}"
+            result = (False, f"Error syncing form: {str(e)}")
+
+    # Only the call that wrote the Form Responses row emails, so a repeated or stale
+    # sync never emails twice. Sent outside the lock so a slow mail server blocks nothing.
+    if wrote_row:
+        notify_team_of_order(backup['proposal_id'], form_data)
+    return result
+
+
+def _setting(name, default=''):
+    """Read a setting from an environment variable (Render), falling back to Streamlit secrets."""
+    value = os.getenv(name)
+    if value is None:
+        try:
+            value = st.secrets.get(name)
+        except Exception:  # no secrets file
+            value = None
+    value = str(value).strip() if value is not None else ''
+    return value or default
+
+
+def notify_team_of_order(proposal_id, form_data):
+    """
+    Email the team that a client order is in Form Responses.
+
+    Settings (environment variables on Render, or .streamlit/secrets.toml locally):
+        ORDER_NOTIFY_EMAILS  comma-separated team addresses
+        SMTP_HOST, SMTP_PORT (default 587), SMTP_USER, SMTP_PASSWORD, SMTP_FROM (default SMTP_USER)
+    With ORDER_NOTIFY_EMAILS or SMTP_HOST unset, nothing is sent.
+
+    Never raises: the order is already saved, so a failed email is only logged
+    and added to failed_notifications for a staff sidebar warning.
+    """
+    recipients = [address.strip() for address in _setting('ORDER_NOTIFY_EMAILS').split(',') if address.strip()]
+    host = _setting('SMTP_HOST')
+    if not recipients or not host:
+        return
+
+    client_info = form_data.get('client_info', {})
+    company = client_info.get('company_name', '') or 'Unknown company'
+    contact = client_info.get('contact_name', '') or 'Unknown contact'
+    if client_info.get('contact_email'):
+        contact += f" ({client_info['contact_email']})"
+
+    try:
+        message = EmailMessage()
+        message['Subject'] = f"New client order: {company}"
+        message['From'] = _setting('SMTP_FROM') or _setting('SMTP_USER') or recipients[0]
+        message['To'] = ', '.join(recipients)
+        message.set_content(
+            "A client submitted an order form.\n\n"
+            f"Company: {company}\n"
+            f"Contact: {contact}\n"
+            f"Items: {len(form_data.get('products', []))}\n"
+            f"Submitted: {form_data.get('submitted_at', '')}\n"
+            f"Proposal: {proposal_id}\n\n"
+            f"Import it in the staff app (Tab 3, Option A): {APP_URL}\n"
+        )
+        with smtplib.SMTP(host, int(_setting('SMTP_PORT', '587')), timeout=10) as server:
+            server.starttls()
+            if _setting('SMTP_USER'):
+                server.login(_setting('SMTP_USER'), _setting('SMTP_PASSWORD'))
+            server.send_message(message)
+    except Exception as e:
+        print(f"Order email for {proposal_id} not sent: {e}")
+        failed_notifications.append({
+            'proposal_id': proposal_id,
+            'company_name': company,
+            'submitted_at': form_data.get('submitted_at', ''),
+            'reason': str(e),
+        })
 
 
 def retry_pending_syncs():

@@ -168,6 +168,7 @@ pricing-data-solution-pbp/
 - **Platform:** Render Standard tier (2GB RAM, $25/month)
 - **Auto-deploy:** Connected to GitHub (deploys on push to main)
 - **Environment:** GCP credentials set in Render dashboard
+- **Order emails (optional):** set `ORDER_NOTIFY_EMAILS` and the `SMTP_*` settings to email the team when a client submits an order form (see the 2026-10-17 order email entry in [CHANGELOG.md](CHANGELOG.md))
 - **PowerPoint template:** 43MB file stored in Google Drive, downloaded on-demand
 
 **Local Development:**
