@@ -313,8 +313,11 @@ def form_response_to_order(response_data):
     # Billing address on the form is "if different from shipping": blank means same as shipping
     billing_address = shipping.get('billing_address') or shipping.get('shipping_address', '')
 
-    # Drop-ship answers: in-app form says "Yes"/"No", the Google Form says "Yes - Ship directly to ..."
-    is_drop_ship = str(shipping.get('drop_shipping', '')).strip().lower().startswith('yes')
+    # Drop-ship answers: in-app form says "Yes"/"No"/"Other: <client's words>",
+    # the Google Form says "Yes - Ship directly to ..."
+    drop_answer = str(shipping.get('drop_shipping', '')).strip()
+    is_other_answer = drop_answer.lower().startswith('other:')
+    is_drop_ship = not is_other_answer and drop_answer.lower().startswith('yes')
     drop_ship_lines = [shipping.get('drop_shipping_instructions', '')]
     if shipping.get('dropshipping_file'):
         drop_ship_lines.append(f"Address file: {shipping['dropshipping_file']}")
@@ -353,8 +356,7 @@ def form_response_to_order(response_data):
     if payment.get('impact_card_selection'):
         team_lines.append(f"Impact card selection: {payment['impact_card_selection']}")
     # An "Other" shipping answer is the client's own words (not Yes/No)
-    drop_answer = str(shipping.get('drop_shipping', '')).strip()
-    if drop_answer and drop_answer.lower().split()[0].strip(',.-') not in ('yes', 'no'):
+    if is_other_answer or (drop_answer and drop_answer.lower().split()[0].strip(',.-') not in ('yes', 'no')):
         team_lines.append(f"Shipping (client's answer): {drop_answer}")
     order_notes = {}
     if team_lines:

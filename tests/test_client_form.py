@@ -578,7 +578,7 @@ def test_response_row_keeps_payment_preference_column_blank():
 def test_accounting_contact_and_other_shipping_reach_form_responses():
     """The accounting email/platform and a typed "Other" shipping answer land in Form Responses and import back."""
     form = dict(SAMPLE_FORM,
-                shipping_info=dict(SAMPLE_FORM['shipping_info'], drop_shipping='Pick up at our warehouse'),
+                shipping_info=dict(SAMPLE_FORM['shipping_info'], drop_shipping='Other: Pick up at our warehouse'),
                 payment_info=dict(SAMPLE_FORM['payment_info'], accounting_contact_type='Accounting platform',
                                   accounting_contact='BillPay.com'))
     client, response, _, _ = _mock_sheets(LIVE_HEADERS)
@@ -587,16 +587,27 @@ def test_accounting_contact_and_other_shipping_reach_form_responses():
     cell = _response_rows(response)[0]
     accounting_header = 'Is there a specific platform or email address we need to send the invoice to (i.e. BillPay.com)?'
     assert cell[accounting_header] == 'Accounting platform: BillPay.com'
-    assert cell['Will this order be drop-shipped to individual recipients? *'] == 'Pick up at our warehouse'
+    assert cell['Will this order be drop-shipped to individual recipients? *'] == 'Other: Pick up at our warehouse'
 
     # Tab 3 import: the invoice answer has one home (bookkeeping note); "Other" shipping is kept as a team note
     order = form_response_to_order(parse_form_response(cell))
     assert order['order_notes']['internal_bookkeeping'] == 'Send invoice to: Accounting platform: BillPay.com'
-    assert "Shipping (client's answer): Pick up at our warehouse" in order['order_notes']['internal_pbp_team']
+    assert "Shipping (client's answer): Other: Pick up at our warehouse" in order['order_notes']['internal_pbp_team']
     assert order['client_info']['shipping_type'] == 'One Location'
 
 
+
+def test_other_shipping_answer_starting_with_yes_or_no_is_kept():
+    """An "Other" answer that starts with "No," or "Yes," is still kept as a note and is not drop-ship."""
+    for answer in ['Other: No, we will pick up at the warehouse', 'Other: Yes, half to the office and half to homes']:
+        response = {'shipping_info': {'drop_shipping': answer}}
+        order = form_response_to_order(response)
+        assert order['order_notes']['internal_pbp_team'] == f"Shipping (client's answer): {answer}"
+        assert order['client_info']['shipping_type'] == 'One Location'
+
+
 if __name__ == "__main__":
+    test_other_shipping_answer_starting_with_yes_or_no_is_kept()
     test_generate_session_token_is_unique()
     test_accounting_contact_and_other_shipping_reach_form_responses()
     test_generate_session_token_is_url_safe()

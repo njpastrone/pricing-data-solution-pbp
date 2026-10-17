@@ -655,7 +655,7 @@ def _render_client_form_page(proposal_id, session_id):
     saved_shipping = saved_data.get('shipping_info', {})
 
     # Drop-shipping question first (address depends on this choice).
-    # Saved as "Yes", "No", or the client's own words when they pick "Other".
+    # Saved as "Yes", "No", or "Other: <client's own words>".
     drop_ship_options = ["Shipped to one address", "Yes, dropshipped to multiple addresses", "Other"]
     saved_drop = saved_shipping.get('drop_shipping', '')
     if saved_drop.lower() == 'yes':
@@ -675,7 +675,7 @@ def _render_client_form_page(proposal_id, session_id):
     if drop_shipping == "Other":
         drop_shipping_other = st.text_input(
             "Please describe how this order should be shipped *",
-            value=saved_drop if drop_index == 2 else '',
+            value=saved_drop[len('Other:'):].strip() if saved_drop.lower().startswith('other:') else (saved_drop if drop_index == 2 else ''),
             key="cf_drop_shipping_other"
         )
 
@@ -792,7 +792,7 @@ def _render_client_form_page(proposal_id, session_id):
             'shipping_info': {
                 'shipping_address': shipping_address,
                 'billing_address': billing_address,
-                'drop_shipping': drop_shipping_other.strip() if drop_shipping == 'Other' else ('Yes' if drop_shipping.startswith('Yes') else 'No'),
+                'drop_shipping': f"Other: {drop_shipping_other.strip()}" if drop_shipping == 'Other' else ('Yes' if drop_shipping.startswith('Yes') else 'No'),
                 'drop_shipping_instructions': drop_instructions,
                 'in_hands_date': str(in_hands_date) if isinstance(in_hands_date, date) else '',
             },
