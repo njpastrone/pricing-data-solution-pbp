@@ -21,6 +21,7 @@ from src.forms_config import (
     MAX_PRODUCT_LINES,
     find_response_column,
 )
+from src.client_form import STATUS_PENDING
 
 
 def generate_prefilled_form_url(client_info, products):
@@ -566,3 +567,93 @@ def format_product_summary(products):
     items_str = ", ".join(items)
 
     return f"{count} product{'s' if count != 1 else ''}: {items_str}"
+
+
+def _parse_timestamp(text):
+    """'10/16/2026 14:03:22' (Form Responses timestamp) -> datetime. Anything else -> None."""
+    try:
+        return datetime.strptime(str(text).strip(), '%m/%d/%Y %H:%M:%S')
+    except ValueError:
+        return None
+
+
+def build_submissions_list(response_records, received_orders):
+    """
+    Combine Form Responses rows and the in-app form's backup copies into one list
+    of submitted order forms, newest first, for the staff Submitted Order Forms view.
+
+    An order still waiting to be copied into Form Responses is listed from its
+    backup copy (marked pending), so staff see it even while the copy is stuck.
+
+    Args:
+        response_records (list of dict): Form Responses rows (load_form_responses(...).to_dict('records')),
+            in sheet order, so record i is sheet row i + 2
+        received_orders (list of dict): client_form.load_received_orders()
+
+    Returns:
+        list of dict: {
+            'data': parse_form_response() style dict,
+            'sheet_row': Form Responses row number (None while pending),
+            'pending': True if not yet in Form Responses,
+            'imported': True if already imported into an order,
+            'proposal_id', 'session_id': backup copy keys ('' for Google Form answers),
+        }
+    """
+    # Backup copies by (submit time, company): the same values written to Form Responses
+    backups = {}
+    for order in received_orders:
+        form = order['form_data']
+        key = (form.get('submitted_at', ''), form.get('client_info', {}).get('company_name', ''))
+        backups[key] = order
+
+    submissions = []
+    for i, record in enumerate(response_records):
+        data = parse_form_response(record)
+        if not data['metadata']['timestamp'] and not data['client_info']['company_name']:
+            continue  # blank row in the sheet
+        key = (str(data['metadata']['timestamp']), data['client_info']['company_name'])
+        backup = backups.pop(key, {})
+        submissions.append({
+            'data': data,
+            'sheet_row': i + 2,
+            'pending': False,
+            'imported': str(data['metadata']['imported']).upper() == 'TRUE',
+            'proposal_id': backup.get('proposal_id', ''),
+            'session_id': backup.get('session_id', ''),
+        })
+
+    # Pending backups left over have not reached Form Responses yet
+    for order in backups.values():
+        if order['status'] != STATUS_PENDING:
+            continue
+        form = order['form_data']
+        data = {
+            'client_info': form.get('client_info', {}),
+            'products': form.get('products', []),
+            'shipping_info': dict(form.get('shipping_info', {}), dropshipping_file=order['file_name']),
+            'payment_info': form.get('payment_info', {}),
+            'notes': form.get('notes', ''),
+            'metadata': {'timestamp': form.get('submitted_at', ''), 'imported': '', 'order_id': ''},
+        }
+        submissions.append({
+            'data': data,
+            'sheet_row': None,
+            'pending': True,
+            'imported': False,
+            'proposal_id': order['proposal_id'],
+            'session_id': order['session_id'],
+        })
+
+    submissions.sort(key=lambda s: _parse_timestamp(s['data']['metadata']['timestamp']) or datetime.min, reverse=True)
+    return submissions
+
+
+def submission_matches_search(submission, text):
+    """True if the search text appears in the company, contact, email, date or any product name."""
+    data = submission['data']
+    client = data['client_info']
+    searchable = [
+        client.get('company_name', ''), client.get('contact_name', ''), client.get('contact_email', ''),
+        data['metadata'].get('timestamp', ''),
+    ] + [product.get('name', '') for product in data['products']]
+    return str(text).strip().lower() in ' '.join(str(value) for value in searchable).lower()

@@ -179,6 +179,7 @@ See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
   - **Tab 2: Client Order Form Generator** - Generate shareable client form links and legacy HTML forms
   - **Tab 3: Order & Client Info** - Order management, client data collection
   - **Tab 4: Execution & Accounting** - Invoice/PO generation, bookkeeping
+  - **Submitted Order Forms tab** - Staff list of every submitted client order form (search, full details, import into Tab 3)
 - **Password Gate:** Main app requires password; client form links bypass the gate
 - **Data Source:** Google Sheets with dataset selector (Demo or Real)
   - **Demo Dataset:** master_pricing_template_10_14 (19 products, 4 partners - testing/development data)
@@ -208,10 +209,11 @@ See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
   1. **Tab 1 (Proposal Generator):** Browse & filter products → Configure proposal → Generate PowerPoint
   2. **Tab 2 (Client Order Form Generator):** Enter client info → Generate Client Form Link → Send link to client
   3. **Client completes form:** Standalone in-app form (no login required) → Saves to Google Sheets
-  4. **Tab 3 (Order & Client Info):** Load & import form response → All data auto-populates → Configure order details
+  4. **Submitted Order Forms tab:** Find the response → Import into Tab 3 → All data auto-populates
+     **Tab 3 (Order & Client Info):** Configure order details
   5. **Tab 4 (Execution & Accounting):** Review/edit order → Generate invoice & PO → Download for bookkeeping
 - **Alternative Workflows:**
-  - **Google Form:** Tab 2 → Generate Google Form URL → Client completes → Tab 3 → Import response
+  - **Google Form:** Tab 2 → Generate Google Form URL → Client completes → Submitted Order Forms tab → Import into Tab 3
   - **HTML Form:** Tab 2 → Generate HTML form → Client completes → Tab 3 → Import HTML file
   - **Proposal Direct:** Tab 1 → Create proposal → Tab 3 → Import from proposal (Option B)
   - **Manual Entry:** Tab 3 → Add products manually (Option C)
@@ -314,19 +316,10 @@ See SCHEMA_UPDATE_PROCESS.md for complete walkthrough and examples.
   - Duplicate name detection with versioning (v2, v3, etc.)
   - Stored in Google Sheets (cloud-persistent)
 - **Workflow Guidance:** Clear instructions showing 4 pathways into Tab 3 with recommended workflow
-- **Option A - Google Form Import (RECOMMENDED - NEW!):** Import completed Google Form responses
-  - **Load Responses:** Click "Load Recent Form Responses" to fetch from Google Sheets
-  - **Preview Before Import:** Expandable preview showing:
-    - Client info (type, company, contact, email, phone)
-    - Products with quantities and customization notes
-    - Shipping details (address, drop-shipping, in-hands date)
-    - Payment preferences (timeline, method)
-    - Impact card selection
-  - **One-Click Import:** Imports all data and adds products to order
-  - **Automatic Product Matching:** Exact match, case-insensitive against catalog
-  - **Default Settings:** Quantities from form, 100% markup (editable after import)
-  - **Duplicate Prevention:** Tracking columns prevent re-importing same response
-  - **Seamless Integration:** Works perfectly with Tab 2 Google Form generation
+- **Option A - Submitted Order Form Import (RECOMMENDED):** Done from the Submitted Order Forms tab
+  - Lists every submitted order form newest first (Form Responses plus orders still waiting in the `client_form_drafts` backup tab), with search and an imported filter
+  - Selecting one shows every answer: products with quantity and customization notes, client and contact, shipping, billing, drop-ship (with the address file), payment and invoice details, notes
+  - **Import into Tab 3:** Imports all data and adds products to the order (exact, case-insensitive catalog match), then marks the response imported
 - **Option B - HTML Order Form Import (Alternative):** Upload completed client order forms (HTML format)
   - Supports both our generated HTML and Google Docs exported HTML
   - **Client Info Extraction:** Extracts 11 fields automatically (client type, company, contact info, shipping/billing addresses, drop shipping, in-hands date, impact cards, payment preference)
