@@ -1665,6 +1665,7 @@ with st.sidebar:
                 # Clear all session state data
                 st.session_state.proposal_products = []
                 st.session_state.order_items = []
+                st.session_state.order_confirmed = False
                 # Clear proposal tracking info
                 st.session_state.loaded_proposal_name = None
                 st.session_state.loaded_proposal_date = None
@@ -7339,6 +7340,7 @@ with tab3:
         # Clear order button
         if st.button("Clear Entire Order", type="secondary"):
             st.session_state.order_items = []
+            st.session_state.order_confirmed = False
             st.rerun()
 
         # PRICING SUMMARY (Phase 3) - Show all products with notes or warnings
