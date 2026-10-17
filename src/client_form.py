@@ -595,7 +595,7 @@ def notify_team_of_order(proposal_id, form_data):
             f"Items: {len(form_data.get('products', []))}\n"
             f"Submitted: {form_data.get('submitted_at', '')}\n"
             f"Proposal: {proposal_id}\n\n"
-            f"Import it in the staff app (Tab 3, Option A): {APP_URL}\n"
+            f"Import it in the staff app (Submitted Order Forms tab): {APP_URL}\n"
         )
         with smtplib.SMTP(host, int(_setting('SMTP_PORT', '587')), timeout=10) as server:
             server.starttls()

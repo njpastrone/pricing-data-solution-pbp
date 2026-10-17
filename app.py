@@ -1491,7 +1491,7 @@ with st.sidebar:
         st.warning(
             f"Order email not sent: {failed['company_name']} ({failed['proposal_id']}, "
             f"received {failed['submitted_at']}). The order is saved in Form Responses; "
-            f"import it from Tab 3. Reason: {failed['reason']}."
+            f"import it from the Submitted Order Forms tab. Reason: {failed['reason']}."
         )
 
     # Section 0: Data Source Information
