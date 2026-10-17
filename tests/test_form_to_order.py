@@ -18,6 +18,7 @@ from streamlit.testing.v1 import AppTest
 
 from src.forms_helper import parse_form_response, form_response_to_order, html_form_to_order, add_order_notes
 from src.order_manager import save_order, load_order_data
+from src.helpers import convert_proposal_to_order
 from test_client_form import FakeSheet, LIVE_HEADERS, _mock_sheets, _submit
 
 APP_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app.py')
@@ -101,6 +102,17 @@ def test_html_order_form_lands_like_a_form_response():
     assert client_info['payment_preference'] == 'ACH'
     assert order['order_notes'] == {'internal_pbp_team': 'Impact cards: Yes'}
     assert order['products'] == []
+
+
+def test_proposal_import_leaves_customization_description_blank():
+    """Catalog 'Customization Info' is availability text, not ordered customization: it must not reach invoice lines."""
+    proposal_item = {
+        'product_data': {'Product/Service': 'Hoodie', 'Partner': 'Acme', 'Customization Info': 'Laser engraving available, MOQ 50'},
+        'quantity': 10, 'markup_percent': 100.0,
+    }
+    order_item = convert_proposal_to_order(proposal_item, lambda data, qty: (5.0, '1-49', 1), lambda base, rate: 0.0)
+    assert order_item['customization_description'] == ''
+    assert order_item['include_customization'] is False
 
 
 def test_imported_order_survives_save_and_load():
@@ -200,6 +212,7 @@ if __name__ == "__main__":
     test_full_form_reaches_the_order()
     test_blank_billing_address_means_same_as_shipping()
     test_html_order_form_lands_like_a_form_response()
+    test_proposal_import_leaves_customization_description_blank()
     test_imported_order_survives_save_and_load()
     test_google_form_answers_are_understood()
     test_add_order_notes_keeps_staff_notes_and_skips_repeats()
