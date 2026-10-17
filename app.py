@@ -81,6 +81,7 @@ from src.forms_helper import (
     PAYMENT_METHODS,
     load_form_responses,
     form_response_to_order,
+    html_form_to_order,
     add_order_notes,
     mark_response_imported,
     build_submissions_list,
