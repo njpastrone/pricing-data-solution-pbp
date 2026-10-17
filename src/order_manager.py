@@ -292,6 +292,64 @@ def save_order(name, created_by, order_data, dataset, photos_by_product=None, ov
         return False, f"Error saving order: {str(e)}", None
 
 
+# Session-state keys stored with a saved order (everything needed to reload it in Tab 3 and Tab 4)
+ORDER_STATE_KEYS = [
+    'order_items', 'order_shipping', 'partner_shipping', 'sales_tax',
+    'kitting_pbp_cost', 'kitting_client_price',
+    'order_discount_type', 'order_discount_preset',
+    'order_discount_custom_desc', 'order_discount_custom_value',
+    'order_use_marketing_rounding', 'apply_cc_fee', 'cc_fee_percent',
+    'client_info', 'order_notes', 'order_confirmed',
+]
+
+
+def save_current_order(state, name, created_by, overwrite=False, finalize=False):
+    """
+    Save the order currently in session state (used by every Tab 3 save button).
+
+    Args:
+        state: st.session_state (or any dict holding ORDER_STATE_KEYS)
+        name (str): Order name typed by the user
+        created_by (str): Creator name (optional)
+        overwrite (bool): Update the existing order with this name in place
+        finalize (bool): Also mark the order as finalized (order_confirmed).
+            The session is only marked finalized once the save succeeds.
+
+    Returns:
+        tuple: (success: bool, message: str, order_id: str or None)
+    """
+    if not name or not name.strip():
+        return False, "Please enter an order name", None
+
+    order_data = {key: state[key] for key in ORDER_STATE_KEYS}
+    if finalize:
+        order_data['order_confirmed'] = True
+
+    # Read uploaded product photos so they can be stored with the order
+    photos_for_upload = {}
+    for prod_name, photos in state.get('product_photos', {}).items():
+        if photos:
+            photo_list = []
+            for photo in photos:
+                photo.seek(0)
+                photo_list.append({'bytes': photo.read(), 'filename': photo.name})
+            photos_for_upload[prod_name] = photo_list
+
+    success, message, order_id = save_order(
+        name=name.strip(),
+        created_by=created_by.strip() if created_by else "",
+        order_data=order_data,
+        dataset=state['selected_dataset'],
+        photos_by_product=photos_for_upload if photos_for_upload else None,
+        overwrite=overwrite
+    )
+
+    if success and finalize:
+        state['order_confirmed'] = True
+
+    return success, message, order_id
+
+
 def load_all_orders():
     """
     Load all saved orders (metadata only, not full data).
