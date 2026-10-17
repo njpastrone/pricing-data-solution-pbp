@@ -11,12 +11,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from streamlit.testing.v1 import AppTest
 
 from src.client_form import load_received_orders
-from src.forms_helper import build_submissions_list, submission_matches_search
+from src.forms_helper import build_submissions_list, load_form_responses, submission_matches_search
 from test_client_form import FakeSheet, LIVE_HEADERS, SAMPLE_FORM, _mock_sheets, _submit
 from test_form_to_order import FULL_FORM, _app_function_source
 
@@ -51,7 +53,9 @@ def _two_synced_and_one_stuck():
     with patch('src.client_form.datetime', _at(9)):
         assert _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM, b'name,address', 'addresses.csv')[0]
 
-    stuck_form = dict(FULL_FORM, client_info=dict(FULL_FORM['client_info'], company_name='Stuck Co'))
+    stuck_form = dict(FULL_FORM, client_info=dict(FULL_FORM['client_info'], company_name='Stuck Co'),
+                      payment_info=dict(FULL_FORM['payment_info'], accounting_contact_type='Email',
+                                        accounting_contact='ap@stuck.com'))
     response.fail['update'] = [Exception("Sheets is down")]
     with patch('src.client_form.datetime', _at(10)):
         assert _submit(client, 'PROP_2', 'sess2', stuck_form)[0]
@@ -128,7 +132,7 @@ def test_details_show_every_answer():
     texts = [t.value for t in app.text]
     for answer in ['Existing', 'Stuck Co', 'Jo Smith', 'jo@acme.com', '555-1234',
                    '123 Main St\nSpringfield', 'PO Box 9\nSpringfield', '2026-11-01', 'Yes',
-                   'Split across 3 offices', 'Credit Card', 'Budget is $500 to $600']:
+                   'Split across 3 offices', 'Credit Card', 'ap@stuck.com', 'Budget is $500 to $600']:
         assert answer in texts, answer
 
     products = app.table[0].value
@@ -138,10 +142,21 @@ def test_details_show_every_answer():
     assert 'Waiting to sync' in app.caption[0].value
 
 
+def test_failed_form_responses_read_is_an_error_not_an_empty_list():
+    """A Sheets error must reach the tab (shown as an error), never look like 'no submitted forms'."""
+    worksheet = MagicMock()
+    worksheet.get_all_records.side_effect = Exception("429 Quota exceeded")
+    client = MagicMock()
+    client.open_by_key.return_value.worksheet.return_value = worksheet
+    with pytest.raises(Exception, match="Quota"):
+        load_form_responses(client)
+
+
 if __name__ == "__main__":
     test_every_submitted_form_is_listed_newest_first()
     test_blank_sheet_rows_are_not_listed()
     test_submitted_backups_missing_from_form_responses_are_not_listed_as_pending()
     test_search_finds_company_contact_email_date_and_product()
     test_details_show_every_answer()
+    test_failed_form_responses_read_is_an_error_not_an_empty_list()
     print("All tests passed!")

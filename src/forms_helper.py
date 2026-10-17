@@ -123,7 +123,9 @@ def load_form_responses(gc):
         pd.DataFrame: DataFrame with all responses, including:
             - All form fields
             - Tracking columns (Imported?, Order ID, etc.)
-            - Empty DataFrame if sheet not found or error
+
+    Raises:
+        Exception: if the sheet cannot be read, so a failed read is never shown as "no responses"
 
     Example:
         >>> from src.data_loader import connect_to_sheets
@@ -132,25 +134,9 @@ def load_form_responses(gc):
         >>> print(len(df))
         5  # 5 responses
     """
-    try:
-        # Open response sheet
-        sheet_id = GOOGLE_FORM_CONFIG['response_sheet_id']
-        spreadsheet = gc.open_by_key(sheet_id)
-
-        # Get the responses worksheet
-        worksheet = spreadsheet.worksheet(GOOGLE_FORM_CONFIG['response_sheet_name'])
-
-        # Get all data
-        data = worksheet.get_all_records()
-
-        # Convert to DataFrame
-        df = pd.DataFrame(data)
-
-        return df
-
-    except Exception as e:
-        print(f"Error loading form responses: {e}")
-        return pd.DataFrame()
+    spreadsheet = gc.open_by_key(GOOGLE_FORM_CONFIG['response_sheet_id'])
+    worksheet = spreadsheet.worksheet(GOOGLE_FORM_CONFIG['response_sheet_name'])
+    return pd.DataFrame(worksheet.get_all_records())
 
 
 def parse_form_response(response_row):

@@ -696,7 +696,8 @@ def show_submission_details(submission):
         st.markdown("#### Payment and accounting")
         show_answer("Payment method", payment.get('payment_method', ''))
         show_answer("Payment preference", payment.get('payment_preference', ''))
-        show_answer("Send invoice to", payment.get('invoice_platform', ''))
+        # Orders still waiting to sync keep the client form's own accounting contact field
+        show_answer("Send invoice to", payment.get('invoice_platform') or payment.get('accounting_contact', ''))
         show_answer("Impact cards", payment.get('impact_cards', ''))
         show_answer("Impact card selection", payment.get('impact_card_selection', ''))
 
@@ -10606,7 +10607,7 @@ with tab6:
                 responses = load_form_responses(connect_to_sheets())
             except Exception as e:
                 responses = None
-                st.error(f"Could not connect to Google Sheets: {e}")
+                st.error(f"Could not read the submitted order forms from Google Sheets: {e}")
             if responses is not None:
                 st.session_state.submitted_forms = build_submissions_list(responses.to_dict('records'), load_received_orders())
                 st.session_state.submitted_forms_loads = st.session_state.get('submitted_forms_loads', 0) + 1
