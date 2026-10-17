@@ -579,15 +579,10 @@ def load_received_orders():
 
     Returns:
         list of dict: {'proposal_id', 'session_id', 'form_data', 'file_name', 'status'}
+
+    Raises on a Google Sheets error, so staff see it instead of a list missing orders.
     """
-    drafts = _get_drafts_sheet()
-    if drafts is None:
-        return []
-    try:
-        rows = _read_backup_rows(drafts)
-    except Exception as e:
-        print(f"Could not read received client orders: {e}")
-        return []
+    rows = _read_backup_rows(_open_drafts_sheet())
     return [
         {
             'proposal_id': row['proposal_id'],
@@ -616,38 +611,3 @@ def retrieve_uploaded_file(proposal_id, session_id):
     if draft and draft.get('file_data') and draft.get('file_name'):
         return draft['file_data'], draft['file_name']
     return None, None
-
-
-def retrieve_file_by_proposal(proposal_id):
-    """
-    Find the most recent uploaded file for a given proposal (any session).
-
-    Args:
-        proposal_id (str): Proposal ID
-
-    Returns:
-        tuple: (file_bytes, filename) or (None, None) if not found
-    """
-    try:
-        sheet = _get_drafts_sheet()
-        if sheet is None:
-            return None, None
-
-        all_values = _retry_on_quota(sheet.get_all_values)
-        # Find most recent draft with a file for this proposal
-        best_row = None
-        for row in all_values[1:]:
-            if len(row) >= 5 and row[0] == proposal_id and row[3]:  # Has file data
-                best_row = row
-
-        if best_row:
-            file_b64 = best_row[3]
-            file_name = best_row[4]
-            file_data = base64.b64decode(file_b64) if file_b64 else None
-            return file_data, file_name
-
-        return None, None
-
-    except Exception as e:
-        print(f"Error retrieving file: {e}")
-        return None, None

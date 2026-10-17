@@ -104,6 +104,13 @@ def test_submitted_backups_missing_from_form_responses_are_not_listed_as_pending
     assert [(s['pending'], s['session_id']) for s in submissions] == [(True, 'pending_sync'), (False, '')]
 
 
+def test_backup_tab_read_failure_raises_instead_of_hiding_pending_orders():
+    client, _, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    drafts.fail['batch_get'] = [Exception("Sheets is down")]
+    with patch('src.client_form.connect_to_sheets', return_value=client), pytest.raises(Exception, match="Sheets is down"):
+        load_received_orders()
+
+
 def test_search_finds_company_contact_email_date_and_product():
     acme = _two_synced_and_one_stuck()[1]
     for text in ['acme', 'JO SMITH', 'jo@acme.com', '10/16/2026', 'hot honey', '']:

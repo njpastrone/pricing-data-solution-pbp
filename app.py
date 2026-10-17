@@ -10605,11 +10605,12 @@ with tab6:
         with st.spinner("Loading submitted order forms..."):
             try:
                 responses = load_form_responses(connect_to_sheets())
+                received = load_received_orders()
             except Exception as e:
                 responses = None
                 st.error(f"Could not read the submitted order forms from Google Sheets: {e}")
             if responses is not None:
-                st.session_state.submitted_forms = build_submissions_list(responses.to_dict('records'), load_received_orders())
+                st.session_state.submitted_forms = build_submissions_list(responses.to_dict('records'), received)
                 st.session_state.submitted_forms_loads = st.session_state.get('submitted_forms_loads', 0) + 1
                 st.session_state.pop('submitted_form_file', None)
         if responses is not None:
