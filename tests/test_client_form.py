@@ -743,6 +743,24 @@ def test_email_failure_never_fails_the_order():
     failed_notifications.clear()
 
 
+def test_bad_email_header_never_fails_the_sync():
+    """A company name with a line break cannot go in an email subject: the order still syncs and staff are warned."""
+    from src.client_form import failed_notifications
+    failed_notifications.clear()
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    form = json.loads(json.dumps(SAMPLE_FORM))
+    form['client_info']['company_name'] = 'Acme\nCorp'
+    FakeSMTP.sent, FakeSMTP.fail = [], None
+    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('src.client_form.smtplib.SMTP', FakeSMTP):
+        assert _submit(client, 'PROP_1', 'sess1', form) == (True, "Order received")
+
+    assert FakeSMTP.sent == []
+    assert len(_response_rows(response)) == 1
+    assert _backup(drafts)[1] == STATUS_SUBMITTED
+    assert [f['proposal_id'] for f in failed_notifications] == ['PROP_1']
+    failed_notifications.clear()
+
+
 def test_no_email_when_not_set_up():
     """Without recipients or a mail server configured, submit works and no mail server is contacted."""
     for settings in ({}, {'ORDER_NOTIFY_EMAILS': 'team@example.com'}, {'SMTP_HOST': 'smtp.example.com'}):

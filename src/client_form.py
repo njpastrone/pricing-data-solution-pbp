@@ -583,21 +583,20 @@ def notify_team_of_order(proposal_id, form_data):
     if client_info.get('contact_email'):
         contact += f" ({client_info['contact_email']})"
 
-    message = EmailMessage()
-    message['Subject'] = f"New client order: {company}"
-    message['From'] = _setting('SMTP_FROM') or _setting('SMTP_USER') or recipients[0]
-    message['To'] = ', '.join(recipients)
-    message.set_content(
-        "A client submitted an order form.\n\n"
-        f"Company: {company}\n"
-        f"Contact: {contact}\n"
-        f"Items: {len(form_data.get('products', []))}\n"
-        f"Submitted: {form_data.get('submitted_at', '')}\n"
-        f"Proposal: {proposal_id}\n\n"
-        f"Import it in the staff app (Tab 3, Option A): {APP_URL}\n"
-    )
-
     try:
+        message = EmailMessage()
+        message['Subject'] = f"New client order: {company}"
+        message['From'] = _setting('SMTP_FROM') or _setting('SMTP_USER') or recipients[0]
+        message['To'] = ', '.join(recipients)
+        message.set_content(
+            "A client submitted an order form.\n\n"
+            f"Company: {company}\n"
+            f"Contact: {contact}\n"
+            f"Items: {len(form_data.get('products', []))}\n"
+            f"Submitted: {form_data.get('submitted_at', '')}\n"
+            f"Proposal: {proposal_id}\n\n"
+            f"Import it in the staff app (Tab 3, Option A): {APP_URL}\n"
+        )
         with smtplib.SMTP(host, int(_setting('SMTP_PORT', '587')), timeout=10) as server:
             server.starttls()
             if _setting('SMTP_USER'):
