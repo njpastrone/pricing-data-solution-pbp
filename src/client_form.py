@@ -572,6 +572,35 @@ def retry_pending_syncs():
     return stuck
 
 
+def load_received_orders():
+    """
+    Read every received order (pending or submitted) from the backup tab, for the
+    staff Submitted Order Forms view. One read; the large file column is skipped.
+
+    Returns:
+        list of dict: {'proposal_id', 'session_id', 'form_data', 'file_name', 'status'}
+    """
+    drafts = _get_drafts_sheet()
+    if drafts is None:
+        return []
+    try:
+        rows = _read_backup_rows(drafts)
+    except Exception as e:
+        print(f"Could not read received client orders: {e}")
+        return []
+    return [
+        {
+            'proposal_id': row['proposal_id'],
+            'session_id': row['session_id'],
+            'form_data': _deserialize_form_data(row['json']),
+            'file_name': row['file_name'],
+            'status': row['status'],
+        }
+        for row in rows
+        if row['status'] in (STATUS_PENDING, STATUS_SUBMITTED)
+    ]
+
+
 def retrieve_uploaded_file(proposal_id, session_id):
     """
     Retrieve an uploaded file from the drafts sheet.
