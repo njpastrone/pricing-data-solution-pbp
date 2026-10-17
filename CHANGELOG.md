@@ -5,6 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased] - 2026-10-09
 
+### Changed (2026-10-17, Tab 3 save and finalize)
+- **One "Save & Finalize Order" Button at the Bottom of Tab 3:** The bottom of Tab 3 had a "Confirm Order" button ("Ready to finalize your order?") and a separate "Save Order" button, and it was not clear which one to use. "Confirm Order" only set an in-session `order_confirmed` flag that nothing else reads (Tab 4 never required it) and was lost unless the order was saved afterwards. They are now one button that saves the order to Saved Orders and marks it finalized in the same click, with helper text explaining what it does and that Tab 4 is next. The "Edit Order" button is gone: the order stays editable and can be saved again (Overwrite updates it in place). The quick save at the top of Tab 3 and the Saved Orders panel still save without changing the finalized flag, so a work-in-progress order can be saved as before. "Clear Entire Order" and the sidebar reset also clear the finalized flag, so a new order never starts out finalized
+- All three Tab 3 save buttons now share `save_current_order()` (`src/order_manager.py`) instead of three copies of the same code; the session is only marked finalized once the save succeeds
+- Tests: `tests/test_save_current_order.py` (fake `save_order`, no Google Sheets)
+
 ### Changed (2026-10-17, client order form)
 - **Dropshipping Spreadsheet Is No Longer Expected Up Front:** Choosing "dropshipped to multiple addresses" now shows a short note that a recipient address spreadsheet will be needed before the order ships, plus the dropshipping instructions box. The file upload was removed from the form (a file saved with an older draft is kept, and Tab 3 can still download files already submitted). No template is offered until the team settles on a format
 - **"Other" Shipping Option:** The drop-shipping dropdown has an "Other" choice with a text box; the typed answer is required on submit and saved to Form Responses as "Other: <typed text>". Tab 3 import keeps it in the order's internal team notes ("Shipping (client's answer): Other: ...") with Shipping Type One Location, even when the text starts with "Yes" or "No"

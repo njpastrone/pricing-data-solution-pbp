@@ -65,7 +65,7 @@ from src.proposal_manager import (
     delete_proposal
 )
 from src.order_manager import (
-    save_order,
+    save_current_order,
     load_all_orders,
     load_order_data,
     delete_order
@@ -1027,11 +1027,6 @@ if 'order_fifty_cent_rounding' not in st.session_state:
 if 'order_confirmed' not in st.session_state:
     st.session_state.order_confirmed = False
 
-# Initialize order backup for persistence during edit/confirm cycles
-# This preserves data entered in Tab 4 when user clicks "Edit Order"
-if 'order_backup' not in st.session_state:
-    st.session_state.order_backup = {}
-
 # Initialize client information
 if 'client_info' not in st.session_state:
     st.session_state.client_info = {
@@ -1670,6 +1665,7 @@ with st.sidebar:
                 # Clear all session state data
                 st.session_state.proposal_products = []
                 st.session_state.order_items = []
+                st.session_state.order_confirmed = False
                 # Clear proposal tracking info
                 st.session_state.loaded_proposal_name = None
                 st.session_state.loaded_proposal_date = None
@@ -5163,60 +5159,19 @@ with tab3:
                 )
             with col3:
                 if st.button("Save", type="primary", use_container_width=True, key="quick_save_order_btn"):
-                    if not quick_order_name or not quick_order_name.strip():
-                        st.error("Please enter an order name")
+                    success, message, result = save_current_order(
+                        st.session_state, quick_order_name, quick_creator, overwrite=quick_overwrite_order
+                    )
+
+                    if success:
+                        update_last_save_time('order')
+                        clear_saved_data_cache()  # Clear cache to show new order
+                        st.success(f"{message} - Available in sidebar under 'Saved Orders'")
+                        time.sleep(1)
+                        st.rerun()
                     else:
-                        # Prepare order data
-                        order_data = {
-                            'order_items': st.session_state.order_items,
-                            'order_shipping': st.session_state.order_shipping,
-                            'partner_shipping': st.session_state.partner_shipping,
-                            'sales_tax': st.session_state.sales_tax,
-                            'kitting_pbp_cost': st.session_state.kitting_pbp_cost,
-                            'kitting_client_price': st.session_state.kitting_client_price,
-                            'order_discount_type': st.session_state.order_discount_type,
-                            'order_discount_preset': st.session_state.order_discount_preset,
-                            'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
-                            'order_discount_custom_value': st.session_state.order_discount_custom_value,
-                            'order_use_marketing_rounding': st.session_state.order_use_marketing_rounding,
-                            'apply_cc_fee': st.session_state.apply_cc_fee,
-                            'cc_fee_percent': st.session_state.cc_fee_percent,
-                            'client_info': st.session_state.client_info,
-                            'order_notes': st.session_state.order_notes,
-                            'order_confirmed': st.session_state.order_confirmed
-                        }
-
-                        # Prepare photos for upload to Drive
-                        photos_for_upload = {}
-                        for prod_name, photos in st.session_state.get('product_photos', {}).items():
-                            if photos:
-                                photo_list = []
-                                for photo in photos:
-                                    photo.seek(0)
-                                    photo_list.append({
-                                        'bytes': photo.read(),
-                                        'filename': photo.name
-                                    })
-                                photos_for_upload[prod_name] = photo_list
-
-                        success, message, result = save_order(
-                            name=quick_order_name.strip(),
-                            created_by=quick_creator.strip() if quick_creator else "",
-                            order_data=order_data,
-                            dataset=st.session_state.selected_dataset,
-                            photos_by_product=photos_for_upload if photos_for_upload else None,
-                            overwrite=quick_overwrite_order
-                        )
-
-                        if success:
-                            update_last_save_time('order')
-                            clear_saved_data_cache()  # Clear cache to show new order
-                            st.success(f"{message} - Available in sidebar under 'Saved Orders'")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            # Name conflict: guide the user to overwrite or rename
-                            st.error(message)
+                        # Missing name or name conflict: guide the user to overwrite or rename
+                        st.error(message)
 
     st.divider()
 
@@ -5399,61 +5354,20 @@ with tab3:
             )
 
             if st.button("Save Order", key="save_order_btn", type="primary", use_container_width=True, disabled=not has_products):
-                if not order_name or not order_name.strip():
-                    st.error("Please enter an order name")
+                success, message, result = save_current_order(
+                    st.session_state, order_name, created_by, overwrite=overwrite_order
+                )
+
+                if success:
+                    update_last_save_time('order')
+                    clear_saved_data_cache()  # Clear cache to show new order
+                    st.success(message)
+                    st.rerun()  # Rerun to clear form
                 else:
-                    # Prepare order data
-                    order_data = {
-                        'order_items': st.session_state.order_items,
-                        'order_shipping': st.session_state.order_shipping,
-                        'partner_shipping': st.session_state.partner_shipping,
-                        'sales_tax': st.session_state.sales_tax,
-                        'kitting_pbp_cost': st.session_state.kitting_pbp_cost,
-                        'kitting_client_price': st.session_state.kitting_client_price,
-                        'order_discount_type': st.session_state.order_discount_type,
-                        'order_discount_preset': st.session_state.order_discount_preset,
-                        'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
-                        'order_discount_custom_value': st.session_state.order_discount_custom_value,
-                        'order_use_marketing_rounding': st.session_state.order_use_marketing_rounding,
-                        'apply_cc_fee': st.session_state.apply_cc_fee,
-                        'cc_fee_percent': st.session_state.cc_fee_percent,
-                        'client_info': st.session_state.client_info,
-                        'order_notes': st.session_state.order_notes,
-                        'order_confirmed': st.session_state.order_confirmed
-                    }
-
-                    # Prepare photos for upload to Drive
-                    photos_for_upload = {}
-                    for prod_name, photos in st.session_state.get('product_photos', {}).items():
-                        if photos:
-                            photo_list = []
-                            for photo in photos:
-                                photo.seek(0)
-                                photo_list.append({
-                                    'bytes': photo.read(),
-                                    'filename': photo.name
-                                })
-                            photos_for_upload[prod_name] = photo_list
-
-                    success, message, result = save_order(
-                        name=order_name.strip(),
-                        created_by=created_by.strip() if created_by else "",
-                        order_data=order_data,
-                        dataset=st.session_state.selected_dataset,
-                        photos_by_product=photos_for_upload if photos_for_upload else None,
-                        overwrite=overwrite_order
-                    )
-
-                    if success:
-                        update_last_save_time('order')
-                        clear_saved_data_cache()  # Clear cache to show new order
-                        st.success(message)
-                        st.rerun()  # Rerun to clear form
-                    else:
-                        # Name conflict: guide the user to overwrite or rename
-                        # (the Overwrite checkbox above is the reliable path;
-                        # a nested confirm button would be dropped on rerun).
-                        st.error(message)
+                    # Missing name or name conflict: guide the user to overwrite or rename
+                    # (the Overwrite checkbox above is the reliable path;
+                    # a nested confirm button would be dropped on rerun).
+                    st.error(message)
 
     st.divider()
 
@@ -7426,6 +7340,7 @@ with tab3:
         # Clear order button
         if st.button("Clear Entire Order", type="secondary"):
             st.session_state.order_items = []
+            st.session_state.order_confirmed = False
             st.rerun()
 
         # PRICING SUMMARY (Phase 3) - Show all products with notes or warnings
@@ -8321,29 +8236,18 @@ with tab3:
                           help="Date when costs were submitted/verified")
 
     # ============================================================
-    # CONFIRM ORDER
+    # SAVE & FINALIZE ORDER
     # ============================================================
     st.divider()
+    st.markdown("### Save & Finalize Order")
+    st.caption(
+        "One click saves this order to 'Saved Orders' in the sidebar and marks it as finalized. "
+        "Next, open **Tab 4: Execution & Accounting** to generate the Invoice & Purchase Order. "
+        "You can keep editing afterwards and save again (tick Overwrite to update the same order)."
+    )
 
-    if not st.session_state.order_confirmed:
-        st.markdown("### Ready to finalize your order?")
-        st.caption("Review the order summary above and client information, then confirm to proceed to Tab 3.")
-
-        if st.button("Confirm Order", type="primary", use_container_width=True):
-            st.session_state.order_confirmed = True
-            st.rerun()
-    else:
-        st.success("Order complete! Your order summary is ready.")
-        st.info("Go to **Tab 4: Execution & Accounting** to generate Invoice & Purchase Order for this order.")
-
-        # Optional: Add button to go back and edit
-        if st.button("Edit Order", type="secondary"):
-            st.session_state.order_confirmed = False
-            st.rerun()
-
-    # Save Your Work section at bottom of Tab 3
-    st.divider()
-    st.markdown("### Save Your Work")
+    if st.session_state.order_confirmed:
+        st.success("This order is finalized. Go to **Tab 4: Execution & Accounting** to generate the Invoice & Purchase Order.")
 
     # Show unsaved changes indicator and save status
     if has_unsaved_order_changes():
@@ -8378,62 +8282,21 @@ with tab3:
             help="When checked, saving updates the existing order of the same name in place. Leave unchecked to keep separate versions."
         )
 
-        if st.button("Save Order", type="primary", use_container_width=True, key="save_order_btn_bottom"):
-            if not order_name or not order_name.strip():
-                st.error("Please enter an order name")
+        if st.button("Save & Finalize Order", type="primary", use_container_width=True, key="save_order_btn_bottom"):
+            success, message, result = save_current_order(
+                st.session_state, order_name, created_by, overwrite=overwrite_order, finalize=True
+            )
+
+            if success:
+                update_last_save_time('order')
+                clear_saved_data_cache()  # Clear cache to show new order
+                st.success(f"{message} - Order finalized. You can find it in the sidebar under 'Saved Orders'")
+                time.sleep(1.5)
+                st.rerun()
             else:
-                # Prepare order data
-                order_data = {
-                    'order_items': st.session_state.order_items,
-                    'order_shipping': st.session_state.order_shipping,
-                    'partner_shipping': st.session_state.partner_shipping,
-                    'sales_tax': st.session_state.sales_tax,
-                    'kitting_pbp_cost': st.session_state.kitting_pbp_cost,
-                    'kitting_client_price': st.session_state.kitting_client_price,
-                    'order_discount_type': st.session_state.order_discount_type,
-                    'order_discount_preset': st.session_state.order_discount_preset,
-                    'order_discount_custom_desc': st.session_state.order_discount_custom_desc,
-                    'order_discount_custom_value': st.session_state.order_discount_custom_value,
-                    'order_use_marketing_rounding': st.session_state.order_use_marketing_rounding,
-                    'apply_cc_fee': st.session_state.apply_cc_fee,
-                    'cc_fee_percent': st.session_state.cc_fee_percent,
-                    'client_info': st.session_state.client_info,
-                    'order_notes': st.session_state.order_notes,
-                    'order_confirmed': st.session_state.order_confirmed
-                }
-
-                # Prepare photos for upload to Drive
-                photos_for_upload = {}
-                for prod_name, photos in st.session_state.get('product_photos', {}).items():
-                    if photos:
-                        photo_list = []
-                        for photo in photos:
-                            photo.seek(0)
-                            photo_list.append({
-                                'bytes': photo.read(),
-                                'filename': photo.name
-                            })
-                        photos_for_upload[prod_name] = photo_list
-
-                success, message, result = save_order(
-                    name=order_name.strip(),
-                    created_by=created_by.strip() if created_by else "",
-                    order_data=order_data,
-                    dataset=st.session_state.selected_dataset,
-                    photos_by_product=photos_for_upload if photos_for_upload else None,
-                    overwrite=overwrite_order
-                )
-
-                if success:
-                    update_last_save_time('order')
-                    clear_saved_data_cache()  # Clear cache to show new order
-                    st.success(f"{message} - You can find it in the sidebar under 'Saved Orders'")
-                    time.sleep(1.5)
-                    st.rerun()
-                else:
-                    # Name conflict: guide the user to overwrite or rename
-                    # (the Overwrite checkbox above is the reliable path).
-                    st.error(message)
+                # Missing name or name conflict: guide the user to overwrite or rename
+                # (the Overwrite checkbox above is the reliable path).
+                st.error(message)
     else:
         st.info("Add products to your order to enable saving")
 
