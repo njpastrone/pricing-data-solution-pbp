@@ -710,6 +710,25 @@ def test_pending_order_emails_only_when_it_reaches_form_responses():
     assert len(FakeSMTP.sent) == 1
 
 
+def test_stale_pending_row_sends_no_second_email():
+    """Retry read the row as pending, then another sync copied and emailed it first: retry sends nothing more."""
+    from src import client_form
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    response.fail['update'] = [Exception("503 Service Unavailable")]
+    _submit_with_email(client)
+    assert FakeSMTP.sent == []
+
+    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('src.client_form.smtplib.SMTP', FakeSMTP), \
+         patch('src.client_form.connect_to_sheets', return_value=client):
+        stale_rows = client_form._read_backup_rows(drafts)
+        sync_submission('PROP_1', 'sess1')
+        assert len(FakeSMTP.sent) == 1
+        with patch('src.client_form._read_backup_rows', return_value=stale_rows):
+            retry_pending_syncs()
+    assert len(FakeSMTP.sent) == 1
+    assert len(_response_rows(response)) == 1
+
+
 def test_email_failure_never_fails_the_order():
     """Mail server down: client still sees 'Order received', the order is synced, and staff are warned."""
     from src.client_form import failed_notifications
