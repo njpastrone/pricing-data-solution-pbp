@@ -654,28 +654,37 @@ def _render_client_form_page(proposal_id, session_id):
 
     saved_shipping = saved_data.get('shipping_info', {})
 
-    # Drop-shipping question first (address depends on this choice)
+    # Drop-shipping question first (address depends on this choice).
+    # Saved as "Yes", "No", or "Other: <client's own words>".
+    drop_ship_options = ["Shipped to one address", "Yes, dropshipped to multiple addresses", "Other"]
+    saved_drop = saved_shipping.get('drop_shipping', '')
+    if saved_drop.lower() == 'yes':
+        drop_index = 1
+    elif saved_drop.lower() in ('', 'no'):
+        drop_index = 0
+    else:
+        drop_index = 2
     drop_shipping = st.selectbox(
         "Will this order be dropshipped or shipped to an individual address? *",
-        options=["Shipped to one address", "Yes, dropshipped to multiple addresses"],
-        index=1 if saved_shipping.get('drop_shipping', '').lower() == 'yes' else 0,
+        options=drop_ship_options,
+        index=drop_index,
         key="cf_drop_shipping"
     )
 
-    drop_instructions = ""
-    uploaded_file = None
-    if drop_shipping == "Yes, dropshipped to multiple addresses":
-        st.caption("Please upload a spreadsheet of addresses and indicate what you want dropshipped to each location.")
-
-        uploaded_file = st.file_uploader(
-            "Upload Dropshipping Address File (.xlsx, .csv)",
-            type=["xlsx", "csv"],
-            key="cf_file_upload"
+    drop_shipping_other = ""
+    if drop_shipping == "Other":
+        drop_shipping_other = st.text_input(
+            "Please describe how this order should be shipped *",
+            value=saved_drop[len('Other:'):].strip() if saved_drop.lower().startswith('other:') else (saved_drop if drop_index == 2 else ''),
+            key="cf_drop_shipping_other"
         )
 
-        # Show previously uploaded file if exists
-        if not uploaded_file and draft and draft.get('file_name'):
-            st.info(f"Previously uploaded: {draft['file_name']}")
+    drop_instructions = ""
+    if drop_shipping == "Yes, dropshipped to multiple addresses":
+        st.info(
+            "You do not need a recipient spreadsheet right now. We will need a spreadsheet of "
+            "recipient addresses before your order ships; your PBP representative will follow up."
+        )
 
         drop_instructions = st.text_area(
             "Additional Dropshipping Instructions",
@@ -739,6 +748,22 @@ def _render_client_form_page(proposal_id, session_id):
         key="cf_payment_method"
     )
 
+    # Where invoices go: some clients use an email address, others an accounting platform
+    accounting_type_options = ["Email", "Accounting platform"]
+    saved_accounting_type = saved_payment.get('accounting_contact_type', 'Email')
+    accounting_type = st.radio(
+        "Where should we send invoices? *",
+        options=accounting_type_options,
+        index=accounting_type_options.index(saved_accounting_type) if saved_accounting_type in accounting_type_options else 0,
+        horizontal=True,
+        key="cf_accounting_type"
+    )
+    accounting_contact = st.text_input(
+        "Accounting Email Address *" if accounting_type == "Email" else "Accounting Platform (name and any account details) *",
+        value=saved_payment.get('accounting_contact', ''),
+        key="cf_accounting_contact"
+    )
+
     st.divider()
 
     # --- Section 5: Additional Notes ---
@@ -767,7 +792,7 @@ def _render_client_form_page(proposal_id, session_id):
             'shipping_info': {
                 'shipping_address': shipping_address,
                 'billing_address': billing_address,
-                'drop_shipping': 'Yes' if drop_shipping.startswith('Yes') else 'No',
+                'drop_shipping': f"Other: {drop_shipping_other.strip()}" if drop_shipping == 'Other' else ('Yes' if drop_shipping.startswith('Yes') else 'No'),
                 'drop_shipping_instructions': drop_instructions,
                 'in_hands_date': str(in_hands_date) if isinstance(in_hands_date, date) else '',
             },
@@ -776,6 +801,8 @@ def _render_client_form_page(proposal_id, session_id):
                 'impact_card_selection': '',
                 'payment_preference': '',  # Payment terms are set by PBP staff, not the client
                 'payment_method': payment_method,
+                'accounting_contact_type': accounting_type,
+                'accounting_contact': accounting_contact.strip(),
             },
             'notes': special_requests,
         }
@@ -786,9 +813,8 @@ def _render_client_form_page(proposal_id, session_id):
     with col_save:
         if st.button("Save Progress", use_container_width=True, key="cf_save_btn"):
             form_data = _collect_form_data()
-            file_bytes = uploaded_file.read() if uploaded_file else (draft.get('file_data') if draft else None)
-            fname = uploaded_file.name if uploaded_file else (draft.get('file_name') if draft else None)
-            success, msg = save_draft(proposal_id, session_id, form_data, file_bytes, fname)
+            # No file upload on the form; a file saved with an older draft is kept as it is
+            success, msg = save_draft(proposal_id, session_id, form_data)
             if success:
                 st.success("Progress saved! You can close this page and return later.")
             else:
@@ -812,13 +838,17 @@ def _render_client_form_page(proposal_id, session_id):
                 missing.append("Shipping Address")
             if not isinstance(in_hands_date, date):
                 missing.append("In-Hands Date")
+            if drop_shipping == "Other" and not drop_shipping_other.strip():
+                missing.append("Shipping description (Other)")
+            if not accounting_contact.strip():
+                missing.append("Accounting Email or Platform")
+            elif accounting_type == "Email" and '@' not in accounting_contact:
+                missing.append("a valid Accounting Email Address")
 
             if missing:
                 st.error(f"Please fill in required fields: {', '.join(missing)}")
             else:
-                file_bytes = uploaded_file.read() if uploaded_file else (draft.get('file_data') if draft else None)
-                fname = uploaded_file.name if uploaded_file else (draft.get('file_name') if draft else None)
-                success, msg = submit_form(proposal_id, session_id, form_data, file_bytes, fname)
+                success, msg = submit_form(proposal_id, session_id, form_data)
                 if success:
                     st.session_state.cf_submitted = True
                     st.rerun()

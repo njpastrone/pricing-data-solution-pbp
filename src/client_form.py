@@ -402,6 +402,10 @@ def _build_response_row(headers, form_data, file_name):
     client_info = form_data.get('client_info', {})
     shipping = form_data.get('shipping_info', {})
     payment = form_data.get('payment_info', {})
+    # Saved as one cell, e.g. "Email: ap@acme.com" or "Accounting platform: BillPay.com"
+    accounting = payment.get('accounting_contact', '')
+    if accounting:
+        accounting = f"{payment.get('accounting_contact_type', 'Email')}: {accounting}"
     fields = [
         ('timestamp', form_data.get('submitted_at', '')),
         ('client_type', client_info.get('client_type', '')),
@@ -418,6 +422,7 @@ def _build_response_row(headers, form_data, file_name):
         ('impact_card_selection', payment.get('impact_card_selection', '')),
         ('payment_preference', payment.get('payment_preference', '')),
         ('payment_method', payment.get('payment_method', '')),
+        ('invoice_platform', accounting),
         ('special_requests', form_data.get('notes', '')),
     ]
     for i, product in enumerate(form_data.get('products', []), start=1):
