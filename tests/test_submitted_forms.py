@@ -87,6 +87,19 @@ def test_blank_sheet_rows_are_not_listed():
     assert [s['sheet_row'] for s in submissions] == [3]
 
 
+def test_submitted_backups_missing_from_form_responses_are_not_listed_as_pending():
+    # Backups saved before submitted_at existed, or whose sheet row was edited, never match a row
+    def backup(status, submitted_at=''):
+        return {'proposal_id': 'P', 'session_id': status, 'file_name': '', 'status': status,
+                'form_data': {'submitted_at': submitted_at, 'client_info': {'company_name': 'Acme Corp'}}}
+    received = [backup('submitted'), backup('submitted'), backup('pending_sync', '10/16/2026 10:00:00')]
+    records = [dict({h: '' for h in LIVE_HEADERS}, **{'Timestamp': '10/15/2026 08:30:00', 'Company Name *': 'Acme Corp'})]
+
+    submissions = build_submissions_list(records, received)
+
+    assert [(s['pending'], s['session_id']) for s in submissions] == [(True, 'pending_sync'), (False, '')]
+
+
 def test_search_finds_company_contact_email_date_and_product():
     acme = _two_synced_and_one_stuck()[1]
     for text in ['acme', 'JO SMITH', 'jo@acme.com', '10/16/2026', 'hot honey', '']:
@@ -128,6 +141,7 @@ def test_details_show_every_answer():
 if __name__ == "__main__":
     test_every_submitted_form_is_listed_newest_first()
     test_blank_sheet_rows_are_not_listed()
+    test_submitted_backups_missing_from_form_responses_are_not_listed_as_pending()
     test_search_finds_company_contact_email_date_and_product()
     test_details_show_every_answer()
     print("All tests passed!")

@@ -21,6 +21,7 @@ from src.forms_config import (
     MAX_PRODUCT_LINES,
     find_response_column,
 )
+from src.client_form import STATUS_PENDING
 
 
 def generate_prefilled_form_url(client_info, products):
@@ -627,8 +628,10 @@ def build_submissions_list(response_records, received_orders):
             'session_id': backup.get('session_id', ''),
         })
 
-    # Whatever backups are left have not reached Form Responses yet
+    # Pending backups left over have not reached Form Responses yet
     for order in backups.values():
+        if order['status'] != STATUS_PENDING:
+            continue
         form = order['form_data']
         data = {
             'client_info': form.get('client_info', {}),

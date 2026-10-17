@@ -10601,11 +10601,17 @@ with tab6:
     load_label = "Refresh" if 'submitted_forms' in st.session_state else "Load Submitted Order Forms"
     if st.button(load_label, key="load_submitted_forms"):
         with st.spinner("Loading submitted order forms..."):
-            responses = load_form_responses(connect_to_sheets())
-            st.session_state.submitted_forms = build_submissions_list(responses.to_dict('records'), load_received_orders())
-            st.session_state.submitted_forms_loads = st.session_state.get('submitted_forms_loads', 0) + 1
-            st.session_state.pop('submitted_form_file', None)
-        st.rerun()
+            try:
+                responses = load_form_responses(connect_to_sheets())
+            except Exception as e:
+                responses = None
+                st.error(f"Could not connect to Google Sheets: {e}")
+            if responses is not None:
+                st.session_state.submitted_forms = build_submissions_list(responses.to_dict('records'), load_received_orders())
+                st.session_state.submitted_forms_loads = st.session_state.get('submitted_forms_loads', 0) + 1
+                st.session_state.pop('submitted_form_file', None)
+        if responses is not None:
+            st.rerun()
 
     import_message = st.session_state.pop('submitted_form_import_message', None)
     if import_message:
@@ -10679,7 +10685,10 @@ with tab6:
                     if st.button(import_label, type="secondary" if submission['imported'] else "primary", key="import_submitted_form"):
                         products_added, products_skipped = import_form_response(submission['data'])
                         order_id = f"IMPORTED-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-                        marked = mark_response_imported(connect_to_sheets(), submission['sheet_row'], order_id)
+                        try:
+                            marked = mark_response_imported(connect_to_sheets(), submission['sheet_row'], order_id)
+                        except Exception:
+                            marked = False
                         if marked:
                             submission['imported'] = True
                             submission['data']['metadata']['order_id'] = order_id
