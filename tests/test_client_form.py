@@ -14,7 +14,7 @@ from src.client_form import (generate_session_token, load_proposal_for_client, _
                              submit_form, save_draft, sync_submission, retry_pending_syncs, DRAFTS_SHEET_NAME, BACKUP_RETRY_WAITS,
                              STATUS_PENDING, STATUS_SUBMITTED, _open_worksheet, _open_drafts_sheet)
 from src.forms_config import GOOGLE_FORM_CONFIG, find_response_column
-from src.forms_helper import parse_form_response, mark_response_imported
+from src.forms_helper import parse_form_response, mark_response_imported, form_response_to_order
 
 
 def test_generate_session_token_is_unique():
@@ -589,9 +589,11 @@ def test_accounting_contact_and_other_shipping_reach_form_responses():
     assert cell[accounting_header] == 'Accounting platform: BillPay.com'
     assert cell['Will this order be drop-shipped to individual recipients? *'] == 'Pick up at our warehouse'
 
-    parsed = parse_form_response(cell)
-    assert parsed['payment_info']['accounting_contact'] == 'Accounting platform: BillPay.com'
-    assert parsed['shipping_info']['drop_shipping'] == 'Pick up at our warehouse'
+    # Tab 3 import: the invoice answer has one home (bookkeeping note); "Other" shipping is kept as a team note
+    order = form_response_to_order(parse_form_response(cell))
+    assert order['order_notes']['internal_bookkeeping'] == 'Send invoice to: Accounting platform: BillPay.com'
+    assert "Shipping (client's answer): Pick up at our warehouse" in order['order_notes']['internal_pbp_team']
+    assert order['client_info']['shipping_type'] == 'One Location'
 
 
 if __name__ == "__main__":

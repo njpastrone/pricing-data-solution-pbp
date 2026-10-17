@@ -46,11 +46,6 @@ SYNC_RETRY_WAITS = [10, 30, 60, 120]  # seconds between attempts
 # An order still waiting to be copied after this long is flagged to staff.
 STUCK_AFTER_MINUTES = 10
 
-# Blank recipient spreadsheet clients can download for dropshipped orders
-DROPSHIP_TEMPLATE_CSV = (
-    "Recipient Name,Company,Street Address,City,State,ZIP,Country,Phone,Email,Item,Quantity,Notes\n"
-)
-
 # Draft statuses in the backup tab (column H)
 STATUS_DRAFT = 'draft'
 STATUS_PENDING = 'pending_sync'   # order received, not yet in Form Responses
@@ -427,7 +422,7 @@ def _build_response_row(headers, form_data, file_name):
         ('impact_card_selection', payment.get('impact_card_selection', '')),
         ('payment_preference', payment.get('payment_preference', '')),
         ('payment_method', payment.get('payment_method', '')),
-        ('accounting_contact', accounting),
+        ('invoice_platform', accounting),
         ('special_requests', form_data.get('notes', '')),
     ]
     for i, product in enumerate(form_data.get('products', []), start=1):
