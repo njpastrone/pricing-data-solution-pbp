@@ -77,6 +77,7 @@ from src.template_loader import (
     TEMPLATE_CONFIG
 )
 from src.forms_config import MAX_PRODUCT_LINES
+from src.forms_helper import PAYMENT_METHODS
 from src.client_form import (
     load_proposal_for_client,
     load_draft,
@@ -333,6 +334,158 @@ def clear_saved_data_cache():
     # Also clear the cache directly
     cached_load_all_proposals.clear()
     cached_load_all_orders.clear()
+
+
+# Per-product widget keys in Tab 3 (each ends in the product's row number)
+ORDER_ROW_WIDGET_PREFIXES = ('prod_', 'addon_', 'custom_made_in_', 'custom_ships_from_',
+                             'custom_tariff_', 'manual_override_tab3_')
+
+
+def clear_row_widget_state(prefixes):
+    """Remove stale per-row widget keys before new rows are loaded.
+
+    Streamlit keeps a widget's state keyed by name; when a new proposal or
+    order is loaded into the same row numbers, leftover widget state from the
+    previous rows would shadow the loaded values (e.g. wrongly showing
+    'Manual override' checked). Clearing them lets each widget re-initialize
+    from the loaded row.
+    """
+    for widget_key in list(st.session_state.keys()):
+        if widget_key.startswith(prefixes) and widget_key.rsplit('_', 1)[-1].isdigit():
+            del st.session_state[widget_key]
+
+
+def synced_widget(widget, label, store, field, key, default='', options=None, **kwargs):
+    """
+    Draw an input that always shows store[field] and saves edits back into it.
+
+    Why: Streamlit remembers a keyed widget's own value and ignores value= after
+    the first run, so after a form import or an order load the widget kept
+    showing (and writing back) the old value. That is why Tab 3 data often did
+    not carry over to Tab 4. Here the widget is reset from the store on every
+    run, and an edit is saved by on_change before the next run starts, so Tab 3
+    and Tab 4 always show the same, current value.
+
+    Args:
+        widget: st.text_input, st.text_area, st.checkbox, st.selectbox or st.date_input
+        store (dict): Where the value lives (e.g. st.session_state.client_info)
+        field (str): Key inside store
+        key (str): Unique widget key
+        default: Value used when store has none
+        options (list): Choices, for st.selectbox only (an unknown stored value is added)
+    """
+    value = store.get(field)
+    if value is None or value == '':
+        value = default
+    if options is not None:
+        options = list(options)
+        if value not in options:
+            if value:
+                options.append(value)
+            else:
+                value = options[0]
+        kwargs['options'] = options
+    store[field] = value
+    st.session_state[key] = value
+
+    def save_edit():
+        store[field] = st.session_state[key]
+
+    return widget(label, key=key, on_change=save_edit, **kwargs)
+
+
+CONTACT_ROLES = ['Primary Contact', 'Billing Contact', 'Technical Contact', 'Shipping Contact', 'Other']
+
+
+def contacts_editor(tab):
+    """Edit the order's contacts (shared by Tab 3 and Tab 4, so both show the same contacts)."""
+    client_info = st.session_state.client_info
+    if not client_info.get('contacts'):
+        client_info['contacts'] = [{'name': '', 'email': '', 'phone': '', 'role': 'Primary Contact'}]
+    contacts = client_info['contacts']
+
+    if st.button("Add Another Contact", key=f"{tab}_add_contact"):
+        contacts.append({'name': '', 'email': '', 'phone': '', 'role': ''})
+        st.rerun()
+
+    for idx, contact in enumerate(contacts):
+        if len(contacts) > 1:
+            col_header, col_remove = st.columns([3, 1])
+            with col_header:
+                st.markdown(f"**Contact {idx + 1}**")
+            with col_remove:
+                if st.button("Remove", key=f"{tab}_remove_contact_{idx}"):
+                    contacts.pop(idx)
+                    st.rerun()
+        else:
+            st.markdown(f"**Contact {idx + 1}**")
+
+        col_contact1, col_contact2 = st.columns(2)
+        with col_contact1:
+            synced_widget(st.text_input, "Name", contact, 'name', key=f"{tab}_contact_name_{idx}",
+                          placeholder="e.g., John Smith")
+            synced_widget(st.text_input, "Email", contact, 'email', key=f"{tab}_contact_email_{idx}",
+                          placeholder="e.g., john@company.com")
+        with col_contact2:
+            synced_widget(st.text_input, "Phone", contact, 'phone', key=f"{tab}_contact_phone_{idx}",
+                          placeholder="e.g., (555) 123-4567")
+            synced_widget(st.selectbox, "Role", contact, 'role', key=f"{tab}_contact_role_{idx}",
+                          options=CONTACT_ROLES)
+
+
+PAYMENT_TERMS_OPTIONS = ['Net 30', 'Net 15', 'Net 60', 'Due on Receipt', '50% Deposit', 'Custom']
+
+
+def payment_terms_editor(tab):
+    """Pick standard payment terms or type custom ones (shared by Tab 3 and Tab 4)."""
+    client_info = st.session_state.client_info
+    current = client_info.get('payment_timeline') or 'Net 30'
+    picker_key = f"{tab}_payment_terms"
+    st.session_state[picker_key] = current if current in PAYMENT_TERMS_OPTIONS else 'Custom'
+
+    def save_pick():
+        client_info['payment_timeline'] = st.session_state[picker_key]
+
+    st.selectbox("Payment Terms", PAYMENT_TERMS_OPTIONS, key=picker_key, on_change=save_pick)
+
+    if st.session_state[picker_key] == 'Custom':
+        text_key = f"{tab}_custom_payment_terms"
+        st.session_state[text_key] = '' if current == 'Custom' else current
+
+        def save_custom_terms():
+            client_info['payment_timeline'] = st.session_state[text_key] or 'Custom'
+
+        st.text_input("Custom Payment Terms", key=text_key, on_change=save_custom_terms,
+                      placeholder="e.g., Net 45, 2/10 Net 30, etc.")
+
+
+ORDER_NOTE_FIELDS = [
+    ('internal_pbp_team', "Internal Notes (For PBP Team)",
+     "Rush order - coordinate with warehouse. Contact Jim for priority handling.",
+     "Team coordination, workflow notes, internal reminders"),
+    ('internal_bookkeeping', "Internal Notes (For Bookkeeping)",
+     "Net 30 terms, send invoice after PO approval. Track against Q1 budget.",
+     "Accounting, billing, payment tracking"),
+    ('external_partners', "External Notes (For Partners/POs)",
+     "Kitting required: gift box with ribbon. Include branded tissue paper. Ship to warehouse by 3/15.",
+     "Instructions for partners, PO details, shipping requirements"),
+    ('external_clients', "External Notes (For Clients/Invoices)",
+     "Dropship directly to client. Include care instructions card with each unit.",
+     "Client-facing information, special requests, delivery instructions"),
+]
+
+
+def order_notes_editor(tab):
+    """The 4 order notes in a 2x2 grid (shared by Tab 3 and Tab 4, so edits in either tab carry over)."""
+    rows = [ORDER_NOTE_FIELDS[:2], ORDER_NOTE_FIELDS[2:]]
+    for row in rows:
+        for column, (field, label, placeholder, help_text) in zip(st.columns(2), row):
+            with column:
+                note = synced_widget(st.text_area, label, st.session_state.order_notes, field,
+                                     key=f"{tab}_note_{field}", placeholder=placeholder,
+                                     height=120, help=help_text)
+                if note:
+                    st.caption(f"{len(note.split())} words")
 
 def _render_client_form_page(proposal_id, session_id):
     """
@@ -867,6 +1020,7 @@ if 'client_info' not in st.session_state:
         'shipping_type': 'One Location',  # One Location or Drop Shipping
         'ship_method': 'Ground',  # Ground, Air, Freight, Other
         'shipping_address': '',
+        'drop_shipping_instructions': '',  # From the client order form; printed on the invoice/PO
         'payment_timeline': 'Net 30',  # MODIFIED: Changed to dropdown default
         'payment_preference': 'Check',  # MODIFIED: Changed to dropdown default
         'client_in_hands_date': None,  # Target delivery date for client
@@ -917,10 +1071,6 @@ elif len(st.session_state.client_info['contacts']) == 0:
         'phone': '',
         'role': 'Primary Contact'
     })
-
-# Initialize custom payment terms
-if 'custom_payment_terms' not in st.session_state:
-    st.session_state.custom_payment_terms = ''
 
 # Initialize order notes (4 categories organized by audience)
 if 'order_notes' not in st.session_state:
@@ -1019,14 +1169,6 @@ Send us your own card""",
 Check
 Credit Card (3% processing fee applies)"""
     }
-
-# Legacy compatibility - maintain sync between old and new dropshipping fields
-if 'dropshipping_notes' not in st.session_state:
-    st.session_state.dropshipping_notes = st.session_state.form_customizations['dropshipping_instructions']
-else:
-    # If dropshipping_notes exists but differs from form_customizations, sync them
-    if st.session_state.dropshipping_notes != st.session_state.form_customizations['dropshipping_instructions']:
-        st.session_state.dropshipping_notes = st.session_state.form_customizations['dropshipping_instructions']
 
 if 'using_proposal_data' not in st.session_state:
     st.session_state.using_proposal_data = False
@@ -1193,20 +1335,6 @@ with st.sidebar:
         if len(saved_proposals) == 0:
             st.info("No saved proposals yet")
         else:
-            def clear_proposal_row_widget_state():
-                """Remove stale per-row widget keys before loading a proposal.
-
-                Streamlit keeps a widget's state keyed by name; when a new
-                proposal is loaded into the same indexes, leftover
-                override_/markup_/price_ widget state from the previously shown
-                proposal would shadow the loaded values (e.g. wrongly showing
-                'Manual override' checked). Clearing them lets each widget
-                re-initialize from the loaded product.
-                """
-                prefixes = ('price_', 'markup_', 'override_', 'updating_from_markup_')
-                for widget_key in list(st.session_state.keys()):
-                    if widget_key.startswith(prefixes) and widget_key.rsplit('_', 1)[-1].isdigit():
-                        del st.session_state[widget_key]
 
             # Add manage mode checkbox
             manage_proposals = st.checkbox("Manage proposals (delete)", key="manage_proposals_mode")
@@ -1228,7 +1356,7 @@ with st.sidebar:
                                 # Clear stale per-row widget state from the
                                 # previously shown proposal so it doesn't shadow
                                 # the loaded values (e.g. Override checkbox).
-                                clear_proposal_row_widget_state()
+                                clear_row_widget_state(('price_', 'markup_', 'override_', 'updating_from_markup_'))
 
                                 st.session_state.proposal_products = proposal_data.get('proposal_products', [])
                                 st.session_state.proposal_marketing_rounding = proposal_data.get('proposal_marketing_rounding', False)
@@ -1265,7 +1393,7 @@ with st.sidebar:
                                 # Clear stale per-row widget state from the
                                 # previously shown proposal so it doesn't shadow
                                 # the loaded values (e.g. Override checkbox).
-                                clear_proposal_row_widget_state()
+                                clear_row_widget_state(('price_', 'markup_', 'override_', 'updating_from_markup_'))
 
                                 st.session_state.proposal_products = proposal_data.get('proposal_products', [])
                                 st.session_state.proposal_marketing_rounding = proposal_data.get('proposal_marketing_rounding', False)
@@ -1343,6 +1471,7 @@ with st.sidebar:
                                     st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
 
                                 st.session_state.order_items = order_data.get('order_items', [])
+                                clear_row_widget_state(ORDER_ROW_WIDGET_PREFIXES)  # rows must show the loaded values
 
                                 # Migration: Add kitting fields to old orders that don't have them
                                 for item in st.session_state.order_items:
@@ -1407,6 +1536,7 @@ with st.sidebar:
                                     st.warning(f"Dataset mismatch: {dataset} → {st.session_state.selected_dataset}")
 
                                 st.session_state.order_items = order_data.get('order_items', [])
+                                clear_row_widget_state(ORDER_ROW_WIDGET_PREFIXES)  # rows must show the loaded values
 
                                 # Migration: Add kitting fields to old orders that don't have them
                                 for item in st.session_state.order_items:
@@ -1525,6 +1655,7 @@ with st.sidebar:
                     'shipping_type': 'One Location',
                     'ship_method': 'Ground',
                     'shipping_address': '',
+                    'drop_shipping_instructions': '',  # From the client order form; printed on the invoice/PO
                     'payment_timeline': 'Net 30',
                     'payment_preference': 'Check',
                     'client_in_hands_date': None,
@@ -4381,9 +4512,6 @@ with tab2:
         # Update session state if value changed
         if new_value != current_value:
             st.session_state.form_customizations[selected_field] = new_value
-            # Update legacy dropshipping_notes for compatibility
-            if selected_field == 'dropshipping_instructions':
-                st.session_state.dropshipping_notes = new_value
 
     # Button to confirm info is ready (visual feedback)
     st.divider()
@@ -5136,6 +5264,7 @@ with tab3:
 
                                 # Load order data into session state
                                 st.session_state.order_items = order_data.get('order_items', [])
+                                clear_row_widget_state(ORDER_ROW_WIDGET_PREFIXES)  # rows must show the loaded values
 
                                 # Migration: Add kitting fields to old orders that don't have them
                                 for item in st.session_state.order_items:
@@ -5307,7 +5436,7 @@ with tab3:
 
     # Import helpers
     from src.data_loader import connect_to_sheets
-    from src.forms_helper import load_form_responses, parse_form_response, mark_response_imported, format_product_summary
+    from src.forms_helper import load_form_responses, parse_form_response, mark_response_imported, format_product_summary, form_response_to_order, html_form_to_order, add_order_notes
     from src.forms_config import RESPONSE_COLUMNS
 
     if st.button("Load All Form Responses", key="load_google_form_responses"):
@@ -5456,45 +5585,12 @@ with tab3:
                         button_type = "primary"
 
                     if st.button(button_label, key=f"import_google_response_{idx}", type=button_type):
-                        # Import client info
-                        client_type = response_data['client_info'].get('client_type', 'New')
-                        drop_shipping = response_data['shipping_info'].get('drop_shipping', 'No')
-
-                        # Build contacts array from form data
-                        contacts = [{
-                            'name': response_data['client_info'].get('contact_name', ''),
-                            'email': response_data['client_info'].get('contact_email', ''),
-                            'phone': response_data['client_info'].get('contact_phone', ''),
-                            'role': 'Primary Contact'
-                        }]
-
-                        # Parse in-hands date string to date object (Google Forms returns YYYY-MM-DD string)
-                        in_hands_date_str = response_data['shipping_info'].get('in_hands_date', None)
-                        if in_hands_date_str:
-                            try:
-                                in_hands_date = datetime.strptime(in_hands_date_str, '%Y-%m-%d').date()
-                            except (ValueError, AttributeError):
-                                in_hands_date = None
-                        else:
-                            in_hands_date = None
-
-                        st.session_state.client_info = {
-                            'is_new_client': client_type == 'New',
-                            'company_name': response_data['client_info'].get('company_name', ''),
-                            'contacts': contacts,
-                            'client_po': '',
-                            'billing_address': response_data['shipping_info'].get('billing_address', ''),
-                            'shipping_type': 'Drop Shipping' if drop_shipping == 'Yes' else 'One Location',
-                            'ship_method': 'Ground',
-                            'shipping_address': response_data['shipping_info'].get('shipping_address', ''),
-                            'payment_timeline': response_data['payment_info'].get('payment_preference') or 'Net 30',
-                            'payment_preference': response_data['payment_info'].get('payment_method', 'Check'),
-                            'client_in_hands_date': in_hands_date,
-                            'order_submitted_by': '',
-                            'order_submitted_date': datetime.now().date(),
-                            'cost_submitted_by': '',
-                            'cost_submitted_date': None
-                        }
+                        # One shared mapping decides where every form answer lands in the order
+                        order_from_form = form_response_to_order(response_data)
+                        st.session_state.client_info = order_from_form['client_info']
+                        st.session_state.order_notes = add_order_notes(st.session_state.order_notes, order_from_form['order_notes'])
+                        # Per-product widgets must start from the imported values, not old ones
+                        clear_row_widget_state(ORDER_ROW_WIDGET_PREFIXES)
 
                         # Import products (using new pricing logic from Phase 1)
                         from src.pricing_engine import get_unit_price_new_system, calculate_pbp_msrp
@@ -5504,7 +5600,7 @@ with tab3:
                         products_skipped = []
                         max_pbp_shipping = 0.0
 
-                        for product in response_data['products']:
+                        for product in order_from_form['products']:
                             product_name = product['name']
 
                             # Match product name to catalog (exact match, case-insensitive)
@@ -5583,8 +5679,9 @@ with tab3:
                                     'pricing_notes': pricing_notes,
                                     'validation_warning': validation_warning,
                                     'manual_override': False,
+                                    # Client's customization notes from the form
                                     'include_customization': False,
-                                    'customization_description': product_data.get('Customization Info', ''),
+                                    'customization_description': product['customization_description'],
                                     'customization_setup_fee': float(clean_price(get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')) or 0.0),
                                     'customization_per_unit': float(clean_price(get_column_value(product_data, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')) or 0.0),
                                     'customization_setup_total': 0.0,
@@ -5715,41 +5812,10 @@ with tab3:
         # Import button
             st.divider()
             if st.button("Import Client Information", type="primary", use_container_width=True, key="import_client_data_btn_top"):
-            # Apply to session state
-                st.session_state.client_info['is_new_client'] = (parsed_data['client_type'] == 'New')
-                st.session_state.client_info['company_name'] = parsed_data['company_name']
-                st.session_state.client_info['contact_name'] = parsed_data['contact_name']
-                st.session_state.client_info['contact_email'] = parsed_data['contact_email']
-                st.session_state.client_info['shipping_address'] = parsed_data['shipping_address']
-                st.session_state.client_info['billing_address'] = parsed_data['billing_address']
-    
-            # Set shipping type based on drop shipping answer
-            # Default to 'One Location' (show shipping address) unless clearly "Yes" for drop shipping
-                if parsed_data['drop_shipping'] == 'Yes':
-                    st.session_state.client_info['shipping_type'] = 'Drop Shipping'
-                else:
-                # For "No", empty, or any unclear answer, default to One Location
-                    st.session_state.client_info['shipping_type'] = 'One Location'
-    
-            # Parse and apply date
-                if parsed_data['client_in_hands_date']:
-                    try:
-                        from datetime import datetime
-                    # Try to parse MM/DD/YYYY format
-                        date_obj = datetime.strptime(parsed_data['client_in_hands_date'], '%m/%d/%Y')
-                        st.session_state.client_info['client_in_hands_date'] = date_obj.date()
-                    except:
-                    # If parsing fails, leave empty and let user enter manually
-                        st.session_state.client_info['client_in_hands_date'] = None
-    
-            # Map payment preference to our dropdown values
-                payment_map = {
-                    'ACH': 'ACH',
-                    'Check': 'Check',
-                    'Credit Card': 'Credit Card (3% processing fee applies)'
-                }
-                if parsed_data['payment_preference'] in payment_map:
-                    st.session_state.client_info['payment_preference'] = payment_map[parsed_data['payment_preference']]
+            # Same mapping as the form response import (contacts, billing fallback, drop-ship notes)
+                order_from_form = html_form_to_order(parsed_data)
+                st.session_state.client_info = order_from_form['client_info']
+                st.session_state.order_notes = add_order_notes(st.session_state.order_notes, order_from_form['order_notes'])
     
                 st.success("Client information imported successfully! Review and edit the fields below as needed.")
                 st.rerun()
@@ -5894,7 +5960,7 @@ with tab3:
                                     'validation_warning': validation_warning,
                                     'manual_override': False,
                                     'include_customization': False,
-                                    'customization_description': product_data.get('Customization Info', ''),
+                                    'customization_description': '',
                                     'customization_setup_fee': float(clean_price(get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')) or 0.0),
                                     'customization_per_unit': float(clean_price(get_column_value(product_data, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')) or 0.0),
                                     'customization_setup_total': 0.0,
@@ -6257,7 +6323,7 @@ with tab3:
                     'product_ref': product_data.get('Partner Product SKU/REF', 'N/A'),
                     'country_of_origin_made_in': product_data.get('Country of Origin (Made In)', 'N/A'),
                     'country_of_origin_ships_from': product_data.get('Country of Origin (Ships From)', 'N/A'),
-                    'customization_description': product_data.get('Customization Info', ''),
+                    'customization_description': '',
                     'product_subtotal': base_price * 1,
                     'customization_setup_total': 0.0,
                     'customization_unit_total': 0.0,
@@ -6778,17 +6844,15 @@ with tab3:
                 key=f"prod_custom_{idx}"
             )
 
-            if new_include_custom:
-                    # Customization description (editable)
-                    default_desc = item.get('customization_description', '') or product_data.get('Customization Info', '')
-                    new_custom_desc = st.text_input(
-                        "Customization Description",
-                        value=default_desc,
-                        placeholder="e.g., Logo engraving on lid, Custom label printing",
-                        key=f"prod_custom_desc_{idx}",
-                        help="Describe the customization — this will appear on invoices and POs"
-                    )
+            new_custom_desc = st.text_input(
+                "Customization Description",
+                value=item.get('customization_description', ''),
+                placeholder="e.g., Logo engraving on lid, Custom label printing",
+                key=f"prod_custom_desc_{idx}",
+                help="Describe the customization — this will appear on invoices and POs"
+            )
 
+            if new_include_custom:
                     col_setup, col_perunit = st.columns(2)
 
                     with col_setup:
@@ -7193,7 +7257,7 @@ with tab3:
                     'quantity': new_quantity,
                     'markup_percent': current_markup,
                     'include_customization': new_include_custom,
-                    'customization_description': new_custom_desc if new_include_custom else '',
+                    'customization_description': new_custom_desc,
                     'customization_setup_fee': new_setup_fee,
                     'customization_per_unit': new_perunit_cost,
                     'partner_customization_setup_fee': new_partner_setup_fee,
@@ -7721,67 +7785,7 @@ with tab3:
     st.subheader("Order Notes")
     st.caption("Organize notes by audience: Internal (stays within PBP) vs External (shared with partners/clients).")
 
-    # First row - 2 internal fields
-    notes_col1, notes_col2 = st.columns(2)
-
-    with notes_col1:
-        internal_team_value = st.session_state.order_notes.get('internal_pbp_team', '')
-        st.session_state.order_notes['internal_pbp_team'] = st.text_area(
-            "Internal Notes (For PBP Team)",
-            value=internal_team_value,
-            placeholder="Rush order - coordinate with warehouse. Contact Jim for priority handling.",
-            height=120,
-            key="internal_pbp_team_input",
-            help="Team coordination, workflow notes, internal reminders"
-        )
-        if internal_team_value:
-            word_count = len(internal_team_value.split())
-            st.caption(f"{word_count} words")
-
-    with notes_col2:
-        internal_bookkeeping_value = st.session_state.order_notes.get('internal_bookkeeping', '')
-        st.session_state.order_notes['internal_bookkeeping'] = st.text_area(
-            "Internal Notes (For Bookkeeping)",
-            value=internal_bookkeeping_value,
-            placeholder="Net 30 terms, send invoice after PO approval. Track against Q1 budget.",
-            height=120,
-            key="internal_bookkeeping_input",
-            help="Accounting, billing, payment tracking"
-        )
-        if internal_bookkeeping_value:
-            word_count = len(internal_bookkeeping_value.split())
-            st.caption(f"{word_count} words")
-
-    # Second row - 2 external fields
-    notes_col3, notes_col4 = st.columns(2)
-
-    with notes_col3:
-        external_partners_value = st.session_state.order_notes.get('external_partners', '')
-        st.session_state.order_notes['external_partners'] = st.text_area(
-            "External Notes (For Partners/POs)",
-            value=external_partners_value,
-            placeholder="Kitting required: gift box with ribbon. Include branded tissue paper. Ship to warehouse by 3/15.",
-            height=120,
-            key="external_partners_input",
-            help="Instructions for partners, PO details, shipping requirements"
-        )
-        if external_partners_value:
-            word_count = len(external_partners_value.split())
-            st.caption(f"{word_count} words")
-
-    with notes_col4:
-        external_clients_value = st.session_state.order_notes.get('external_clients', '')
-        st.session_state.order_notes['external_clients'] = st.text_area(
-            "External Notes (For Clients/Invoices)",
-            value=external_clients_value,
-            placeholder="Dropship directly to client. Include care instructions card with each unit.",
-            height=120,
-            key="external_clients_input",
-            help="Client-facing information, special requests, delivery instructions"
-        )
-        if external_clients_value:
-            word_count = len(external_clients_value.split())
-            st.caption(f"{word_count} words")
+    order_notes_editor('t3')
 
     # Use session state values for calculations
     shipping = st.session_state.order_shipping
@@ -8205,131 +8209,34 @@ with tab3:
 
     with st.expander("Client Details", expanded=False):
         st.markdown("Enter client information for invoices and purchase orders.")
+        st.caption("Everything here is the same order data Tab 4 shows: edit it in either tab.")
+        ci = st.session_state.client_info
 
         col1, col2 = st.columns(2)
 
         with col1:
-            st.session_state.client_info['is_new_client'] = st.checkbox(
-                "New Client?",
-                value=st.session_state.client_info['is_new_client']
-            )
-
-            st.session_state.client_info['company_name'] = st.text_input(
-                "Company Name",
-                value=st.session_state.client_info['company_name'],
-                placeholder="e.g., Acme Corp"
-            )
-
-
-            st.session_state.client_info['client_po'] = st.text_input(
-                "Client PO Number (optional)",
-                value=st.session_state.client_info['client_po'],
-                placeholder="e.g., PO-2025-001"
-            )
+            synced_widget(st.checkbox, "New Client?", ci, 'is_new_client', key="t3_is_new_client", default=True)
+            synced_widget(st.text_input, "Company Name", ci, 'company_name', key="t3_company_name",
+                          placeholder="e.g., Acme Corp")
+            synced_widget(st.text_input, "Client PO Number (optional)", ci, 'client_po', key="t3_client_po",
+                          placeholder="e.g., PO-2025-001")
 
         with col2:
-            st.session_state.client_info['billing_address'] = st.text_area(
-                "Billing Address",
-                value=st.session_state.client_info['billing_address'],
-                placeholder="123 Main St\nCity, State ZIP",
-                height=100
-            )
-
-            st.session_state.client_info['shipping_type'] = st.selectbox(
-                "Shipping Type",
-                options=['One Location', 'Drop Shipping'],
-                index=0 if st.session_state.client_info['shipping_type'] == 'One Location' else 1
-            )
-
-            if st.session_state.client_info['shipping_type'] == 'One Location':
-                st.session_state.client_info['shipping_address'] = st.text_area(
-                    "Shipping Address",
-                    value=st.session_state.client_info['shipping_address'],
-                    placeholder="456 Shipping Lane\nCity, State ZIP",
-                    height=100
-                )
-            else:
-                st.session_state.client_info['shipping_address'] = ''
-                st.caption("Drop shipping details to be arranged separately")
+            synced_widget(st.text_area, "Billing Address", ci, 'billing_address', key="t3_billing_address",
+                          placeholder="123 Main St\nCity, State ZIP", height=100)
+            synced_widget(st.selectbox, "Shipping Type", ci, 'shipping_type', key="t3_shipping_type",
+                          options=['One Location', 'Drop Shipping'])
+            synced_widget(st.text_area, "Shipping Address", ci, 'shipping_address', key="t3_shipping_address",
+                          placeholder="456 Shipping Lane\nCity, State ZIP", height=100)
+            if ci['shipping_type'] == 'Drop Shipping':
+                synced_widget(st.text_area, "Dropshipping Instructions", ci, 'drop_shipping_instructions',
+                              key="t3_drop_shipping_instructions", height=100,
+                              help="From the client order form; printed on the invoice/PO")
 
         # Contacts Management Section
         st.markdown("---")
         st.markdown("**Contacts Information**")
-
-        # Display all contacts
-        contacts = st.session_state.client_info.get('contacts', [])
-        if not contacts:
-            contacts = [{'name': '', 'email': '', 'phone': '', 'role': 'Primary Contact'}]
-            st.session_state.client_info['contacts'] = contacts
-
-        # Add/Remove buttons
-        col_add, col_spacer = st.columns([1, 3])
-        with col_add:
-            if st.button("Add Another Contact", key="add_contact_tab3"):
-                st.session_state.client_info['contacts'].append({
-                    'name': '',
-                    'email': '',
-                    'phone': '',
-                    'role': ''
-                })
-                st.rerun()
-
-        # Display each contact
-        for idx, contact in enumerate(contacts):
-            contact_num = idx + 1
-
-            # Contact header with remove button
-            if len(contacts) > 1:
-                col_header, col_remove = st.columns([3, 1])
-                with col_header:
-                    st.markdown(f"**Contact {contact_num}**")
-                with col_remove:
-                    if st.button(f"Remove", key=f"remove_contact_{idx}_tab3"):
-                        st.session_state.client_info['contacts'].pop(idx)
-                        st.rerun()
-            else:
-                st.markdown(f"**Contact {contact_num}**")
-
-            # Contact fields in 2 columns
-            col_contact1, col_contact2 = st.columns(2)
-
-            with col_contact1:
-                contact['name'] = st.text_input(
-                    "Name",
-                    value=contact.get('name', ''),
-                    key=f"contact_name_{idx}_tab3",
-                    placeholder="e.g., John Smith"
-                )
-
-                contact['email'] = st.text_input(
-                    "Email",
-                    value=contact.get('email', ''),
-                    key=f"contact_email_{idx}_tab3",
-                    placeholder="e.g., john@company.com"
-                )
-
-            with col_contact2:
-                contact['phone'] = st.text_input(
-                    "Phone",
-                    value=contact.get('phone', ''),
-                    key=f"contact_phone_{idx}_tab3",
-                    placeholder="e.g., (555) 123-4567"
-                )
-
-                role_options = ['Primary Contact', 'Billing Contact', 'Technical Contact', 'Shipping Contact', 'Other']
-                current_role = contact.get('role', 'Primary Contact')
-                if current_role not in role_options and current_role:
-                    role_options.append(current_role)
-
-                contact['role'] = st.selectbox(
-                    "Role",
-                    options=role_options,
-                    index=role_options.index(current_role) if current_role in role_options else 0,
-                    key=f"contact_role_{idx}_tab3"
-                )
-
-            if idx < len(contacts) - 1:
-                st.markdown("")  # Add spacing between contacts
+        contacts_editor('t3')
 
         st.markdown("---")
         st.markdown("**Payment & Delivery Terms**")
@@ -8337,81 +8244,27 @@ with tab3:
         col3, col4 = st.columns(2)
 
         with col3:
-            # Updated to dropdown with Net 15 and Custom option
-            payment_terms_options = ['Net 30', 'Net 15', 'Net 60', 'Due on Receipt', '50% Deposit', 'Custom']
-            current_timeline = st.session_state.client_info.get('payment_timeline', 'Net 30')
-
-            # If current value is custom (not in standard options), select Custom
-            if current_timeline not in payment_terms_options[:-1]:  # Exclude 'Custom' from check
-                if current_timeline and current_timeline != 'Custom':
-                    st.session_state.custom_payment_terms = current_timeline
-                selected_index = payment_terms_options.index('Custom')
-            else:
-                selected_index = payment_terms_options.index(current_timeline)
-
-            selected_payment = st.selectbox(
-                "Payment Terms",
-                options=payment_terms_options,
-                index=selected_index
-            )
-
-            # If Custom is selected, show text input
-            if selected_payment == "Custom":
-                custom_terms = st.text_input(
-                    "Enter Custom Payment Terms",
-                    value=st.session_state.custom_payment_terms,
-                    placeholder="e.g., Net 45, 2/10 Net 30, etc.",
-                    key="custom_payment_input_tab3"
-                )
-                st.session_state.custom_payment_terms = custom_terms
-                st.session_state.client_info['payment_timeline'] = custom_terms if custom_terms else "Custom"
-            else:
-                st.session_state.client_info['payment_timeline'] = selected_payment
+            payment_terms_editor('t3')
 
         with col4:
-            # Updated to match template options
-            payment_method_options = ['Check', 'ACH', 'Credit Card', 'Wire Transfer']
-            current_preference = st.session_state.client_info.get('payment_preference', 'Check')
-            if current_preference not in payment_method_options:
-                payment_method_options.append(current_preference)
-
-            st.session_state.client_info['payment_preference'] = st.selectbox(
-                "Payment Method",
-                options=payment_method_options,
-                index=payment_method_options.index(current_preference) if current_preference in payment_method_options else 0
-            )
+            synced_widget(st.selectbox, "Payment Method", ci, 'payment_preference', key="t3_payment_method",
+                          options=PAYMENT_METHODS)
 
         col5, col6 = st.columns(2)
 
         with col5:
             # Ship method dropdown (separate from shipping type)
-            ship_method_options = ['Ground', 'Air', 'Freight', 'Other']
-            current_ship_method = st.session_state.client_info.get('ship_method', 'Ground')
-
-            if current_ship_method not in ship_method_options:
-                ship_method_options.append(current_ship_method)
-
-            st.session_state.client_info['ship_method'] = st.selectbox(
-                "Ship Method",
-                options=ship_method_options,
-                index=ship_method_options.index(current_ship_method) if current_ship_method in ship_method_options else 0,
-                help="How products will be shipped to client"
-            )
+            synced_widget(st.selectbox, "Ship Method", ci, 'ship_method', key="t3_ship_method",
+                          options=['Ground', 'Air', 'Freight', 'Other'],
+                          help="How products will be shipped to client")
 
         with col6:
-            # Client in-hands date
-            st.session_state.client_info['client_in_hands_date'] = st.date_input(
-                "Client In-Hands Date",
-                value=st.session_state.client_info.get('client_in_hands_date'),
-                help="Target delivery date for client to receive products"
-            )
-
-            # PBP in-hands date (when PBP needs to receive from partner)
-            st.session_state.client_info['pbp_in_hands_date'] = st.date_input(
-                "PBP In-Hands Date",
-                value=st.session_state.client_info.get('pbp_in_hands_date'),
-                help="Date PBP needs to receive product from partner (for Purchase Orders)"
-            )
+            synced_widget(st.date_input, "Client In-Hands Date", ci, 'client_in_hands_date',
+                          key="t3_client_in_hands_date", default=None,
+                          help="Target delivery date for client to receive products")
+            synced_widget(st.date_input, "PBP In-Hands Date", ci, 'pbp_in_hands_date',
+                          key="t3_pbp_in_hands_date", default=None,
+                          help="Date PBP needs to receive product from partner (for Purchase Orders)")
 
         st.markdown("---")
         st.markdown("**Order Submission Details**")
@@ -8419,35 +8272,23 @@ with tab3:
         col7, col8 = st.columns(2)
 
         with col7:
-            st.session_state.client_info['order_submitted_by'] = st.text_input(
-                "Order Submitted By",
-                value=st.session_state.client_info.get('order_submitted_by', ''),
-                placeholder="Your name",
-                help="Person creating this order"
-            )
-
-            st.session_state.client_info['cost_submitted_by'] = st.text_input(
-                "Cost Submitted By",
-                value=st.session_state.client_info.get('cost_submitted_by', ''),
-                placeholder="Finance contact name",
-                help="Person who submitted/verified costs"
-            )
+            synced_widget(st.text_input, "Order Submitted By", ci, 'order_submitted_by', key="t3_order_submitted_by",
+                          placeholder="Your name", help="Person creating this order")
+            synced_widget(st.text_input, "Cost Submitted By", ci, 'cost_submitted_by', key="t3_cost_submitted_by",
+                          placeholder="Finance contact name", help="Person who submitted/verified costs")
 
         with col8:
             # Order submitted date (auto-filled, read-only display)
-            order_date = st.session_state.client_info.get('order_submitted_date', datetime.now().date())
+            order_date = ci.get('order_submitted_date', datetime.now().date())
             st.date_input(
                 "Order Submitted Date",
                 value=order_date,
                 disabled=True,
                 help="Auto-filled when order created"
             )
-
-            st.session_state.client_info['cost_submitted_date'] = st.date_input(
-                "Cost Submitted Date",
-                value=st.session_state.client_info.get('cost_submitted_date'),
-                help="Date when costs were submitted/verified"
-            )
+            synced_widget(st.date_input, "Cost Submitted Date", ci, 'cost_submitted_date',
+                          key="t3_cost_submitted_date", default=None,
+                          help="Date when costs were submitted/verified")
 
     # ============================================================
     # CONFIRM ORDER
@@ -8602,280 +8443,46 @@ with tab4:
 
         # Editable fields for missing information
         with st.expander("Edit Order Information", expanded=bool(validation_warnings)):
-            # Keep these editors in sync with values entered elsewhere (e.g., Tab 3).
-            # Streamlit ignores a widget's value= after its key is first created
-            # (which happens at app startup, before any input), so the panel would
-            # otherwise show stale/blank defaults. We seed each widget key from
-            # client_info every run; the on_change callbacks below write user edits
-            # back to client_info, keeping both directions consistent.
-            _ci_sync = st.session_state.client_info
-            st.session_state['tab4_is_new_client'] = _ci_sync.get('is_new_client', True)
-            st.session_state['tab3_company_name'] = _ci_sync.get('company_name', '')
-            st.session_state['tab3_billing_address'] = _ci_sync.get('billing_address', '')
-            st.session_state['tab3_shipping_address'] = _ci_sync.get('shipping_address', '')
-            st.session_state['tab3_order_submitted_by'] = _ci_sync.get('order_submitted_by', '')
-            st.session_state['tab3_cost_submitted_by'] = _ci_sync.get('cost_submitted_by', '')
-            for _sync_idx, _sync_contact in enumerate(_ci_sync.get('contacts', [])):
-                st.session_state[f'tab4_contact_name_{_sync_idx}'] = _sync_contact.get('name', '')
-                st.session_state[f'tab4_contact_email_{_sync_idx}'] = _sync_contact.get('email', '')
-                st.session_state[f'tab4_contact_phone_{_sync_idx}'] = _sync_contact.get('phone', '')
+            # Same order data as Tab 3 (Section 6): edits in either tab show up in both.
+            ci = st.session_state.client_info
 
             col1, col2 = st.columns(2)
 
             with col1:
                 st.markdown("**Client Information**")
+                synced_widget(st.checkbox, "New Client?", ci, 'is_new_client', key="t4_is_new_client", default=True)
+                synced_widget(st.text_input, "Company Name", ci, 'company_name', key="t4_company_name")
+                synced_widget(st.text_input, "Client PO Number (optional)", ci, 'client_po', key="t4_client_po")
+                synced_widget(st.text_area, "Billing Address", ci, 'billing_address', key="t4_billing_address", height=80)
+                synced_widget(st.selectbox, "Shipping Type", ci, 'shipping_type', key="t4_shipping_type",
+                              options=['One Location', 'Drop Shipping'])
+                synced_widget(st.text_area, "Shipping Address", ci, 'shipping_address', key="t4_shipping_address", height=80)
+                if ci['shipping_type'] == 'Drop Shipping':
+                    synced_widget(st.text_area, "Dropshipping Instructions", ci, 'drop_shipping_instructions',
+                                  key="t4_drop_shipping_instructions", height=80,
+                                  help="Printed on the invoice/PO")
 
-                # New Client checkbox with callback
-                def update_is_new_client():
-                    st.session_state.client_info['is_new_client'] = st.session_state.tab4_is_new_client
-
-                st.checkbox(
-                    "New Client?",
-                    key="tab4_is_new_client",
-                    on_change=update_is_new_client
-                )
-
-                # Use callback to update client_info to ensure persistence
-                def update_company_name():
-                    st.session_state.client_info['company_name'] = st.session_state.tab3_company_name
-
-                st.text_input(
-                    "Company Name",
-                    key="tab3_company_name",
-                    on_change=update_company_name
-                )
-
-
-                def update_billing_address():
-                    st.session_state.client_info['billing_address'] = st.session_state.tab3_billing_address
-
-                st.text_area(
-                    "Billing Address",
-                    key="tab3_billing_address",
-                    height=80,
-                    on_change=update_billing_address
-                )
-
-                def update_shipping_address():
-                    st.session_state.client_info['shipping_address'] = st.session_state.tab3_shipping_address
-
-                st.text_area(
-                    "Shipping Address",
-                    key="tab3_shipping_address",
-                    height=80,
-                    on_change=update_shipping_address
-                )
+            with col2:
+                st.markdown("**Order Details**")
+                synced_widget(st.date_input, "Client In-Hands Date", ci, 'client_in_hands_date',
+                              key="t4_client_in_hands_date", default=None)
+                synced_widget(st.date_input, "PBP In-Hands Date", ci, 'pbp_in_hands_date',
+                              key="t4_pbp_in_hands_date", default=None,
+                              help="Date PBP needs to receive product from partner (for Purchase Orders)")
+                synced_widget(st.selectbox, "Ship Method", ci, 'ship_method', key="t4_ship_method",
+                              options=['Ground', 'Air', 'Freight', 'Other'])
+                payment_terms_editor('t4')
+                synced_widget(st.selectbox, "Payment Method", ci, 'payment_preference', key="t4_payment_method",
+                              options=PAYMENT_METHODS)
+                synced_widget(st.text_input, "Order Submitted By", ci, 'order_submitted_by', key="t4_order_submitted_by")
+                synced_widget(st.text_input, "Cost Submitted By", ci, 'cost_submitted_by', key="t4_cost_submitted_by")
+                synced_widget(st.date_input, "Cost Submitted Date", ci, 'cost_submitted_date',
+                              key="t4_cost_submitted_date", default=None)
 
             # Contacts Management Section
             st.markdown("---")
             st.markdown("**Contacts Management**")
-
-            # Display all contacts
-            contacts = st.session_state.client_info.get('contacts', [])
-            if not contacts:
-                contacts = [{'name': '', 'email': '', 'phone': '', 'role': 'Primary Contact'}]
-                st.session_state.client_info['contacts'] = contacts
-
-            # Add button
-            if st.button("Add Contact", key="add_contact_tab4"):
-                st.session_state.client_info['contacts'].append({
-                    'name': '',
-                    'email': '',
-                    'phone': '',
-                    'role': ''
-                })
-                st.rerun()
-
-            # Display each contact
-            for idx, contact in enumerate(contacts):
-                # Display contact header with remove button if multiple contacts
-                if len(contacts) > 1:
-                    contact_header_col, remove_col = st.columns([5, 1])
-                    with contact_header_col:
-                        st.markdown(f"**Contact {idx + 1}**")
-                    with remove_col:
-                        if st.button("Remove", key=f"tab4_remove_contact_{idx}"):
-                            st.session_state.client_info['contacts'].pop(idx)
-                            st.rerun()
-                else:
-                    st.markdown(f"**Contact {idx + 1}**")
-
-                contact_col1, contact_col2 = st.columns(2)
-
-                with contact_col1:
-                    # Create callback functions for each field
-                    def update_contact_name(idx=idx):
-                        st.session_state.client_info['contacts'][idx]['name'] = st.session_state[f"tab4_contact_name_{idx}"]
-
-                    def update_contact_email(idx=idx):
-                        st.session_state.client_info['contacts'][idx]['email'] = st.session_state[f"tab4_contact_email_{idx}"]
-
-                    # Key is seeded from client_info each run (sync block above);
-                    # on_change writes edits back. No value= / no direct return
-                    # assignment here, so Tab 3 input is not clobbered.
-                    st.text_input(
-                        "Name",
-                        key=f"tab4_contact_name_{idx}",
-                        on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
-                            {'name': st.session_state[f"tab4_contact_name_{idx}"]}
-                        )
-                    )
-
-                    st.text_input(
-                        "Email",
-                        key=f"tab4_contact_email_{idx}",
-                        on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
-                            {'email': st.session_state[f"tab4_contact_email_{idx}"]}
-                        )
-                    )
-
-                with contact_col2:
-                    st.text_input(
-                        "Phone",
-                        key=f"tab4_contact_phone_{idx}",
-                        on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
-                            {'phone': st.session_state[f"tab4_contact_phone_{idx}"]}
-                        )
-                    )
-
-                    role_options = ['Primary Contact', 'Billing Contact', 'Technical Contact', 'Shipping Contact', 'Other']
-                    current_role = contact.get('role', 'Primary Contact')
-                    if current_role not in role_options and current_role:
-                        role_options.append(current_role)
-
-                    st.selectbox(
-                        "Role",
-                        options=role_options,
-                        index=role_options.index(current_role) if current_role in role_options else 0,
-                        key=f"tab4_contact_role_{idx}",
-                        on_change=lambda idx=idx: st.session_state.client_info['contacts'][idx].update(
-                            {'role': st.session_state[f"tab4_contact_role_{idx}"]}
-                        )
-                    )
-
-                # Add separator between contacts if not the last one
-                if idx < len(contacts) - 1:
-                    st.divider()
-
-            with col2:
-                st.markdown("**Order Details**")
-
-                def update_in_hands_date():
-                    st.session_state.client_info['client_in_hands_date'] = st.session_state.tab3_in_hands_date
-
-                st.date_input(
-                    "Client In-Hands Date",
-                    value=st.session_state.client_info.get('client_in_hands_date'),
-                    key="tab3_in_hands_date",
-                    on_change=update_in_hands_date
-                )
-
-                def update_pbp_in_hands_date():
-                    st.session_state.client_info['pbp_in_hands_date'] = st.session_state.tab3_pbp_in_hands_date
-
-                st.date_input(
-                    "PBP In-Hands Date",
-                    value=st.session_state.client_info.get('pbp_in_hands_date'),
-                    key="tab3_pbp_in_hands_date",
-                    on_change=update_pbp_in_hands_date,
-                    help="Date PBP needs to receive product from partner (for Purchase Orders)"
-                )
-
-                def update_ship_method():
-                    st.session_state.client_info['ship_method'] = st.session_state.tab3_ship_method
-
-                ship_method_options = ['Ground', 'Air', 'Freight', 'Other']
-                current_ship = st.session_state.client_info.get('ship_method', 'Ground')
-                st.selectbox(
-                    "Ship Method",
-                    options=ship_method_options,
-                    index=ship_method_options.index(current_ship) if current_ship in ship_method_options else 0,
-                    key="tab3_ship_method",
-                    on_change=update_ship_method
-                )
-
-                def update_payment_terms():
-                    selected = st.session_state.tab3_payment_terms
-                    if selected == "Custom":
-                        # Use the custom terms if available
-                        if st.session_state.custom_payment_terms:
-                            st.session_state.client_info['payment_timeline'] = st.session_state.custom_payment_terms
-                    else:
-                        st.session_state.client_info['payment_timeline'] = selected
-
-                payment_terms_options = ['Net 30', 'Net 15', 'Net 60', 'Due on Receipt', '50% Deposit', 'Custom']
-                current_terms = st.session_state.client_info.get('payment_timeline', 'Net 30')
-
-                # Handle custom terms display
-                if current_terms not in payment_terms_options[:-1]:  # Exclude 'Custom' from check
-                    if current_terms and current_terms != 'Custom':
-                        st.session_state.custom_payment_terms = current_terms
-                    display_index = payment_terms_options.index("Custom")
-                else:
-                    display_index = payment_terms_options.index(current_terms)
-
-                selected_payment = st.selectbox(
-                    "Payment Terms",
-                    options=payment_terms_options,
-                    index=display_index,
-                    key="tab3_payment_terms",
-                    on_change=update_payment_terms
-                )
-
-                # If Custom is selected, show text input
-                if selected_payment == "Custom":
-                    def update_custom_terms():
-                        st.session_state.custom_payment_terms = st.session_state.custom_terms_edit_input
-                        st.session_state.client_info['payment_timeline'] = st.session_state.custom_terms_edit_input
-
-                    st.text_input(
-                        "Custom Payment Terms",
-                        value=st.session_state.custom_payment_terms,
-                        placeholder="e.g., Net 45, 2/10 Net 30, etc.",
-                        key="custom_terms_edit_input",
-                        on_change=update_custom_terms
-                    )
-
-                def update_payment_method():
-                    st.session_state.client_info['payment_preference'] = st.session_state.tab3_payment_method
-
-                payment_method_options = ['Check', 'ACH', 'Credit Card', 'Wire Transfer']
-                current_method = st.session_state.client_info.get('payment_preference', 'Check')
-                st.selectbox(
-                    "Payment Method",
-                    options=payment_method_options,
-                    index=payment_method_options.index(current_method) if current_method in payment_method_options else 0,
-                    key="tab3_payment_method",
-                    on_change=update_payment_method
-                )
-
-                def update_order_submitted_by():
-                    st.session_state.client_info['order_submitted_by'] = st.session_state.tab3_order_submitted_by
-
-                st.text_input(
-                    "Order Submitted By",
-                    key="tab3_order_submitted_by",
-                    on_change=update_order_submitted_by
-                )
-
-                def update_cost_submitted_by():
-                    st.session_state.client_info['cost_submitted_by'] = st.session_state.tab3_cost_submitted_by
-
-                st.text_input(
-                    "Cost Submitted By",
-                    key="tab3_cost_submitted_by",
-                    on_change=update_cost_submitted_by
-                )
-
-                def update_cost_submitted_date():
-                    st.session_state.client_info['cost_submitted_date'] = st.session_state.tab3_cost_submitted_date
-
-                st.date_input(
-                    "Cost Submitted Date",
-                    value=st.session_state.client_info.get('cost_submitted_date'),
-                    key="tab3_cost_submitted_date",
-                    on_change=update_cost_submitted_date
-                )
+            contacts_editor('t4')
 
         # ============================================================
         # EDITABLE PRODUCT DESCRIPTIONS
@@ -9247,51 +8854,7 @@ with tab4:
 
             with col_notes:
                 st.write(f"**Order Notes** ({filled_notes_count} filled)")
-
-                show_notes_form = st.checkbox(
-                    "Add Order Notes",
-                    key="tab3_show_notes_form",
-                    help="Add specific details for this order"
-                )
-
-                if show_notes_form:
-                    st.caption("Add specific details for this order (organized by audience)")
-
-                    st.session_state.order_notes['internal_pbp_team'] = st.text_area(
-                        "Internal Notes (For PBP Team)",
-                        value=st.session_state.order_notes.get('internal_pbp_team', ''),
-                        placeholder="Rush order - coordinate with warehouse. Contact Jim for priority handling.",
-                        height=70,
-                        key="tab3_internal_pbp_team",
-                        help="Team coordination, workflow notes, internal reminders"
-                    )
-
-                    st.session_state.order_notes['internal_bookkeeping'] = st.text_area(
-                        "Internal Notes (For Bookkeeping)",
-                        value=st.session_state.order_notes.get('internal_bookkeeping', ''),
-                        placeholder="Net 30 terms, send invoice after PO approval. Track against Q1 budget.",
-                        height=70,
-                        key="tab3_internal_bookkeeping",
-                        help="Accounting, billing, payment tracking"
-                    )
-
-                    st.session_state.order_notes['external_partners'] = st.text_area(
-                        "External Notes (For Partners/POs)",
-                        value=st.session_state.order_notes.get('external_partners', ''),
-                        placeholder="Kitting required: gift box with ribbon. Include branded tissue paper. Ship to warehouse by 3/15.",
-                        height=70,
-                        key="tab3_external_partners",
-                        help="Instructions for partners, PO details, shipping requirements"
-                    )
-
-                    st.session_state.order_notes['external_clients'] = st.text_area(
-                        "External Notes (For Clients/Invoices)",
-                        value=st.session_state.order_notes.get('external_clients', ''),
-                        placeholder="Dropship directly to client. Include care instructions card with each unit.",
-                        height=70,
-                        key="tab3_external_clients",
-                        help="Client-facing information, special requests, delivery instructions"
-                    )
+                st.caption("Edit the order notes in the NOTES section below (same notes as Tab 3).")
 
         st.divider()
 
@@ -9601,6 +9164,10 @@ with tab4:
                 if edited_desc:
                     invoice_desc = edited_desc
                     po_desc = edited_desc
+                customization_desc = item.get('customization_description', '')
+                if customization_desc:
+                    invoice_desc = f"{invoice_desc} (Customization: {customization_desc})"
+                    po_desc = f"{po_desc} (Customization: {customization_desc})"
 
                 qty = item['quantity']
 
@@ -9679,7 +9246,7 @@ with tab4:
 
                 # Add customization line items if present
                 if item.get('include_customization', False):
-                    customization_desc = item.get('customization_description', 'Custom work')
+                    customization_desc = customization_desc or 'Custom work'
 
                     # Client-facing prices
                     customization_setup = item.get('customization_setup_total', 0)
@@ -9887,9 +9454,11 @@ with tab4:
         that matches your purchase order request and any additional spec sheets for our partners.
         """)
 
+        # Editable here and in Tab 3 (same notes); they print at the top of the invoice/PO
+        order_notes_editor('t4')
         order_notes = st.session_state.order_notes
 
-        # Display all 4 categories with clear section headers
+        # Collect the 4 categories with clear section headers for the invoice/PO
         notes_content = []
         if order_notes.get('internal_pbp_team'):
             notes_content.append(f"**Internal Notes (For PBP Team):**\n{order_notes['internal_pbp_team']}")
@@ -9899,12 +9468,6 @@ with tab4:
             notes_content.append(f"**External Notes (For Partners/POs):**\n{order_notes['external_partners']}")
         if order_notes.get('external_clients'):
             notes_content.append(f"**External Notes (For Clients/Invoices):**\n{order_notes['external_clients']}")
-
-        if notes_content:
-            for note in notes_content:
-                st.markdown(note)
-        else:
-            st.caption("No notes added")
 
         st.divider()
 
@@ -9935,22 +9498,26 @@ with tab4:
             }])
             invoice_complete = pd.concat([invoice_complete, total_row], ignore_index=True)
 
+        # The client's dropshipping instructions (from the order form, editable in Tab 3/Tab 4)
+        drop_ship_notes = client_info.get('drop_shipping_instructions', '').strip()
+
         # Notes go at the top of the file (accounting reads them first)
-        if notes_content:
+        csv_notes = ([f"Dropshipping Instructions: {drop_ship_notes}"] if drop_ship_notes else []) + notes_content
+        if csv_notes:
             notes_rows = pd.DataFrame([
                 {col: (note.replace('**', '').replace('\n', ' ') if col == 'DESCRIPTION (Invoice)' else "")
                  for col in invoice_complete.columns}
-                for note in notes_content
+                for note in csv_notes
             ] + [{col: "" for col in invoice_complete.columns}])
             invoice_complete = pd.concat([notes_rows, invoice_complete], ignore_index=True)
 
         # Build notes block (shown at the top of the invoice/PO)
         notes_html = ""
-        if st.session_state.dropshipping_notes:
+        if drop_ship_notes:
             notes_html += f"""
     <div class="notes-section">
         <div class="notes-header">DROPSHIPPING INSTRUCTIONS</div>
-        <p>{st.session_state.dropshipping_notes.replace(chr(10), '<br/>')}</p>
+        <p>{drop_ship_notes.replace(chr(10), '<br/>')}</p>
     </div>"""
         if notes_content:
             notes_html += """

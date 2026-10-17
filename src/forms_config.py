@@ -189,6 +189,7 @@ RESPONSE_COLUMNS = {
 
     # Section 5: Additional Notes
     'special_requests': 'Special Requests, Notes, or Questions',
+    'invoice_platform': 'Is there a specific platform or email address we need to send the invoice to (i.e. BillPay.com)?',
 
     # Tracking columns (added manually to response sheet starting at column AR)
     'imported': 'Imported?',
