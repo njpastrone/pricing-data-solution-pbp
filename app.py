@@ -5681,7 +5681,7 @@ with tab3:
                                     'manual_override': False,
                                     # Client's customization notes from the form
                                     'include_customization': False,
-                                    'customization_description': product['customization_description'] or product_data.get('Customization Info', ''),
+                                    'customization_description': product['customization_description'],
                                     'customization_setup_fee': float(clean_price(get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')) or 0.0),
                                     'customization_per_unit': float(clean_price(get_column_value(product_data, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')) or 0.0),
                                     'customization_setup_total': 0.0,
@@ -5960,7 +5960,7 @@ with tab3:
                                     'validation_warning': validation_warning,
                                     'manual_override': False,
                                     'include_customization': False,
-                                    'customization_description': product_data.get('Customization Info', ''),
+                                    'customization_description': '',
                                     'customization_setup_fee': float(clean_price(get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')) or 0.0),
                                     'customization_per_unit': float(clean_price(get_column_value(product_data, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')) or 0.0),
                                     'customization_setup_total': 0.0,
@@ -6323,7 +6323,7 @@ with tab3:
                     'product_ref': product_data.get('Partner Product SKU/REF', 'N/A'),
                     'country_of_origin_made_in': product_data.get('Country of Origin (Made In)', 'N/A'),
                     'country_of_origin_ships_from': product_data.get('Country of Origin (Ships From)', 'N/A'),
-                    'customization_description': product_data.get('Customization Info', ''),
+                    'customization_description': '',
                     'product_subtotal': base_price * 1,
                     'customization_setup_total': 0.0,
                     'customization_unit_total': 0.0,
@@ -6844,17 +6844,15 @@ with tab3:
                 key=f"prod_custom_{idx}"
             )
 
-            if new_include_custom:
-                    # Customization description (editable)
-                    default_desc = item.get('customization_description', '') or product_data.get('Customization Info', '')
-                    new_custom_desc = st.text_input(
-                        "Customization Description",
-                        value=default_desc,
-                        placeholder="e.g., Logo engraving on lid, Custom label printing",
-                        key=f"prod_custom_desc_{idx}",
-                        help="Describe the customization — this will appear on invoices and POs"
-                    )
+            new_custom_desc = st.text_input(
+                "Customization Description",
+                value=item.get('customization_description', ''),
+                placeholder="e.g., Logo engraving on lid, Custom label printing",
+                key=f"prod_custom_desc_{idx}",
+                help="Describe the customization — this will appear on invoices and POs"
+            )
 
+            if new_include_custom:
                     col_setup, col_perunit = st.columns(2)
 
                     with col_setup:
@@ -7259,7 +7257,7 @@ with tab3:
                     'quantity': new_quantity,
                     'markup_percent': current_markup,
                     'include_customization': new_include_custom,
-                    'customization_description': new_custom_desc if new_include_custom else item.get('customization_description', ''),
+                    'customization_description': new_custom_desc,
                     'customization_setup_fee': new_setup_fee,
                     'customization_per_unit': new_perunit_cost,
                     'partner_customization_setup_fee': new_partner_setup_fee,
@@ -9166,6 +9164,10 @@ with tab4:
                 if edited_desc:
                     invoice_desc = edited_desc
                     po_desc = edited_desc
+                customization_desc = item.get('customization_description', '')
+                if customization_desc:
+                    invoice_desc = f"{invoice_desc} (Customization: {customization_desc})"
+                    po_desc = f"{po_desc} (Customization: {customization_desc})"
 
                 qty = item['quantity']
 
@@ -9244,7 +9246,7 @@ with tab4:
 
                 # Add customization line items if present
                 if item.get('include_customization', False):
-                    customization_desc = item.get('customization_description', 'Custom work')
+                    customization_desc = customization_desc or 'Custom work'
 
                     # Client-facing prices
                     customization_setup = item.get('customization_setup_total', 0)

@@ -199,6 +199,7 @@ def test_tab3_and_tab4_show_the_same_current_order_data():
 if __name__ == "__main__":
     test_full_form_reaches_the_order()
     test_blank_billing_address_means_same_as_shipping()
+    test_html_order_form_lands_like_a_form_response()
     test_imported_order_survives_save_and_load()
     test_google_form_answers_are_understood()
     test_add_order_notes_keeps_staff_notes_and_skips_repeats()
