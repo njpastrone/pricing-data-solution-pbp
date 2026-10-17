@@ -303,7 +303,7 @@ def form_response_to_order(response_data):
         dict: {
             'client_info': full client_info dict for the order,
             'order_notes': notes to add to the order (only categories that have text),
-            'products': [{'name', 'quantity', 'include_customization', 'customization_description'}],
+            'products': [{'name', 'quantity', 'customization_description'}],
         }
     """
     client = response_data.get('client_info', {})
@@ -365,11 +365,37 @@ def form_response_to_order(response_data):
         products.append({
             'name': product['name'],
             'quantity': product['quantity'],
-            'include_customization': bool(notes),
             'customization_description': notes,
         })
 
     return {'client_info': client_info, 'order_notes': order_notes, 'products': products}
+
+
+def html_form_to_order(parsed_data):
+    """
+    Map a parsed HTML order form (helpers.parse_client_order_form_html) onto the order
+    through form_response_to_order(), so it lands exactly like a form response.
+    Products are left out: the HTML import adds them in its own product picker.
+    """
+    return form_response_to_order({
+        'client_info': {
+            'client_type': parsed_data.get('client_type', ''),
+            'company_name': parsed_data.get('company_name', ''),
+            'contact_name': parsed_data.get('contact_name', ''),
+            'contact_email': parsed_data.get('contact_email', ''),
+        },
+        'shipping_info': {
+            'drop_shipping': parsed_data.get('drop_shipping', ''),
+            'shipping_address': parsed_data.get('shipping_address', ''),
+            'drop_shipping_instructions': parsed_data.get('dropshipping_info', ''),
+            'billing_address': parsed_data.get('billing_address', ''),
+            'in_hands_date': parsed_data.get('client_in_hands_date', ''),
+        },
+        'payment_info': {
+            'payment_method': parsed_data.get('payment_preference', ''),
+            'impact_cards': parsed_data.get('impact_card_preference', ''),
+        },
+    })
 
 
 def add_order_notes(existing_notes, new_notes):

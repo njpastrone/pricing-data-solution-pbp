@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
-from src.forms_helper import parse_form_response, form_response_to_order, add_order_notes
+from src.forms_helper import parse_form_response, form_response_to_order, html_form_to_order, add_order_notes
 from src.order_manager import save_order, load_order_data
 from test_client_form import FakeSheet, LIVE_HEADERS, _mock_sheets, _submit
 
@@ -67,10 +67,8 @@ def test_full_form_reaches_the_order():
 
     # Customization notes stay with their own product
     assert order['products'] == [
-        {'name': 'Unisex Fleece Hoodie', 'quantity': 25, 'include_customization': True,
-         'customization_description': 'Navy, white logo'},
-        {'name': '9 oz Hot Honey', 'quantity': 100, 'include_customization': False,
-         'customization_description': ''},
+        {'name': 'Unisex Fleece Hoodie', 'quantity': 25, 'customization_description': 'Navy, white logo'},
+        {'name': '9 oz Hot Honey', 'quantity': 100, 'customization_description': ''},
     ]
 
     # Additional notes and impact cards go into the team notes
@@ -82,6 +80,27 @@ def test_blank_billing_address_means_same_as_shipping():
     form = dict(FULL_FORM, shipping_info=dict(FULL_FORM['shipping_info'], billing_address=''))
     order = _form_to_imported_order(form)
     assert order['client_info']['billing_address'] == '123 Main St\nSpringfield'
+
+
+def test_html_order_form_lands_like_a_form_response():
+    """The legacy HTML form import writes contacts, billing fallback and drop-ship notes too."""
+    order = html_form_to_order({
+        'client_type': 'New', 'company_name': 'Acme Corp',
+        'contact_name': 'Jane Doe', 'contact_email': 'jane@acme.com',
+        'drop_shipping': 'Yes', 'shipping_address': '123 Main St',
+        'dropshipping_info': 'Split across 3 offices', 'billing_address': '',
+        'client_in_hands_date': '11/1/2026', 'impact_card_preference': 'Yes',
+        'payment_preference': 'ACH', 'products': ['Hoodie'], 'parse_errors': [],
+    })
+    client_info = order['client_info']
+    assert client_info['contacts'] == [{'name': 'Jane Doe', 'email': 'jane@acme.com', 'phone': '', 'role': 'Primary Contact'}]
+    assert client_info['billing_address'] == '123 Main St'
+    assert client_info['shipping_type'] == 'Drop Shipping'
+    assert client_info['drop_shipping_instructions'] == 'Split across 3 offices'
+    assert client_info['client_in_hands_date'] == date(2026, 11, 1)
+    assert client_info['payment_preference'] == 'ACH'
+    assert order['order_notes'] == {'internal_pbp_team': 'Impact cards: Yes'}
+    assert order['products'] == []
 
 
 def test_imported_order_survives_save_and_load():

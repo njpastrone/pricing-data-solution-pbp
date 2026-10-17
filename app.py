@@ -5436,7 +5436,7 @@ with tab3:
 
     # Import helpers
     from src.data_loader import connect_to_sheets
-    from src.forms_helper import load_form_responses, parse_form_response, mark_response_imported, format_product_summary, form_response_to_order, add_order_notes
+    from src.forms_helper import load_form_responses, parse_form_response, mark_response_imported, format_product_summary, form_response_to_order, html_form_to_order, add_order_notes
     from src.forms_config import RESPONSE_COLUMNS
 
     if st.button("Load All Form Responses", key="load_google_form_responses"):
@@ -5680,7 +5680,7 @@ with tab3:
                                     'validation_warning': validation_warning,
                                     'manual_override': False,
                                     # Client's customization notes from the form
-                                    'include_customization': product['include_customization'],
+                                    'include_customization': False,
                                     'customization_description': product['customization_description'] or product_data.get('Customization Info', ''),
                                     'customization_setup_fee': float(clean_price(get_column_value(product_data, 'Client Price: Customization Setup Fee', 'Customization Setup Fee', '')) or 0.0),
                                     'customization_per_unit': float(clean_price(get_column_value(product_data, 'Client Price: Customization Cost per Unit', 'Customization Cost per Unit', '')) or 0.0),
@@ -5812,41 +5812,10 @@ with tab3:
         # Import button
             st.divider()
             if st.button("Import Client Information", type="primary", use_container_width=True, key="import_client_data_btn_top"):
-            # Apply to session state
-                st.session_state.client_info['is_new_client'] = (parsed_data['client_type'] == 'New')
-                st.session_state.client_info['company_name'] = parsed_data['company_name']
-                st.session_state.client_info['contact_name'] = parsed_data['contact_name']
-                st.session_state.client_info['contact_email'] = parsed_data['contact_email']
-                st.session_state.client_info['shipping_address'] = parsed_data['shipping_address']
-                st.session_state.client_info['billing_address'] = parsed_data['billing_address']
-    
-            # Set shipping type based on drop shipping answer
-            # Default to 'One Location' (show shipping address) unless clearly "Yes" for drop shipping
-                if parsed_data['drop_shipping'] == 'Yes':
-                    st.session_state.client_info['shipping_type'] = 'Drop Shipping'
-                else:
-                # For "No", empty, or any unclear answer, default to One Location
-                    st.session_state.client_info['shipping_type'] = 'One Location'
-    
-            # Parse and apply date
-                if parsed_data['client_in_hands_date']:
-                    try:
-                        from datetime import datetime
-                    # Try to parse MM/DD/YYYY format
-                        date_obj = datetime.strptime(parsed_data['client_in_hands_date'], '%m/%d/%Y')
-                        st.session_state.client_info['client_in_hands_date'] = date_obj.date()
-                    except:
-                    # If parsing fails, leave empty and let user enter manually
-                        st.session_state.client_info['client_in_hands_date'] = None
-    
-            # Map payment preference to our dropdown values
-                payment_map = {
-                    'ACH': 'ACH',
-                    'Check': 'Check',
-                    'Credit Card': 'Credit Card (3% processing fee applies)'
-                }
-                if parsed_data['payment_preference'] in payment_map:
-                    st.session_state.client_info['payment_preference'] = payment_map[parsed_data['payment_preference']]
+            # Same mapping as the form response import (contacts, billing fallback, drop-ship notes)
+                order_from_form = html_form_to_order(parsed_data)
+                st.session_state.client_info = order_from_form['client_info']
+                st.session_state.order_notes = add_order_notes(st.session_state.order_notes, order_from_form['order_notes'])
     
                 st.success("Client information imported successfully! Review and edit the fields below as needed.")
                 st.rerun()
