@@ -86,6 +86,8 @@ from src.client_form import (
     generate_session_token,
     retrieve_file_by_proposal,
     retry_pending_syncs,
+    failed_notifications,
+    APP_URL,
     STATUS_PENDING,
     STATUS_SUBMITTED
 )
@@ -1261,6 +1263,14 @@ with st.sidebar:
             f"({stuck['proposal_id']}, received {stuck['submitted_at']}). It is safe in the "
             f"client_form_drafts tab but not yet in Form Responses. Reason: {stuck['reason']}. "
             "Refresh the page to re-check."
+        )
+
+    # Staff alert: client orders whose team email could not be sent
+    for failed in failed_notifications:
+        st.warning(
+            f"Order email not sent: {failed['company_name']} ({failed['proposal_id']}, "
+            f"received {failed['submitted_at']}). The order is saved in Form Responses; "
+            f"import it from Tab 3. Reason: {failed['reason']}."
         )
 
     # Section 0: Data Source Information
@@ -4598,8 +4608,7 @@ with tab2:
                 save_draft(saved_proposal_id, token, prefill_data)
 
             # Build URL
-            base_url = "https://pbp-order-management-system.onrender.com/"
-            form_link = f"{base_url}?client_form={saved_proposal_id}&session={token}"
+            form_link = f"{APP_URL}?client_form={saved_proposal_id}&session={token}"
             st.session_state.generated_client_form_link = form_link
             st.rerun()
 
