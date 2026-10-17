@@ -499,6 +499,7 @@ def sync_submission(proposal_id, session_id):
 
 def _sync_backup_row(drafts, backup):
     """Copy one already-read backup row (from _read_backup_rows) into Form Responses."""
+    wrote_row = False
     with _sync_lock:
         try:
             if backup['status'] == STATUS_SUBMITTED:
@@ -532,14 +533,19 @@ def _sync_backup_row(drafts, backup):
                         raise
                     _retry_on_quota(lambda: worksheet.resize(rows=next_row))
                     _retry_on_quota(lambda: worksheet.update(range_name=f'A{next_row}', values=[row]))
+                wrote_row = True
 
             _retry_on_quota(lambda: drafts.update_cell(backup['row_number'], 8, STATUS_SUBMITTED))
-            # Marked submitted just now, so later syncs return "Already submitted" and never email again
-            notify_team_of_order(backup['proposal_id'], form_data)
-            return True, "Synced"
+            result = (True, "Synced")
 
         except Exception as e:
-            return False, f"Error syncing form: {str(e)}"
+            result = (False, f"Error syncing form: {str(e)}")
+
+    # Only the call that wrote the Form Responses row emails, so a repeated or stale
+    # sync never emails twice. Sent outside the lock so a slow mail server blocks nothing.
+    if wrote_row:
+        notify_team_of_order(backup['proposal_id'], form_data)
+    return result
 
 
 def _setting(name, default=''):
@@ -550,7 +556,8 @@ def _setting(name, default=''):
             value = st.secrets.get(name)
         except Exception:  # no secrets file
             value = None
-    return str(value).strip() if value is not None else default
+    value = str(value).strip() if value is not None else ''
+    return value or default
 
 
 def notify_team_of_order(proposal_id, form_data):
