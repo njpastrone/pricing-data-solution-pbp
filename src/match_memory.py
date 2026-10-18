@@ -22,7 +22,7 @@ import json
 from datetime import datetime
 import streamlit as st
 from src.data_loader import connect_to_sheets, DATASET_CONFIGS
-from src.match_manager import normalize_for_storage
+from pbp.core.match_manager import normalize_for_storage
 
 
 def _get_matches_sheet():

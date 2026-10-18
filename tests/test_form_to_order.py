@@ -16,9 +16,9 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
-from src.forms_helper import parse_form_response, form_response_to_order, html_form_to_order, add_order_notes
+from pbp.core.forms_helper import parse_form_response, form_response_to_order, html_form_to_order, add_order_notes
 from src.order_manager import save_order, load_order_data
-from src.helpers import convert_proposal_to_order
+from pbp.core.helpers import convert_proposal_to_order
 from test_client_form import FakeSheet, LIVE_HEADERS, _mock_sheets, _submit
 
 APP_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app.py')

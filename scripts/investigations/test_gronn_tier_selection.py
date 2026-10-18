@@ -11,8 +11,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 from src.data_loader import load_pricing_data
-from src.helpers import get_column_value, parse_tier_info
-from src.pricing_engine import determine_tier_number
+from pbp.core.helpers import get_column_value, parse_tier_info
+from pbp.core.pricing_engine import determine_tier_number
 
 def test_gronn_tiers():
     print(f"\n{'='*70}")

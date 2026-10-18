@@ -72,9 +72,9 @@ Type: files_with_matches (then read each file)
 **Key files to check (in priority order):**
 - `app.py` - Main application (all 4 tabs)
 - `src/data_loader.py` - Google Sheets data loading
-- `src/helpers.py` - Utility functions and `get_column_value()` mapping
-- `src/pricing_engine.py` - Pricing calculations
-- `src/pptx_generator.py` - PowerPoint generation
+- `pbp/core/helpers.py` - Utility functions and `get_column_value()` mapping
+- `pbp/core/pricing_engine.py` - Pricing calculations
+- `pbp/core/pptx_generator.py` - PowerPoint generation
 - `schema_reference.md` - Schema documentation
 - `README.md` - Project documentation
 - `CLAUDE.md` - Project context
@@ -120,7 +120,7 @@ Make changes systematically (AFTER user approval):
 
 **Step 1: Update Core Helper First**
 
-Read and update `src/helpers.py` - modify `get_column_value()` function:
+Read and update `pbp/core/helpers.py` - modify `get_column_value()` function:
 - Add new canonical name at top of priority list
 - Add old name to fallback list
 - Update docstrings
@@ -209,7 +209,7 @@ SCHEMA: [Brief description of change]
 - Updated documentation
 
 Files changed:
-- src/helpers.py (column mapping)
+- pbp/core/helpers.py (column mapping)
 - app.py (display logic)
 - schema_reference.md (documentation)
 ```

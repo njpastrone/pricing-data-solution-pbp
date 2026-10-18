@@ -13,12 +13,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Import required modules
-from src.slide_matcher import (
+from pbp.core.slide_matcher import (
     normalize_product_name,
     get_impact_slide_for_partner,
     find_all_impact_slides
 )
-from src.pptx_generator import (
+from pbp.core.pptx_generator import (
     detect_variant_groups,
     extract_variant_identifier,
     check_pricing_consistency,

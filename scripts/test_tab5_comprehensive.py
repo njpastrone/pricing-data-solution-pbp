@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pandas as pd
 from src.data_loader import load_pricing_data
-from src.helpers import (
+from pbp.core.helpers import (
     clean_price,
     get_column_value,
     get_shipping_costs,
@@ -17,7 +17,7 @@ from src.helpers import (
     calculate_product_tariff,
     convert_proposal_to_order
 )
-from src.pricing_engine import get_unit_price_new_system
+from pbp.core.pricing_engine import get_unit_price_new_system
 
 print("COMPREHENSIVE TAB 5 VERIFICATION")
 print("=" * 80)

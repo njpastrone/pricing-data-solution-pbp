@@ -16,8 +16,8 @@ sys.path.insert(0, project_root)
 
 try:
     from src.data_loader import load_pricing_data
-    from src.helpers import get_column_value, clean_price
-    from src.pricing_engine import get_unit_price_new_system
+    from pbp.core.helpers import get_column_value, clean_price
+    from pbp.core.pricing_engine import get_unit_price_new_system
 except ImportError as e:
     print(f"❌ CRITICAL ERROR: Cannot import required modules: {e}")
     print("Make sure you're running this from the project root directory")

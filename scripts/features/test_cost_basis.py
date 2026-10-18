@@ -8,7 +8,7 @@ Usage:
 
 import streamlit as st
 from src.data_loader import load_pricing_data
-from src.helpers import normalize_cost_to_per_item, get_column_value
+from pbp.core.helpers import normalize_cost_to_per_item, get_column_value
 
 st.title("Test Cost Basis Normalization (Jan 2026)")
 st.caption("Testing Per Item vs Per Package cost normalization")
@@ -40,7 +40,7 @@ for idx, row in df_template.iterrows():
 
     if base_cost_raw:
         try:
-            from src.helpers import clean_price
+            from pbp.core.helpers import clean_price
             base_cost = clean_price(base_cost_raw)
 
             if base_cost and cost_basis == 'Per Package':

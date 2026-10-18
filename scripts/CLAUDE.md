@@ -368,7 +368,7 @@ This tests:
 ### Dataset Testing
 Always test with both datasets:
 - **Demo dataset:** `master_pricing_template_10_14` (19 products)
-- **Real dataset:** `master_pricing` (133 products)
+- **Real dataset:** `master_pricing` (302 products)
 
 Switch dataset in sidebar of test scripts when available.
 

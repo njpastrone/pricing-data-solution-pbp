@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
 from src.data_loader import load_pricing_data
-from src.pricing_engine import get_unit_price_new_system
-from src.helpers import clean_price
+from pbp.core.pricing_engine import get_unit_price_new_system
+from pbp.core.helpers import clean_price
 
 st.set_page_config(page_title="Test Units Per Package", layout="wide")
 st.title("Units Per Package Normalization Test")

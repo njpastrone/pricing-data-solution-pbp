@@ -18,7 +18,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from src.data_loader import load_pricing_data
-from src.helpers import get_column_value
+from pbp.core.helpers import get_column_value
 
 st.title("🧪 Description Fallback Test")
 st.caption("Testing description hierarchy for invoices, POs, and proposals")

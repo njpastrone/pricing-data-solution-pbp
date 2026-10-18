@@ -14,7 +14,7 @@ import urllib.parse
 from datetime import datetime
 import pandas as pd
 from gspread.utils import rowcol_to_a1
-from src.forms_config import (
+from pbp.core.forms_config import (
     GOOGLE_FORM_CONFIG,
     ALL_ENTRY_IDS,
     RESPONSE_COLUMNS,

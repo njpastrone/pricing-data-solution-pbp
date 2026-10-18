@@ -8,7 +8,7 @@ Purpose: Local data storage for manual matches and cached files
 
 ## Quick Context
 - **Primary responsibility**: Local JSON storage for manual product-to-slide matches
-- **Key dependencies**: src/match_manager.py
+- **Key dependencies**: pbp/core/match_manager.py
 - **Used by**: PowerPoint slide matching system
 - **Technology stack**: JSON files
 
@@ -52,7 +52,7 @@ The `data/` directory serves as local file system storage for application data t
 
 **Usage:**
 ```python
-from src.match_manager import load_manual_matches, save_manual_matches
+from pbp.core.match_manager import load_manual_matches, save_manual_matches
 
 # Load matches
 matches = load_manual_matches()
@@ -85,7 +85,7 @@ save_manual_matches(matches)
 
 ### Loading Manual Matches
 ```python
-from src.match_manager import load_manual_matches
+from pbp.core.match_manager import load_manual_matches
 
 matches = load_manual_matches()
 # Returns: {'demo': {...}, 'real': {...}}
@@ -97,7 +97,7 @@ dataset_matches = matches.get(dataset, {})
 
 ### Saving Manual Matches
 ```python
-from src.match_manager import save_manual_matches
+from pbp.core.match_manager import save_manual_matches
 
 # Load existing
 matches = load_manual_matches()
@@ -111,7 +111,7 @@ save_manual_matches(matches)
 
 ### Product Name Normalization
 ```python
-from src.match_manager import normalize_for_storage
+from pbp.core.match_manager import normalize_for_storage
 
 # Normalize for consistent storage
 normalized_name = normalize_for_storage("Product Name (Variant)")
@@ -162,7 +162,7 @@ rm data/manual_matches.json
 
 ### To migrate matches between datasets:
 ```python
-from src.match_manager import load_manual_matches, save_manual_matches
+from pbp.core.match_manager import load_manual_matches, save_manual_matches
 
 matches = load_manual_matches()
 
@@ -236,7 +236,7 @@ Product names are normalized before storage:
 - Lowercase
 - Special characters removed
 - Spaces preserved
-- See `src/match_manager.py::normalize_for_storage()`
+- See `pbp/core/match_manager.py::normalize_for_storage()`
 
 **Why?** Consistent matching regardless of capitalization or punctuation.
 
@@ -308,9 +308,9 @@ Track when matches were added:
 ## Links & Resources
 
 - **Main README:** [../README.md](../README.md)
-- **Match Manager:** [../src/match_manager.py](../src/match_manager.py)
+- **Match Manager:** [../pbp/core/match_manager.py](../pbp/core/match_manager.py)
 - **Match Memory:** [../src/match_memory.py](../src/match_memory.py)
-- **Slide Matcher:** [../src/slide_matcher.py](../src/slide_matcher.py)
+- **Slide Matcher:** [../pbp/core/slide_matcher.py](../pbp/core/slide_matcher.py)
 - **PowerPoint Phase 1:** [../docs/powerpoint/PHASE_1_COMPLETION_SUMMARY.md](../docs/powerpoint/PHASE_1_COMPLETION_SUMMARY.md)
 
 ---

@@ -36,7 +36,7 @@ This directory stores local data files used by the application. Currently contai
 - Admin-defined exact matches
 
 **Managed by:**
-- `src/match_manager.py` - Read/write operations
+- `pbp/core/match_manager.py` - Read/write operations
 - Tab 1 UI - User can set overrides
 
 ---
@@ -54,7 +54,7 @@ When matching products to PowerPoint slides:
 
 ### Load Matches
 ```python
-from src.match_manager import load_manual_matches
+from pbp.core.match_manager import load_manual_matches
 
 matches = load_manual_matches()
 demo_matches = matches.get('demo', {})
@@ -62,7 +62,7 @@ demo_matches = matches.get('demo', {})
 
 ### Save Matches
 ```python
-from src.match_manager import save_manual_matches
+from pbp.core.match_manager import save_manual_matches
 
 matches['demo']['Product Name'] = 'Slide Title'
 save_manual_matches(matches)
@@ -90,6 +90,6 @@ save_manual_matches(matches)
 ## Links
 
 - **CLAUDE.md:** [CLAUDE.md](CLAUDE.md) - AI context
-- **Match Manager:** [../src/match_manager.py](../src/match_manager.py)
+- **Match Manager:** [../pbp/core/match_manager.py](../pbp/core/match_manager.py)
 - **Match Memory:** [../src/match_memory.py](../src/match_memory.py)
 - **PowerPoint Docs:** [../docs/powerpoint/](../docs/powerpoint/)

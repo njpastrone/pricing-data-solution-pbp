@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.data_loader import load_pricing_data, connect_to_sheets
-from src.helpers import extract_partner_contacts
+from pbp.core.helpers import extract_partner_contacts
 
 def test_google_sheets_connection():
     """Test 1: Verify Google Sheets connection and Partner-Specific Info sheet exists"""

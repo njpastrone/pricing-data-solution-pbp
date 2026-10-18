@@ -12,7 +12,7 @@ import streamlit as st
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from src.helpers import (
+from pbp.core.helpers import (
     parse_moq_value,
     parse_mov_value,
     convert_mov_to_moq,

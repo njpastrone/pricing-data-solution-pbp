@@ -2,7 +2,7 @@
 
 A Python/Streamlit application for creating proposals, managing orders, and generating invoices for artisan products.
 
-**Status:** IN PRODUCTION - https://pricing-data-solution-pbp.onrender.com
+**Status:** IN PRODUCTION - https://pbp-order-management-system.onrender.com
 **Version:** 8.4.0
 **Last Updated:** 2026-05-27
 
@@ -110,24 +110,20 @@ pricing-data-solution-pbp/
 ├── requirements.txt            # Python dependencies
 ├── CLAUDE.md                   # Project rules & AI context
 │
-├── src/                        # Modular code (14 modules, ~8,300 lines)
+├── pbp/                        # Shared core package (Streamlit app + future web app)
+│   ├── core/                  # helpers, pricing_engine, slide_matcher, pptx_generator,
+│   │                          # match_manager, forms_config, forms_helper
+│   └── sheets/                # drive_helper (photo storage via Google Sheets)
+│
+├── src/                        # Streamlit-coupled modules
 │   ├── data_loader.py         # Google Sheets data loading
-│   ├── helpers.py             # Utility functions, validation, HTML parsing
-│   ├── pricing_engine.py      # Pricing calculations and quote generation
 │   ├── client_form.py         # Client order form page (v8.4.0)
-│   ├── slide_matcher.py       # PowerPoint slide matching
-│   ├── pptx_generator.py      # PowerPoint generation
 │   ├── template_loader.py     # Cloud-based template loading
-│   ├── match_manager.py       # Manual match storage (JSON)
 │   ├── match_memory.py        # Confirmed match storage (Google Sheets)
 │   ├── proposal_manager.py    # Save/load/delete proposals
-│   ├── order_manager.py       # Save/load/delete orders
-│   ├── drive_helper.py        # Photo storage via Google Sheets (base64)
-│   ├── forms_config.py        # Google Forms configuration
-│   └── forms_helper.py        # Google Forms URL generation & import
+│   └── order_manager.py       # Save/load/delete orders
 │
-├── tests/                      # Unit tests
-│   └── test_client_form.py    # Client form module tests
+├── tests/                      # Unit tests + golden parity tests (tests/golden/)
 │
 ├── docs/                       # Documentation (organized by topic)
 │   ├── planning/              # Requirements, pricing logic, data structure
@@ -151,7 +147,7 @@ pricing-data-solution-pbp/
 
 **Datasets:** Switchable between Demo and Real data (sidebar selector)
 - **Demo:** `master_pricing_template_10_14` (19 products, 4 partners)
-- **Real:** `master_pricing` (133 products, 4 partners)
+- **Real:** `master_pricing` (302 products, 33 partners as of 2026-10-13)
 
 **Schema:** v8.1.0, 45 columns. See [schema_reference.md](schema_reference.md) for complete definition.
 
@@ -164,7 +160,7 @@ pricing-data-solution-pbp/
 
 ## Deployment
 
-**Live URL:** https://pricing-data-solution-pbp.onrender.com
+**Live URL:** https://pbp-order-management-system.onrender.com
 
 - **Platform:** Render Standard tier (2GB RAM, $25/month)
 - **Auto-deploy:** Connected to GitHub (deploys on push to main)

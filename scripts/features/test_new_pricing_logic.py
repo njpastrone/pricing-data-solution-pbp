@@ -8,8 +8,8 @@ Usage:
 
 import streamlit as st
 from src.data_loader import load_pricing_data
-from src.pricing_engine import calculate_pbp_msrp, calculate_vendor_markup, calculate_pbp_markup
-from src.helpers import normalize_cost_to_per_item, get_pricing_logic
+from pbp.core.pricing_engine import calculate_pbp_msrp, calculate_vendor_markup, calculate_pbp_markup
+from pbp.core.helpers import normalize_cost_to_per_item, get_pricing_logic
 
 st.title("Test New Pricing Logic (Jan 2026)")
 st.caption("Testing 3 pricing methods: MSRP + % of cost, MSRP capped, Standard markup")

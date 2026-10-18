@@ -385,7 +385,7 @@ When testing MOQ/MOV functionality:
 - **[schema_reference.md](../../schema_reference.md)** - Data structure definitions
 - **[METHODOLOGY_LOGIC.md](METHODOLOGY_LOGIC.md)** - Historical pricing logic
 - **[PLANNING.md](PLANNING.md)** - Project requirements and architecture
-- **[src/helpers.py](../../src/helpers.py)** - Implementation code
+- **[pbp/core/helpers.py](../../pbp/core/helpers.py)** - Implementation code
 - **[scripts/features/test_moq_mov_calculation.py](../../scripts/features/test_moq_mov_calculation.py)** - Unit tests
 
 ---
@@ -409,4 +409,4 @@ If you encounter unexpected MOQ calculations:
 5. Review edge case handling in this document
 6. Run unit tests: `streamlit run scripts/features/test_moq_mov_calculation.py`
 
-For questions or clarifications, refer to this document and the related code in `src/helpers.py`.
+For questions or clarifications, refer to this document and the related code in `pbp/core/helpers.py`.
