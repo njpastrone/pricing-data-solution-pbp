@@ -1800,7 +1800,7 @@ def format_pricing_breakdown_row(description, units, pbp_per_unit, pbp_total, cl
 MAX_PHOTOS_PER_PRODUCT = 5
 
 
-def add_product_photos(existing, uploaded, max_photos=MAX_PHOTOS_PER_PRODUCT):
+def add_product_photos(existing, uploaded, max_photos=MAX_PHOTOS_PER_PRODUCT, saved=()):
     """
     Merge newly uploaded photos into a product's photo list without duplicates.
 
@@ -1812,18 +1812,22 @@ def add_product_photos(existing, uploaded, max_photos=MAX_PHOTOS_PER_PRODUCT):
         existing (list): Photos already attached (objects with .name and .size)
         uploaded (list): Photos currently in the uploader widget
         max_photos (int): Cap per product
+        saved (list): Photos already stored with a loaded order (metadata dicts
+            with 'filename' and 'size'). They count toward the cap and are never
+            added again.
 
     Returns:
         tuple: (merged photo list, number of photos skipped because of the cap)
     """
     merged = list(existing)
     seen = {(p.name, p.size) for p in merged}
+    seen.update((m.get('filename'), m.get('size')) for m in saved)
     skipped = 0
     for photo in uploaded or []:
         key = (photo.name, photo.size)
         if key in seen:
             continue
-        if len(merged) >= max_photos:
+        if len(saved) + len(merged) >= max_photos:
             skipped += 1
             continue
         merged.append(photo)

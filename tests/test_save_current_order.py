@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import io
 
 import src.order_manager as order_manager
+from src.helpers import add_product_photos
 from src.order_manager import ORDER_STATE_KEYS, save_current_order
 
 
@@ -84,9 +85,121 @@ def test_product_photos_are_read_for_upload(monkeypatch):
     calls = _fake_save(monkeypatch)
     photo = io.BytesIO(b"png-bytes")
     photo.name = "mug.png"
+    photo.size = 9
     photo.read()  # leave the cursor at the end, like after a preview
     state = _state(product_photos={'Mug': [photo], 'Pen': []})
 
     save_current_order(state, "ABC", "")
 
     assert calls[0]['photos_by_product'] == {'Mug': [{'bytes': b"png-bytes", 'filename': "mug.png"}]}
+
+
+# --- Photos survive re-saving a loaded order (fake sheet + fake photo store) ---
+
+class FakeSheet:
+    def __init__(self):
+        self.rows = [["Order_ID", "Name", "Created_By", "Created_Date", "Dataset", "Order_Data"]]
+
+    def get_all_values(self):
+        return [list(row) for row in self.rows]
+
+    def append_row(self, row):
+        self.rows.append(list(row))
+
+    def update(self, cell_range, values):
+        row_number = int(cell_range.split(":")[0][1:])
+        self.rows[row_number - 1] = list(values[0])
+
+
+def _fake_storage(monkeypatch):
+    import src.drive_helper as drive_helper
+    sheet = FakeSheet()
+    uploads = []
+
+    def fake_upload_photo(file_bytes, filename, order_id=""):
+        uploads.append(file_bytes)
+        return f"photo-{len(uploads)}"
+
+    monkeypatch.setattr(order_manager, 'initialize_orders_sheet', lambda: sheet)
+    monkeypatch.setattr(drive_helper, 'upload_photo', fake_upload_photo)
+    return uploads
+
+
+def _upload(name, data):
+    photo = io.BytesIO(data)
+    photo.name = name
+    photo.size = len(data)
+    return photo
+
+
+def _load_into(state):
+    """Do what Tab 3's Load button does with a saved order's photos."""
+    order_id = order_manager.load_all_orders()[0]['order_id']
+    _, order_data, _ = order_manager.load_order_data(order_id)
+    state['product_photos'] = {}
+    state['product_photo_metadata'] = order_data.get('product_photos', {})
+    return order_data
+
+
+def _saved_filenames(order_data, product):
+    return [p['filename'] for p in order_data['product_photos'][product]]
+
+
+def test_resave_loaded_order_without_uploads_keeps_photos(monkeypatch):
+    uploads = _fake_storage(monkeypatch)
+    state = _state(order_items=[], product_photos={'Mug': [_upload("mug.png", b"mug")]})
+    save_current_order(state, "ABC", "")
+
+    state = _state(order_items=[])
+    _load_into(state)
+    save_current_order(state, "ABC", "", overwrite=True, finalize=True)
+
+    assert _saved_filenames(_load_into(_state()), 'Mug') == ["mug.png"]
+    assert len(uploads) == 1  # the saved photo is not uploaded again
+
+
+def test_resave_loaded_order_with_new_upload_keeps_old_and_new(monkeypatch):
+    uploads = _fake_storage(monkeypatch)
+    state = _state(order_items=[], product_photos={'Mug': [_upload("mug.png", b"mug")]})
+    save_current_order(state, "ABC", "")
+
+    state = _state(order_items=[])
+    _load_into(state)
+    state['product_photos'] = {'Mug': [_upload("logo.png", b"logo")]}
+    save_current_order(state, "ABC", "", overwrite=True)
+
+    assert _saved_filenames(_load_into(_state()), 'Mug') == ["mug.png", "logo.png"]
+    assert len(uploads) == 2
+
+
+def test_saving_twice_in_one_session_does_not_duplicate_photos(monkeypatch):
+    uploads = _fake_storage(monkeypatch)
+    photo = _upload("mug.png", b"mug")
+    state = _state(order_items=[], product_photos={'Mug': [photo]})
+    save_current_order(state, "ABC", "")
+    # The uploader re-sends the same file on the next rerun
+    state['product_photos']['Mug'] = add_product_photos(
+        state['product_photos'].get('Mug', []), [photo], saved=state['product_photo_metadata']['Mug'])[0]
+    save_current_order(state, "ABC", "", overwrite=True)
+
+    assert _saved_filenames(_load_into(_state()), 'Mug') == ["mug.png"]
+    assert len(uploads) == 1
+
+
+def test_cap_counts_saved_photos(monkeypatch):
+    _fake_storage(monkeypatch)
+    first = [_upload(f"{i}.png", b"x" * (i + 1)) for i in range(4)]
+    state = _state(order_items=[], product_photos={'Mug': first})
+    save_current_order(state, "ABC", "")
+
+    state = _state(order_items=[])
+    _load_into(state)
+    # Only one slot is left, so only one of these two is attached
+    merged, skipped = add_product_photos([], [_upload("a.png", b"a"), _upload("b.png", b"b")],
+                                         saved=state['product_photo_metadata']['Mug'])
+    assert [p.name for p in merged] == ["a.png"] and skipped == 1
+    # Even if more slip into the session, the save stops at five
+    state['product_photos'] = {'Mug': [_upload("a.png", b"a"), _upload("b.png", b"b")]}
+    save_current_order(state, "ABC", "", overwrite=True)
+
+    assert len(_load_into(_state())['product_photos']['Mug']) == 5
