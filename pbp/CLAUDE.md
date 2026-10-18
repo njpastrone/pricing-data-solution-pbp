@@ -14,5 +14,7 @@ FastAPI app can both import them. Phase 0 only moved files and changed imports.
   `src.match_memory` (which imports streamlit) inside `find_match`. If that
   lookup fails it logs a warning and falls back to manual/automatic matching.
   Phase 1 moves confirmed-match storage into `pbp/sheets/`.
+- `pbp/core/forms_helper.py` imports `STATUS_PENDING` from `src.client_form`
+  (which imports streamlit). Phase 1 moves `client_form` into `pbp/sheets/`.
 
-Until both are done, importing these two modules pulls in Streamlit.
+Until these are done, importing these three modules pulls in Streamlit.
