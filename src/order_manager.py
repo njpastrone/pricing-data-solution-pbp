@@ -17,6 +17,7 @@ from datetime import datetime, date
 import streamlit as st
 import gspread
 from src.data_loader import connect_to_sheets, DATASET_CONFIGS
+from src.helpers import add_product_photos
 
 
 def convert_dates_to_strings(obj):
@@ -143,7 +144,7 @@ def upload_order_photos(order_id, photos_by_product):
         photos_by_product (dict): {product_name: [{"bytes": b"...", "filename": "photo.png"}, ...]}
 
     Returns:
-        dict: {product_name: [{"file_id": "abc123", "filename": "photo.png"}, ...]}
+        dict: {product_name: [{"file_id": "abc123", "filename": "photo.png", "size": 1234}, ...]}
     """
     from src.drive_helper import upload_photo
 
@@ -162,7 +163,8 @@ def upload_order_photos(order_id, photos_by_product):
             if file_id:
                 product_files.append({
                     'file_id': file_id,
-                    'filename': photo['filename']  # Keep original filename for display
+                    'filename': photo['filename'],  # Keep original filename for display
+                    'size': len(photo['bytes'])  # Lets a re-save skip photos already stored
                 })
 
         if product_files:
@@ -216,7 +218,8 @@ def save_order(name, created_by, order_data, dataset, photos_by_product=None, ov
         created_by (str): Creator name/email (optional)
         order_data (dict): Order state data to save
         dataset (str): Dataset used ('demo' or 'real')
-        photos_by_product (dict): Optional product photos to upload
+        photos_by_product (dict): Optional new product photos to upload. They are
+            added to any photos already in order_data['product_photos'].
         overwrite (bool): If True and an order with this name exists, replace it
             in place (keeping its original Order_ID) instead of suggesting a
             versioned name.
@@ -258,11 +261,12 @@ def save_order(name, created_by, order_data, dataset, photos_by_product=None, ov
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Upload photos to Google Drive if any were provided
+        # Upload new photos and add them to the photos already saved with the order
         if photos_by_product:
             photo_metadata = upload_order_photos(order_id, photos_by_product)
-            if photo_metadata:
-                order_data['product_photos'] = photo_metadata
+            all_photos = order_data.setdefault('product_photos', {})
+            for product_name, files in photo_metadata.items():
+                all_photos[product_name] = all_photos.get(product_name, []) + files
 
         # Convert any date/datetime objects to strings before JSON serialization
         order_data_serializable = convert_dates_to_strings(order_data)
@@ -325,14 +329,22 @@ def save_current_order(state, name, created_by, overwrite=False, finalize=False)
     if finalize:
         order_data['order_confirmed'] = True
 
-    # Read uploaded product photos so they can be stored with the order
+    # Keep the photos already saved with a loaded order, then upload only the
+    # new ones (skipping any already saved, up to the per-product cap)
+    saved_photos = state.get('product_photo_metadata') or {}
+    order_data['product_photos'] = {prod: list(files) for prod, files in saved_photos.items()}
+
+    def unsaved_photos(prod_name, photos):
+        new_photos, _ = add_product_photos([], photos, saved=order_data['product_photos'].get(prod_name, []))
+        return new_photos
+
     photos_for_upload = {}
     for prod_name, photos in state.get('product_photos', {}).items():
-        if photos:
-            photo_list = []
-            for photo in photos:
-                photo.seek(0)
-                photo_list.append({'bytes': photo.read(), 'filename': photo.name})
+        photo_list = []
+        for photo in unsaved_photos(prod_name, photos):
+            photo.seek(0)
+            photo_list.append({'bytes': photo.read(), 'filename': photo.name})
+        if photo_list:
             photos_for_upload[prod_name] = photo_list
 
     success, message, order_id = save_order(
@@ -343,6 +355,15 @@ def save_current_order(state, name, created_by, overwrite=False, finalize=False)
         photos_by_product=photos_for_upload if photos_for_upload else None,
         overwrite=overwrite
     )
+
+    if success:
+        # The session now holds what was saved, so the next save does not
+        # upload the same photos again. Photos that failed to upload stay.
+        state['product_photo_metadata'] = order_data['product_photos']
+        state['product_photos'] = {
+            prod: unsaved_photos(prod, photos)
+            for prod, photos in state.get('product_photos', {}).items()
+        }
 
     if success and finalize:
         state['order_confirmed'] = True
@@ -450,7 +471,12 @@ def delete_order(order_id):
                 if len(row) >= 6 and row[5]:
                     try:
                         order_data = json.loads(row[5])
-                        file_ids = get_photo_file_ids_from_order(order_data)
+                        still_used = set()
+                        for other in all_values[1:]:
+                            if other is not row and len(other) >= 6 and other[5]:
+                                still_used.update(get_photo_file_ids_from_order(json.loads(other[5])))
+                        file_ids = [fid for fid in get_photo_file_ids_from_order(order_data)
+                                    if fid not in still_used]
                         if file_ids:
                             from src.drive_helper import delete_photos
                             deleted = delete_photos(file_ids)

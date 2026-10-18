@@ -1897,6 +1897,8 @@ with st.sidebar:
                 st.session_state.proposal_products = []
                 st.session_state.order_items = []
                 st.session_state.order_confirmed = False
+                st.session_state.product_photos = {}
+                st.session_state.product_photo_metadata = {}
                 # Clear proposal tracking info
                 st.session_state.loaded_proposal_name = None
                 st.session_state.loaded_proposal_date = None
@@ -7259,6 +7261,8 @@ with tab3:
         if st.button("Clear Entire Order", type="secondary"):
             st.session_state.order_items = []
             st.session_state.order_confirmed = False
+            st.session_state.product_photos = {}
+            st.session_state.product_photo_metadata = {}
             st.rerun()
 
         # PRICING SUMMARY (Phase 3) - Show all products with notes or warnings
@@ -8014,9 +8018,10 @@ with tab3:
             key="photo_product_selector"
         )
 
-        # Show current photo count for selected product
+        # Show current photo count for selected product (saved photos count too)
         current_photos = st.session_state.product_photos.get(selected_product, [])
-        remaining = MAX_PHOTOS_PER_PRODUCT - len(current_photos)
+        saved_photos = st.session_state.product_photo_metadata.get(selected_product, [])
+        remaining = MAX_PHOTOS_PER_PRODUCT - len(saved_photos) - len(current_photos)
 
         if remaining > 0:
             uploaded_photos = st.file_uploader(
@@ -8030,7 +8035,7 @@ with tab3:
                 # Add new photos up to the cap, skipping ones already attached
                 # (the uploader re-sends its files on every rerun)
                 existing = st.session_state.product_photos.get(selected_product, [])
-                merged, skipped = add_product_photos(existing, uploaded_photos)
+                merged, skipped = add_product_photos(existing, uploaded_photos, saved=saved_photos)
                 st.session_state.product_photos[selected_product] = merged
                 if skipped:
                     st.warning(f"Skipped {skipped} photo(s) - maximum {MAX_PHOTOS_PER_PRODUCT} per product reached.")
@@ -8038,6 +8043,9 @@ with tab3:
             st.info(f"{selected_product} already has {MAX_PHOTOS_PER_PRODUCT} photos (maximum).")
 
         # Display photos for selected product
+        if saved_photos:
+            saved_names = ", ".join(m.get('filename', '') for m in saved_photos)
+            st.caption(f"Already saved with this order: {saved_names}")
         current_photos = st.session_state.product_photos.get(selected_product, [])
         if current_photos:
             st.markdown(f"**{selected_product}** - {len(current_photos)} photo(s):")
@@ -8047,13 +8055,17 @@ with tab3:
                     photo.seek(0)
                     st.image(photo, caption=photo.name)
 
-        # Summary of all products with photos
-        products_with_photos = {k: v for k, v in st.session_state.product_photos.items() if v}
+        # Summary of all products with photos (saved + new uploads)
+        products_with_photos = {}
+        for photo_dict in (st.session_state.product_photo_metadata, st.session_state.product_photos):
+            for prod_name, photos in photo_dict.items():
+                if photos:
+                    products_with_photos[prod_name] = products_with_photos.get(prod_name, 0) + len(photos)
         if products_with_photos:
             st.divider()
             st.markdown("**Photo Summary:**")
-            for prod_name, photos in products_with_photos.items():
-                st.caption(f"- {prod_name}: {len(photos)} photo(s)")
+            for prod_name, photo_count in products_with_photos.items():
+                st.caption(f"- {prod_name}: {photo_count} photo(s)")
         else:
             st.caption("No photos uploaded yet.")
 
@@ -9547,8 +9559,8 @@ with tab4:
         <img src="data:{mime_type};base64,{b64}" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;" />
     </div>"""
 
-                # Fall back to Drive photos (loaded from saved order)
-                elif prod_name in product_photos_meta and product_photos_meta[prod_name]:
+                # Also show Drive photos (loaded from saved order)
+                if prod_name in product_photos_meta and product_photos_meta[prod_name]:
                     for meta in product_photos_meta[prod_name]:
                         from src.drive_helper import download_photo as dl_photo
                         photo_bytes = dl_photo(meta['file_id'])
@@ -9636,8 +9648,8 @@ with tab4:
                                 key=f"tab4_dl_photo_{prod_name}_{pi}"
                             )
 
-                # Fall back to saved photos (loaded from Google Sheets)
-                elif prod_name in product_photos_meta and product_photos_meta[prod_name]:
+                # Also show saved photos (loaded from Google Sheets)
+                if prod_name in product_photos_meta and product_photos_meta[prod_name]:
                     photos_meta = product_photos_meta[prod_name]
                     photo_cols = st.columns(min(len(photos_meta), 4))
                     for pi, meta in enumerate(photos_meta):
