@@ -634,3 +634,137 @@ if __name__ == "__main__":
     test_parse_form_response_reads_live_headers()
     test_response_row_keeps_payment_preference_column_blank()
     print("All tests passed!")
+
+
+NOTIFY_SETTINGS = {'ORDER_NOTIFY_EMAILS': 'team@example.com, ops@example.com', 'SMTP_HOST': 'smtp.example.com',
+                   'SMTP_USER': 'sender@example.com', 'SMTP_PASSWORD': 'secret'}
+
+
+class FakeSMTP:
+    """Stands in for smtplib.SMTP; records every sent email in FakeSMTP.sent."""
+    sent = []
+    fail = None
+
+    def __init__(self, host, port, timeout):
+        if FakeSMTP.fail:
+            raise FakeSMTP.fail
+        self.host, self.port = host, port
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def starttls(self):
+        pass
+
+    def login(self, user, password):
+        assert (user, password) == ('sender@example.com', 'secret')
+
+    def send_message(self, message):
+        FakeSMTP.sent.append(message)
+
+
+def _submit_with_email(client, settings=NOTIFY_SETTINGS, fail=None):
+    """Submit SAMPLE_FORM with fake email settings and a fake mail server."""
+    FakeSMTP.sent, FakeSMTP.fail = [], fail
+    with patch.dict(os.environ, settings), patch('src.client_form.smtplib.SMTP', FakeSMTP):
+        return _submit(client, 'PROP_1', 'sess1', SAMPLE_FORM)
+
+
+def test_submitted_order_emails_the_team_once():
+    """Once the order is in Form Responses, the team gets one email with company, contact, items and the app link."""
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    assert _submit_with_email(client) == (True, "Order received")
+
+    assert len(FakeSMTP.sent) == 1
+    email = FakeSMTP.sent[0]
+    assert email['To'] == 'team@example.com, ops@example.com'
+    assert email['From'] == 'sender@example.com'
+    assert 'Acme Corp' in email['Subject']
+    body = email.get_content()
+    assert 'Jo Smith (jo@acme.com)' in body
+    assert 'Items: 2' in body
+    assert 'PROP_1' in body
+    assert 'https://pbp-order-management-system.onrender.com/' in body
+
+    # Later syncs (another submit click, the app's next-run retry) send nothing more
+    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('src.client_form.smtplib.SMTP', FakeSMTP), \
+         patch('src.client_form.connect_to_sheets', return_value=client):
+        sync_submission('PROP_1', 'sess1')
+        retry_pending_syncs()
+    assert len(FakeSMTP.sent) == 1
+
+
+def test_pending_order_emails_only_when_it_reaches_form_responses():
+    """No email while the order waits in the backup tab; one email when the retry copies it."""
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    response.fail['update'] = [Exception("503 Service Unavailable")]
+    _submit_with_email(client)
+    assert FakeSMTP.sent == []
+
+    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('src.client_form.smtplib.SMTP', FakeSMTP), \
+         patch('src.client_form.connect_to_sheets', return_value=client):
+        retry_pending_syncs()
+    assert len(FakeSMTP.sent) == 1
+
+
+def test_stale_pending_row_sends_no_second_email():
+    """Retry read the row as pending, then another sync copied and emailed it first: retry sends nothing more."""
+    from src import client_form
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    response.fail['update'] = [Exception("503 Service Unavailable")]
+    _submit_with_email(client)
+    assert FakeSMTP.sent == []
+
+    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('src.client_form.smtplib.SMTP', FakeSMTP), \
+         patch('src.client_form.connect_to_sheets', return_value=client):
+        stale_rows = client_form._read_backup_rows(drafts)
+        sync_submission('PROP_1', 'sess1')
+        assert len(FakeSMTP.sent) == 1
+        with patch('src.client_form._read_backup_rows', return_value=stale_rows):
+            retry_pending_syncs()
+    assert len(FakeSMTP.sent) == 1
+    assert len(_response_rows(response)) == 1
+
+
+def test_email_failure_never_fails_the_order():
+    """Mail server down: client still sees 'Order received', the order is synced, and staff are warned."""
+    from src.client_form import failed_notifications
+    failed_notifications.clear()
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    assert _submit_with_email(client, fail=OSError("connection refused")) == (True, "Order received")
+
+    assert len(_response_rows(response)) == 1
+    assert _backup(drafts)[1] == STATUS_SUBMITTED
+    assert [(f['proposal_id'], f['company_name']) for f in failed_notifications] == [('PROP_1', 'Acme Corp')]
+    assert 'connection refused' in failed_notifications[0]['reason']
+    failed_notifications.clear()
+
+
+def test_bad_email_header_never_fails_the_sync():
+    """A company name with a line break cannot go in an email subject: the order still syncs and staff are warned."""
+    from src.client_form import failed_notifications
+    failed_notifications.clear()
+    client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    form = json.loads(json.dumps(SAMPLE_FORM))
+    form['client_info']['company_name'] = 'Acme\nCorp'
+    FakeSMTP.sent, FakeSMTP.fail = [], None
+    with patch.dict(os.environ, NOTIFY_SETTINGS), patch('src.client_form.smtplib.SMTP', FakeSMTP):
+        assert _submit(client, 'PROP_1', 'sess1', form) == (True, "Order received")
+
+    assert FakeSMTP.sent == []
+    assert len(_response_rows(response)) == 1
+    assert _backup(drafts)[1] == STATUS_SUBMITTED
+    assert [f['proposal_id'] for f in failed_notifications] == ['PROP_1']
+    failed_notifications.clear()
+
+
+def test_no_email_when_not_set_up():
+    """Without recipients or a mail server configured, submit works and no mail server is contacted."""
+    for settings in ({}, {'ORDER_NOTIFY_EMAILS': 'team@example.com'}, {'SMTP_HOST': 'smtp.example.com'}):
+        client, response, drafts, _ = _mock_sheets(LIVE_HEADERS)
+        blank = {name: '' for name in NOTIFY_SETTINGS}
+        assert _submit_with_email(client, dict(blank, **settings), fail=AssertionError("mail server contacted")) == (True, "Order received")
+        assert FakeSMTP.sent == []
