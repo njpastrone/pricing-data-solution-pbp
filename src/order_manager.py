@@ -471,7 +471,12 @@ def delete_order(order_id):
                 if len(row) >= 6 and row[5]:
                     try:
                         order_data = json.loads(row[5])
-                        file_ids = get_photo_file_ids_from_order(order_data)
+                        still_used = set()
+                        for other in all_values[1:]:
+                            if other is not row and len(other) >= 6 and other[5]:
+                                still_used.update(get_photo_file_ids_from_order(json.loads(other[5])))
+                        file_ids = [fid for fid in get_photo_file_ids_from_order(order_data)
+                                    if fid not in still_used]
                         if file_ids:
                             from src.drive_helper import delete_photos
                             deleted = delete_photos(file_ids)

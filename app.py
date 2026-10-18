@@ -9559,8 +9559,8 @@ with tab4:
         <img src="data:{mime_type};base64,{b64}" style="max-width: 100%; border: 1px solid #ddd; border-radius: 4px;" />
     </div>"""
 
-                # Fall back to Drive photos (loaded from saved order)
-                elif prod_name in product_photos_meta and product_photos_meta[prod_name]:
+                # Also show Drive photos (loaded from saved order)
+                if prod_name in product_photos_meta and product_photos_meta[prod_name]:
                     for meta in product_photos_meta[prod_name]:
                         from src.drive_helper import download_photo as dl_photo
                         photo_bytes = dl_photo(meta['file_id'])
@@ -9648,8 +9648,8 @@ with tab4:
                                 key=f"tab4_dl_photo_{prod_name}_{pi}"
                             )
 
-                # Fall back to saved photos (loaded from Google Sheets)
-                elif prod_name in product_photos_meta and product_photos_meta[prod_name]:
+                # Also show saved photos (loaded from Google Sheets)
+                if prod_name in product_photos_meta and product_photos_meta[prod_name]:
                     photos_meta = product_photos_meta[prod_name]
                     photo_cols = st.columns(min(len(photos_meta), 4))
                     for pi, meta in enumerate(photos_meta):

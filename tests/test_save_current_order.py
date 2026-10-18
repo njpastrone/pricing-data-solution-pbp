@@ -110,6 +110,9 @@ class FakeSheet:
         row_number = int(cell_range.split(":")[0][1:])
         self.rows[row_number - 1] = list(values[0])
 
+    def delete_rows(self, row_number):
+        del self.rows[row_number - 1]
+
 
 def _fake_storage(monkeypatch):
     import src.drive_helper as drive_helper
@@ -203,3 +206,24 @@ def test_cap_counts_saved_photos(monkeypatch):
     save_current_order(state, "ABC", "", overwrite=True)
 
     assert len(_load_into(_state())['product_photos']['Mug']) == 5
+
+
+def test_deleting_one_version_keeps_photos_the_other_still_uses(monkeypatch):
+    import src.drive_helper as drive_helper
+    _fake_storage(monkeypatch)
+    deleted = []
+    monkeypatch.setattr(drive_helper, 'delete_photos', lambda ids: deleted.extend(ids) or len(ids))
+    state = _state(order_items=[], product_photos={'Mug': [_upload("mug.png", b"mug")]})
+    save_current_order(state, "ABC", "")
+
+    state = _state(order_items=[])
+    _load_into(state)
+    state['product_photos'] = {'Mug': [_upload("logo.png", b"logo")]}
+    save_current_order(state, "ABC (v2)", "")
+
+    ids = {o['name']: o['order_id'] for o in order_manager.load_all_orders()}
+    order_manager.delete_order(ids["ABC"])
+    assert deleted == []  # mug.png is still used by "ABC (v2)"
+
+    order_manager.delete_order(ids["ABC (v2)"])
+    assert sorted(deleted) == ["photo-1", "photo-2"]
