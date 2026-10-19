@@ -22,7 +22,8 @@ from datetime import datetime
 from email.message import EmailMessage
 import gspread
 import streamlit as st
-from src.data_loader import connect_to_sheets, DATASET_CONFIGS
+from src.data_loader import connect_to_sheets, load_pricing_data, DATASET_CONFIGS
+from src.pricing_engine import calculate_pbp_msrp
 from src.forms_config import GOOGLE_FORM_CONFIG, RESPONSE_COLUMNS, MAX_PRODUCT_LINES, find_response_column
 
 
@@ -53,6 +54,10 @@ STUCK_AFTER_MINUTES = 10
 STATUS_DRAFT = 'draft'
 STATUS_PENDING = 'pending_sync'   # order received, not yet in Form Responses
 STATUS_SUBMITTED = 'submitted'    # order is in Form Responses
+
+# A form link with no proposal uses this ID prefix plus the dataset, e.g. "catalog_real".
+# The client then picks from the whole product catalog and sees prices.
+CATALOG_FORM_PREFIX = "catalog_"
 
 # Staff app address, used in client form links and the team order email
 APP_URL = "https://pbp-order-management-system.onrender.com/"
@@ -144,6 +149,65 @@ def load_proposal_for_client(proposal_id):
 
     except Exception as e:
         print(f"Error loading proposal for client form: {e}")
+        return None
+
+
+def catalog_form_id(dataset):
+    """Form ID for a link that starts with no proposal (whole catalog), e.g. "catalog_real"."""
+    return f"{CATALOG_FORM_PREFIX}{dataset}"
+
+
+def catalog_products(df_template):
+    """
+    Turn the pricing Data sheet into the client form's product list.
+
+    Returns:
+        list of dict: {'name', 'partner', 'pricing'} where 'pricing' is the product's
+        spreadsheet row (used to show the client a price). Duplicate names are listed once.
+    """
+    products = []
+    seen = set()
+    for _, row in df_template.iterrows():
+        name = str(row.get('Product/Service', '') or '').strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        products.append({'name': name, 'partner': row.get('Partner', ''), 'pricing': row.to_dict()})
+    return products
+
+
+def load_catalog_for_client(form_id):
+    """
+    Load the whole product catalog for a form link that has no proposal.
+
+    Returns:
+        dict or None: same shape as load_proposal_for_client, each product also
+        carrying its 'pricing' row. None if the ID is not a catalog ID or on error.
+    """
+    dataset = form_id[len(CATALOG_FORM_PREFIX):] if form_id.startswith(CATALOG_FORM_PREFIX) else ''
+    if dataset not in ('demo', 'real'):
+        return None
+    try:
+        df_template, _, _ = load_pricing_data(dataset)
+        return {'proposal_name': 'Product catalog', 'products': catalog_products(df_template)}
+    except Exception as e:
+        print(f"Error loading catalog for client form: {e}")
+        return None
+
+
+def client_unit_price(pricing_row, quantity):
+    """
+    Price per unit the client pays at this quantity (same pricing as the Tab 1 catalog).
+
+    Returns:
+        float or None: None when the price cannot be worked out (never raises,
+        so the client never sees a technical error).
+    """
+    try:
+        price = calculate_pbp_msrp(pricing_row, quantity)['pbp_msrp']
+        return float(price) if price and price > 0 else None
+    except Exception as e:
+        print(f"Could not price {pricing_row.get('Product/Service', '')} for client form: {e}")
         return None
 
 
