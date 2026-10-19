@@ -5,6 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased] - 2026-10-09
 
+### Added (2026-10-19, client order form without a proposal)
+- **Start a Client Order Form With No Proposal:** Tab 2 "Generate Client Form Link" no longer requires a saved proposal. With no proposal loaded, the link (`?client_form=catalog_<dataset>`) opens a form where the client picks from the whole product catalog of the dataset in use, and each chosen item shows its price per unit and line total for the quantity entered (the same pricing as the Tab 1 catalog, before customization, shipping and taxes), next to the editable quantity and customization notes. A product whose price cannot be worked out shows "your PBP representative will confirm the price" instead of an error. Links from a saved proposal work as before (proposal products only, no prices). Saving, submitting, the background copy to Form Responses and the Submitted Order Forms import are unchanged
+- New helpers in `src/client_form.py`: `catalog_form_id()`, `catalog_products()`, `load_catalog_for_client()`, `client_unit_price()`
+- Tests: `tests/test_client_form.py` (fake pricing data: catalog list, dataset from the link, errors hidden from the client, price matches catalog pricing)
+
 ### Fixed (2026-10-17, order photos)
 - **Re-Saving a Loaded Order No Longer Drops Its Photos:** Loading an order kept its saved photos aside, but every save rebuilt the order without them, so overwriting with no new uploads removed all product photos, and adding a photo kept only the new one. `save_current_order()` (`src/order_manager.py`, used by every Tab 3 save button including Save & Finalize) now keeps the saved photos and uploads only new ones, skipping any already saved (same name and size, as `add_product_photos()` does) and stopping at 5 per product counting saved photos. `save_order()` adds new uploads to the saved photos instead of replacing them. Saving twice in one session no longer uploads the same photo again. Photo metadata now also records each photo's size (photos are stored the same way)
 - Tab 3 "Product Photos" counts saved photos toward the 5 remaining slots, lists saved photo names, and includes them in the photo summary. "Clear Entire Order" and the sidebar reset also clear photos, so a new order does not pick up the previous order's photos

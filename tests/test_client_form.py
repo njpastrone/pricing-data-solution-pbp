@@ -768,3 +768,40 @@ def test_no_email_when_not_set_up():
         blank = {name: '' for name in NOTIFY_SETTINGS}
         assert _submit_with_email(client, dict(blank, **settings), fail=AssertionError("mail server contacted")) == (True, "Order received")
         assert FakeSMTP.sent == []
+
+
+# --- Form links with no proposal (whole catalog, with prices) ---
+
+import pandas as pd
+from src.client_form import catalog_form_id, catalog_products, load_catalog_for_client, client_unit_price
+
+CATALOG_ROW = {'Product/Service': 'Jam', 'Partner': 'Partner X', 'Pricing Tiers (Y/N)': 'N',
+               'PBP Cost (No Tiers)': '$5.00', 'PBP Standard Markup': '2', 'PBP Pricing Logic': 'Standard markup'}
+
+
+def test_catalog_products_lists_each_named_product_once():
+    df = pd.DataFrame([CATALOG_ROW, CATALOG_ROW, dict(CATALOG_ROW, **{'Product/Service': ''})])
+    products = catalog_products(df)
+    assert [p['name'] for p in products] == ['Jam']
+    assert products[0]['partner'] == 'Partner X'
+    assert products[0]['pricing']['PBP Cost (No Tiers)'] == '$5.00'
+
+
+def test_load_catalog_for_client_uses_the_link_dataset():
+    df = pd.DataFrame([CATALOG_ROW])
+    with patch('src.client_form.load_pricing_data', return_value=(df, None, None)) as load:
+        catalog = load_catalog_for_client(catalog_form_id('demo'))
+    load.assert_called_once_with('demo')
+    assert [p['name'] for p in catalog['products']] == ['Jam']
+
+
+def test_load_catalog_for_client_rejects_other_ids_and_hides_errors():
+    assert load_catalog_for_client('PROP_20260524_143022') is None
+    assert load_catalog_for_client('catalog_other') is None
+    with patch('src.client_form.load_pricing_data', side_effect=Exception("quota exceeded")):
+        assert load_catalog_for_client(catalog_form_id('real')) is None
+
+
+def test_client_unit_price_matches_catalog_pricing_and_never_raises():
+    assert client_unit_price(CATALOG_ROW, 100) == 10.0  # $5 cost x 2 standard markup
+    assert client_unit_price({'Product/Service': 'No cost'}, 100) is None
