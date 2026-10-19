@@ -868,7 +868,7 @@ def _render_client_form_page(proposal_id, session_id):
             if selected_product in pricing_by_name:
                 unit_price = client_unit_price(pricing_by_name[selected_product], qty)
                 if unit_price:
-                    st.caption(f"Price: ${unit_price:,.2f} per unit, ${unit_price * qty:,.2f} for {qty:,} "
+                    st.caption(f"Price: \\${unit_price:,.2f} per unit, \\${unit_price * qty:,.2f} for {qty:,} "
                                "(before customization, shipping and taxes)")
                 else:
                     st.caption("Price: your PBP representative will confirm the price for this item.")
