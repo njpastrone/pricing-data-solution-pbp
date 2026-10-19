@@ -745,14 +745,15 @@ def _render_client_form_page(proposal_id, session_id):
     if loaded_key not in st.session_state:
         # A link with no proposal shows the whole catalog (with prices)
         if proposal_id.startswith(CATALOG_FORM_PREFIX):
-            proposal = load_catalog_for_client(proposal_id)
+            proposal, draft = load_catalog_for_client(proposal_id, session_id)
         else:
             proposal = load_proposal_for_client(proposal_id)
+            # Load existing draft (if client is returning)
+            draft = load_draft(proposal_id, session_id) if proposal else None
         if proposal is None:
             st.error("This form is no longer available. Please contact your PBP representative.")
             return
-        # Load existing draft (if client is returning)
-        st.session_state[loaded_key] = (proposal, load_draft(proposal_id, session_id))
+        st.session_state[loaded_key] = (proposal, draft)
     proposal, draft = st.session_state[loaded_key]
     saved_data = draft['form_data'] if draft else {}
 
@@ -4814,11 +4815,9 @@ with tab2:
 
     if not saved_proposal_id:
         # No proposal needed: the client picks from the whole catalog and sees prices
-        form_id = catalog_form_id(st.session_state.selected_dataset)
         st.info("No saved proposal: the client will choose products from the full catalog "
                 "and see each product's price. To show only a proposal's products, save the proposal in Tab 1 first.")
     else:
-        form_id = saved_proposal_id
         # Show products from proposal
         has_proposal_products = len(st.session_state.proposal_products) > 0
 
@@ -4835,6 +4834,8 @@ with tab2:
     # Generate link button
     if st.button("Generate Client Form Link", type="primary", use_container_width=True, key="gen_client_form_link_btn"):
         token = generate_session_token()
+        # A link with no proposal gets its own unguessable ID (whole catalog)
+        form_id = saved_proposal_id or catalog_form_id(st.session_state.selected_dataset)
 
         # Save exec's client info as a draft so the form starts pre-filled
         order_details = st.session_state.get('order_details', {})
@@ -4849,13 +4850,18 @@ with tab2:
         }
         # Only save draft if exec entered any client info
         has_client_info = any(v.strip() for k, v in prefill_data['client_info'].items() if k != 'client_type' and isinstance(v, str))
-        if has_client_info:
-            save_draft(form_id, token, prefill_data)
+        link_saved = True
+        # A catalog link must always be saved: the form page rejects catalog links it has no record of
+        if has_client_info or not saved_proposal_id:
+            link_saved, _ = save_draft(form_id, token, prefill_data)
 
-        # Build URL
-        form_link = f"{APP_URL}?client_form={form_id}&session={token}"
-        st.session_state.generated_client_form_link = form_link
-        st.rerun()
+        if link_saved or saved_proposal_id:
+            # Build URL
+            form_link = f"{APP_URL}?client_form={form_id}&session={token}"
+            st.session_state.generated_client_form_link = form_link
+            st.rerun()
+        else:
+            st.error("Could not create the form link. Please try again in a minute.")
 
     # Display generated link
     if st.session_state.get('generated_client_form_link'):

@@ -55,8 +55,8 @@ STATUS_DRAFT = 'draft'
 STATUS_PENDING = 'pending_sync'   # order received, not yet in Form Responses
 STATUS_SUBMITTED = 'submitted'    # order is in Form Responses
 
-# A form link with no proposal uses this ID prefix plus the dataset, e.g. "catalog_real".
-# The client then picks from the whole product catalog and sees prices.
+# A form link with no proposal uses this ID prefix plus the dataset and a random
+# part, e.g. "catalog_real_3f9a1c2b7d4e". The client picks from the whole catalog and sees prices.
 CATALOG_FORM_PREFIX = "catalog_"
 
 # Staff app address, used in client form links and the team order email
@@ -153,8 +153,11 @@ def load_proposal_for_client(proposal_id):
 
 
 def catalog_form_id(dataset):
-    """Form ID for a link that starts with no proposal (whole catalog), e.g. "catalog_real"."""
-    return f"{CATALOG_FORM_PREFIX}{dataset}"
+    """
+    New form ID for a link that starts with no proposal (whole catalog),
+    e.g. "catalog_real_3f9a1c2b7d4e". The random part makes each link unguessable.
+    """
+    return f"{CATALOG_FORM_PREFIX}{dataset}_{generate_session_token()}"
 
 
 def catalog_products(df_template):
@@ -176,23 +179,30 @@ def catalog_products(df_template):
     return products
 
 
-def load_catalog_for_client(form_id):
+def load_catalog_for_client(form_id, session_id):
     """
     Load the whole product catalog for a form link that has no proposal.
 
+    A catalog link only works once staff generate it in Tab 2, which saves a
+    draft row for that form ID + session, so a guessed or unknown link is rejected.
+
     Returns:
-        dict or None: same shape as load_proposal_for_client, each product also
-        carrying its 'pricing' row. None if the ID is not a catalog ID or on error.
+        tuple: (catalog, draft). The catalog has the same shape as
+        load_proposal_for_client, each product also carrying its 'pricing' row;
+        the draft is what load_draft returns. (None, None) if the link is unknown or on error.
     """
-    dataset = form_id[len(CATALOG_FORM_PREFIX):] if form_id.startswith(CATALOG_FORM_PREFIX) else ''
+    dataset = form_id[len(CATALOG_FORM_PREFIX):].split('_')[0] if form_id.startswith(CATALOG_FORM_PREFIX) else ''
     if dataset not in ('demo', 'real'):
-        return None
+        return None, None
+    draft = load_draft(form_id, session_id)
+    if draft is None:
+        return None, None
     try:
         df_template, _, _ = load_pricing_data(dataset)
-        return {'proposal_name': 'Product catalog', 'products': catalog_products(df_template)}
+        return {'proposal_name': 'Product catalog', 'products': catalog_products(df_template)}, draft
     except Exception as e:
         print(f"Error loading catalog for client form: {e}")
-        return None
+        return None, None
 
 
 def client_unit_price(pricing_row, quantity):
