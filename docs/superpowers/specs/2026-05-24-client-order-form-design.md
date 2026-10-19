@@ -161,6 +161,8 @@ UI flow:
 
 The proposal must be saved before generating a link. If unsaved, the app shows a warning: "Please save your proposal first before generating a client form link."
 
+> Superseded (2026-10-19): a link can now be generated with no proposal (whole-catalog form). See [CHANGELOG.md](../../../CHANGELOG.md).
+
 ### Tab 2: Google Form Section (Legacy)
 
 Keep the existing Google Form section as-is, below the new section. Can be collapsed in an expander with a note like "Legacy: Google Form (alternative)".
