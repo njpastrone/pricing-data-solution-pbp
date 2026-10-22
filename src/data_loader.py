@@ -78,6 +78,12 @@ def connect_to_sheets():
         1. Streamlit secrets (local): st.secrets["gcp_service_account"]
         2. Environment variables (Render): GCP_* environment variables
     """
+    # Tests only: serve a fixed in-memory snapshot instead of Google Sheets.
+    # Production never sets PBP_FAKE_SHEETS. See tests/README.md.
+    if os.getenv("PBP_FAKE_SHEETS"):
+        from tests.fake_sheets import FakeClient
+        return FakeClient()
+
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"

@@ -1,0 +1,12 @@
+,Master Pricing (TEST SNAPSHOT - invented data),,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+,Partner,Product/Service,Has Variants (Y/N),Variant Type,Purchase Description (to Partner),Billing Description (to Client),Marketing Description (Website),MOQ (Partner),MOV (Partner),MOQ (PBP),MOV (PBP),Pricing Tiers (Y/N),Pricing Tiers Info,PBP Cost (No Tiers/Tier 1),PBP Cost: Tier 2,PBP Cost: Tier 3,PBP Cost: Tier 4,PBP Cost: Tier 5,PBP Cost: Tier 6,Cost Basis (Per Item/Per Case),Units per Case,"PBP Cost (Per-Unit, No Tiers, Calculated)",Pricing Logic,Shipping Add-On % (of Cost),Other Add-On % (of Cost),Pricing Notes,Vendor Published MSRP,"Vendor Markup (No Tiers, Calculated)","PBP Markup (Vendor+Add-On, No Tiers)","PBP MSRP (Per-Unit, No Tiers, Calculated)",PBP MSRP (Website),PBP Cost: Customization Setup Fee,Client Price: Customization Setup Fee,PBP Cost: Customization Cost per Unit,Client Price: Customization Cost per Unit,Customization Info,Country of Origin (Made In),Country of Origin (Ships From),PBP Cost: Shipping Cost per Unit,Client Price: Shipping Price per Unit,Shipping Details,Tariff Estimate ($),Tariff Estimate (%),Tariff Info,Data Collection Notes
+,Harbor Weavers,Woven Market Tote,N,,"Woven tote, natural palm",Handwoven market tote,Handwoven palm market tote,25,,25,,Y,"T1: 1-49, T2: 50-99, T3: 100+",$12.00,$10.50,$9.00,,,,Per Item,1,,Standard markup,,,,$30.00,,,,,$40.00,$75.00,$1.00,$2.00,Embroidered tag,Guatemala,USA,,,,,,,Invented test row
+,Sunrise Apiary,9 oz Raw Honey,Y,"(Wildflower, Clover)",9 oz raw honey jar,9 oz raw honey,Small-batch raw honey,24,,24,,N,,$6.00,,,,,,Per Item,1,,MSRP + % of cost,15,,,$14.10,,,15.00,,,,,,,USA,USA,,,,,,,Invented test row
+,Sunrise Apiary,Honey Stick Case,N,,Case of 50 honey sticks,Honey sticks,Honey sticks for gift boxes,50,,50,,N,,$40.00,,,,,,Per Case,50,0.80,Standard markup,,,,,,,,,,,,,,USA,USA,,,,,,,Invented test row
+,Mesa Ceramics,Stoneware Mug,N,,12 oz stoneware mug,Stoneware mug,Hand-thrown stoneware mug,12,,12,,N,,$8.00,,,,,,Per Item,1,,MSRP + Other Add-On % (of Cost),,10,,$22.20,,,23.00,,,,,,,USA,USA,,,,,,,Invented test row
+,Highland Knits,Alpaca Beanie,N,,Alpaca blend beanie,Alpaca beanie,Soft alpaca blend beanie,20,,20,,N,,$9.00,,,,,,Per Item,1,,MSRP capped – ship absorbed,20,,,$25.00,,,25.00,,,,,,,Peru,Peru,,,,,10,,Invented test row

@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased] - 2026-10-09
 
+### Added (2026-10-22, tests that drive the real app)
+- **Google Sheets Stand-In for Tests:** Setting `PBP_FAKE_SHEETS=1` makes `connect_to_sheets()` return an in-memory fake (`tests/fake_sheets.py`) instead of Google. The pricing spreadsheet serves a fixed snapshot of invented products, partners and contacts (`tests/fixtures/sheets/*.csv`, covering the 4 pricing methods, tiers and Per Case); every other spreadsheet starts empty. The app and its tests run with no Google credentials. Production never sets the variable, so the live Sheets path is unchanged
+- **AppTest Suite for the Order Flow:** `tests/test_app_order_flow.py` runs the real `app.py` headless (`streamlit.testing.v1.AppTest`): adds products in Tab 3, sets quantities, $0.50 and marketing rounding, a typed client price override and per-product kitting, then checks the Order Summary total and the Tab 4 invoice/PO lines and total. How to run and extend it: `tests/README.md`
+- A strict expected-failure test records a bug found this way: raising a tiered product's quantity into a cheaper tier keeps the old client price (the price box keeps its value and the markup is recalculated from it), so the tier discount never reaches the client
+- `FakeSheet` moved from `tests/test_client_form.py` to `tests/fake_sheets.py` (shared by both)
+
 ### Fixed (2026-10-17, order photos)
 - **Re-Saving a Loaded Order No Longer Drops Its Photos:** Loading an order kept its saved photos aside, but every save rebuilt the order without them, so overwriting with no new uploads removed all product photos, and adding a photo kept only the new one. `save_current_order()` (`src/order_manager.py`, used by every Tab 3 save button including Save & Finalize) now keeps the saved photos and uploads only new ones, skipping any already saved (same name and size, as `add_product_photos()` does) and stopping at 5 per product counting saved photos. `save_order()` adds new uploads to the saved photos instead of replacing them. Saving twice in one session no longer uploads the same photo again. Photo metadata now also records each photo's size (photos are stored the same way)
 - Tab 3 "Product Photos" counts saved photos toward the 5 remaining slots, lists saved photo names, and includes them in the photo summary. "Clear Entire Order" and the sidebar reset also clear photos, so a new order does not pick up the previous order's photos

@@ -15,6 +15,7 @@ from src.client_form import (generate_session_token, load_proposal_for_client, _
                              STATUS_PENDING, STATUS_SUBMITTED, _open_worksheet, _open_drafts_sheet)
 from src.forms_config import GOOGLE_FORM_CONFIG, find_response_column
 from src.forms_helper import parse_form_response, mark_response_imported, form_response_to_order
+from fake_sheets import FakeSheet
 
 
 def test_generate_session_token_is_unique():
@@ -112,63 +113,6 @@ SAMPLE_FORM = {
                      'payment_method': 'ACH'},
     'notes': 'Rush please',
 }
-
-
-class FakeSheet:
-    """A tiny in-memory worksheet. Put exceptions in fail['method'] to make the next calls fail."""
-
-    def __init__(self, rows, row_count=1000):
-        self.rows = [list(r) for r in rows]
-        self.row_count = row_count  # grid size as cached on the handle, like gspread
-        self.grid_rows = row_count  # real grid size on Google's side
-        self.fail = {}
-
-    def _maybe_fail(self, method):
-        if self.fail.get(method):
-            raise self.fail[method].pop(0)
-
-    def get_all_values(self):
-        self._maybe_fail('get_all_values')
-        return [list(r) for r in self.rows]
-
-    def batch_get(self, ranges):  # whole-column ranges like 'A:C'
-        self._maybe_fail('batch_get')
-        result = []
-        for cell_range in ranges:
-            first, last = (ord(c) - ord('A') for c in cell_range.split(':'))
-            result.append([r[first:last + 1] for r in self.rows])
-        return result
-
-    def row_values(self, number):
-        return list(self.rows[number - 1])
-
-    def append_row(self, row):
-        self._maybe_fail('append_row')
-        if any(len(str(v)) > 50000 for v in row):
-            raise Exception("cell over 50000 characters")
-        self.rows.append(list(row))
-
-    def update_cell(self, row_number, col_number, value):
-        self._maybe_fail('update_cell')
-        while len(self.rows) < row_number:
-            self.rows.append([])
-        row = self.rows[row_number - 1]
-        row.extend([''] * (col_number - len(row)))
-        row[col_number - 1] = value
-
-    def resize(self, rows):
-        self.row_count = self.grid_rows = rows
-
-    def update(self, range_name, values):  # e.g. 'C2' or 'G2:H2'
-        self._maybe_fail('update')
-        first = range_name.split(':')[0]
-        col_number = ord(first[0]) - ord('A') + 1
-        if int(first[1:]) > self.grid_rows:
-            raise Exception("exceeds grid limits")
-        for offset, value in enumerate(values[0]):
-            if len(str(value)) > 50000:
-                raise Exception("cell over 50000 characters")
-            self.update_cell(int(first[1:]), col_number + offset, value)
 
 
 DRAFT_HEADERS = ['Proposal_ID', 'Session_ID', 'Draft_Data_JSON', 'File_Data_Base64',
