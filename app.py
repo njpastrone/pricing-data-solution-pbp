@@ -91,6 +91,7 @@ from src.client_form import (
     load_proposal_for_client,
     load_catalog_for_client,
     catalog_form_id,
+    catalog_products,
     client_unit_price,
     CATALOG_FORM_PREFIX,
     load_draft,
@@ -4813,10 +4814,42 @@ with tab2:
     # Check if a proposal is saved
     saved_proposal_id = st.session_state.get('loaded_proposal_id')
 
+    # Products the PBP rep picks for a form with no proposal (pre-filled on the client's form)
+    staff_products = []
+
     if not saved_proposal_id:
-        # No proposal needed: the client picks from the whole catalog and sees prices
-        st.info("No saved proposal: the client will choose products from the full catalog "
-                "and see each product's price. To show only a proposal's products, save the proposal in Tab 1 first.")
+        # No proposal needed: the rep picks the products discussed with the client,
+        # then the client confirms them (and can add more from the catalog) on the form
+        st.info("No saved proposal: pick the products discussed with the client below. They will be "
+                "pre-filled on the form with their prices, and the client can confirm, change or add products. "
+                "To show only a proposal's products instead, save the proposal in Tab 1 first.")
+
+        catalog = catalog_products(st.session_state.df_template)
+        partner_by_name = {p['name']: p['partner'] for p in catalog}
+        pricing_by_name = {p['name']: p['pricing'] for p in catalog}
+        picked_names = st.multiselect(
+            "Products for this form (type to search the catalog)",
+            options=list(partner_by_name),
+            format_func=lambda name: f"{name} ({partner_by_name[name]})",
+            max_selections=MAX_PRODUCT_LINES,
+            key="cf_staff_picks"
+        )
+
+        for name in picked_names:
+            col_name, col_qty, col_notes = st.columns([2, 1, 2])
+            with col_name:
+                st.markdown(f"**{name}**")
+            with col_qty:
+                qty = st.number_input("Quantity", min_value=1, value=100, key=f"cf_staff_qty_{name}")
+            with col_notes:
+                notes = st.text_input("Customization Notes", key=f"cf_staff_notes_{name}")
+            with col_name:
+                unit_price = client_unit_price(pricing_by_name[name], qty)
+                if unit_price:
+                    st.caption(f"\\${unit_price:,.2f} per unit, \\${unit_price * qty:,.2f} total")
+                else:
+                    st.caption("No price available; confirm it with the client")
+            staff_products.append({'name': name, 'quantity': qty, 'customization_notes': notes})
     else:
         # Show products from proposal
         has_proposal_products = len(st.session_state.proposal_products) > 0
@@ -4848,6 +4881,8 @@ with tab2:
                 'contact_phone': order_details.get('contact_phone', ''),
             },
         }
+        if staff_products:
+            prefill_data['products'] = staff_products
         # Only save draft if exec entered any client info
         has_client_info = any(v.strip() for k, v in prefill_data['client_info'].items() if k != 'client_type' and isinstance(v, str))
         link_saved = True
@@ -4872,9 +4907,10 @@ with tab2:
 
         st.info("""
 **What's Next?**
-1. Copy the link above and send it to your client
-2. Client opens the link, fills out the form, and submits
-3. Open the **Submitted Order Forms** tab to view and import the completed response
+1. Optional: open the link to check the form, make any changes and press Save Progress
+2. Copy the link above and send it to your client
+3. Client opens the link, fills out the form, and submits
+4. Open the **Submitted Order Forms** tab to view and import the completed response
 """)
 
         st.caption("Each click of 'Generate' creates a new unique link. Multiple clients can use different links for the same proposal.")

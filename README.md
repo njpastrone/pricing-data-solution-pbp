@@ -74,7 +74,7 @@ streamlit run scripts/test_connection.py
 - PowerPoint generation with automated slide matching
 
 ### Tab 2: Client Order Form Generator
-- **Client Form Link (Recommended):** Shareable URL to standalone form page, no login needed. Works without a saved proposal: the client then picks from the whole catalog and sees prices
+- **Client Form Link (Recommended):** Shareable URL to standalone form page, no login needed. Works without a saved proposal: the PBP rep searches the catalog and picks the products discussed with the client, the form opens pre-filled with them and their prices, and the client confirms and adds their details
 - **Google Form (Legacy):** Pre-filled Google Form URL generation
 - **HTML Form (Legacy):** Professional HTML order forms with template customization
 
