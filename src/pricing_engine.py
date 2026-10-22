@@ -4,7 +4,7 @@ Handles tier selection, price lookup, customization costs, and tariff calculatio
 """
 
 import pandas as pd
-from src.helpers import parse_tier_info, parse_tariff_rate, clean_price, get_column_value
+from src.helpers import parse_tier_info, parse_tariff_rate, clean_price, get_column_value, calculate_markup_from_price
 
 
 def determine_tier_number(quantity, tier_info_string, has_tiers):
@@ -146,6 +146,33 @@ def get_item_unit_cost(item, quantity):
     if item.get('pbp_cost_override') is not None:
         unit_cost = item['pbp_cost_override']
     return unit_cost, tier_range, tier_column
+
+
+def set_item_client_price(item, unit_cost, client_price):
+    """
+    Set the PbP MSRP (client price per unit) the user typed in Tab 3.
+
+    The markup is recalculated to hit that price, and the price is remembered
+    so a later PBP Cost edit keeps it (see set_item_pbp_cost).
+    """
+    item['markup_percent'] = calculate_markup_from_price(unit_cost, client_price)
+    item['pbp_msrp_override'] = client_price
+
+
+def set_item_pbp_cost(item, new_cost, sheet_cost):
+    """
+    Set the PBP Cost the user typed in Tab 3.
+
+    Typing the spreadsheet cost back in removes the override. If the user
+    already set a PbP MSRP, it stays put and the markup is recalculated, so
+    editing cost then MSRP or MSRP then cost gives the same result.
+    """
+    if sheet_cost and abs(new_cost - sheet_cost) < 0.005:
+        item.pop('pbp_cost_override', None)
+    else:
+        item['pbp_cost_override'] = new_cost
+    if item.get('pbp_msrp_override'):
+        item['markup_percent'] = calculate_markup_from_price(new_cost, item['pbp_msrp_override'])
 
 
 def get_price_for_quantity(product_row, quantity):

@@ -51,6 +51,8 @@ from src.pricing_engine import (
     determine_tier_number,
     get_unit_price_new_system,
     get_item_unit_cost,
+    set_item_client_price,
+    set_item_pbp_cost,
     get_price_for_quantity,
     calculate_pbp_msrp,
     calculate_catalog_client_price,
@@ -6600,16 +6602,14 @@ with tab3:
                     st.session_state[cost_key] = float(base_price)
 
                     def save_cost_override(i=idx, key=cost_key, sheet_cost=sheet_cost):
-                        new_cost = st.session_state[key]
-                        # Typing the spreadsheet cost back in removes the override
-                        if sheet_cost and abs(new_cost - sheet_cost) < 0.005:
-                            st.session_state.order_items[i].pop('pbp_cost_override', None)
-                        else:
-                            st.session_state.order_items[i]['pbp_cost_override'] = new_cost
+                        set_item_pbp_cost(st.session_state.order_items[i], st.session_state[key], sheet_cost)
+                        # Let the price and markup fields re-read the item's (possibly new) markup
+                        st.session_state.pop(f"prod_markup_{i}", None)
+                        st.session_state.pop(f"prod_price_{i}", None)
 
                     st.number_input(
                         f"PBP Cost for {idx}",
-                        min_value=0.0,
+                        min_value=0.01,
                         step=0.5,
                         format="%.2f",
                         key=cost_key,
@@ -6686,8 +6686,7 @@ with tab3:
                         # Update markup if price changed
                         if abs(new_client_price - client_price_per_unit) > 0.01:  # Check if meaningfully different
                             # Calculate new markup from the price
-                            new_markup_calc = calculate_markup_from_price(base_price, new_client_price)
-                            st.session_state.order_items[idx]['markup_percent'] = new_markup_calc
+                            set_item_client_price(st.session_state.order_items[idx], base_price, new_client_price)
                             st.session_state[f'updating_from_price_tab3_{idx}'] = True
                             st.rerun()
                 else:
@@ -6711,6 +6710,7 @@ with tab3:
                     )
                     # Set flag if markup changed to prevent circular updates
                     if new_markup != item['markup_percent']:
+                        st.session_state.order_items[idx].pop('pbp_msrp_override', None)
                         st.session_state[f'updating_from_markup_tab3_{idx}'] = True
 
             st.divider()
@@ -7782,7 +7782,7 @@ with tab3:
             if item.get('is_custom', False) or item.get('is_custom_product', False):
                 continue
             product_data_check = item.get('product_data', {})
-            base_price_check, _, _ = get_unit_price_new_system(product_data_check, item['quantity'])
+            base_price_check, _, _ = get_item_unit_cost(item, item['quantity'])
             if base_price_check:
                 markup = item.get('markup_percent', 100)
                 client_price_est = base_price_check * (1 + markup / 100)

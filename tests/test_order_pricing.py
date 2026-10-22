@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from streamlit.testing.v1 import AppTest
 
 from src.helpers import get_item_client_unit_price, calculate_split_totals
-from src.pricing_engine import get_item_unit_cost
+from src.pricing_engine import get_item_unit_cost, set_item_client_price, set_item_pbp_cost
 from test_form_to_order import _app_function_source
 
 
@@ -81,8 +81,45 @@ def test_pbp_cost_override_replaces_the_spreadsheet_cost():
     assert round(get_item_client_unit_price(stored, True), 2) == 33.00
 
 
+def _sunglasses():
+    return {'markup_percent': 100.0,
+            'product_data': {'Pricing Tiers (Y/N)': 'N', 'PBP Cost (No Tiers/Tier 1)': '$20.00'}}
+
+
+def _client_unit_price(item):
+    cost = get_item_unit_cost(item, 10)[0]
+    return cost * (1 + item['markup_percent'] / 100)
+
+
+def test_pbp_cost_and_msrp_edits_give_same_result_in_either_order():
+    """Leather sunglasses: PBP Cost $23.57 / PbP MSRP $33.00 whichever is typed first."""
+    msrp_first = _sunglasses()
+    set_item_client_price(msrp_first, get_item_unit_cost(msrp_first, 10)[0], 33.00)
+    set_item_pbp_cost(msrp_first, 23.57, 20.00)
+
+    cost_first = _sunglasses()
+    set_item_pbp_cost(cost_first, 23.57, 20.00)
+    set_item_client_price(cost_first, get_item_unit_cost(cost_first, 10)[0], 33.00)
+
+    for item in (msrp_first, cost_first):
+        assert get_item_unit_cost(item, 10)[0] == 23.57
+        assert round(_client_unit_price(item), 2) == 33.00
+
+
+def test_pbp_cost_edit_without_set_msrp_keeps_markup():
+    item = _sunglasses()
+    set_item_pbp_cost(item, 25.00, 20.00)
+    assert item['markup_percent'] == 100.0
+    assert round(_client_unit_price(item), 2) == 50.00
+
+    set_item_pbp_cost(item, 20.00, 20.00)  # typing the spreadsheet cost back removes the override
+    assert 'pbp_cost_override' not in item
+
+
 if __name__ == "__main__":
     test_rounded_pbp_msrp_is_the_invoice_price()
     test_kitting_and_rounding_set_in_tab3_reach_the_invoice()
     test_pbp_cost_override_replaces_the_spreadsheet_cost()
+    test_pbp_cost_and_msrp_edits_give_same_result_in_either_order()
+    test_pbp_cost_edit_without_set_msrp_keeps_markup()
     print("All order pricing tests passed")
