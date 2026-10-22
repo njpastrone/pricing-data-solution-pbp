@@ -161,7 +161,7 @@ UI flow:
 
 The proposal must be saved before generating a link. If unsaved, the app shows a warning: "Please save your proposal first before generating a client form link."
 
-> Superseded (2026-10-19): a link can now be generated with no proposal (whole-catalog form). See [CHANGELOG.md](../../../CHANGELOG.md).
+> Superseded (2026-10-19): a link can now be generated with no proposal: the PBP rep picks products from the catalog in Tab 2, and the form opens pre-filled with them (client can change them or add more from the whole catalog). See [CHANGELOG.md](../../../CHANGELOG.md).
 
 ### Tab 2: Google Form Section (Legacy)
 
