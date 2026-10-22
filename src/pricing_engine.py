@@ -132,6 +132,22 @@ def get_unit_price_new_system(row, quantity):
     return None, None, None
 
 
+def get_item_unit_cost(item, quantity):
+    """
+    PBP cost per unit for an order item.
+
+    Uses the cost the user typed in Tab 3 ('pbp_cost_override') when set,
+    otherwise the spreadsheet price for the quantity's tier.
+
+    Returns:
+        tuple: (unit_cost, tier_range, tier_column), same as get_unit_price_new_system
+    """
+    unit_cost, tier_range, tier_column = get_unit_price_new_system(item['product_data'], quantity)
+    if item.get('pbp_cost_override') is not None:
+        unit_cost = item['pbp_cost_override']
+    return unit_cost, tier_range, tier_column
+
+
 def get_price_for_quantity(product_row, quantity):
     """
     OLD SYSTEM: Select the appropriate price tier based on quantity.

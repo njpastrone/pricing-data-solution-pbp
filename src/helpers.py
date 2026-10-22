@@ -1689,6 +1689,22 @@ def format_product_with_variant(product_name, variant):
 
 # ========== SPLIT TOTALS CALCULATIONS ==========
 
+def get_item_client_unit_price(item, fifty_cent_rounding=False):
+    """
+    Client price per unit for an order item's base product (cost + markup, no
+    customization), rounded to the nearest $0.50 when enabled.
+
+    This is the PbP MSRP shown in Tab 3. Tab 3's summary and the Tab 4
+    invoice/PO both use it, so the rounded price shown in Tab 3 is the one
+    that ends up on the invoice.
+    """
+    qty = item.get('quantity', 1)
+    if qty <= 0:
+        return 0.0
+    unit_price = (item.get('product_subtotal', 0) + item.get('markup_amount', 0)) / qty
+    return round_to_nearest_fifty_cents(unit_price, fifty_cent_rounding)
+
+
 def calculate_split_totals(order_items, markup_only=False, fifty_cent_rounding=False):
     """
     Calculate PBP costs and client prices separately for order items.
@@ -1734,14 +1750,10 @@ def calculate_split_totals(order_items, markup_only=False, fifty_cent_rounding=F
         results['products_pbp_cost'] += product_cost
 
         # Product client price (with markup), applying per-unit rounding if enabled
-        markup_amount = item.get('markup_amount', 0)
-        qty = item.get('quantity', 1)
-        if fifty_cent_rounding and qty > 0:
-            client_per_unit_raw = (product_cost + markup_amount) / qty
-            client_per_unit_rounded = round_to_nearest_fifty_cents(client_per_unit_raw, True)
-            product_with_markup = client_per_unit_rounded * qty
+        if fifty_cent_rounding:
+            product_with_markup = get_item_client_unit_price(item, True) * item.get('quantity', 1)
         else:
-            product_with_markup = product_cost + markup_amount
+            product_with_markup = product_cost + item.get('markup_amount', 0)
         results['products_client_price'] += product_with_markup
         results['products_only_client_price'] += product_with_markup
 
