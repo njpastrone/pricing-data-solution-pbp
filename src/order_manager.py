@@ -299,7 +299,7 @@ def save_order(name, created_by, order_data, dataset, photos_by_product=None, ov
 # Session-state keys stored with a saved order (everything needed to reload it in Tab 3 and Tab 4)
 ORDER_STATE_KEYS = [
     'order_items', 'order_shipping', 'partner_shipping', 'sales_tax',
-    'kitting_pbp_cost', 'kitting_client_price',
+    'kitting_pbp_cost', 'kitting_client_price', 'kitting_boxes',
     'order_discount_type', 'order_discount_preset',
     'order_discount_custom_desc', 'order_discount_custom_value',
     'order_use_marketing_rounding', 'apply_cc_fee', 'cc_fee_percent',

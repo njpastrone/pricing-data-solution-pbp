@@ -7,8 +7,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from streamlit.testing.v1 import AppTest
 
-from src.helpers import get_item_client_unit_price, calculate_split_totals
-from src.pricing_engine import get_item_unit_cost, set_item_client_price, set_item_pbp_cost
+from src.helpers import get_item_client_unit_price, calculate_split_totals, calculate_kitting_totals
+from src.pricing_engine import get_item_unit_cost, set_item_client_price, set_item_pbp_cost, keep_typed_pbp_msrp
 from test_form_to_order import _app_function_source
 
 
@@ -116,10 +116,42 @@ def test_pbp_cost_edit_without_set_msrp_keeps_markup():
     assert 'pbp_cost_override' not in item
 
 
+def test_typed_msrp_sticks_across_quantity_tier_change():
+    """Type $33 at qty 100 (tier cost $20), change qty to 500 (tier cost $18): MSRP stays $33, even after a cost edit."""
+    item = {'markup_percent': 100.0, 'product_data': {
+        'Pricing Tiers (Y/N)': 'Y',
+        'Pricing Tiers Info': 'T1: 1-499, T2: 500-999',
+        'PBP Cost (No Tiers/Tier 1)': '$20.00',
+        'PBP Cost: Tier 2': '$18.00',
+    }}
+    assert get_item_unit_cost(item, 100)[0] == 20.00
+    set_item_client_price(item, 20.00, 33.00)
+
+    cost_500 = get_item_unit_cost(item, 500)[0]
+    assert cost_500 == 18.00
+    keep_typed_pbp_msrp(item, cost_500)
+    assert round(cost_500 * (1 + item['markup_percent'] / 100), 2) == 33.00
+
+    set_item_pbp_cost(item, 19.00, cost_500)
+    assert round(get_item_unit_cost(item, 500)[0] * (1 + item['markup_percent'] / 100), 2) == 33.00
+
+
+def test_sale_wide_kitting_is_per_box():
+    """DuploCloud order: $11.50 per box x 85 boxes = $977.50 client kitting."""
+    per_kit = {'include_kitting': True, 'kitting_quantity': 2, 'kitting_pbp_cost': 1.0, 'kitting_client_price': 3.0}
+    sale_pbp, sale_client, item_pbp, item_client = calculate_kitting_totals([per_kit], 0.0, 11.50, 85)
+    assert sale_client == 977.50
+    assert sale_pbp == 0.0
+    assert (item_pbp, item_client) == (2.0, 6.0)
+    assert sale_client + item_client == 983.50
+
+
 if __name__ == "__main__":
     test_rounded_pbp_msrp_is_the_invoice_price()
     test_kitting_and_rounding_set_in_tab3_reach_the_invoice()
     test_pbp_cost_override_replaces_the_spreadsheet_cost()
     test_pbp_cost_and_msrp_edits_give_same_result_in_either_order()
     test_pbp_cost_edit_without_set_msrp_keeps_markup()
+    test_typed_msrp_sticks_across_quantity_tier_change()
+    test_sale_wide_kitting_is_per_box()
     print("All order pricing tests passed")

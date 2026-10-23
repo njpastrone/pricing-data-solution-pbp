@@ -153,7 +153,7 @@ def set_item_client_price(item, unit_cost, client_price):
     Set the PbP MSRP (client price per unit) the user typed in Tab 3.
 
     The markup is recalculated to hit that price, and the price is remembered
-    so a later PBP Cost edit keeps it (see set_item_pbp_cost).
+    so a later PBP Cost or quantity (tier) change keeps it (see keep_typed_pbp_msrp).
     """
     item['markup_percent'] = calculate_markup_from_price(unit_cost, client_price)
     item['pbp_msrp_override'] = client_price
@@ -171,8 +171,16 @@ def set_item_pbp_cost(item, new_cost, sheet_cost):
         item.pop('pbp_cost_override', None)
     else:
         item['pbp_cost_override'] = new_cost
+    keep_typed_pbp_msrp(item, new_cost)
+
+
+def keep_typed_pbp_msrp(item, unit_cost):
+    """
+    If the user typed a PbP MSRP, recalculate the markup so the price stays
+    the typed one at this PBP cost (after a cost edit or a tier change).
+    """
     if item.get('pbp_msrp_override'):
-        item['markup_percent'] = calculate_markup_from_price(new_cost, item['pbp_msrp_override'])
+        item['markup_percent'] = calculate_markup_from_price(unit_cost, item['pbp_msrp_override'])
 
 
 def get_price_for_quantity(product_row, quantity):

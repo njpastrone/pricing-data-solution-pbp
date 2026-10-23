@@ -1705,6 +1705,25 @@ def get_item_client_unit_price(item, fifty_cent_rounding=False):
     return round_to_nearest_fifty_cents(unit_price, fifty_cent_rounding)
 
 
+def calculate_kitting_totals(order_items, kitting_pbp_cost, kitting_client_price, kitting_boxes=1):
+    """
+    Kitting totals for an order: sale-wide kitting (per box x number of boxes)
+    plus per-product kitting (per kit x kitting quantity).
+
+    Returns:
+        tuple: (sale_wide_pbp, sale_wide_client, per_product_pbp, per_product_client)
+    """
+    per_product_pbp = 0.0
+    per_product_client = 0.0
+    for item in order_items:
+        if item.get('include_kitting', False):
+            kitting_qty = item.get('kitting_quantity', 1)
+            per_product_pbp += item.get('kitting_pbp_cost', 0.0) * kitting_qty
+            per_product_client += item.get('kitting_client_price', 0.0) * kitting_qty
+    return (kitting_pbp_cost * kitting_boxes, kitting_client_price * kitting_boxes,
+            per_product_pbp, per_product_client)
+
+
 def calculate_split_totals(order_items, markup_only=False, fifty_cent_rounding=False):
     """
     Calculate PBP costs and client prices separately for order items.

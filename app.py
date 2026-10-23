@@ -30,6 +30,7 @@ from src.helpers import (
     round_to_nearest_five,
     round_to_nearest_fifty_cents,
     get_item_client_unit_price,
+    calculate_kitting_totals,
     calculate_moq,
     calculate_credit_card_fee,
     calculate_markup_from_price,
@@ -53,6 +54,7 @@ from src.pricing_engine import (
     get_item_unit_cost,
     set_item_client_price,
     set_item_pbp_cost,
+    keep_typed_pbp_msrp,
     get_price_for_quantity,
     calculate_pbp_msrp,
     calculate_catalog_client_price,
@@ -1252,6 +1254,8 @@ if 'kitting_pbp_cost' not in st.session_state:
     st.session_state.kitting_pbp_cost = 0.0
 if 'kitting_client_price' not in st.session_state:
     st.session_state.kitting_client_price = 0.0
+if 'kitting_boxes' not in st.session_state:
+    st.session_state.kitting_boxes = 1
 
 # Initialize discount settings in session state
 if 'order_discount_type' not in st.session_state:
@@ -1768,6 +1772,7 @@ with st.sidebar:
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
                                 st.session_state.kitting_pbp_cost = order_data.get('kitting_pbp_cost', 0.0)
                                 st.session_state.kitting_client_price = order_data.get('kitting_client_price', 0.0)
+                                st.session_state.kitting_boxes = order_data.get('kitting_boxes', 1)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -1833,6 +1838,7 @@ with st.sidebar:
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
                                 st.session_state.kitting_pbp_cost = order_data.get('kitting_pbp_cost', 0.0)
                                 st.session_state.kitting_client_price = order_data.get('kitting_client_price', 0.0)
+                                st.session_state.kitting_boxes = order_data.get('kitting_boxes', 1)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -5566,6 +5572,7 @@ with tab3:
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
                                 st.session_state.kitting_pbp_cost = order_data.get('kitting_pbp_cost', 0.0)
                                 st.session_state.kitting_client_price = order_data.get('kitting_client_price', 0.0)
+                                st.session_state.kitting_boxes = order_data.get('kitting_boxes', 1)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -6593,6 +6600,10 @@ with tab3:
                 # Recalculate base price if quantity changed
                 if new_quantity != item['quantity']:
                     base_price, tier_range, tier_column = get_item_unit_cost(item, new_quantity)
+                    if base_price and item.get('pbp_msrp_override'):
+                        keep_typed_pbp_msrp(st.session_state.order_items[idx], base_price)
+                        st.session_state.pop(f"prod_markup_{idx}", None)
+                        st.session_state.pop(f"prod_price_{idx}", None)
 
             with col2:
                 # Editable PBP cost (overrides the spreadsheet cost, like the PbP MSRP field)
@@ -7627,7 +7638,7 @@ with tab3:
         st.subheader("Kitting & Gift Set Pricing (Sale-wide)")
         st.caption("Add costs for gift boxes or packaging that apply to the entire order. For product-specific kitting, see product settings above.")
 
-        col1_kitting, col2_kitting = st.columns(2)
+        col1_kitting, col2_kitting, col3_kitting = st.columns(3)
 
         with col1_kitting:
             synced_widget(
@@ -7637,7 +7648,7 @@ with tab3:
                 min_value=0.0,
                 step=10.0,
                 key="kitting_pbp_input",
-                help="What PBP pays for gift set assembly and packaging"
+                help="What PBP pays per box for gift set assembly and packaging"
             )
 
         with col2_kitting:
@@ -7648,7 +7659,19 @@ with tab3:
                 min_value=0.0,
                 step=10.0,
                 key="kitting_client_input",
-                help="What client pays for gift sets and custom packaging"
+                help="What client pays per box for gift sets and custom packaging"
+            )
+
+        with col3_kitting:
+            synced_widget(
+                st.number_input,
+                "Number of Boxes",
+                st.session_state, 'kitting_boxes',
+                default=1,
+                min_value=1,
+                step=1,
+                key="kitting_boxes_input",
+                help="Kitting cost and price are per box and multiplied by this number"
             )
 
         # Custom Line Items & Order Notes - Side by Side
@@ -7810,20 +7833,14 @@ with tab3:
         # Get sales tax amount
         sales_tax = st.session_state.sales_tax
 
-        # Calculate total kitting: global + per-product
-        global_kitting_pbp = st.session_state.kitting_pbp_cost
-        global_kitting_client = st.session_state.kitting_client_price
-
-        # Sum per-product kitting (multiplied by kitting quantity)
-        per_product_kitting_pbp = 0.0
-        per_product_kitting_client = 0.0
-        for item in st.session_state.order_items:
-            if item.get('include_kitting', False):
-                kitting_qty = item.get('kitting_quantity', 1)
-                per_product_kitting_pbp += item.get('kitting_pbp_cost', 0.0) * kitting_qty
-                per_product_kitting_client += item.get('kitting_client_price', 0.0) * kitting_qty
-
-        # Total kitting = global + per-product
+        # Total kitting: sale-wide (per box x boxes) + per-product
+        kitting_boxes = st.session_state.kitting_boxes
+        global_kitting_pbp, global_kitting_client, per_product_kitting_pbp, per_product_kitting_client = calculate_kitting_totals(
+            st.session_state.order_items,
+            st.session_state.kitting_pbp_cost,
+            st.session_state.kitting_client_price,
+            kitting_boxes
+        )
         total_kitting_pbp = global_kitting_pbp + per_product_kitting_pbp
         total_kitting_client = global_kitting_client + per_product_kitting_client
 
@@ -8005,7 +8022,7 @@ with tab3:
 
         # Kitting/Gift Set Assembly (Sale-wide) - only show if global kitting > 0
         if global_kitting_pbp > 0 or global_kitting_client > 0:
-            summary_items.append(["Kitting/Gift Set Assembly (Sale-wide)", "", "", f"${global_kitting_pbp:.2f}", "", f"${global_kitting_client:.2f}"])
+            summary_items.append(["Kitting/Gift Set Assembly (Sale-wide)", kitting_boxes, f"${st.session_state.kitting_pbp_cost:.2f}", f"${global_kitting_pbp:.2f}", f"${st.session_state.kitting_client_price:.2f}", f"${global_kitting_client:.2f}"])
 
         # Add tariff for each product (if > 0)
         for item in st.session_state.order_items:
@@ -8666,7 +8683,7 @@ with tab4:
             st.divider()
             st.subheader("Kitting & Gift Set Pricing")
 
-            col1_kitting, col2_kitting = st.columns(2)
+            col1_kitting, col2_kitting, col3_kitting = st.columns(3)
 
             with col1_kitting:
                 synced_widget(
@@ -8676,7 +8693,7 @@ with tab4:
                     min_value=0.0,
                     step=10.0,
                     key="tab4_kitting_pbp_input",
-                    help="What PBP pays for gift set assembly and packaging"
+                    help="What PBP pays per box for gift set assembly and packaging"
                 )
 
             with col2_kitting:
@@ -8687,7 +8704,19 @@ with tab4:
                     min_value=0.0,
                     step=10.0,
                     key="tab4_kitting_client_input",
-                    help="What client pays for gift sets and custom packaging"
+                    help="What client pays per box for gift sets and custom packaging"
+                )
+
+            with col3_kitting:
+                synced_widget(
+                    st.number_input,
+                    "Number of Boxes",
+                    st.session_state, 'kitting_boxes',
+                    default=1,
+                    min_value=1,
+                    step=1,
+                    key="tab4_kitting_boxes_input",
+                    help="Kitting cost and price are per box and multiplied by this number"
                 )
 
             # Custom Line Items & Order Notes - Side by Side
@@ -9289,13 +9318,13 @@ with tab4:
                 'PARTNER': 'Kitting (Sale-wide)',
                 'DESCRIPTION (Invoice)': 'Gift Set Assembly & Packaging',
                 'DESCRIPTION (PO)': 'Kitting & Assembly Services',
-                'QTY': 1,
+                'QTY': kitting_boxes,
                 'IN-HANDS from Partner': 'N/A',
                 'COST/UNIT': f"${kitting_pbp_cost:.2f}",
-                'TOTAL COST': f"${kitting_pbp_cost:.2f}",
+                'TOTAL COST': f"${global_kitting_pbp:.2f}",
 
                 'SELL PRICE/UNIT': f"${kitting_client_price:.2f}",
-                'TOTAL SELL PRICE': f"${kitting_client_price:.2f}"
+                'TOTAL SELL PRICE': f"${global_kitting_client:.2f}"
             })
 
         # Display line items table with better column sizing
