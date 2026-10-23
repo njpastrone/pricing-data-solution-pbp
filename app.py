@@ -56,6 +56,7 @@ from src.pricing_engine import (
     set_item_client_price,
     set_item_pbp_cost,
     keep_typed_pbp_msrp,
+    MIN_MARKUP_PERCENT,
     get_price_for_quantity,
     calculate_pbp_msrp,
     calculate_catalog_client_price,
@@ -6684,7 +6685,7 @@ with tab3:
                             st.caption(f"Rounded from ${client_price_per_unit_unrounded:.2f}")
 
                         # Update markup if price changed
-                        if abs(new_client_price - client_price_per_unit) > 0.01:  # Check if meaningfully different
+                        if abs(new_client_price - client_price_per_unit) > 0.01 and new_client_price != item.get('pbp_msrp_override'):
                             # Calculate new markup from the price
                             set_item_client_price(st.session_state.order_items[idx], base_price, new_client_price)
                             st.session_state[f'updating_from_price_tab3_{idx}'] = True
@@ -6702,7 +6703,7 @@ with tab3:
                 else:
                     new_markup = st.number_input(
                         f"Markup for {idx}",
-                        min_value=-50.0,  # Allow negative markup for below-cost pricing
+                        min_value=MIN_MARKUP_PERCENT,  # Allow negative markup for below-cost pricing
                         value=item['markup_percent'],
                         step=5.0,
                         key=f"prod_markup_{idx}",

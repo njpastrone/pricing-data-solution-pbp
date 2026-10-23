@@ -148,6 +148,15 @@ def get_item_unit_cost(item, quantity):
     return unit_cost, tier_range, tier_column
 
 
+# Lowest markup the Tab 3 markup field accepts (allows below-cost pricing)
+MIN_MARKUP_PERCENT = -50.0
+
+
+def markup_for_price(unit_cost, client_price):
+    """Markup that turns unit_cost into client_price, never below MIN_MARKUP_PERCENT."""
+    return max(MIN_MARKUP_PERCENT, calculate_markup_from_price(unit_cost, client_price))
+
+
 def set_item_client_price(item, unit_cost, client_price):
     """
     Set the PbP MSRP (client price per unit) the user typed in Tab 3.
@@ -155,7 +164,7 @@ def set_item_client_price(item, unit_cost, client_price):
     The markup is recalculated to hit that price, and the price is remembered
     so a later PBP Cost or quantity (tier) change keeps it (see keep_typed_pbp_msrp).
     """
-    item['markup_percent'] = calculate_markup_from_price(unit_cost, client_price)
+    item['markup_percent'] = markup_for_price(unit_cost, client_price)
     item['pbp_msrp_override'] = client_price
 
 
@@ -180,7 +189,7 @@ def keep_typed_pbp_msrp(item, unit_cost):
     the typed one at this PBP cost (after a cost edit or a tier change).
     """
     if item.get('pbp_msrp_override'):
-        item['markup_percent'] = calculate_markup_from_price(unit_cost, item['pbp_msrp_override'])
+        item['markup_percent'] = markup_for_price(unit_cost, item['pbp_msrp_override'])
 
 
 def get_price_for_quantity(product_row, quantity):
