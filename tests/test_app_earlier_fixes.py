@@ -11,8 +11,12 @@ Run: pytest tests/test_app_earlier_fixes.py
 """
 
 import io
+import os
+import sys
 import time
 from datetime import date
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PIL import Image
 
