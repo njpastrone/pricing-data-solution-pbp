@@ -15,7 +15,10 @@ without `test_impact_slide_mapping.py`, which needs live Google credentials.
 (`streamlit.testing.v1`). Each test sets widgets and clicks buttons like a
 person would (add a product, type a quantity, tick rounding, type a client
 price, add kitting), then checks the Tab 3 Order Summary and the Tab 4
-invoice/PO.
+invoice/PO. It also follows a client order form with no proposal end to end:
+the rep picks products in Tab 2, the client opens the link (a second AppTest
+with `client_form`/`session` query params), changes it and submits, and staff
+import it from the Submitted Order Forms tab.
 
 ```bash
 pytest tests/test_app_order_flow.py
