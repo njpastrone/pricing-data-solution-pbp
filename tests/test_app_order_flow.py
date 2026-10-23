@@ -287,6 +287,16 @@ def test_form_without_a_proposal_carries_products_prices_and_notes_into_the_orde
     assert app.session_state['client_info']['contacts'][0]['email'] == 'jo@acme.example'
 
 
+def test_a_catalog_link_with_no_rep_picks_starts_with_no_lines(app):
+    app.text_input(key='order_detail_company_name').input('Acme Corp').run()
+    app.button(key='gen_client_form_link_btn').click().run()
+    form = open_client_form(app.session_state['generated_client_form_link'])
+    assert not [n for n in form.number_input if n.key.startswith('cf_qty_')]
+    assert any('No products on this order yet' in i.value for i in form.info)
+    form.button(key='cf_add_item').click().run()
+    assert form.selectbox(key='cf_product_0').value == '-- Select a product --'
+
+
 def test_a_guessed_catalog_link_shows_no_catalog(app):
     form = open_client_form('https://example.com/?client_form=catalog_real_000000000000&session=abcdefabcdef')
     assert [e.value for e in form.error] == ["This form is no longer available. Please contact your PBP representative."]

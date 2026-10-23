@@ -862,8 +862,10 @@ def _render_client_form_page(proposal_id, session_id):
     if 'cf_lines' not in st.session_state:
         if 'products' in saved_data:  # the rep's picks or the client's saved draft
             start_products = saved_data['products']
-        else:  # a proposal link: every proposal product (up to the form's limit)
+        elif not proposal_id.startswith(CATALOG_FORM_PREFIX):  # a proposal link: every proposal product (up to the form's limit)
             start_products = [{'name': name} for name in product_names[:MAX_PRODUCT_LINES]]
+        else:  # a catalog link with no rep picks starts empty
+            start_products = []
         st.session_state.cf_lines = [dict(product, id=i) for i, product in enumerate(start_products)]
         st.session_state.cf_next_line_id = len(start_products)
 
