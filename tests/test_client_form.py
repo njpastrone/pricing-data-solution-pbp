@@ -712,3 +712,70 @@ def test_no_email_when_not_set_up():
         blank = {name: '' for name in NOTIFY_SETTINGS}
         assert _submit_with_email(client, dict(blank, **settings), fail=AssertionError("mail server contacted")) == (True, "Order received")
         assert FakeSMTP.sent == []
+
+
+# --- Form links with no proposal (whole catalog, with prices) ---
+
+import pandas as pd
+from src.client_form import catalog_form_id, catalog_products, load_catalog_for_client, client_unit_price, STATUS_DRAFT
+
+CATALOG_ROW = {'Product/Service': 'Jam', 'Partner': 'Partner X', 'Pricing Tiers (Y/N)': 'N',
+               'PBP Cost (No Tiers)': '$5.00', 'PBP Standard Markup': '2', 'PBP Pricing Logic': 'Standard markup'}
+
+
+def test_catalog_products_lists_each_named_product_once():
+    df = pd.DataFrame([CATALOG_ROW, CATALOG_ROW, dict(CATALOG_ROW, **{'Product/Service': ''})])
+    products = catalog_products(df)
+    assert [p['name'] for p in products] == ['Jam']
+    assert products[0]['partner'] == 'Partner X'
+    assert products[0]['pricing']['PBP Cost (No Tiers)'] == '$5.00'
+
+
+def _open_catalog_link(client, form_id, session_id, df=None, load_error=None):
+    """Open a catalog form link against fake sheets and fake pricing data."""
+    pricing = patch('src.client_form.load_pricing_data', return_value=(df, None, None), side_effect=load_error)
+    with patch('src.client_form.connect_to_sheets', return_value=client), pricing as load:
+        return load_catalog_for_client(form_id, session_id), load
+
+
+def test_catalog_form_ids_are_unique_and_keep_the_dataset():
+    first, second = catalog_form_id('real'), catalog_form_id('real')
+    assert first != second
+    assert first.startswith('catalog_real_') and len(first) > len('catalog_real_')
+
+
+def test_generated_catalog_link_loads_the_link_dataset():
+    form_id, session_id = catalog_form_id('demo'), generate_session_token()
+    client, _, drafts, _ = _mock_sheets(LIVE_HEADERS)
+    with patch('src.client_form.connect_to_sheets', return_value=client):
+        assert save_draft(form_id, session_id, {'client_info': {}})[0]  # what Tab 2 does on Generate
+    (catalog, draft), load = _open_catalog_link(client, form_id, session_id, df=pd.DataFrame([CATALOG_ROW]))
+    load.assert_called_once_with('demo')
+    assert [p['name'] for p in catalog['products']] == ['Jam']
+    assert draft['status'] == STATUS_DRAFT
+
+
+def test_unknown_or_guessed_catalog_links_are_rejected():
+    form_id, session_id = catalog_form_id('real'), generate_session_token()
+    client, _, _, _ = _mock_sheets(LIVE_HEADERS, draft_rows=[[form_id, session_id, '{}', '', '', 'now', 'now', STATUS_DRAFT]])
+    df = pd.DataFrame([CATALOG_ROW])
+    for guessed_id, guessed_session in [('catalog_real', 'x'), (form_id, 'x'), (catalog_form_id('real'), session_id),
+                                        ('catalog_other_abc', session_id), ('PROP_20260524_143022', session_id)]:
+        (catalog, draft), _ = _open_catalog_link(client, guessed_id, guessed_session, df=df)
+        assert (catalog, draft) == (None, None), guessed_id
+
+
+def test_catalog_link_hides_errors_from_the_client():
+    form_id, session_id = catalog_form_id('real'), generate_session_token()
+    client, _, drafts, _ = _mock_sheets(LIVE_HEADERS, draft_rows=[[form_id, session_id, '{}', '', '', 'now', 'now', STATUS_DRAFT]])
+    (catalog, draft), _ = _open_catalog_link(client, form_id, session_id, load_error=Exception("quota exceeded"))
+    assert (catalog, draft) == (None, None)
+    drafts.fail['get_all_values'] = [Exception("sheets down")] * 10
+    with patch('src.client_form.time.sleep'):
+        (catalog, draft), _ = _open_catalog_link(client, form_id, session_id, df=pd.DataFrame([CATALOG_ROW]))
+    assert (catalog, draft) == (None, None)
+
+
+def test_client_unit_price_matches_catalog_pricing_and_never_raises():
+    assert client_unit_price(CATALOG_ROW, 100) == 10.0  # $5 cost x 2 standard markup
+    assert client_unit_price({'Product/Service': 'No cost'}, 100) is None

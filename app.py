@@ -89,6 +89,11 @@ from src.forms_helper import (
 )
 from src.client_form import (
     load_proposal_for_client,
+    load_catalog_for_client,
+    catalog_form_id,
+    catalog_products,
+    client_unit_price,
+    CATALOG_FORM_PREFIX,
     load_draft,
     save_draft,
     submit_form,
@@ -739,12 +744,17 @@ def _render_client_form_page(proposal_id, session_id):
     # (shared with the main app), so re-reading them each time hits the quota.
     loaded_key = f"cf_loaded_{proposal_id}_{session_id}"
     if loaded_key not in st.session_state:
-        proposal = load_proposal_for_client(proposal_id)
+        # A link with no proposal shows the whole catalog (with prices)
+        if proposal_id.startswith(CATALOG_FORM_PREFIX):
+            proposal, draft = load_catalog_for_client(proposal_id, session_id)
+        else:
+            proposal = load_proposal_for_client(proposal_id)
+            # Load existing draft (if client is returning)
+            draft = load_draft(proposal_id, session_id) if proposal else None
         if proposal is None:
             st.error("This form is no longer available. Please contact your PBP representative.")
             return
-        # Load existing draft (if client is returning)
-        st.session_state[loaded_key] = (proposal, load_draft(proposal_id, session_id))
+        st.session_state[loaded_key] = (proposal, draft)
     proposal, draft = st.session_state[loaded_key]
     saved_data = draft['form_data'] if draft else {}
 
@@ -808,6 +818,8 @@ def _render_client_form_page(proposal_id, session_id):
 
     # Build product name list for dropdowns (with a blank placeholder)
     product_names = [p['name'] for p in proposal['products']]
+    # Catalog links (no proposal) carry each product's pricing row so the client sees a price
+    pricing_by_name = {p['name']: p['pricing'] for p in proposal['products'] if p.get('pricing')}
     dropdown_options = ["-- Select a product --"] + product_names
 
     saved_products = saved_data.get('products', [])
@@ -853,6 +865,14 @@ def _render_client_form_page(proposal_id, session_id):
                     key=f"cf_notes_{idx}",
                     placeholder="Optional: describe any customization needed"
                 )
+
+            if selected_product in pricing_by_name:
+                unit_price = client_unit_price(pricing_by_name[selected_product], qty)
+                if unit_price:
+                    st.caption(f"Price: \\${unit_price:,.2f} per unit, \\${unit_price * qty:,.2f} for {qty:,} "
+                               "(before customization, shipping and taxes)")
+                else:
+                    st.caption("Price: your PBP representative will confirm the price for this item.")
 
             products_input.append({
                 'name': selected_product,
@@ -4794,9 +4814,42 @@ with tab2:
     # Check if a proposal is saved
     saved_proposal_id = st.session_state.get('loaded_proposal_id')
 
+    # Products the PBP rep picks for a form with no proposal (pre-filled on the client's form)
+    staff_products = []
+
     if not saved_proposal_id:
-        st.warning("Please save your proposal first before generating a client form link.")
-        st.caption("Go to Tab 1 → Save Proposal, then return here.")
+        # No proposal needed: the rep picks the products discussed with the client,
+        # then the client confirms them (and can add more from the catalog) on the form
+        st.info("No saved proposal: pick the products discussed with the client below. They will be "
+                "pre-filled on the form with their prices, and the client can confirm, change or add products. "
+                "To show only a proposal's products instead, save the proposal in Tab 1 first.")
+
+        catalog = catalog_products(st.session_state.df_template)
+        partner_by_name = {p['name']: p['partner'] for p in catalog}
+        pricing_by_name = {p['name']: p['pricing'] for p in catalog}
+        picked_names = st.multiselect(
+            "Products for this form (type to search the catalog)",
+            options=list(partner_by_name),
+            format_func=lambda name: f"{name} ({partner_by_name[name]})",
+            max_selections=MAX_PRODUCT_LINES,
+            key="cf_staff_picks"
+        )
+
+        for name in picked_names:
+            col_name, col_qty, col_notes = st.columns([2, 1, 2])
+            with col_name:
+                st.markdown(f"**{name}**")
+            with col_qty:
+                qty = st.number_input("Quantity", min_value=1, value=100, key=f"cf_staff_qty_{name}")
+            with col_notes:
+                notes = st.text_input("Customization Notes", key=f"cf_staff_notes_{name}")
+            with col_name:
+                unit_price = client_unit_price(pricing_by_name[name], qty)
+                if unit_price:
+                    st.caption(f"\\${unit_price:,.2f} per unit, \\${unit_price * qty:,.2f} total")
+                else:
+                    st.caption("No price available; confirm it with the client")
+            staff_products.append({'name': name, 'quantity': qty, 'customization_notes': notes})
     else:
         # Show products from proposal
         has_proposal_products = len(st.session_state.proposal_products) > 0
@@ -4811,46 +4864,56 @@ with tab2:
                     partner = item['product_data'].get('Partner', '')
                     st.text(f"- {product_name} ({partner})")
 
-        # Generate link button
-        if st.button("Generate Client Form Link", type="primary", use_container_width=True, key="gen_client_form_link_btn"):
-            token = generate_session_token()
+    # Generate link button
+    if st.button("Generate Client Form Link", type="primary", use_container_width=True, key="gen_client_form_link_btn"):
+        token = generate_session_token()
+        # A link with no proposal gets its own unguessable ID (whole catalog)
+        form_id = saved_proposal_id or catalog_form_id(st.session_state.selected_dataset)
 
-            # Save exec's client info as a draft so the form starts pre-filled
-            order_details = st.session_state.get('order_details', {})
-            prefill_data = {
-                'client_info': {
-                    'client_type': order_details.get('client_type', 'New'),
-                    'company_name': order_details.get('company_name', ''),
-                    'contact_name': order_details.get('contact_name', ''),
-                    'contact_email': order_details.get('contact_email', ''),
-                    'contact_phone': order_details.get('contact_phone', ''),
-                },
-            }
-            # Only save draft if exec entered any client info
-            has_client_info = any(v.strip() for k, v in prefill_data['client_info'].items() if k != 'client_type' and isinstance(v, str))
-            if has_client_info:
-                save_draft(saved_proposal_id, token, prefill_data)
+        # Save exec's client info as a draft so the form starts pre-filled
+        order_details = st.session_state.get('order_details', {})
+        prefill_data = {
+            'client_info': {
+                'client_type': order_details.get('client_type', 'New'),
+                'company_name': order_details.get('company_name', ''),
+                'contact_name': order_details.get('contact_name', ''),
+                'contact_email': order_details.get('contact_email', ''),
+                'contact_phone': order_details.get('contact_phone', ''),
+            },
+        }
+        if staff_products:
+            prefill_data['products'] = staff_products
+        # Only save draft if exec entered any client info
+        has_client_info = any(v.strip() for k, v in prefill_data['client_info'].items() if k != 'client_type' and isinstance(v, str))
+        link_saved = True
+        # A catalog link must always be saved: the form page rejects catalog links it has no record of
+        if has_client_info or not saved_proposal_id:
+            link_saved, _ = save_draft(form_id, token, prefill_data)
 
+        if link_saved or saved_proposal_id:
             # Build URL
-            form_link = f"{APP_URL}?client_form={saved_proposal_id}&session={token}"
+            form_link = f"{APP_URL}?client_form={form_id}&session={token}"
             st.session_state.generated_client_form_link = form_link
             st.rerun()
+        else:
+            st.error("Could not create the form link. Please try again in a minute.")
 
-        # Display generated link
-        if st.session_state.get('generated_client_form_link'):
-            link = st.session_state.generated_client_form_link
-            st.text_area("Copy this link and send to your client:", value=link, height=80, key="client_form_link_display")
+    # Display generated link
+    if st.session_state.get('generated_client_form_link'):
+        link = st.session_state.generated_client_form_link
+        st.text_area("Copy this link and send to your client:", value=link, height=80, key="client_form_link_display")
 
-            st.markdown(f'<a href="{link}" target="_blank" style="text-decoration: none;"><button style="width: 100%; padding: 0.5rem; background-color: #0066cc; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">Preview Form in New Tab</button></a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="{link}" target="_blank" style="text-decoration: none;"><button style="width: 100%; padding: 0.5rem; background-color: #0066cc; color: white; border: none; border-radius: 0.25rem; cursor: pointer;">Preview Form in New Tab</button></a>', unsafe_allow_html=True)
 
-            st.info("""
+        st.info("""
 **What's Next?**
-1. Copy the link above and send it to your client
-2. Client opens the link, fills out the form, and submits
-3. Open the **Submitted Order Forms** tab to view and import the completed response
+1. Optional: open the link to check the form, make any changes and press Save Progress
+2. Copy the link above and send it to your client
+3. Client opens the link, fills out the form, and submits
+4. Open the **Submitted Order Forms** tab to view and import the completed response
 """)
 
-            st.caption("Each click of 'Generate' creates a new unique link. Multiple clients can use different links for the same proposal.")
+        st.caption("Each click of 'Generate' creates a new unique link. Multiple clients can use different links for the same proposal.")
 
     # ============================================================
     # SECTION 3: GENERATE GOOGLE FORM (LEGACY)

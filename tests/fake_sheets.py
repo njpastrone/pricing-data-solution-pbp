@@ -94,6 +94,11 @@ class FakeSheet:
                     raise Exception("cell over 50000 characters")
                 self.update_cell(int(first[1:]) + row_offset, col_number + offset, value)
 
+    def batch_update(self, updates):  # [{'range': 'AX2', 'values': [['TRUE']]}, ...], one cell each
+        self._maybe_fail('batch_update')
+        for item in updates:
+            self.update_cell(*gspread.utils.a1_to_rowcol(item['range']), item['values'][0][0])
+
 
 class FakeSpreadsheet:
     """A spreadsheet: a dict of worksheet name -> FakeSheet."""
