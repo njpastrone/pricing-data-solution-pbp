@@ -163,9 +163,10 @@ def set_item_client_price(item, unit_cost, client_price):
 
     The markup is recalculated to hit that price, and the price is remembered
     so a later PBP Cost or quantity (tier) change keeps it (see keep_typed_pbp_msrp).
+    A price below the lowest allowed markup is raised to that lowest price.
     """
     item['markup_percent'] = markup_for_price(unit_cost, client_price)
-    item['pbp_msrp_override'] = client_price
+    item['pbp_msrp_override'] = max(client_price, unit_cost * (1 + MIN_MARKUP_PERCENT / 100))
 
 
 def set_item_pbp_cost(item, new_cost, sheet_cost):

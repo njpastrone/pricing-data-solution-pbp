@@ -166,11 +166,17 @@ def test_mistyped_cost_far_above_a_typed_price_does_not_crash(app):
 
 
 def test_typed_price_below_half_the_cost_does_not_crash(app):
-    """The markup field stops at -50%, so a typed price under half the cost is held at half the cost."""
+    """The markup field stops at -50%, so a typed price under half the cost is raised to half the cost everywhere."""
     tote = add_product(app, 'Harbor Weavers', 'Woven Market Tote', 60)  # $10.50 cost
+    app.checkbox(key='order_fifty_cent_rounding_checkbox').uncheck().run()
     app.number_input(key=f'prod_price_{tote}').set_value(2.00).run()
     assert not app.exception
     assert app.session_state['order_items'][tote]['markup_percent'] == -50.0
+    assert app.number_input(key=f'prod_price_{tote}').value == 5.25
+    assert any('lowest allowed price' in c.value for c in app.caption)
+    assert item_client_total(app, tote) == 5.25 * 60
+    assert total_quote(app) == 5.25 * 60
+    assert invoice_lines(app)['Woven Market Tote'] == '$315.00'
 
 
 def open_client_form(link):

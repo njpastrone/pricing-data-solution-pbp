@@ -6645,6 +6645,10 @@ with tab3:
                 if base_price:
                     product_subtotal_calc = base_price * new_quantity
 
+                    # After a typed price, show the price actually charged in the fields
+                    if st.session_state.pop(f'sync_price_tab3_{idx}', False):
+                        show_new_markup_and_price(idx, base_price)
+
                     # Use current markup for calculation
                     current_markup = st.session_state.get(f"prod_markup_{idx}", item['markup_percent'])
                     if not st.session_state.get(f'updating_from_price_tab3_{idx}', False):
@@ -6683,12 +6687,15 @@ with tab3:
                         # Show rounding note if price was rounded
                         if st.session_state.order_fifty_cent_rounding and abs(client_price_per_unit - client_price_per_unit_unrounded) > 0.01:
                             st.caption(f"Rounded from ${client_price_per_unit_unrounded:.2f}")
+                        if item.get('pbp_msrp_override') and item['markup_percent'] <= MIN_MARKUP_PERCENT:
+                            st.caption(f"Raised to the lowest allowed price ({MIN_MARKUP_PERCENT:.0f}% markup)")
 
                         # Update markup if price changed
-                        if abs(new_client_price - client_price_per_unit) > 0.01 and new_client_price != item.get('pbp_msrp_override'):
+                        if abs(new_client_price - client_price_per_unit) > 0.01:
                             # Calculate new markup from the price
                             set_item_client_price(st.session_state.order_items[idx], base_price, new_client_price)
                             st.session_state[f'updating_from_price_tab3_{idx}'] = True
+                            st.session_state[f'sync_price_tab3_{idx}'] = True
                             st.rerun()
                 else:
                     st.markdown("—")
