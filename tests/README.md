@@ -6,6 +6,9 @@ Run everything from the project root:
 pytest tests/
 ```
 
+The same suite runs on every pull request (`.github/workflows/tests.yml`),
+without `test_impact_slide_mapping.py`, which needs live Google credentials.
+
 ## App tests (the real app, headless)
 
 `test_app_order_flow.py` runs the real `app.py` with Streamlit AppTest
