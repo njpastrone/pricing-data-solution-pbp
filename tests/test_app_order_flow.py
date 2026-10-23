@@ -31,18 +31,23 @@ from streamlit.testing.v1 import AppTest
 APP_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app.py')
 
 
+def start_app():
+    """Open the app logged in, like a staff member in a new browser. Shares the test's fake sheets."""
+    at = AppTest.from_file(APP_PATH, default_timeout=60)
+    at.session_state['authenticated'] = True  # skip the password gate
+    at.session_state['storage_init'] = {}  # browser localStorage; otherwise the component waits for a browser forever
+    at.run()
+    assert not at.exception
+    return at
+
+
 @pytest.fixture
 def app(monkeypatch):
     """The real app, logged in, reading the Sheets snapshot instead of Google."""
     monkeypatch.setenv('PBP_FAKE_SHEETS', '1')
     st.cache_data.clear()
     st.cache_resource.clear()  # fresh fake client = empty saved orders for every test
-    at = AppTest.from_file(APP_PATH, default_timeout=60)
-    at.session_state['authenticated'] = True  # skip the password gate
-    at.session_state['storage_init'] = {}  # browser localStorage; otherwise the component waits for a browser forever
-    at.run()
-    assert not at.exception
-    yield at
+    yield start_app()
     # Don't leave the cached fake client behind for other test files
     st.cache_data.clear()
     st.cache_resource.clear()
