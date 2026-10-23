@@ -7,7 +7,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from streamlit.testing.v1 import AppTest
 
-from src.helpers import get_item_client_unit_price, calculate_split_totals, calculate_kitting_totals
+import csv
+import io
+
+from src.helpers import get_item_client_unit_price, calculate_split_totals, calculate_kitting_totals, build_order_csv
 from src.pricing_engine import get_item_unit_cost, set_item_client_price, set_item_pbp_cost, keep_typed_pbp_msrp
 from test_form_to_order import _app_function_source
 
@@ -146,6 +149,25 @@ def test_sale_wide_kitting_is_per_box():
     assert sale_client + item_client == 983.50
 
 
+def test_sidebar_order_csv_matches_order_form():
+    """Sidebar CSV: Honey at the rounded $7.00 and a TOTAL that includes $11.50 x 85 boxes kitting."""
+    honey = dict(_item(3.53, 7.06, quantity=85), product_name='3 oz Honey')
+    state = {
+        'order_items': [honey],
+        'order_fifty_cent_rounding': True,
+        'kitting_client_price': 11.50,
+        'kitting_pbp_cost': 0.0,
+        'kitting_boxes': 85,
+        'order_shipping': 0.0,
+        'sales_tax': 0.0,
+        'order_discount_type': 'none',
+    }
+    rows = list(csv.reader(io.StringIO(build_order_csv(state))))
+    assert rows[1] == ['3 oz Honey', '85', '$7.00', '$595.00']
+    assert ['Kitting', '', '', '$977.50'] in rows
+    assert rows[-1] == ['TOTAL', '', '', '$1572.50']
+
+
 if __name__ == "__main__":
     test_rounded_pbp_msrp_is_the_invoice_price()
     test_kitting_and_rounding_set_in_tab3_reach_the_invoice()
@@ -154,4 +176,5 @@ if __name__ == "__main__":
     test_pbp_cost_edit_without_set_msrp_keeps_markup()
     test_typed_msrp_sticks_across_quantity_tier_change()
     test_sale_wide_kitting_is_per_box()
+    test_sidebar_order_csv_matches_order_form()
     print("All order pricing tests passed")

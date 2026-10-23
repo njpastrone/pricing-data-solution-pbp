@@ -30,9 +30,10 @@ from src.helpers import (
     round_to_nearest_five,
     round_to_nearest_fifty_cents,
     get_item_client_unit_price,
-    calculate_kitting_totals,
+    get_order_discount,
+    calculate_order_quote,
+    build_order_csv,
     calculate_moq,
-    calculate_credit_card_fee,
     calculate_markup_from_price,
     extract_partner_contacts,
     validate_invoice_completeness,
@@ -2111,43 +2112,8 @@ with st.sidebar:
 
     # Download current order as CSV
     if len(st.session_state.order_items) > 0:
-        import io
-        import csv
-
-        # Build CSV content
-        output = io.StringIO()
-        writer = csv.writer(output)
-
-        # Header
-        writer.writerow(["Product", "Quantity", "Per Unit", "Total"])
-
-        # Order items
-        for item in st.session_state.order_items:
-            writer.writerow([
-                item['product_name'],
-                item['quantity'],
-                f"${item['total_per_unit']:.2f}",
-                f"${item['product_total']:.2f}"
-            ])
-
-        # Add totals
-        products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
-        writer.writerow(["Shipping", "", "", f"${st.session_state.order_shipping:.2f}"])
-
-        # Add per-product tariff lines
-        for item in st.session_state.order_items:
-            tariff_amount = item.get('tariff_amount', 0)
-            if tariff_amount > 0:
-                country = item.get('country_of_origin', 'Unknown')
-                tariff_rate = item.get('tariff_rate_percent', 0)
-                writer.writerow([f"Tariff: {item['product_name']} ({tariff_rate}% - {country})", "", "", f"${tariff_amount:.2f}"])
-
-        # Calculate total tariff
-        total_tariff = sum(item.get('tariff_amount', 0) for item in st.session_state.order_items)
-        total_quote = products_subtotal + st.session_state.order_shipping + total_tariff
-        writer.writerow(["TOTAL", "", "", f"${total_quote:.2f}"])
-
-        csv_content = output.getvalue()
+        # Same prices and TOTAL as the Tab 3 Order Summary and the invoice/PO
+        csv_content = build_order_csv(st.session_state)
 
         st.download_button(
             on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
@@ -7774,21 +7740,7 @@ with tab3:
     tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
 
     # Calculate discount
-    discount_percent = 0.0
-    discount_description = ""
-
-    if st.session_state.order_discount_type == "preset":
-        # Extract percentage from preset string (e.g., "NGO Discount (5%)" -> 5.0)
-        preset = st.session_state.order_discount_preset
-        discount_description = preset
-        # Parse percentage from string like "Non-profit Discount (5%)"
-        if "(" in preset and "%" in preset:
-            percent_str = preset.split("(")[1].split("%")[0]
-            discount_percent = float(percent_str)
-
-    elif st.session_state.order_discount_type == "custom":
-        discount_percent = st.session_state.order_discount_custom_value
-        discount_description = st.session_state.order_discount_custom_desc if st.session_state.order_discount_custom_desc else f"Custom Discount ({discount_percent}%)"
+    discount_percent, discount_description = get_order_discount(st.session_state)
 
     # ============================================================
     # TOTAL ORDER CALCULATION
@@ -7817,51 +7769,25 @@ with tab3:
         if below_moq_warnings:
             st.warning("**The following products are below their Minimum Order Quantity:**\n" + "\n".join(below_moq_warnings))
 
-        # Import helper functions
-        from src.helpers import calculate_split_totals
+        # Order totals (shared with the sidebar CSV and the Tab 4 invoice/PO)
+        order_totals = calculate_order_quote(st.session_state)
+        split_totals = order_totals['split_totals']
+        discount_amount = order_totals['discount_amount']
+        sales_tax = order_totals['sales_tax']
 
-        # Calculate split totals
-        split_totals = calculate_split_totals(st.session_state.order_items, fifty_cent_rounding=st.session_state.order_fifty_cent_rounding)
+        # Kitting: sale-wide (per box x boxes) + per-product
+        kitting_boxes = order_totals['kitting_boxes']
+        global_kitting_pbp = order_totals['global_kitting_pbp']
+        global_kitting_client = order_totals['global_kitting_client']
+        per_product_kitting_pbp = order_totals['per_product_kitting_pbp']
+        per_product_kitting_client = order_totals['per_product_kitting_client']
+        kitting_pbp = global_kitting_pbp + per_product_kitting_pbp
+        kitting_client = global_kitting_client + per_product_kitting_client
+        total_kitting_client = kitting_client
 
-        # Apply discount ONLY to products client price (not customization)
-        discount_amount = split_totals['products_only_client_price'] * (discount_percent / 100)
-        products_after_discount = split_totals['products_only_client_price'] - discount_amount
-
-        # Build subtotal: products after discount + customization (no discount on customization)
-        subtotal_after_discount = products_after_discount + split_totals['customization_client_price']
-
-        # Get sales tax amount
-        sales_tax = st.session_state.sales_tax
-
-        # Total kitting: sale-wide (per box x boxes) + per-product
-        kitting_boxes = st.session_state.kitting_boxes
-        global_kitting_pbp, global_kitting_client, per_product_kitting_pbp, per_product_kitting_client = calculate_kitting_totals(
-            st.session_state.order_items,
-            st.session_state.kitting_pbp_cost,
-            st.session_state.kitting_client_price,
-            kitting_boxes
-        )
-        total_kitting_pbp = global_kitting_pbp + per_product_kitting_pbp
-        total_kitting_client = global_kitting_client + per_product_kitting_client
-
-        # Get kitting costs (for backward compatibility with variable names below)
-        kitting_pbp = total_kitting_pbp
-        kitting_client = total_kitting_client
-
-        # Calculate base total before CC fee
-        total_before_cc = subtotal_after_discount + shipping + sales_tax + kitting_client + tariff
-
-        # Calculate credit card fee (applied to total before CC fee)
-        cc_fee_amount = calculate_credit_card_fee(total_before_cc, st.session_state.apply_cc_fee, st.session_state.cc_fee_percent)
-
-        # Final total
-        total_quote = total_before_cc + cc_fee_amount
-
-        # Apply $0.50 rounding if enabled
-        total_quote = round_to_nearest_fifty_cents(total_quote, st.session_state.order_fifty_cent_rounding)
-
-        # Apply marketing rounding if enabled (after $0.50 rounding)
-        total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
+        total_before_cc = order_totals['total_before_cc']
+        cc_fee_amount = order_totals['cc_fee_amount']
+        total_quote = order_totals['total_quote']
 
         total_units = sum(item['quantity'] for item in st.session_state.order_items)
 
