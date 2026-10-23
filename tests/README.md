@@ -40,10 +40,17 @@ Production never sets `PBP_FAKE_SHEETS`. The same switch also runs the app
 locally without credentials: `PBP_FAKE_SHEETS=1 streamlit run app.py`
 (password `pbp2026`).
 
+`test_app_earlier_fixes.py` re-checks the client order form and order fixes
+#33-#40 the same way: two clients submitting at once, the drop-ship / "Other"
+shipping / accounting questions, every form answer reaching Tab 3 and Tab 4,
+the Save & Finalize button, the Submitted Order Forms tab (list, search,
+filter, details, import) and product photos across saves and reloads.
+
 ### Writing a new app test
 
 Use the `app` fixture and the helpers at the top of `test_app_order_flow.py`
-(`add_product`, `total_quote`, `invoice_lines`, `invoice_total`). Find widgets
+(`add_product`, `total_quote`, `invoice_lines`, `invoice_total`, and
+`start_app` for a second staff session on the same fake sheets). Find widgets
 by their `key=` in `app.py`, for example
 `app.number_input(key='prod_qty_0').set_value(50).run()`.
 
