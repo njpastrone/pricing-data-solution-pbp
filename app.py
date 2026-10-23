@@ -394,7 +394,15 @@ def show_new_markup_and_price(idx, unit_cost):
     )
 
 
-def synced_widget(widget, label, store, field, key, default='', options=None, **kwargs):
+def show_all_new_prices():
+    """After the $0.50 rounding setting changes, put each item's new PbP MSRP into its Tab 3 field."""
+    for idx, item in enumerate(st.session_state.order_items):
+        unit_cost, _, _ = get_item_unit_cost(item, item['quantity'])
+        if unit_cost:
+            show_new_markup_and_price(idx, unit_cost)
+
+
+def synced_widget(widget, label, store, field, key, default='', options=None, after_edit=None, **kwargs):
     """
     Draw an input that always shows store[field] and saves edits back into it.
 
@@ -412,6 +420,7 @@ def synced_widget(widget, label, store, field, key, default='', options=None, **
         key (str): Unique widget key
         default: Value used when store has none
         options (list): Choices, for st.selectbox only (an unknown stored value is added)
+        after_edit: Optional function run after an edit is saved
     """
     value = store.get(field)
     if value is None or value == '':
@@ -429,6 +438,8 @@ def synced_widget(widget, label, store, field, key, default='', options=None, **
 
     def save_edit():
         store[field] = st.session_state[key]
+        if after_edit:
+            after_edit()
 
     return widget(label, key=key, on_change=save_edit, **kwargs)
 
@@ -7559,6 +7570,7 @@ with tab3:
                 "Round prices to nearest $0.50",
                 st.session_state, 'order_fifty_cent_rounding',
                 key="order_fifty_cent_rounding_checkbox",
+                after_edit=show_all_new_prices,
                 help="Rounds all prices to nearest 50 cents (e.g., $24.37 → $24.50)"
             )
 
@@ -8565,6 +8577,7 @@ with tab4:
                     "Round prices to nearest $0.50",
                     st.session_state, 'order_fifty_cent_rounding',
                     key="tab4_fifty_cent_rounding_checkbox",
+                    after_edit=show_all_new_prices,
                     help="Rounds all prices to nearest 50 cents (e.g., $24.37 → $24.50)"
                 )
 

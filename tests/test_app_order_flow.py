@@ -111,6 +111,9 @@ def test_fifty_cent_and_marketing_rounding(app):
     app.checkbox(key='order_fifty_cent_rounding_checkbox').uncheck().run()
     assert total_quote(app) == 159.00  # $160 unrounded, still charm-priced
 
+    app.checkbox(key='tab4_fifty_cent_rounding_checkbox').check().run()  # same setting, from Tab 4
+    assert total_quote(app) == 149.00
+
 
 def test_typed_client_price_overrides_the_pricing_method(app):
     beanie = add_product(app, 'Highland Knits', 'Alpaca Beanie', 20)  # $25.00 from MSRP
@@ -144,8 +147,6 @@ def test_invoice_matches_the_order_summary(app):
     assert invoice_total(app) == '$860.00'
 
 
-@pytest.mark.xfail(strict=True, reason="Known bug: after a quantity change the stale client price box "
-                   "re-sets the markup, so the cheaper tier never reaches the client price")
 def test_more_units_get_the_cheaper_tier_price(app):
     tote = add_product(app, 'Harbor Weavers', 'Woven Market Tote', 60)  # tier 2: $10.50 cost, 100% markup
     assert app.session_state['order_items'][tote]['base_price'] == 10.50
