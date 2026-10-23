@@ -222,18 +222,29 @@ def test_form_without_a_proposal_carries_products_prices_and_notes_into_the_orde
     link = app.session_state['generated_client_form_link']
     assert 'client_form=catalog_real_' in link
 
-    # Client side: the rep's picks are filled in, with prices
+    # Client side: the rep's picks are fixed lines (no product dropdown), with prices
     form = open_client_form(link)
     assert form.text_input(key='cf_company_name').value == 'Acme Corp'
-    assert [form.selectbox(key=f'cf_product_{i}').value for i in range(2)] == ['Stoneware Mug', 'Woven Market Tote']
+    assert not [s for s in form.selectbox if s.key.startswith('cf_product_')]
     assert [form.number_input(key=f'cf_qty_{i}').value for i in range(2)] == [100, 60]
     assert form.text_input(key='cf_notes_0').value == 'Blue glaze, logo on base'
 
+    # "Add Another Item" is the only product picker: the searchable catalog, minus the fixed lines
     form.number_input(key='cf_qty_0').set_value(40).run()
     form.button(key='cf_add_item').click().run()
-    form.selectbox(key='cf_product_2').select('9 oz Raw Honey').run()
-    form.number_input(key='cf_qty_2').set_value(24).run()
-    form.text_input(key='cf_notes_2').input('Gift tag').run()
+    assert sorted(form.selectbox(key='cf_product_2').options) == [
+        '-- Select a product --', '9 oz Raw Honey', 'Alpaca Beanie', 'Honey Stick Case']
+    form.selectbox(key='cf_product_2').select('Alpaca Beanie').run()
+    form.button(key='cf_add_item').click().run()
+    form.selectbox(key='cf_product_3').select('9 oz Raw Honey').run()
+    form.number_input(key='cf_qty_3').set_value(24).run()
+    form.text_input(key='cf_notes_3').input('Gift tag').run()
+
+    # Changed their mind about the beanie: the lines after it keep their answers
+    form.button(key='cf_remove_2').click().run()
+    assert not form.exception
+    assert [form.number_input(key=f'cf_qty_{i}').value for i in (0, 1, 3)] == [40, 60, 24]
+    assert form.text_input(key='cf_notes_3').value == 'Gift tag'
     assert [c.value for c in form.caption if c.value.startswith('Price:')] == [
         f'Price: \\${unit} per unit, \\${total} for {qty} (before customization, shipping and taxes)'
         for unit, total, qty in [('23.00', '920.00', 40), ('21.00', '1,260.00', 60), ('15.00', '360.00', 24)]]

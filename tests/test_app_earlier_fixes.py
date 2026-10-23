@@ -405,3 +405,54 @@ def test_a_photo_attaches_once_and_survives_reloading_and_resaving_the_order(app
     assert not tab_3.exception and not tab_3.error
     assert saved_order_photos('Mug order') == {'Stoneware Mug': ['mug.png']}
     assert len(stored_photo_ids()) == 1
+
+
+# ---------- Client form: the rep's products are fixed lines the client can remove ----------
+
+def test_proposal_form_shows_fixed_lines_the_client_can_remove_and_add_back(app):
+    """A form from a saved proposal: every proposal product is a fixed line (no dropdown);
+    "Add Another Item" offers only that proposal's products; a saved draft keeps fixed vs added."""
+    from src.proposal_manager import save_proposal
+    responses = form_responses_sheet()
+    products = [('Mesa Ceramics', 'Stoneware Mug'), ('Harbor Weavers', 'Woven Market Tote'),
+                ('Highland Knits', 'Alpaca Beanie')]
+    proposal = {'proposal_products': [{'product_data': {'Partner': partner, 'Product/Service': name}}
+                                      for partner, name in products]}
+    saved, _, proposal_id = save_proposal('Acme gifts', '', proposal, 'real')
+    assert saved
+    link = f'https://example.com/?client_form={proposal_id}&session=abcdefabcdef'
+
+    form = open_client_form(link)
+    assert not [s for s in form.selectbox if s.key.startswith('cf_product_')]
+    assert [form.number_input(key=f'cf_qty_{i}').value for i in range(3)] == [100, 100, 100]
+    assert not [b for b in form.button if b.key == 'cf_add_item']  # every proposal product is already on
+
+    # Remove the tote: the beanie after it keeps its answers
+    form.number_input(key='cf_qty_2').set_value(30)
+    form.text_input(key='cf_notes_2').input('Navy').run()
+    form.button(key='cf_remove_1').click().run()
+    assert not form.exception
+    assert form.number_input(key='cf_qty_2').value == 30
+    assert form.text_input(key='cf_notes_2').value == 'Navy'
+
+    # Add it back from the proposal's products only
+    form.button(key='cf_add_item').click().run()
+    assert form.selectbox(key='cf_product_3').options == ['-- Select a product --', 'Woven Market Tote']
+    form.selectbox(key='cf_product_3').select('Woven Market Tote').run()
+    form.number_input(key='cf_qty_3').set_value(60).run()
+    form.button(key='cf_save_btn').click().run()
+    assert any(s.value.startswith('Progress saved') for s in form.success)
+
+    # The client comes back later: same lines, the added one still has its picker
+    later = open_client_form(link)
+    assert [s.key for s in later.selectbox if s.key.startswith('cf_product_')] == ['cf_product_2']
+    assert later.selectbox(key='cf_product_2').value == 'Woven Market Tote'
+    assert [later.number_input(key=f'cf_qty_{i}').value for i in range(3)] == [100, 30, 60]
+    fill_required(later, 'Acme Corp')
+    assert submit(later) == ''
+
+    wait_for_rows(responses, 2)
+    row = answers(responses, 2)
+    assert [(row[f'Gift Item {i} - Product Name'], row[f'Gift {i} Quantity']) for i in (1, 2, 3)] == [
+        ('Stoneware Mug', '100'), ('Alpaca Beanie', '30'), ('Woven Market Tote', '60')]
+    assert row['Gift 2 Customization Notes'] == 'Navy'
