@@ -1689,6 +1689,41 @@ def format_product_with_variant(product_name, variant):
 
 # ========== SPLIT TOTALS CALCULATIONS ==========
 
+def get_item_client_unit_price(item, fifty_cent_rounding=False):
+    """
+    Client price per unit for an order item's base product (cost + markup, no
+    customization), rounded to the nearest $0.50 when enabled.
+
+    This is the PbP MSRP shown in Tab 3. Tab 3's summary and the Tab 4
+    invoice/PO both use it, so the rounded price shown in Tab 3 is the one
+    that ends up on the invoice.
+    """
+    qty = item.get('quantity', 1)
+    if qty <= 0:
+        return 0.0
+    unit_price = (item.get('product_subtotal', 0) + item.get('markup_amount', 0)) / qty
+    return round_to_nearest_fifty_cents(unit_price, fifty_cent_rounding)
+
+
+def calculate_kitting_totals(order_items, kitting_pbp_cost, kitting_client_price, kitting_boxes=1):
+    """
+    Kitting totals for an order: sale-wide kitting (per box x number of boxes)
+    plus per-product kitting (per kit x kitting quantity).
+
+    Returns:
+        tuple: (sale_wide_pbp, sale_wide_client, per_product_pbp, per_product_client)
+    """
+    per_product_pbp = 0.0
+    per_product_client = 0.0
+    for item in order_items:
+        if item.get('include_kitting', False):
+            kitting_qty = item.get('kitting_quantity', 1)
+            per_product_pbp += item.get('kitting_pbp_cost', 0.0) * kitting_qty
+            per_product_client += item.get('kitting_client_price', 0.0) * kitting_qty
+    return (kitting_pbp_cost * kitting_boxes, kitting_client_price * kitting_boxes,
+            per_product_pbp, per_product_client)
+
+
 def calculate_split_totals(order_items, markup_only=False, fifty_cent_rounding=False):
     """
     Calculate PBP costs and client prices separately for order items.
@@ -1734,14 +1769,10 @@ def calculate_split_totals(order_items, markup_only=False, fifty_cent_rounding=F
         results['products_pbp_cost'] += product_cost
 
         # Product client price (with markup), applying per-unit rounding if enabled
-        markup_amount = item.get('markup_amount', 0)
-        qty = item.get('quantity', 1)
-        if fifty_cent_rounding and qty > 0:
-            client_per_unit_raw = (product_cost + markup_amount) / qty
-            client_per_unit_rounded = round_to_nearest_fifty_cents(client_per_unit_raw, True)
-            product_with_markup = client_per_unit_rounded * qty
+        if fifty_cent_rounding:
+            product_with_markup = get_item_client_unit_price(item, True) * item.get('quantity', 1)
         else:
-            product_with_markup = product_cost + markup_amount
+            product_with_markup = product_cost + item.get('markup_amount', 0)
         results['products_client_price'] += product_with_markup
         results['products_only_client_price'] += product_with_markup
 
@@ -1764,6 +1795,118 @@ def calculate_split_totals(order_items, markup_only=False, fifty_cent_rounding=F
     results['total_client_price'] = results['products_client_price'] + results['customization_client_price']
 
     return results
+
+
+def get_order_discount(state):
+    """
+    Order discount from the Tab 3 settings.
+
+    Returns:
+        tuple: (discount_percent, discount_description)
+    """
+    if state.get('order_discount_type') == "preset":
+        # Parse percentage from a preset like "Non-profit Discount (5%)"
+        preset = state.get('order_discount_preset', '')
+        if "(" in preset and "%" in preset:
+            return float(preset.split("(")[1].split("%")[0]), preset
+        return 0.0, preset
+    if state.get('order_discount_type') == "custom":
+        percent = state.get('order_discount_custom_value', 0.0)
+        return percent, state.get('order_discount_custom_desc') or f"Custom Discount ({percent}%)"
+    return 0.0, ""
+
+
+def calculate_order_quote(state):
+    """
+    Totals for the current order, from session state (st.session_state or a dict).
+
+    Used by the Tab 3 Order Summary, the Tab 4 invoice/PO and the sidebar CSV,
+    so all of them show the same numbers.
+
+    Returns:
+        dict: split_totals, discount_amount, sales_tax, kitting_boxes,
+              global_kitting_pbp/client (sale-wide, per box x boxes),
+              per_product_kitting_pbp/client, cc_fee_amount, total_quote, ...
+    """
+    rounding = state.get('order_fifty_cent_rounding', False)
+    order_items = state.get('order_items', [])
+    discount_percent, _ = get_order_discount(state)
+    split_totals = calculate_split_totals(order_items, fifty_cent_rounding=rounding)
+
+    # Discount applies ONLY to products client price (not customization)
+    discount_amount = split_totals['products_only_client_price'] * (discount_percent / 100)
+    subtotal_after_discount = split_totals['products_only_client_price'] - discount_amount + split_totals['customization_client_price']
+
+    kitting_boxes = state.get('kitting_boxes', 1)
+    global_kitting_pbp, global_kitting_client, per_product_kitting_pbp, per_product_kitting_client = calculate_kitting_totals(
+        order_items, state.get('kitting_pbp_cost', 0.0), state.get('kitting_client_price', 0.0), kitting_boxes
+    )
+    kitting_client = global_kitting_client + per_product_kitting_client
+
+    shipping = state.get('order_shipping', 0.0)
+    sales_tax = state.get('sales_tax', 0.0)
+    tariff = sum(item.get('tariff_amount', 0.0) for item in order_items)
+    total_before_cc = subtotal_after_discount + shipping + sales_tax + kitting_client + tariff
+    cc_fee_amount = calculate_credit_card_fee(total_before_cc, state.get('apply_cc_fee', False), state.get('cc_fee_percent', 3.0))
+
+    # $0.50 rounding, then marketing rounding
+    total_quote = round_to_nearest_fifty_cents(total_before_cc + cc_fee_amount, rounding)
+    total_quote = apply_marketing_rounding(total_quote, state.get('order_use_marketing_rounding', False))
+
+    return {
+        'split_totals': split_totals,
+        'discount_amount': discount_amount,
+        'sales_tax': sales_tax,
+        'kitting_boxes': kitting_boxes,
+        'global_kitting_pbp': global_kitting_pbp,
+        'global_kitting_client': global_kitting_client,
+        'per_product_kitting_pbp': per_product_kitting_pbp,
+        'per_product_kitting_client': per_product_kitting_client,
+        'total_before_cc': total_before_cc,
+        'cc_fee_amount': cc_fee_amount,
+        'total_quote': total_quote,
+    }
+
+
+def build_order_csv(state):
+    """
+    The sidebar "Download Order (CSV)": one row per product at the same
+    (rounded) client price as the invoice/PO, then the order-level lines and
+    the same TOTAL as the Tab 3 Order Summary.
+    """
+    import io
+    import csv
+
+    totals = calculate_order_quote(state)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Product", "Quantity", "Per Unit", "Total"])
+
+    for item in state.get('order_items', []):
+        if item.get('is_custom', False):
+            per_unit = item.get('total_per_unit', 0)
+        else:
+            per_unit = get_item_client_unit_price(item, state.get('order_fifty_cent_rounding', False))
+        writer.writerow([item['product_name'], item['quantity'], f"${per_unit:.2f}", f"${per_unit * item['quantity']:.2f}"])
+
+    discount_percent, discount_description = get_order_discount(state)
+    lines = [
+        ("Customization", totals['split_totals']['customization_client_price']),
+        (f"Discount ({discount_description})" if discount_percent > 0 else "Discount", -totals['discount_amount']),
+        ("Shipping", state.get('order_shipping', 0.0)),
+        ("Sales Tax (Estimated)", totals['sales_tax']),
+        ("Kitting", totals['global_kitting_client'] + totals['per_product_kitting_client']),
+    ]
+    for item in state.get('order_items', []):
+        lines.append((f"Tariff: {item['product_name']} ({item.get('tariff_rate_percent', 0)}% - {item.get('country_of_origin', 'Unknown')})",
+                      item.get('tariff_amount', 0)))
+    lines.append(("Credit Card Fee", totals['cc_fee_amount']))
+
+    for label, amount in lines:
+        if amount:
+            writer.writerow([label, "", "", f"${amount:.2f}" if amount > 0 else f"-${-amount:.2f}"])
+    writer.writerow(["TOTAL", "", "", f"${totals['total_quote']:.2f}"])
+    return output.getvalue()
 
 
 def format_pricing_breakdown_row(description, units, pbp_per_unit, pbp_total, client_per_unit, client_total):

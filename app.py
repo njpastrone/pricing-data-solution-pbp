@@ -29,8 +29,11 @@ from src.helpers import (
     apply_marketing_rounding,
     round_to_nearest_five,
     round_to_nearest_fifty_cents,
+    get_item_client_unit_price,
+    get_order_discount,
+    calculate_order_quote,
+    build_order_csv,
     calculate_moq,
-    calculate_credit_card_fee,
     calculate_markup_from_price,
     extract_partner_contacts,
     validate_invoice_completeness,
@@ -49,6 +52,11 @@ from src.helpers import (
 from src.pricing_engine import (
     determine_tier_number,
     get_unit_price_new_system,
+    get_item_unit_cost,
+    set_item_client_price,
+    set_item_pbp_cost,
+    keep_typed_pbp_msrp,
+    MIN_MARKUP_PERCENT,
     get_price_for_quantity,
     calculate_pbp_msrp,
     calculate_catalog_client_price,
@@ -372,7 +380,30 @@ def clear_row_widget_state(prefixes):
             del st.session_state[widget_key]
 
 
-def synced_widget(widget, label, store, field, key, default='', options=None, **kwargs):
+def show_new_markup_and_price(idx, unit_cost):
+    """
+    After a PBP Cost or tier change, put the item's new markup and PbP MSRP
+    into its Tab 3 fields. Removing the field keys is not enough: the browser
+    keeps showing the old markup and sends it back on the next rerun, which
+    would look like a markup edit and wipe a typed PbP MSRP.
+    """
+    item = st.session_state.order_items[idx]
+    st.session_state[f"prod_markup_{idx}"] = item['markup_percent']
+    st.session_state[f"prod_price_{idx}"] = round_to_nearest_fifty_cents(
+        unit_cost * (1 + item['markup_percent'] / 100),
+        st.session_state.order_fifty_cent_rounding
+    )
+
+
+def show_all_new_prices():
+    """After the $0.50 rounding setting changes, put each item's new PbP MSRP into its Tab 3 field."""
+    for idx, item in enumerate(st.session_state.order_items):
+        unit_cost, _, _ = get_item_unit_cost(item, item['quantity'])
+        if unit_cost:
+            show_new_markup_and_price(idx, unit_cost)
+
+
+def synced_widget(widget, label, store, field, key, default='', options=None, after_edit=None, **kwargs):
     """
     Draw an input that always shows store[field] and saves edits back into it.
 
@@ -390,6 +421,7 @@ def synced_widget(widget, label, store, field, key, default='', options=None, **
         key (str): Unique widget key
         default: Value used when store has none
         options (list): Choices, for st.selectbox only (an unknown stored value is added)
+        after_edit: Optional function run after an edit is saved
     """
     value = store.get(field)
     if value is None or value == '':
@@ -407,6 +439,8 @@ def synced_widget(widget, label, store, field, key, default='', options=None, **
 
     def save_edit():
         store[field] = st.session_state[key]
+        if after_edit:
+            after_edit()
 
     return widget(label, key=key, on_change=save_edit, **kwargs)
 
@@ -1248,6 +1282,8 @@ if 'kitting_pbp_cost' not in st.session_state:
     st.session_state.kitting_pbp_cost = 0.0
 if 'kitting_client_price' not in st.session_state:
     st.session_state.kitting_client_price = 0.0
+if 'kitting_boxes' not in st.session_state:
+    st.session_state.kitting_boxes = 1
 
 # Initialize discount settings in session state
 if 'order_discount_type' not in st.session_state:
@@ -1764,6 +1800,7 @@ with st.sidebar:
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
                                 st.session_state.kitting_pbp_cost = order_data.get('kitting_pbp_cost', 0.0)
                                 st.session_state.kitting_client_price = order_data.get('kitting_client_price', 0.0)
+                                st.session_state.kitting_boxes = order_data.get('kitting_boxes', 1)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -1829,6 +1866,7 @@ with st.sidebar:
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
                                 st.session_state.kitting_pbp_cost = order_data.get('kitting_pbp_cost', 0.0)
                                 st.session_state.kitting_client_price = order_data.get('kitting_client_price', 0.0)
+                                st.session_state.kitting_boxes = order_data.get('kitting_boxes', 1)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -2101,43 +2139,8 @@ with st.sidebar:
 
     # Download current order as CSV
     if len(st.session_state.order_items) > 0:
-        import io
-        import csv
-
-        # Build CSV content
-        output = io.StringIO()
-        writer = csv.writer(output)
-
-        # Header
-        writer.writerow(["Product", "Quantity", "Per Unit", "Total"])
-
-        # Order items
-        for item in st.session_state.order_items:
-            writer.writerow([
-                item['product_name'],
-                item['quantity'],
-                f"${item['total_per_unit']:.2f}",
-                f"${item['product_total']:.2f}"
-            ])
-
-        # Add totals
-        products_subtotal = sum(item['product_total'] for item in st.session_state.order_items)
-        writer.writerow(["Shipping", "", "", f"${st.session_state.order_shipping:.2f}"])
-
-        # Add per-product tariff lines
-        for item in st.session_state.order_items:
-            tariff_amount = item.get('tariff_amount', 0)
-            if tariff_amount > 0:
-                country = item.get('country_of_origin', 'Unknown')
-                tariff_rate = item.get('tariff_rate_percent', 0)
-                writer.writerow([f"Tariff: {item['product_name']} ({tariff_rate}% - {country})", "", "", f"${tariff_amount:.2f}"])
-
-        # Calculate total tariff
-        total_tariff = sum(item.get('tariff_amount', 0) for item in st.session_state.order_items)
-        total_quote = products_subtotal + st.session_state.order_shipping + total_tariff
-        writer.writerow(["TOTAL", "", "", f"${total_quote:.2f}"])
-
-        csv_content = output.getvalue()
+        # Same prices and TOTAL as the Tab 3 Order Summary and the invoice/PO
+        csv_content = build_order_csv(st.session_state)
 
         st.download_button(
             on_click="ignore",  # no rerun on click, so the file is not cleaned up mid-download
@@ -5562,6 +5565,7 @@ with tab3:
                                 st.session_state.sales_tax = order_data.get('sales_tax', 0.0)
                                 st.session_state.kitting_pbp_cost = order_data.get('kitting_pbp_cost', 0.0)
                                 st.session_state.kitting_client_price = order_data.get('kitting_client_price', 0.0)
+                                st.session_state.kitting_boxes = order_data.get('kitting_boxes', 1)
                                 st.session_state.order_discount_type = order_data.get('order_discount_type', 'none')
                                 st.session_state.order_discount_preset = order_data.get('order_discount_preset', 'NGO Discount (5%)')
                                 st.session_state.order_discount_custom_desc = order_data.get('order_discount_custom_desc', '')
@@ -6534,7 +6538,7 @@ with tab3:
 
             # Calculate base price for current quantity first
             new_quantity = item['quantity']  # Default value
-            base_price, tier_range, tier_column = get_unit_price_new_system(product_data, item['quantity'])
+            base_price, tier_range, tier_column = get_item_unit_cost(item, item['quantity'])
 
             # Table header
             header_col1, header_col2, header_col3, header_col4, header_col5, header_col6 = st.columns([1.2, 1.2, 1.2, 1.5, 1.5, 1.2])
@@ -6588,12 +6592,33 @@ with tab3:
 
                 # Recalculate base price if quantity changed
                 if new_quantity != item['quantity']:
-                    base_price, tier_range, tier_column = get_unit_price_new_system(product_data, new_quantity)
+                    base_price, tier_range, tier_column = get_item_unit_cost(item, new_quantity)
+                    if base_price:
+                        keep_typed_pbp_msrp(st.session_state.order_items[idx], base_price)
+                        show_new_markup_and_price(idx, base_price)
 
             with col2:
-                # Show PBP cost
+                # Editable PBP cost (overrides the spreadsheet cost, like the PbP MSRP field)
                 if base_price:
-                    st.markdown(f"${base_price:.2f}")
+                    sheet_cost, _, _ = get_unit_price_new_system(product_data, new_quantity)
+                    cost_key = f"prod_cost_{idx}"
+                    st.session_state[cost_key] = float(base_price)
+
+                    def save_cost_override(i=idx, key=cost_key, sheet_cost=sheet_cost):
+                        set_item_pbp_cost(st.session_state.order_items[i], st.session_state[key], sheet_cost)
+                        show_new_markup_and_price(i, st.session_state[key])
+
+                    st.number_input(
+                        f"PBP Cost for {idx}",
+                        min_value=0.01,
+                        step=0.5,
+                        format="%.2f",
+                        key=cost_key,
+                        on_change=save_cost_override,
+                        label_visibility="collapsed"
+                    )
+                    if item.get('pbp_cost_override') is not None and sheet_cost:
+                        st.caption(f"Overridden (spreadsheet: ${sheet_cost:.2f})")
                 else:
                     st.markdown("—")
 
@@ -6619,6 +6644,10 @@ with tab3:
                 # Calculate client price (base + markup, before customization)
                 if base_price:
                     product_subtotal_calc = base_price * new_quantity
+
+                    # After a typed price, show the price actually charged in the fields
+                    if st.session_state.pop(f'sync_price_tab3_{idx}', False):
+                        show_new_markup_and_price(idx, base_price)
 
                     # Use current markup for calculation
                     current_markup = st.session_state.get(f"prod_markup_{idx}", item['markup_percent'])
@@ -6658,13 +6687,15 @@ with tab3:
                         # Show rounding note if price was rounded
                         if st.session_state.order_fifty_cent_rounding and abs(client_price_per_unit - client_price_per_unit_unrounded) > 0.01:
                             st.caption(f"Rounded from ${client_price_per_unit_unrounded:.2f}")
+                        if item.get('pbp_msrp_override') and item['markup_percent'] <= MIN_MARKUP_PERCENT:
+                            st.caption(f"Raised to the lowest allowed price ({MIN_MARKUP_PERCENT:.0f}% markup)")
 
                         # Update markup if price changed
-                        if abs(new_client_price - client_price_per_unit) > 0.01:  # Check if meaningfully different
+                        if abs(new_client_price - client_price_per_unit) > 0.01:
                             # Calculate new markup from the price
-                            new_markup_calc = calculate_markup_from_price(base_price, new_client_price)
-                            st.session_state.order_items[idx]['markup_percent'] = new_markup_calc
+                            set_item_client_price(st.session_state.order_items[idx], base_price, new_client_price)
                             st.session_state[f'updating_from_price_tab3_{idx}'] = True
+                            st.session_state[f'sync_price_tab3_{idx}'] = True
                             st.rerun()
                 else:
                     st.markdown("—")
@@ -6679,7 +6710,7 @@ with tab3:
                 else:
                     new_markup = st.number_input(
                         f"Markup for {idx}",
-                        min_value=-50.0,  # Allow negative markup for below-cost pricing
+                        min_value=MIN_MARKUP_PERCENT,  # Allow negative markup for below-cost pricing
                         value=item['markup_percent'],
                         step=5.0,
                         key=f"prod_markup_{idx}",
@@ -6687,6 +6718,7 @@ with tab3:
                     )
                     # Set flag if markup changed to prevent circular updates
                     if new_markup != item['markup_percent']:
+                        st.session_state.order_items[idx].pop('pbp_msrp_override', None)
                         st.session_state[f'updating_from_markup_tab3_{idx}'] = True
 
             st.divider()
@@ -7131,7 +7163,7 @@ with tab3:
 
             # RECALCULATE PRICING
             # Get base price for new quantity
-            base_price, tier_range, tier_column = get_unit_price_new_system(product_data, new_quantity)
+            base_price, tier_range, tier_column = get_item_unit_cost(item, new_quantity)
 
             if base_price:
                 # Calculate customization costs
@@ -7224,13 +7256,7 @@ with tab3:
 
                 # Base product row - include product name in description
                 product_pbp_cost = product_subtotal
-                client_per_unit = (product_subtotal + markup_amount) / new_quantity if new_quantity > 0 else 0
-
-                # Apply $0.50 rounding to client per unit price (default: True)
-                client_per_unit = round_to_nearest_fifty_cents(
-                    client_per_unit,
-                    st.session_state.order_fifty_cent_rounding
-                )
+                client_per_unit = get_item_client_unit_price(item, st.session_state.order_fifty_cent_rounding)
 
                 # Recalculate total based on rounded per-unit price
                 product_client_price = client_per_unit * new_quantity
@@ -7382,30 +7408,33 @@ with tab3:
 
             with col_shipping:
                 st.markdown("**Client Shipping:**")
-                st.session_state.order_shipping = st.number_input(
+                synced_widget(
+                    st.number_input,
                     "Shipping Price to Client ($)",
+                    st.session_state, 'order_shipping',
                     min_value=0.0,
-                    value=st.session_state.order_shipping,
                     step=10.0,
                     key="shipping_input",
                     help="Shipping cost charged to client"
                 )
 
                 st.markdown("**Partner Shipping:**")
-                st.session_state.partner_shipping = st.number_input(
+                synced_widget(
+                    st.number_input,
                     "Shipping Cost from Partner ($)",
+                    st.session_state, 'partner_shipping',
                     min_value=0.0,
-                    value=st.session_state.partner_shipping,
                     step=10.0,
                     key="partner_shipping_input",
                     help="Shipping cost PBP pays to partner (for Purchase Orders)"
                 )
 
                 st.markdown("**Sales Tax:**")
-                st.session_state.sales_tax = st.number_input(
+                synced_widget(
+                    st.number_input,
                     "Estimated Sales Tax ($)",
+                    st.session_state, 'sales_tax',
                     min_value=0.0,
-                    value=st.session_state.sales_tax,
                     step=5.0,
                     key="sales_tax_input",
                     help="Estimated sales tax amount to be charged to client"
@@ -7544,24 +7573,28 @@ with tab3:
                 st.session_state.order_discount_custom_desc = ""
 
         with col2:
-            st.session_state.order_fifty_cent_rounding = st.checkbox(
+            synced_widget(
+                st.checkbox,
                 "Round prices to nearest $0.50",
-                value=st.session_state.order_fifty_cent_rounding,
+                st.session_state, 'order_fifty_cent_rounding',
                 key="order_fifty_cent_rounding_checkbox",
+                after_edit=show_all_new_prices,
                 help="Rounds all prices to nearest 50 cents (e.g., $24.37 → $24.50)"
             )
 
-            st.session_state.order_use_marketing_rounding = st.checkbox(
+            synced_widget(
+                st.checkbox,
                 "Apply marketing rounding (e.g., $60 → $59)",
-                value=st.session_state.order_use_marketing_rounding,
+                st.session_state, 'order_use_marketing_rounding',
                 key="marketing_rounding_checkbox",
                 help="Apply charm pricing to prices ending in 0. Applied after $0.50 rounding."
             )
 
         with col3:
-            st.session_state.apply_cc_fee = st.checkbox(
+            synced_widget(
+                st.checkbox,
                 "Credit card fee",
-                value=st.session_state.apply_cc_fee,
+                st.session_state, 'apply_cc_fee',
                 key="cc_fee_checkbox",
                 help="Add credit card processing fee to total (default 3%)"
             )
@@ -7572,11 +7605,12 @@ with tab3:
 
             with col1_row2:
                 if discount_selection == "Custom":
-                    st.session_state.order_discount_custom_value = st.number_input(
+                    synced_widget(
+                        st.number_input,
                         "Custom discount %",
+                        st.session_state, 'order_discount_custom_value',
                         min_value=0.0,
                         max_value=100.0,
-                        value=st.session_state.order_discount_custom_value,
                         step=0.5,
                         key="order_custom_discount_input"
                     )
@@ -7586,11 +7620,12 @@ with tab3:
 
             with col3_row2:
                 if st.session_state.apply_cc_fee:
-                    st.session_state.cc_fee_percent = st.number_input(
+                    synced_widget(
+                        st.number_input,
                         "CC fee %",
+                        st.session_state, 'cc_fee_percent',
                         min_value=0.0,
                         max_value=10.0,
-                        value=st.session_state.cc_fee_percent,
                         step=0.1,
                         key="cc_fee_percent_input",
                         help="Percentage fee charged for credit card payments"
@@ -7601,26 +7636,40 @@ with tab3:
         st.subheader("Kitting & Gift Set Pricing (Sale-wide)")
         st.caption("Add costs for gift boxes or packaging that apply to the entire order. For product-specific kitting, see product settings above.")
 
-        col1_kitting, col2_kitting = st.columns(2)
+        col1_kitting, col2_kitting, col3_kitting = st.columns(3)
 
         with col1_kitting:
-            st.session_state.kitting_pbp_cost = st.number_input(
+            synced_widget(
+                st.number_input,
                 "Kitting Cost (PBP) ($)",
+                st.session_state, 'kitting_pbp_cost',
                 min_value=0.0,
-                value=st.session_state.kitting_pbp_cost,
                 step=10.0,
                 key="kitting_pbp_input",
-                help="What PBP pays for gift set assembly and packaging"
+                help="What PBP pays per box for gift set assembly and packaging"
             )
 
         with col2_kitting:
-            st.session_state.kitting_client_price = st.number_input(
+            synced_widget(
+                st.number_input,
                 "Kitting Price (Client) ($)",
+                st.session_state, 'kitting_client_price',
                 min_value=0.0,
-                value=st.session_state.kitting_client_price,
                 step=10.0,
                 key="kitting_client_input",
-                help="What client pays for gift sets and custom packaging"
+                help="What client pays per box for gift sets and custom packaging"
+            )
+
+        with col3_kitting:
+            synced_widget(
+                st.number_input,
+                "Number of Boxes",
+                st.session_state, 'kitting_boxes',
+                default=1,
+                min_value=1,
+                step=1,
+                key="kitting_boxes_input",
+                help="Kitting cost and price are per box and multiplied by this number"
             )
 
         # Custom Line Items & Order Notes - Side by Side
@@ -7723,21 +7772,7 @@ with tab3:
     tariff = sum(item.get('tariff_amount', 0.0) for item in st.session_state.order_items)
 
     # Calculate discount
-    discount_percent = 0.0
-    discount_description = ""
-
-    if st.session_state.order_discount_type == "preset":
-        # Extract percentage from preset string (e.g., "NGO Discount (5%)" -> 5.0)
-        preset = st.session_state.order_discount_preset
-        discount_description = preset
-        # Parse percentage from string like "Non-profit Discount (5%)"
-        if "(" in preset and "%" in preset:
-            percent_str = preset.split("(")[1].split("%")[0]
-            discount_percent = float(percent_str)
-
-    elif st.session_state.order_discount_type == "custom":
-        discount_percent = st.session_state.order_discount_custom_value
-        discount_description = st.session_state.order_discount_custom_desc if st.session_state.order_discount_custom_desc else f"Custom Discount ({discount_percent}%)"
+    discount_percent, discount_description = get_order_discount(st.session_state)
 
     # ============================================================
     # TOTAL ORDER CALCULATION
@@ -7754,7 +7789,7 @@ with tab3:
             if item.get('is_custom', False) or item.get('is_custom_product', False):
                 continue
             product_data_check = item.get('product_data', {})
-            base_price_check, _, _ = get_unit_price_new_system(product_data_check, item['quantity'])
+            base_price_check, _, _ = get_item_unit_cost(item, item['quantity'])
             if base_price_check:
                 markup = item.get('markup_percent', 100)
                 client_price_est = base_price_check * (1 + markup / 100)
@@ -7766,57 +7801,25 @@ with tab3:
         if below_moq_warnings:
             st.warning("**The following products are below their Minimum Order Quantity:**\n" + "\n".join(below_moq_warnings))
 
-        # Import helper functions
-        from src.helpers import calculate_split_totals
+        # Order totals (shared with the sidebar CSV and the Tab 4 invoice/PO)
+        order_totals = calculate_order_quote(st.session_state)
+        split_totals = order_totals['split_totals']
+        discount_amount = order_totals['discount_amount']
+        sales_tax = order_totals['sales_tax']
 
-        # Calculate split totals
-        split_totals = calculate_split_totals(st.session_state.order_items, fifty_cent_rounding=st.session_state.order_fifty_cent_rounding)
+        # Kitting: sale-wide (per box x boxes) + per-product
+        kitting_boxes = order_totals['kitting_boxes']
+        global_kitting_pbp = order_totals['global_kitting_pbp']
+        global_kitting_client = order_totals['global_kitting_client']
+        per_product_kitting_pbp = order_totals['per_product_kitting_pbp']
+        per_product_kitting_client = order_totals['per_product_kitting_client']
+        kitting_pbp = global_kitting_pbp + per_product_kitting_pbp
+        kitting_client = global_kitting_client + per_product_kitting_client
+        total_kitting_client = kitting_client
 
-        # Apply discount ONLY to products client price (not customization)
-        discount_amount = split_totals['products_only_client_price'] * (discount_percent / 100)
-        products_after_discount = split_totals['products_only_client_price'] - discount_amount
-
-        # Build subtotal: products after discount + customization (no discount on customization)
-        subtotal_after_discount = products_after_discount + split_totals['customization_client_price']
-
-        # Get sales tax amount
-        sales_tax = st.session_state.sales_tax
-
-        # Calculate total kitting: global + per-product
-        global_kitting_pbp = st.session_state.kitting_pbp_cost
-        global_kitting_client = st.session_state.kitting_client_price
-
-        # Sum per-product kitting (multiplied by kitting quantity)
-        per_product_kitting_pbp = 0.0
-        per_product_kitting_client = 0.0
-        for item in st.session_state.order_items:
-            if item.get('include_kitting', False):
-                kitting_qty = item.get('kitting_quantity', 1)
-                per_product_kitting_pbp += item.get('kitting_pbp_cost', 0.0) * kitting_qty
-                per_product_kitting_client += item.get('kitting_client_price', 0.0) * kitting_qty
-
-        # Total kitting = global + per-product
-        total_kitting_pbp = global_kitting_pbp + per_product_kitting_pbp
-        total_kitting_client = global_kitting_client + per_product_kitting_client
-
-        # Get kitting costs (for backward compatibility with variable names below)
-        kitting_pbp = total_kitting_pbp
-        kitting_client = total_kitting_client
-
-        # Calculate base total before CC fee
-        total_before_cc = subtotal_after_discount + shipping + sales_tax + kitting_client + tariff
-
-        # Calculate credit card fee (applied to total before CC fee)
-        cc_fee_amount = calculate_credit_card_fee(total_before_cc, st.session_state.apply_cc_fee, st.session_state.cc_fee_percent)
-
-        # Final total
-        total_quote = total_before_cc + cc_fee_amount
-
-        # Apply $0.50 rounding if enabled
-        total_quote = round_to_nearest_fifty_cents(total_quote, st.session_state.order_fifty_cent_rounding)
-
-        # Apply marketing rounding if enabled (after $0.50 rounding)
-        total_quote = apply_marketing_rounding(total_quote, st.session_state.order_use_marketing_rounding)
+        total_before_cc = order_totals['total_before_cc']
+        cc_fee_amount = order_totals['cc_fee_amount']
+        total_quote = order_totals['total_quote']
 
         total_units = sum(item['quantity'] for item in st.session_state.order_items)
 
@@ -7845,8 +7848,7 @@ with tab3:
             product_pbp_per_unit = product_pbp_cost / item['quantity'] if item['quantity'] > 0 else 0
 
             # Apply per-unit rounding to client price to match Tab 3 display
-            client_per_unit_raw = (product_pbp_cost + item.get('markup_amount', 0)) / item['quantity'] if item['quantity'] > 0 else 0
-            product_client_per_unit = round_to_nearest_fifty_cents(client_per_unit_raw, st.session_state.order_fifty_cent_rounding)
+            product_client_per_unit = get_item_client_unit_price(item, st.session_state.order_fifty_cent_rounding)
             product_client_price = product_client_per_unit * item['quantity']
 
             summary_items.append([
@@ -7978,7 +7980,7 @@ with tab3:
 
         # Kitting/Gift Set Assembly (Sale-wide) - only show if global kitting > 0
         if global_kitting_pbp > 0 or global_kitting_client > 0:
-            summary_items.append(["Kitting/Gift Set Assembly (Sale-wide)", "", "", f"${global_kitting_pbp:.2f}", "", f"${global_kitting_client:.2f}"])
+            summary_items.append(["Kitting/Gift Set Assembly (Sale-wide)", kitting_boxes, f"${st.session_state.kitting_pbp_cost:.2f}", f"${global_kitting_pbp:.2f}", f"${st.session_state.kitting_client_price:.2f}", f"${global_kitting_client:.2f}"])
 
         # Add tariff for each product (if > 0)
         for item in st.session_state.order_items:
@@ -8433,30 +8435,33 @@ with tab4:
 
                 with col_shipping:
                     st.markdown("**Client Shipping:**")
-                    st.session_state.order_shipping = st.number_input(
+                    synced_widget(
+                        st.number_input,
                         "Shipping Price to Client ($)",
+                        st.session_state, 'order_shipping',
                         min_value=0.0,
-                        value=st.session_state.order_shipping,
                         step=10.0,
                         key="tab3_shipping_input",
                         help="Shipping cost charged to client"
                     )
 
                     st.markdown("**Partner Shipping:**")
-                    st.session_state.partner_shipping = st.number_input(
+                    synced_widget(
+                        st.number_input,
                         "Shipping Cost from Partner ($)",
+                        st.session_state, 'partner_shipping',
                         min_value=0.0,
-                        value=st.session_state.partner_shipping,
                         step=10.0,
                         key="tab3_partner_shipping_input",
                         help="Shipping cost PBP pays to partner (for Purchase Orders)"
                     )
 
                     st.markdown("**Sales Tax:**")
-                    st.session_state.sales_tax = st.number_input(
+                    synced_widget(
+                        st.number_input,
                         "Estimated Sales Tax ($)",
+                        st.session_state, 'sales_tax',
                         min_value=0.0,
-                        value=st.session_state.sales_tax,
                         step=5.0,
                         key="tab3_sales_tax_input",
                         help="Estimated sales tax amount to be charged to client"
@@ -8575,24 +8580,28 @@ with tab4:
                     st.session_state.order_discount_custom_desc = ""
 
             with col2:
-                st.session_state.order_fifty_cent_rounding = st.checkbox(
+                synced_widget(
+                    st.checkbox,
                     "Round prices to nearest $0.50",
-                    value=st.session_state.order_fifty_cent_rounding,
+                    st.session_state, 'order_fifty_cent_rounding',
                     key="tab4_fifty_cent_rounding_checkbox",
+                    after_edit=show_all_new_prices,
                     help="Rounds all prices to nearest 50 cents (e.g., $24.37 → $24.50)"
                 )
 
-                st.session_state.order_use_marketing_rounding = st.checkbox(
+                synced_widget(
+                    st.checkbox,
                     "Apply marketing rounding (e.g., $60 → $59)",
-                    value=st.session_state.order_use_marketing_rounding,
+                    st.session_state, 'order_use_marketing_rounding',
                     key="tab3_marketing_rounding_checkbox",
                     help="Apply charm pricing to prices ending in 0. Applied after $0.50 rounding."
                 )
 
             with col3:
-                st.session_state.apply_cc_fee = st.checkbox(
+                synced_widget(
+                    st.checkbox,
                     "Credit card fee",
-                    value=st.session_state.apply_cc_fee,
+                    st.session_state, 'apply_cc_fee',
                     key="tab3_cc_fee_checkbox",
                     help="Add credit card processing fee to total (default 3%)"
                 )
@@ -8603,11 +8612,12 @@ with tab4:
 
                 with col1_row2:
                     if discount_selection == "Custom":
-                        st.session_state.order_discount_custom_value = st.number_input(
+                        synced_widget(
+                            st.number_input,
                             "Custom discount %",
+                            st.session_state, 'order_discount_custom_value',
                             min_value=0.0,
                             max_value=100.0,
-                            value=st.session_state.order_discount_custom_value,
                             step=0.5,
                             key="tab3_order_custom_discount_input"
                         )
@@ -8617,11 +8627,12 @@ with tab4:
 
                 with col3_row2:
                     if st.session_state.apply_cc_fee:
-                        st.session_state.cc_fee_percent = st.number_input(
+                        synced_widget(
+                            st.number_input,
                             "CC fee %",
+                            st.session_state, 'cc_fee_percent',
                             min_value=0.0,
                             max_value=10.0,
-                            value=st.session_state.cc_fee_percent,
                             step=0.1,
                             key="tab3_cc_fee_percent_input",
                             help="Percentage fee charged for credit card payments"
@@ -8631,26 +8642,40 @@ with tab4:
             st.divider()
             st.subheader("Kitting & Gift Set Pricing")
 
-            col1_kitting, col2_kitting = st.columns(2)
+            col1_kitting, col2_kitting, col3_kitting = st.columns(3)
 
             with col1_kitting:
-                st.session_state.kitting_pbp_cost = st.number_input(
+                synced_widget(
+                    st.number_input,
                     "Kitting Cost (PBP) ($)",
+                    st.session_state, 'kitting_pbp_cost',
                     min_value=0.0,
-                    value=st.session_state.kitting_pbp_cost,
                     step=10.0,
                     key="tab4_kitting_pbp_input",
-                    help="What PBP pays for gift set assembly and packaging"
+                    help="What PBP pays per box for gift set assembly and packaging"
                 )
 
             with col2_kitting:
-                st.session_state.kitting_client_price = st.number_input(
+                synced_widget(
+                    st.number_input,
                     "Kitting Price (Client) ($)",
+                    st.session_state, 'kitting_client_price',
                     min_value=0.0,
-                    value=st.session_state.kitting_client_price,
                     step=10.0,
                     key="tab4_kitting_client_input",
-                    help="What client pays for gift sets and custom packaging"
+                    help="What client pays per box for gift sets and custom packaging"
+                )
+
+            with col3_kitting:
+                synced_widget(
+                    st.number_input,
+                    "Number of Boxes",
+                    st.session_state, 'kitting_boxes',
+                    default=1,
+                    min_value=1,
+                    step=1,
+                    key="tab4_kitting_boxes_input",
+                    help="Kitting cost and price are per box and multiplied by this number"
                 )
 
             # Custom Line Items & Order Notes - Side by Side
@@ -9061,32 +9086,9 @@ with tab4:
                 if partner_in_hands and partner_in_hands != 'TBD':
                     partner_in_hands = str(partner_in_hands)
 
-                # Calculate pricing using new system if product data available
-                if product_data is not None:
-                    try:
-                        # Use calculate_pbp_msrp for consistent pricing
-                        user_markup_override = item.get('markup_percent') if item.get('manual_override') else None
-                        pricing_result = calculate_pbp_msrp(
-                            product_data.to_dict(),
-                            quantity=qty,
-                            user_markup_override=user_markup_override
-                        )
-                        partner_cost_per_unit = pricing_result['calculation_details']['base_cost']
-                        sell_price_per_unit = pricing_result['pbp_msrp']
-                    except Exception:
-                        # Fallback to stored values if calculation fails
-                        partner_cost_per_unit = item.get('partner_cost_per_unit', item.get('base_price', 0))
-                        product_subtotal = item.get('product_subtotal', 0)
-                        markup_amount = item.get('markup_amount', 0)
-                        sell_price_total = product_subtotal + markup_amount
-                        sell_price_per_unit = sell_price_total / qty if qty > 0 else 0
-                else:
-                    # Use stored values if product data not available
-                    partner_cost_per_unit = item.get('partner_cost_per_unit', item.get('base_price', 0))
-                    product_subtotal = item.get('product_subtotal', 0)
-                    markup_amount = item.get('markup_amount', 0)
-                    sell_price_total = product_subtotal + markup_amount
-                    sell_price_per_unit = sell_price_total / qty if qty > 0 else 0
+                # Same cost and (rounded) price as Tab 3, including any PBP Cost / PbP MSRP edits
+                partner_cost_per_unit = item.get('base_price') or 0
+                sell_price_per_unit = get_item_client_unit_price(item, st.session_state.order_fifty_cent_rounding)
 
                 partner_cost_total = partner_cost_per_unit * qty
                 sell_price_total = sell_price_per_unit * qty
@@ -9275,13 +9277,13 @@ with tab4:
                 'PARTNER': 'Kitting (Sale-wide)',
                 'DESCRIPTION (Invoice)': 'Gift Set Assembly & Packaging',
                 'DESCRIPTION (PO)': 'Kitting & Assembly Services',
-                'QTY': 1,
+                'QTY': kitting_boxes,
                 'IN-HANDS from Partner': 'N/A',
                 'COST/UNIT': f"${kitting_pbp_cost:.2f}",
-                'TOTAL COST': f"${kitting_pbp_cost:.2f}",
+                'TOTAL COST': f"${global_kitting_pbp:.2f}",
 
                 'SELL PRICE/UNIT': f"${kitting_client_price:.2f}",
-                'TOTAL SELL PRICE': f"${kitting_client_price:.2f}"
+                'TOTAL SELL PRICE': f"${global_kitting_client:.2f}"
             })
 
         # Display line items table with better column sizing
@@ -9307,8 +9309,9 @@ with tab4:
         # Display totals section
         st.write("")  # Spacing
         st.markdown("**Summary Totals:**")
+        # Same numbers as the Tab 3 Order Summary
         totals_data = [
-            ["Subtotal (Products + Customization)", f"${products_subtotal:.2f}"]
+            ["Subtotal (Products + Customization)", f"${split_totals['total_client_price']:.2f}"]
         ]
 
         # Add discount line if applicable (discount applies to products only, not customization)
@@ -9316,6 +9319,13 @@ with tab4:
             totals_data.append([f"Discount ({discount_description}) - on products only", f"-${discount_amount:.2f}"])
 
         totals_data.append(["Shipping", f"${shipping:.2f}"])
+
+        if sales_tax > 0:
+            totals_data.append(["Sales Tax (Estimated)", f"${sales_tax:.2f}"])
+
+        # Sale-wide + per-product kitting (client price only)
+        if total_kitting_client > 0:
+            totals_data.append(["Kitting", f"${total_kitting_client:.2f}"])
 
         # Tariff is already in line items, so we show it separately
         if tariff > 0:

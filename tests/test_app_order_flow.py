@@ -111,6 +111,9 @@ def test_fifty_cent_and_marketing_rounding(app):
     app.checkbox(key='order_fifty_cent_rounding_checkbox').uncheck().run()
     assert total_quote(app) == 159.00  # $160 unrounded, still charm-priced
 
+    app.checkbox(key='tab4_fifty_cent_rounding_checkbox').check().run()  # same setting, from Tab 4
+    assert total_quote(app) == 149.00
+
 
 def test_typed_client_price_overrides_the_pricing_method(app):
     beanie = add_product(app, 'Highland Knits', 'Alpaca Beanie', 20)  # $25.00 from MSRP
@@ -144,12 +147,36 @@ def test_invoice_matches_the_order_summary(app):
     assert invoice_total(app) == '$860.00'
 
 
-@pytest.mark.xfail(strict=True, reason="Known bug: after a quantity change the stale client price box "
-                   "re-sets the markup, so the cheaper tier never reaches the client price")
 def test_more_units_get_the_cheaper_tier_price(app):
     tote = add_product(app, 'Harbor Weavers', 'Woven Market Tote', 60)  # tier 2: $10.50 cost, 100% markup
     assert app.session_state['order_items'][tote]['base_price'] == 10.50
     assert item_client_total(app, tote) == 21.00 * 60
+
+
+def test_mistyped_cost_far_above_a_typed_price_does_not_crash(app):
+    """Typed PbP MSRP $33, then PBP Cost mistyped as $235.70 (for $23.57): the page must keep working."""
+    beanie = add_product(app, 'Highland Knits', 'Alpaca Beanie', 20)
+    app.number_input(key=f'prod_price_{beanie}').set_value(33.00).run()
+    app.number_input(key=f'prod_cost_{beanie}').set_value(235.70).run()
+    assert not app.exception
+
+    app.number_input(key=f'prod_cost_{beanie}').set_value(23.57).run()  # fixing the typo brings $33 back
+    assert not app.exception
+    assert item_client_total(app, beanie) == 33.00 * 20
+
+
+def test_typed_price_below_half_the_cost_does_not_crash(app):
+    """The markup field stops at -50%, so a typed price under half the cost is raised to half the cost everywhere."""
+    tote = add_product(app, 'Harbor Weavers', 'Woven Market Tote', 60)  # $10.50 cost
+    app.checkbox(key='order_fifty_cent_rounding_checkbox').uncheck().run()
+    app.number_input(key=f'prod_price_{tote}').set_value(2.00).run()
+    assert not app.exception
+    assert app.session_state['order_items'][tote]['markup_percent'] == -50.0
+    assert app.number_input(key=f'prod_price_{tote}').value == 5.25
+    assert any('lowest allowed price' in c.value for c in app.caption)
+    assert item_client_total(app, tote) == 5.25 * 60
+    assert total_quote(app) == 5.25 * 60
+    assert invoice_lines(app)['Woven Market Tote'] == '$315.00'
 
 
 def open_client_form(link):
