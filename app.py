@@ -379,6 +379,21 @@ def clear_row_widget_state(prefixes):
             del st.session_state[widget_key]
 
 
+def show_new_markup_and_price(idx, unit_cost):
+    """
+    After a PBP Cost or tier change, put the item's new markup and PbP MSRP
+    into its Tab 3 fields. Removing the field keys is not enough: the browser
+    keeps showing the old markup and sends it back on the next rerun, which
+    would look like a markup edit and wipe a typed PbP MSRP.
+    """
+    item = st.session_state.order_items[idx]
+    st.session_state[f"prod_markup_{idx}"] = item['markup_percent']
+    st.session_state[f"prod_price_{idx}"] = round_to_nearest_fifty_cents(
+        unit_cost * (1 + item['markup_percent'] / 100),
+        st.session_state.order_fifty_cent_rounding
+    )
+
+
 def synced_widget(widget, label, store, field, key, default='', options=None, **kwargs):
     """
     Draw an input that always shows store[field] and saves edits back into it.
@@ -6566,10 +6581,9 @@ with tab3:
                 # Recalculate base price if quantity changed
                 if new_quantity != item['quantity']:
                     base_price, tier_range, tier_column = get_item_unit_cost(item, new_quantity)
-                    if base_price and item.get('pbp_msrp_override'):
+                    if base_price:
                         keep_typed_pbp_msrp(st.session_state.order_items[idx], base_price)
-                        st.session_state.pop(f"prod_markup_{idx}", None)
-                        st.session_state.pop(f"prod_price_{idx}", None)
+                        show_new_markup_and_price(idx, base_price)
 
             with col2:
                 # Editable PBP cost (overrides the spreadsheet cost, like the PbP MSRP field)
@@ -6580,9 +6594,7 @@ with tab3:
 
                     def save_cost_override(i=idx, key=cost_key, sheet_cost=sheet_cost):
                         set_item_pbp_cost(st.session_state.order_items[i], st.session_state[key], sheet_cost)
-                        # Let the price and markup fields re-read the item's (possibly new) markup
-                        st.session_state.pop(f"prod_markup_{i}", None)
-                        st.session_state.pop(f"prod_price_{i}", None)
+                        show_new_markup_and_price(i, st.session_state[key])
 
                     st.number_input(
                         f"PBP Cost for {idx}",
