@@ -848,55 +848,71 @@ def _render_client_form_page(proposal_id, session_id):
 
     # --- Section 2: Products & Quantities ---
     st.subheader("2. Products & Quantities")
-    st.caption("Select the products you would like to order and enter the quantity for each.")
+    st.caption("Check the products below, set the quantity for each, and remove any you do not need.")
 
-    # Build product name list for dropdowns (with a blank placeholder)
     product_names = [p['name'] for p in proposal['products']]
     # Catalog links (no proposal) carry each product's pricing row so the client sees a price
     pricing_by_name = {p['name']: p['pricing'] for p in proposal['products'] if p.get('pricing')}
-    dropdown_options = ["-- Select a product --"] + product_names
-
-    saved_products = saved_data.get('products', [])
-
-    # Determine how many item slots to show (saved items + 1 empty).
-    # Max = number of products, but never more than the response sheet's item columns.
+    pick_placeholder = "-- Select a product --"
     max_items = min(len(product_names), MAX_PRODUCT_LINES)
-    # Initialize item count in session state
-    if 'cf_item_count' not in st.session_state:
-        st.session_state.cf_item_count = max(len(saved_products), 1)
+
+    # The form's lines, set up once per visit. A line is fixed (product the rep added or
+    # the proposal's, shown by name) or added by the client ('added': True, with a picker).
+    # Each line keeps its own id so removing one never shifts another line's quantity or notes.
+    if 'cf_lines' not in st.session_state:
+        if 'products' in saved_data:  # the rep's picks or the client's saved draft
+            start_products = saved_data['products']
+        elif not proposal_id.startswith(CATALOG_FORM_PREFIX):  # a proposal link: every proposal product (up to the form's limit)
+            start_products = [{'name': name} for name in product_names[:MAX_PRODUCT_LINES]]
+        else:  # a catalog link with no rep picks starts empty
+            start_products = []
+        st.session_state.cf_lines = [dict(product, id=i) for i, product in enumerate(start_products)]
+        st.session_state.cf_next_line_id = len(start_products)
+
+    lines = st.session_state.cf_lines
+    fixed_names = [line['name'] for line in lines if not line.get('added')]
+    # "Add another item" offers the proposal's products (or the catalog), minus the fixed lines
+    pick_options = [pick_placeholder] + [name for name in product_names if name not in fixed_names]
 
     products_input = []
 
-    for idx in range(st.session_state.cf_item_count):
-        st.markdown(f"**Item {idx + 1}**")
+    for number, line in enumerate(lines, start=1):
+        line_id = line['id']
+        col_title, col_remove = st.columns([4, 1])
+        with col_title:
+            st.markdown(f"**Item {number}**")
+        with col_remove:
+            # A callback (not st.rerun mid-page) so every other line's answers are kept
+            st.button("Remove", key=f"cf_remove_{line_id}", on_click=lines.remove, args=(line,))
 
-        # Restore saved selection for this slot
-        saved_item = saved_products[idx] if idx < len(saved_products) else {}
-        saved_name = saved_item.get('name', '')
-        default_index = dropdown_options.index(saved_name) if saved_name in dropdown_options else 0
+        if line.get('added'):
+            # Searchable: type in the box to find a product
+            selected_product = st.selectbox(
+                "Product",
+                options=pick_options,
+                index=pick_options.index(line['name']) if line.get('name') in pick_options else 0,
+                key=f"cf_product_{line_id}",
+                label_visibility="collapsed"
+            )
+            line['name'] = selected_product  # keeps the pick if the options change (a fixed line removed)
+        else:
+            selected_product = line['name']
+            st.markdown(selected_product)
 
-        selected_product = st.selectbox(
-            "Product",
-            options=dropdown_options,
-            index=default_index,
-            key=f"cf_product_{idx}",
-            label_visibility="collapsed"
-        )
-
-        if selected_product != "-- Select a product --":
+        if selected_product != pick_placeholder:
             col_qty, col_notes = st.columns([1, 3])
             with col_qty:
                 qty = st.number_input(
                     "Quantity *",
                     min_value=1,
-                    value=saved_item.get('quantity', 100),
-                    key=f"cf_qty_{idx}"
+                    value=line.get('quantity', 100),
+                    key=f"cf_qty_{line_id}"
                 )
             with col_notes:
                 notes = st.text_input(
                     "Customization Notes",
-                    value=saved_item.get('customization_notes', ''),
-                    key=f"cf_notes_{idx}",
+                    value=line.get('customization_notes', ''),
+                    key=f"cf_notes_{line_id}",
                     placeholder="Optional: describe any customization needed"
                 )
 
@@ -908,21 +924,25 @@ def _render_client_form_page(proposal_id, session_id):
                 else:
                     st.caption("Price: your PBP representative will confirm the price for this item.")
 
-            products_input.append({
-                'name': selected_product,
-                'quantity': qty,
-                'customization_notes': notes,
-            })
+            product = {'name': selected_product, 'quantity': qty, 'customization_notes': notes}
+            if line.get('added'):
+                product['added'] = True  # a saved draft brings this line back with its picker
+            products_input.append(product)
 
         # Separator between items
-        if idx < st.session_state.cf_item_count - 1:
+        if number < len(lines):
             st.markdown("---")
 
-    # "Add another item" button (up to max products in proposal)
-    if st.session_state.cf_item_count < max_items:
-        if st.button("+ Add Another Item", key="cf_add_item"):
-            st.session_state.cf_item_count += 1
-            st.rerun()
+    if not lines:
+        st.info("No products on this order yet. Use \"Add Another Item\" to choose one.")
+
+    # "Add another item" (the form holds at most max_items lines)
+    def _add_line():
+        lines.append({'id': st.session_state.cf_next_line_id, 'added': True})
+        st.session_state.cf_next_line_id += 1
+
+    if len(lines) < max_items and len(pick_options) > 1:
+        st.button("+ Add Another Item", key="cf_add_item", on_click=_add_line)
 
     st.divider()
 
