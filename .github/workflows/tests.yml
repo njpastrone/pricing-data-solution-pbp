@@ -1,0 +1,28 @@
+# GitHub Action: Run the test suite on every pull request
+# Uses the Google Sheets stand-in (tests/fake_sheets.py), so no credentials are needed.
+# See tests/README.md.
+
+name: Tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      # test_impact_slide_mapping.py reads the live Google sheet, so it is skipped here
+      - name: Run tests
+        run: pytest tests/ --ignore=tests/test_impact_slide_mapping.py

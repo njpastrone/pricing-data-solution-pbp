@@ -126,8 +126,7 @@ pricing-data-solution-pbp/
 │   ├── forms_config.py        # Google Forms configuration
 │   └── forms_helper.py        # Google Forms URL generation & import
 │
-├── tests/                      # Unit tests
-│   └── test_client_form.py    # Client form module tests
+├── tests/                      # Unit tests and headless app tests (see tests/README.md)
 │
 ├── docs/                       # Documentation (organized by topic)
 │   ├── planning/              # Requirements, pricing logic, data structure
